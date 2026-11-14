@@ -1,22 +1,64 @@
-# Elder_Care web (`frontend/`)
+# Elder_Care web
 
 Giao diện web của hệ thống quản lý viện dưỡng lão: React 19, Vite 8, JavaScript (không TypeScript), Tailwind CSS v4, shadcn/ui (Base UI), lucide-react, font Be Vietnam Pro.
 
-Đọc trước khi viết mã: [AGENTS.md](../AGENTS.md) (luật chung cho mọi người và mọi công cụ AI), [DESIGN.md](../DESIGN.md) (giao diện), [docs/team-plan.md](../docs/team-plan.md) (ai sở hữu thư mục nào). File này là luật cấu trúc của `frontend/`; khác với mã cũ thì theo file này.
+## Ba kho của hệ thống
+
+| Kho | Nội dung |
+| --- | --- |
+| [Elder_Care](https://github.com/longdvhe170204/Elder_Care) | Backend (Spring Boot), đặc tả (`specs/`), hợp đồng API, tài liệu nghiệp vụ và quy ước chung |
+| Elder_Care_Frontend (kho này) | Web cho nhân viên và cổng người thân |
+| [Elder_Care_Mobile](https://github.com/longdvhe170204/Elder_Care_Mobile) | App Flutter cho nhân viên, người thân, người cao tuổi |
+
+Web chỉ nói chuyện với backend qua API `/api/v1`. Kho này tự cài, tự kiểm, tự build được mà không cần mã của hai kho kia; riêng lệnh `npm run gen:api` đọc hợp đồng API từ kho backend (mục "Sinh lại client API").
+
+
+## Yêu cầu
+
+Node 24 và npm. Không cần JDK hay MySQL để phát triển, kiểm và build web.
 
 ## Lệnh
 
 ```bash
 npm ci              # cài đúng phiên bản trong package-lock.json
-npm run dev         # chạy thử ở http://localhost:5173 (đổi vai trò ở khối người dùng cuối menu)
+npm run dev         # chạy thử ở http://localhost:5173
 npm test            # Vitest; một file: npx vitest run <đường dẫn>
 npm run lint
 npm run build
-npm run gen:api     # sinh src/api/ từ specs/*/contracts/api-*.yaml
+npm run gen:api     # sinh src/api/ từ hợp đồng API của kho backend
 npx prettier --write <file>   # định dạng file mình sửa (chưa áp cho mã cũ)
 ```
 
 Thêm component shadcn: `npx shadcn@latest add <tên>` (sinh vào `src/components/ui/`). Thêm thư viện npm: nhờ A (người giữ `package.json`).
+
+### Chạy thử
+
+- Không có backend: `npm run dev` chạy bản mẫu, đổi vai trò ở khối người dùng cuối menu để xem menu từng vai trò.
+- Có backend chạy ở `http://localhost:8080`: `npm run dev` chuyển mọi yêu cầu `/api` sang đó (`vite.config.js`), web và API cùng gốc nên cookie phiên dùng được; menu theo quyền thật của tài khoản đăng nhập.
+
+### Sinh lại client API
+
+`src/api/` sinh từ `specs/*/contracts/api-*.yaml` của kho backend và được commit vào kho này, nên chỉ cần sinh lại khi hợp đồng API thay đổi:
+
+1. Clone kho backend cạnh kho này (cùng thư mục cha, tên thư mục `Elder_Care`) và `git pull` để có hợp đồng mới.
+2. `npm run gen:api`. Kho backend ở chỗ khác thì đặt biến `SPECS_DIR` trỏ tới thư mục `specs` của nó trước khi chạy.
+3. Commit thay đổi ở `src/api/` cùng với màn hình dùng tới nó.
+
+Trên Windows, sau khi sinh lại `git status` có thể liệt kê cả `src/api/` dù nội dung không đổi (khác kiểu xuống dòng); `git add -A` rồi xem lại, chỉ file có nội dung đổi mới còn trong danh sách.
+
+### Docker
+
+`Dockerfile` build web bằng Node 24 rồi phục vụ bằng nginx; `nginx.conf` chuyển `/api/` sang máy tên `backend` cổng 8080.
+
+```bash
+docker build -t eldercare-frontend .
+```
+
+Image này chạy cùng MySQL và backend bằng `docker-compose.yml` của kho backend.
+
+### CI
+
+`.github/workflows/verify.yml` chạy `npm ci`, lint, test, build khi có PR hoặc push vào `develop`, `main`.
 
 ## 1. Cấu trúc `src/`
 
@@ -39,16 +81,16 @@ Mỗi feature chỉ ghi vào thư mục của mình. Tên dưới đây là tên
 | --- | --- | --- |
 | 000 | `parameters`, `approval-requests`, `audit-log` | A |
 | 001 | `residents` | B |
-| 002 | `login`, `accounts`, `permissions`, `pending-review`, `admin` (màn gộp tab Tài khoản, Tham số) | A |
+| 002 | `auth`, `accounts`, `permissions`, `pending-review`, `admin` (màn gộp tab Tài khoản, Tham số) | A |
 | 003 | `beds` | C |
 | 004 | `admissions` | B |
 | 005 | `care-tasks` | C |
 | 006 | `medication` | D |
-| 007 | `alerts`, `incidents` | D |
+| 007 | `alerts`, `incidents`, `health-catalog`, `critical-care`, `measurement-schedules`, `infection-control`, `facility-license` | D |
 | 008 | `shifts`, `handover` | E |
 | 009 | `notifications` | A |
 | 010 | `charges` | E |
-| 011 | `meals` | D |
+| 011 | `nutrition` | D |
 | 012 | `family-portal`, `relatives` | E |
 | 013 | `belongings` | B |
 | 014 | `activities` | C |
