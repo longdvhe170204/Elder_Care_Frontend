@@ -1,16 +1,43 @@
 // Sinh client API của web từ specs/*/contracts/api-*.yaml (000 T010, research R-03).
 // Chỉ dùng hợp đồng đã dịch tên tiếng Anh: thêm mã feature vào TRANSLATED khi hợp đồng của feature đó được duyệt.
 // Chạy: npm run gen:api. Không sửa tay file trong src/api/.
-import { mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse } from 'yaml'
 
-const TRANSLATED = ['000', '001', '002', '003', '004', '005', '006', '007', '008', '009', '010', '011', '012', '013', '014', '015', '016', '017', '018', '019']
+const TRANSLATED = [
+  '000',
+  '001',
+  '002',
+  '003',
+  '004',
+  '005',
+  '006',
+  '007',
+  '008',
+  '009',
+  '010',
+  '011',
+  '012',
+  '013',
+  '014',
+  '015',
+  '016',
+  '017',
+  '018',
+  '019',
+]
 
-const root = fileURLToPath(new URL('../..', import.meta.url))
-const specsDir = join(root, 'specs')
-const outDir = join(root, 'frontend', 'src', 'api')
+const repoRoot = fileURLToPath(new URL('..', import.meta.url))
+const specsDir = process.env.SPECS_DIR ?? join(repoRoot, '..', 'Elder_Care', 'specs')
+const outDir = join(repoRoot, 'src', 'api')
+
+if (!existsSync(specsDir)) {
+  console.error(`Không thấy thư mục hợp đồng: ${specsDir}`)
+  console.error('Clone kho backend cạnh kho này, hoặc đặt biến SPECS_DIR trỏ tới thư mục specs.')
+  process.exit(1)
+}
 
 const HEADER = '// File sinh bởi frontend/scripts/gen-api.mjs từ hợp đồng; không sửa tay.\n'
 
