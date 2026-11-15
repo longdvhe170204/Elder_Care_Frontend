@@ -9,6 +9,12 @@ export const getActivityTypes = (params) => request('GET', '/activity-types', pa
 /** Tạo, sửa, ngừng loại hoạt động (Quản lý viện) (FR-001) */
 export const postActivityTypes = (params) => request('POST', '/activity-types', params)
 
+/** Danh mục nhóm sở thích (thêm 2026-11-15, chủ dự án duyệt) (FR-051) */
+export const getInterestGroups = (params) => request('GET', '/interest-groups', params)
+
+/** Tạo, sửa, ngừng nhóm sở thích (Quản lý viện; thêm 2026-11-15, chủ dự án duyệt) (FR-051) */
+export const postInterestGroups = (params) => request('POST', '/interest-groups', params)
+
 /** Hoạt động theo tầng hoặc toàn viện (FR-002) */
 export const getActivities = (params) => request('GET', '/activities', params)
 

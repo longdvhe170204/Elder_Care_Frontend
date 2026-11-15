@@ -1,13 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { json, mockRoutes } from '@/test/fetchRoutes'
+import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { FeedbackPage } from './FeedbackPage'
 
 // 012 T072 (US9; FR-058a, FR-058b, FR-066, BR-M10-12; bố cục duyệt 2026-11-05): màn Phản hồi có phản hồi của người cao
 // tuổi. Hành chính, Điều dưỡng ghi lời người cao tuổi (nút theo quyền Tạo); cột Người gửi ghi "Chính người cao tuổi";
 // nhóm sức khỏe nhắc trả lời trực tiếp; Mong muốn về người đến thăm, người đón gắn mong muốn đã ghi hoặc ghi mới, Mong
-// muốn việc khác nhắc ghi sở thích; Đổi loại có lý do; ghi thay Đồng ý đóng, Mở lại khi backend cho phép.
+// muốn việc khác ghi sở thích nguồn người cao tuổi rồi gắn vào phản hồi (link-opinion INTEREST, 2026-11-15); Đổi loại
+// có lý do; ghi thay Đồng ý đóng, Mở lại khi backend cho phép.
 
 let api
 
@@ -73,18 +74,36 @@ beforeEach(() => {
   api = mockRoutes()
   api.on('GET', '/me/permissions', permissions('VIEW', 'UPDATE'))
   api.on('GET', '/feedback', json(200, [FROM_APP, ON_BEHALF, WISH_VISITOR, WISH_OTHER]))
-  api.on('GET', '/residents/5', json(200, { id: 5, profileCode: 'NCT-0005', personalInfo: { fullName: 'Nguyễn Thị Lan' } }))
-  api.on('GET', '/feedback/101', json(200, detail(FROM_APP, 'RESIDENT_CHANNEL', ['reply', 'change-priority', 'add-note'])))
-  api.on('GET', '/feedback/102', json(200, detail(ON_BEHALF, 'RECORDED_DIRECTLY', ['add-note', 'agree-to-close', 'reopen'])))
+  api.on(
+    'GET',
+    '/residents/5',
+    json(200, { id: 5, profileCode: 'NCT-0005', personalInfo: { fullName: 'Nguyễn Thị Lan' } }),
+  )
+  api.on(
+    'GET',
+    '/feedback/101',
+    json(200, detail(FROM_APP, 'RESIDENT_CHANNEL', ['reply', 'change-priority', 'add-note'])),
+  )
+  api.on(
+    'GET',
+    '/feedback/102',
+    json(200, detail(ON_BEHALF, 'RECORDED_DIRECTLY', ['add-note', 'agree-to-close', 'reopen'])),
+  )
   api.on(
     'GET',
     '/feedback/103',
-    json(200, detail(WISH_VISITOR, 'RESIDENT_CHANNEL', ['reply', 'change-priority', 'change-type', 'link-opinion', 'add-note'])),
+    json(
+      200,
+      detail(WISH_VISITOR, 'RESIDENT_CHANNEL', ['reply', 'change-priority', 'change-type', 'link-opinion', 'add-note']),
+    ),
   )
   api.on(
     'GET',
     '/feedback/104',
-    json(200, detail(WISH_OTHER, 'RESIDENT_CHANNEL', ['reply', 'change-priority', 'change-type', 'link-opinion', 'add-note'])),
+    json(
+      200,
+      detail(WISH_OTHER, 'RESIDENT_CHANNEL', ['reply', 'change-priority', 'change-type', 'link-opinion', 'add-note']),
+    ),
   )
   api.on(
     'GET',
@@ -216,15 +235,64 @@ describe('Phản hồi của người cao tuổi trên màn nhân viên', () => 
     })
   })
 
-  it('BR_M10_12_mongMuonViecKhac_nhacGhiSoThich', async () => {
+  it('BR_M10_12_mongMuonViecKhac_ghiSoThichNguonNguoiCaoTuoi_xacNhanThayMucCu', async () => {
+    api.on(
+      'GET',
+      '/interest-groups',
+      json(200, [
+        { id: 3, name: 'Âm nhạc', status: 'ACTIVE' },
+        { id: 4, name: 'Cờ', status: 'INACTIVE' },
+      ]),
+    )
+    let calls = 0
+    api.on('POST', '/feedback/104/link-opinion', () =>
+      ++calls === 1
+        ? problem(409, 'PREFERENCE_REPLACEMENT_CONFIRMATION_REQUIRED', {
+            unmetConditions: [
+              {
+                code: 'PREFERENCE_REPLACEMENT_CONFIRMATION_REQUIRED',
+                description: 'Mục hiện hành: Thích – nhạc cổ điển',
+              },
+            ],
+          })
+        : json(200, detail(WISH_OTHER, 'RESIDENT_CHANNEL', ['reply'])),
+    )
     const table = await renderPage()
     await open(table, 'Muốn nghe nhạc buổi tối')
-    expect(await screen.findByText(/Ghi sở thích ở hồ sơ hoạt động/)).toBeInTheDocument()
+
     expect(screen.queryByRole('button', { name: 'Gắn mong muốn đã ghi' })).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi sở thích' }))
+    const group = await screen.findByLabelText('Nhóm sở thích')
+    await within(group).findByRole('option', { name: 'Âm nhạc' })
+    expect(within(group).queryByRole('option', { name: 'Cờ' })).not.toBeInTheDocument()
+    fireEvent.change(group, { target: { value: '3' } })
+    fireEvent.change(screen.getByLabelText('Mức ưa thích'), { target: { value: 'LIKE' } })
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Nhạc dân ca buổi tối' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi và gắn vào phản hồi' }))
+
+    expect(await screen.findByText('Mục hiện hành: Thích – nhạc cổ điển')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Thay mục cũ' }))
+
+    await waitFor(() => expect(api.calls('POST', '/feedback/104/link-opinion')).toHaveLength(2))
+    const [first, second] = api.calls('POST', '/feedback/104/link-opinion').map(bodyOf)
+    expect(first).toEqual({
+      opinion: {
+        itemType: 'INTEREST',
+        interestGroupId: 3,
+        level: 'LIKE',
+        description: 'Nhạc dân ca buổi tối',
+        confirmReplacement: false,
+      },
+    })
+    expect(second.opinion.confirmReplacement).toBe(true)
   })
 
   it('FR_066_doiLoai_batBuocLyDo', async () => {
-    api.on('POST', '/feedback/104/change-type', json(200, detail({ ...WISH_OTHER, type: 'QUESTION' }, 'RESIDENT_CHANNEL', [])))
+    api.on(
+      'POST',
+      '/feedback/104/change-type',
+      json(200, detail({ ...WISH_OTHER, type: 'QUESTION' }, 'RESIDENT_CHANNEL', [])),
+    )
     const table = await renderPage()
     await open(table, 'Muốn nghe nhạc buổi tối')
 
@@ -242,7 +310,11 @@ describe('Phản hồi của người cao tuổi trên màn nhân viên', () => 
   })
 
   it('FR_058a_ghiThayDongYDong', async () => {
-    api.on('POST', '/feedback/102/agree-to-close', json(200, detail({ ...ON_BEHALF, status: 'CLOSED' }, 'RECORDED_DIRECTLY', [])))
+    api.on(
+      'POST',
+      '/feedback/102/agree-to-close',
+      json(200, detail({ ...ON_BEHALF, status: 'CLOSED' }, 'RECORDED_DIRECTLY', [])),
+    )
     const table = await renderPage()
     await open(table, 'Nước tắm hơi lạnh')
 

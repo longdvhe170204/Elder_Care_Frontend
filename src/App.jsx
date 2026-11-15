@@ -17,6 +17,7 @@ import { ShiftTaskPlanningPage } from '@/features/care-tasks/ShiftTaskPlanningPa
 import { DayCareAttendancePage } from '@/features/care-tasks/DayCareAttendancePage'
 import { CareCatalogPage } from '@/features/care-tasks/CareCatalogPage'
 import { ActivitySessionsPage } from '@/features/activities/ActivitySessionsPage'
+import { InterestGroupsPage } from '@/features/activities/InterestGroupsPage'
 import { NutritionCatalogPage } from '@/features/nutrition/catalog/NutritionCatalogPage'
 import { ResidentDietPage } from '@/features/nutrition/resident/ResidentDietPage'
 import { MealsPage } from '@/features/nutrition/meals/MealsPage'
@@ -87,6 +88,7 @@ const PAGES = {
   'day-care-attendance': DayCareAttendancePage,
   'care-catalogs': CareCatalogPage,
   'activity-sessions': ActivitySessionsPage,
+  'interest-groups': InterestGroupsPage,
   nutrition: NutritionCatalogPage,
   'resident-diets': ResidentDietPage,
   meals: MealsPage,

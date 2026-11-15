@@ -200,14 +200,19 @@ function FeedbackDetail({ id, residentName, onChanged, Title, Description }) {
     }
   }, [id])
 
+  // Như run nhưng để lỗi cho khung gọi tự hiện (khối gắn sở thích cần mã lỗi để hỏi thay mục cũ)
+  async function apply(name, body, message) {
+    const data = await command(id, name, body)
+    setF(data)
+    setMode(null)
+    setDone(message)
+    onChanged(message)
+  }
+
   async function run(name, body, message) {
     setFailure(null)
     try {
-      const data = await command(id, name, body)
-      setF(data)
-      setMode(null)
-      setDone(message)
-      onChanged(message)
+      await apply(name, body, message)
     } catch (e) {
       setFailure(problemOf(e))
     }
@@ -287,6 +292,7 @@ function FeedbackDetail({ id, residentName, onChanged, Title, Description }) {
           onLink={(itemId) =>
             run('link-opinion', { opinion: { itemType: 'VISIT_PICKUP_WISH', itemId } }, 'Đã gắn mong muốn vào phản hồi')
           }
+          onLinkInterest={(opinion) => apply('link-opinion', { opinion }, 'Đã ghi sở thích và gắn vào phản hồi')}
         />
       )}
       {mode === null && (can('agree-to-close') || can('reopen')) && (

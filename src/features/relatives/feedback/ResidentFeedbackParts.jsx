@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
+  getInterestGroups,
   getResidents,
   getResidentsByResidentIdRelationships,
   getResidentsByResidentIdVisitPickupWishes,
@@ -189,7 +190,149 @@ export function OnBehalfSheet({ onClose, onDone }) {
  * Mục ý kiến của phản hồi Mong muốn (BR-M10-12): về người đến thăm, người đón thì gắn mong muốn đã ghi có nguồn người
  * cao tuổi hoặc ghi mới; việc khác là sở thích ghi ở hồ sơ hoạt động (014), mục tự gắn khi ghi.
  */
-export function WishOpinions({ feedback, residentName, onLink }) {
+// Mong muốn việc khác (FR-058b, BR-M10-12; 001 FR-023g): người phụ trách ghi sở thích nguồn người cao tuổi; backend ghi ở
+// 014 và gắn vào phản hồi cùng lúc (link-opinion INTEREST). Nhóm và nguồn đã có mục hiện hành thì backend trả 409
+// PREFERENCE_REPLACEMENT_CONFIRMATION_REQUIRED kèm mục cũ: hiện mục cũ và hỏi thay (Q-363), không tự thay.
+function InterestOpinion({ onLink }) {
+  const [open, setOpen] = useState(false)
+  const [groups, setGroups] = useState(null)
+  const [values, setValues] = useState({ interestGroupId: '', level: '', description: '' })
+  const [submitted, setSubmitted] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState(null)
+
+  useEffect(() => {
+    if (!open) return
+    getInterestGroups()
+      .then(({ data }) => setGroups(data.filter((g) => g.status === 'ACTIVE')))
+      .catch((e) => {
+        setGroups([])
+        setFailure(problemOf(e))
+      })
+  }, [open])
+
+  const errors = {
+    interestGroupId: !values.interestGroupId && 'Chọn nhóm sở thích',
+    level: !values.level && 'Chọn mức ưa thích',
+  }
+  const show = (name) => submitted && errors[name]
+  const set = (name) => (e) => setValues((v) => ({ ...v, [name]: e.target.value }))
+  const needsConfirm = failure?.errorCode === 'PREFERENCE_REPLACEMENT_CONFIRMATION_REQUIRED'
+
+  async function submit(confirmReplacement) {
+    setSubmitted(true)
+    if (errors.interestGroupId || errors.level) return
+    setBusy(true)
+    setFailure(null)
+    try {
+      await onLink({
+        itemType: 'INTEREST',
+        interestGroupId: Number(values.interestGroupId),
+        level: values.level,
+        description: values.description.trim() || null,
+        confirmReplacement,
+      })
+    } catch (e) {
+      setFailure(problemOf(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  if (!open) {
+    return (
+      <div className="flex flex-col gap-3">
+        <p className="rounded-lg bg-muted px-3 py-2 type-body-sm">
+          Ghi điều người cao tuổi nói thành sở thích với nguồn &quot;Người cao tuổi nói&quot;; sở thích được gắn vào
+          phản hồi rồi mới trả lời được.
+        </p>
+        <Button variant="outline" className="h-11 self-start" onClick={() => setOpen(true)}>
+          Ghi sở thích
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <form
+      noValidate
+      className="flex flex-col gap-3 rounded-lg border p-3"
+      onSubmit={(e) => {
+        e.preventDefault()
+        submit(false)
+      }}
+    >
+      <ProblemAlert
+        problem={failure}
+        title={needsConfirm ? 'Nhóm này đã có sở thích theo lời người cao tuổi' : undefined}
+      >
+        {needsConfirm && (
+          <Button type="button" variant="outline" disabled={busy} onClick={() => submit(true)}>
+            Thay mục cũ
+          </Button>
+        )}
+      </ProblemAlert>
+      <Field data-invalid={!!show('interestGroupId') || undefined}>
+        <FieldLabel htmlFor="interest-group">Nhóm sở thích</FieldLabel>
+        <select
+          id="interest-group"
+          className={SELECT}
+          value={values.interestGroupId}
+          onChange={set('interestGroupId')}
+          aria-invalid={!!show('interestGroupId') || undefined}
+        >
+          <option value="">{groups === null ? 'Đang tải nhóm…' : 'Chọn nhóm'}</option>
+          {(groups ?? []).map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+        {groups?.length === 0 && (
+          <p className="type-body-sm text-muted-foreground">
+            Chưa có nhóm sở thích; Quản lý viện thêm ở Nhóm sở thích.
+          </p>
+        )}
+        {show('interestGroupId') && <FieldError>{errors.interestGroupId}</FieldError>}
+      </Field>
+      <Field data-invalid={!!show('level') || undefined}>
+        <FieldLabel htmlFor="interest-level">Mức ưa thích</FieldLabel>
+        <select
+          id="interest-level"
+          className={SELECT}
+          value={values.level}
+          onChange={set('level')}
+          aria-invalid={!!show('level') || undefined}
+        >
+          <option value="">Chọn mức</option>
+          <option value="LIKE">Thích</option>
+          <option value="DISLIKE">Không thích</option>
+        </select>
+        {show('level') && <FieldError>{errors.level}</FieldError>}
+      </Field>
+      <Field>
+        <FieldLabel htmlFor="interest-description">Mô tả</FieldLabel>
+        <Textarea
+          id="interest-description"
+          rows={2}
+          maxLength={2000}
+          value={values.description}
+          onChange={set('description')}
+        />
+      </Field>
+      <span className="flex flex-wrap gap-2">
+        <Button type="submit" className="h-11" disabled={busy}>
+          Ghi và gắn vào phản hồi
+        </Button>
+        <Button type="button" variant="ghost" className="h-11" onClick={() => setOpen(false)}>
+          Quay lại
+        </Button>
+      </span>
+    </form>
+  )
+}
+
+export function WishOpinions({ feedback, residentName, onLink, onLinkInterest }) {
   const [mode, setMode] = useState(null)
   const [wishes, setWishes] = useState(null)
   const [relationships, setRelationships] = useState([])
@@ -216,13 +359,7 @@ export function WishOpinions({ feedback, residentName, onLink }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, residentId])
 
-  if (feedback.wishTopic !== 'VISITORS_PICKERS') {
-    return (
-      <p className="rounded-lg bg-muted px-3 py-2 type-body-sm">
-        Ghi sở thích ở hồ sơ hoạt động; mục sẽ tự gắn vào phản hồi khi ghi xong, rồi mới trả lời được.
-      </p>
-    )
-  }
+  if (feedback.wishTopic !== 'VISITORS_PICKERS') return <InterestOpinion onLink={onLinkInterest} />
 
   return (
     <div className="flex flex-col gap-3">
