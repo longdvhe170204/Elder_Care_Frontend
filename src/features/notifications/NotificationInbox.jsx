@@ -13,7 +13,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
 import { CallReminderSheet } from './CallReminderSheet'
-import { NotificationDetail } from './NotificationDetail'
+import { NotificationDetail } from '@/common/notifications/NotificationDetail'
 import { LEVEL_LABELS, label, reminderIdOf } from './notificationLabels'
 
 // Hộp thông báo (009 T035; FR-033 → FR-036; DESIGN.md `notification-inbox`). Khẩn cấp chưa xác nhận lên đầu (backend
@@ -174,7 +174,13 @@ export function NotificationInbox({ openedKey, onOpen, onClose }) {
           id={id}
           onOpened={replace}
           onHidden={hide}
-          onOpenReminder={openReminder}
+          sourceAction={(n) =>
+            reminderIdOf(n) !== null && (
+              <Button variant="outline" className="self-start" onClick={() => openReminder(reminderIdOf(n))}>
+                Mở lượt nhắc gọi
+              </Button>
+            )
+          }
           {...titles}
         />
       ),
