@@ -7,15 +7,16 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
-import { LEVEL_LABELS, PART_LABELS, STATUS_LABELS, label, reminderIdOf } from './notificationLabels'
+import { LEVEL_LABELS, PART_LABELS, STATUS_LABELS, label } from './notificationLabels'
 
 // Khung chi tiết thông báo (009 T035; FR-034, FR-036; DESIGN.md 2.2, `notification-inbox`). Mở là ghi xem lần đầu
 // (backend); nội dung theo quyền hiện hành: phần đã hết quyền thay bằng dòng khóa, không lộ nội dung. Bản ghi nguồn chỉ
-// là chữ tới khi module nguồn có khóa quyền xem (`canOpen`), riêng lượt nhắc gọi của chính M13 mở được.
+// là chữ; nơi dùng truyền `sourceAction(notification)` để hiện nút mở bản ghi nguồn mà màn đó có (nhân viên: lượt nhắc gọi
+// của M13; cổng người thân: yêu cầu xác nhận người nhận của 013). Dùng chung cho hộp thông báo nhân viên và cổng người thân.
 
 const PART_ORDER = ['GENERAL', 'HEALTH', 'COSTS', 'VISITS', 'CONTRACT']
 
-export function NotificationDetail({ id, onOpened, onHidden, onOpenReminder, Title = 'h2', Description = 'p' }) {
+export function NotificationDetail({ id, onOpened, onHidden, sourceAction, Title = 'h2', Description = 'p' }) {
   const [state, setState] = useState({ status: 'loading' })
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -126,11 +127,7 @@ export function NotificationDetail({ id, onOpened, onHidden, onOpenReminder, Tit
         )
       })}
 
-      {reminderIdOf(n) !== null && (
-        <Button variant="outline" className="self-start" onClick={() => onOpenReminder(reminderIdOf(n))}>
-          Mở lượt nhắc gọi
-        </Button>
-      )}
+      {sourceAction?.(n)}
       <ProblemAlert problem={failure} />
       {n.viewedAt && (
         <Button variant="outline" className="self-start" disabled={busy} onClick={hide}>

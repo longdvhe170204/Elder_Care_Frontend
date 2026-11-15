@@ -19,6 +19,7 @@ import { VisitsPage } from './VisitsPage'
 import { LiveContractPage, LiveDepositsPage, LiveHealthPage, LiveTodayPage } from './live/LivePages'
 import { LiveCostsPage } from './live/LiveCostsPage'
 import { LiveFeedbackPage } from './live/LiveFeedbackPage'
+import { LiveNotificationsPage } from './live/LiveNotificationsPage'
 
 // Cổng người thân, bản web (DESIGN.md 2.3): đăng nhập xong vào Trang chủ, là trang giới thiệu viện; các màn khác
 // đi từ đầu trang (máy tính) hoặc thanh dưới (điện thoại). Đầu trang cùng kiểu với trang giới thiệu: dải nền trời,
@@ -51,9 +52,10 @@ const PAGES = {
 }
 
 // Có phiên thật: ba màn đọc API của 012 (T028), Chi phí, số dư đọc số dư của 017 (T011), Đồ gửi đọc phần của 013 (T028)
-// do App.jsx truyền vào; các màn khác còn bản mẫu tới task web của phần đó
+// do App.jsx truyền vào; Thông báo đọc hộp thông báo của 009; các màn khác còn bản mẫu tới task web của phần đó
 const LIVE_PAGES = {
   today: LiveTodayPage,
+  notifications: LiveNotificationsPage,
   health: LiveHealthPage,
   contract: LiveContractPage,
   costs: LiveCostsPage,

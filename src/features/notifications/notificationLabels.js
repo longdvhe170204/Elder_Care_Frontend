@@ -1,25 +1,10 @@
 // Nhãn tiếng Việt cho giá trị của hợp đồng api-009 (glossary mục 15.3; DESIGN.md 3.5). Giá trị chưa có nhãn hiện
 // nguyên mã để không đoán nghĩa.
 
-export const LEVEL_LABELS = { URGENT: 'Khẩn cấp', MEDIUM: 'Trung bình', LOW: 'Nhẹ' }
+// Nhãn mức, trạng thái, phần nội dung và hàm label dùng chung với cổng người thân ở common/notifications
+import { LEVEL_LABELS, PART_LABELS, STATUS_LABELS, label } from '@/common/notifications/notificationLabels'
 
-export const STATUS_LABELS = {
-  HELD_FOR_QUIET_HOURS: 'Chờ hết giờ yên tĩnh',
-  NOT_SENT: 'Không gửi',
-  SENT: 'Đã gửi',
-  DELIVERY_FAILED: 'Gửi thất bại',
-  VIEWED: 'Đã xem',
-  ACKNOWLEDGED: 'Đã xác nhận',
-  UNREACHABLE: 'Không liên lạc được',
-}
-
-export const PART_LABELS = {
-  GENERAL: 'Phần chung',
-  HEALTH: 'Phần sức khỏe',
-  COSTS: 'Chi phí',
-  VISITS: 'Thăm',
-  CONTRACT: 'Hợp đồng',
-}
+export { LEVEL_LABELS, PART_LABELS, STATUS_LABELS, label }
 
 export const CHANNEL_LABELS = {
   IN_APP: 'Trong ứng dụng',
@@ -104,7 +89,6 @@ export const HANDOFF_LABELS = {
 
 const RECIPIENT_TYPES = { STAFF: 'Nhân viên', FAMILY_MEMBER: 'Người thân', RESIDENT: 'Người cao tuổi' }
 
-export const label = (labels, value) => (value ? (labels[value] ?? value) : '')
 
 function groupDetailLabel(group, detail, text) {
   // người tạm nhận do 007, 008 chỉ định ghi nhóm Staff căn cứ TAM_NHAN (FR-009)
