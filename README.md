@@ -54,11 +54,11 @@ Trên Windows, sau khi sinh lại `git status` có thể liệt kê cả `src/ap
 docker build -t eldercare-frontend .
 ```
 
-Image này chạy cùng MySQL và backend bằng `docker-compose.yml` của kho backend.
+Image này chạy cùng MySQL và backend bằng `docker-compose.yml` của kho backend. Bản dựng sẵn ở `ghcr.io/longdvhe170204/elder_care_frontend` (tag `develop`, `main`, `sha-<commit>`).
 
 ### CI
 
-`.github/workflows/verify.yml` chạy `npm ci`, lint, test, build khi có PR hoặc push vào `develop`, `main`.
+`.github/workflows/verify.yml` chạy `npm ci`, lint, test, build khi có PR hoặc push vào `develop`, `main`. `.github/workflows/publish.yml` chạy sau khi `verify` xanh trên `develop`, `main`: build image và đẩy lên GHCR.
 
 ## 1. Cấu trúc `src/`
 
