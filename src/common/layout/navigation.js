@@ -134,6 +134,14 @@ export const NAV_GROUPS = [
         functions: ['ACTIVITY_OUTING'],
         roles: [QL, TT, DD, CS],
       },
+      // Dòng "Danh mục loại hoạt động, nhóm sở thích", Phụ lục 27 (014 FR-051, thêm 2026-11-15); chỉ Quản lý viện có lệnh.
+      {
+        key: 'interest-groups',
+        label: 'Nhóm sở thích',
+        icon: 'BookOpen',
+        functions: ['ACTIVITY_CATALOG'],
+        roles: [QL, TT, DD, CS],
+      },
       // Dòng "Kiểm tra chất lượng", Phụ lục 27 (014 T025, bố cục duyệt 2026-11-07); Người phụ trách ca theo nhiệm vụ.
       {
         key: 'quality-checks',

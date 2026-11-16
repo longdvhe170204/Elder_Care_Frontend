@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getResidentsByResidentIdWellbeingProfile, getResultValues } from '@/api'
+import { getInterestGroups, getResidentsByResidentIdWellbeingProfile, getResultValues } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,7 +10,8 @@ import { problemOf } from '@/common/problem'
 import { ActivityField } from './ActivityField'
 import { addDays, todayInVietnam, ATTENDANCE_RESULT, PARTICIPATION_LEVEL, COMMUNICATION_LEVEL } from './sessionView'
 
-function PreferenceList({ items, historical = false }) {
+// Tên nhóm lấy từ danh mục (FR-051); chưa đọc được danh mục thì hiện mã để không mất thông tin
+function PreferenceList({ items, groupNames, historical = false }) {
   if (!items.length) return <p className="type-body-sm text-muted-foreground">Chưa ghi nhận.</p>
   return (
     <ul className="flex flex-col gap-3">
@@ -21,7 +22,8 @@ function PreferenceList({ items, historical = false }) {
             relative={`người thân mã ${item.source.familyMemberId}`}
           />
           <p className="type-body-sm">
-            {item.level === 'LIKE' ? 'Thích' : 'Không thích'}, nhóm {item.interestGroupId}
+            {item.level === 'LIKE' ? 'Thích' : 'Không thích'}, nhóm{' '}
+            {groupNames.get(item.interestGroupId) ?? item.interestGroupId}
           </p>
           {item.description && <p className="type-body">{item.description}</p>}
           <p className="type-body-sm text-muted-foreground">
@@ -46,6 +48,16 @@ export function WellbeingSheet({ residentId, residentName, onClose }) {
   const [result, setResult] = useState(null)
   const [resultValues, setResultValues] = useState([])
   const [catalogFailure, setCatalogFailure] = useState(null)
+  const [groupNames, setGroupNames] = useState(() => new Map())
+  useEffect(() => {
+    let active = true
+    getInterestGroups()
+      .then(({ data }) => active && setGroupNames(new Map(data.map((g) => [g.id, g.name]))))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [])
   useEffect(() => {
     let active = true
     getResultValues()
@@ -174,12 +186,12 @@ export function WellbeingSheet({ residentId, residentName, onClose }) {
             </section>
             <section className="flex flex-col gap-3" aria-label="Sở thích">
               <h3 className="type-card-title">Sở thích hiện hành</h3>
-              <PreferenceList items={profile.preferences.current} />
+              <PreferenceList items={profile.preferences.current} groupNames={groupNames} />
               <details>
                 <summary className="type-label cursor-pointer py-3">
                   Lịch sử sở thích ({profile.preferences.history.length})
                 </summary>
-                <PreferenceList items={profile.preferences.history} historical />
+                <PreferenceList items={profile.preferences.history} groupNames={groupNames} historical />
               </details>
             </section>
             <section className="flex flex-col gap-2" aria-label="Cảnh báo">
