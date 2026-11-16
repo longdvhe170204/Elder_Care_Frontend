@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDate } from '@/common/dateTime'
+import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { RecordWishSheet } from '../right-change-requests/VisitPickupWishes'
 import { describeWish } from '../right-change-requests/requestLabels'
@@ -186,14 +187,13 @@ export function OnBehalfSheet({ onClose, onDone }) {
   )
 }
 
-/**
- * Mục ý kiến của phản hồi Mong muốn (BR-M10-12): về người đến thăm, người đón thì gắn mong muốn đã ghi có nguồn người
- * cao tuổi hoặc ghi mới; việc khác là sở thích ghi ở hồ sơ hoạt động (014), mục tự gắn khi ghi.
- */
 // Mong muốn việc khác (FR-058b, BR-M10-12; 001 FR-023g): người phụ trách ghi sở thích nguồn người cao tuổi; backend ghi ở
 // 014 và gắn vào phản hồi cùng lúc (link-opinion INTEREST). Nhóm và nguồn đã có mục hiện hành thì backend trả 409
-// PREFERENCE_REPLACEMENT_CONFIRMATION_REQUIRED kèm mục cũ: hiện mục cũ và hỏi thay (Q-363), không tự thay.
+// PREFERENCE_REPLACEMENT_CONFIRMATION_REQUIRED kèm mục cũ: hiện mục cũ và hỏi thay (Q-363), không tự thay. Ghi sở thích
+// cần quyền Tạo ở dòng "Hoạt động, ngoài viện" (Phụ lục 27; Quản lý viện chỉ xem): người phụ trách không có quyền này
+// (Quản lý viện khi tầng chưa có Trưởng tầng, FR-059) thì giao lại, không hiện nút sẽ bị từ chối.
 function InterestOpinion({ onLink }) {
+  const { can } = usePermissions()
   const [open, setOpen] = useState(false)
   const [groups, setGroups] = useState(null)
   const [values, setValues] = useState({ interestGroupId: '', level: '', description: '' })
@@ -239,6 +239,15 @@ function InterestOpinion({ onLink }) {
     }
   }
 
+  if (!can('ACTIVITY_OUTING', 'CREATE')) {
+    return (
+      <p className="rounded-lg bg-muted px-3 py-2 type-body-sm">
+        Cần ghi điều người cao tuổi nói thành sở thích rồi mới trả lời được. Bạn không có quyền ghi sở thích: giao lại
+        phản hồi cho Trưởng tầng hoặc Điều dưỡng phụ trách tầng của người cao tuổi.
+      </p>
+    )
+  }
+
   if (!open) {
     return (
       <div className="flex flex-col gap-3">
@@ -267,7 +276,7 @@ function InterestOpinion({ onLink }) {
         title={needsConfirm ? 'Nhóm này đã có sở thích theo lời người cao tuổi' : undefined}
       >
         {needsConfirm && (
-          <Button type="button" variant="outline" disabled={busy} onClick={() => submit(true)}>
+          <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => submit(true)}>
             Thay mục cũ
           </Button>
         )}
@@ -332,6 +341,10 @@ function InterestOpinion({ onLink }) {
   )
 }
 
+/**
+ * Mục ý kiến của phản hồi Mong muốn (BR-M10-12): về người đến thăm, người đón thì gắn mong muốn đã ghi có nguồn người
+ * cao tuổi hoặc ghi mới; việc khác thì ghi sở thích và gắn ngay ({@link InterestOpinion}).
+ */
 export function WishOpinions({ feedback, residentName, onLink, onLinkInterest }) {
   const [mode, setMode] = useState(null)
   const [wishes, setWishes] = useState(null)

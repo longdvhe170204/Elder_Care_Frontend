@@ -58,7 +58,7 @@ function GroupForm({ row, onSaved }) {
         />
         {missing && <FieldError>Nhập tên nhóm sở thích</FieldError>}
       </Field>
-      <Button type="submit" className="self-start" disabled={busy}>
+      <Button type="submit" className="h-11 self-start" disabled={busy}>
         Lưu nhóm sở thích
       </Button>
     </form>
@@ -112,7 +112,11 @@ export function InterestGroupsPage() {
         <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={state.status === 'loading'}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="type-title">Danh mục</h2>
-            {manage && <Button onClick={() => setEditing({ row: null })}>Thêm nhóm sở thích</Button>}
+            {manage && (
+              <Button className="h-11" onClick={() => setEditing({ row: null })}>
+                Thêm nhóm sở thích
+              </Button>
+            )}
           </div>
           <p role="status" className="empty:hidden type-body-sm">
             {done}
@@ -132,12 +136,18 @@ export function InterestGroupsPage() {
                   </div>
                   {manage && (
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" aria-label={`Sửa nhóm ${row.name}`} onClick={() => setEditing({ row })}>
+                      <Button
+                        variant="outline"
+                        className="h-11"
+                        aria-label={`Sửa nhóm ${row.name}`}
+                        onClick={() => setEditing({ row })}
+                      >
                         Sửa
                       </Button>
                       {row.status === 'ACTIVE' ? (
                         <Button
                           variant="outline"
+                          className="h-11"
                           aria-label={`Ngừng nhóm ${row.name}`}
                           onClick={() => changeStatus(row, 'INACTIVE')}
                         >
@@ -146,6 +156,7 @@ export function InterestGroupsPage() {
                       ) : (
                         <Button
                           variant="outline"
+                          className="h-11"
                           aria-label={`Dùng lại nhóm ${row.name}`}
                           onClick={() => changeStatus(row, 'ACTIVE')}
                         >

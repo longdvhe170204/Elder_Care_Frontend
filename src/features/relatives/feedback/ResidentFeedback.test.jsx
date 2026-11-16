@@ -235,7 +235,24 @@ describe('Phản hồi của người cao tuổi trên màn nhân viên', () => 
     })
   })
 
+  it('BR_M10_12_mongMuonViecKhac_khongCoQuyenGhiSoThich_nhacGiaoLai', async () => {
+    const table = await renderPage()
+    await open(table, 'Muốn nghe nhạc buổi tối')
+
+    expect(await screen.findByText(/Bạn không có quyền ghi sở thích: giao lại phản hồi/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ghi sở thích' })).not.toBeInTheDocument()
+  })
+
   it('BR_M10_12_mongMuonViecKhac_ghiSoThichNguonNguoiCaoTuoi_xacNhanThayMucCu', async () => {
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'FEEDBACK', operation: 'VIEW' },
+        { function: 'FEEDBACK', operation: 'UPDATE' },
+        { function: 'ACTIVITY_OUTING', operation: 'CREATE' },
+      ]),
+    )
     api.on(
       'GET',
       '/interest-groups',
