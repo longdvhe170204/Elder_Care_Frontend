@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Badge } from '@/components/ui/badge'
 import { DetailLayout } from '@/common/DetailLayout'
+import { NowStrip } from '@/common/NowStrip'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -49,7 +50,7 @@ function AlertCard({ alert, name, busy, onReceive, onStart, onOpen }) {
     <Card
       role="article"
       aria-label={`${typeLabel(alert.type)}, ${name}`}
-      className={cn('gap-3', urgent && 'ring-[1.5px] ring-destructive')}
+      className="gap-3"
     >
       <CardHeader className="flex flex-row items-center gap-2.5">
         <ResidentAvatar name={name} code={String(alert.residentId ?? alert.id)} />
@@ -381,6 +382,14 @@ export function AlertsPage() {
           </ToggleGroup>
         </div>
       </PageHeader>
+      {/* DESIGN.md 5, 7.2: cảnh báo gấp (Khẩn cấp, đã leo thang tối đa) nổi lên ở dải này, thẻ không thêm viền đỏ */}
+      <NowStrip
+        items={sortAlerts(alerts.filter(isUrgent)).map((a) => ({
+          key: a.id,
+          label: `${nameOf(a)}, ${typeLabel(a.type)}`,
+          onSelect: () => setOpenId(a.id),
+        }))}
+      />
       <p role="status" aria-live="polite" className="empty:hidden rounded-xl border bg-card px-4 py-3 type-body-sm">
         {announcement}
       </p>

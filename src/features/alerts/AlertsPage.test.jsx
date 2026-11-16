@@ -76,6 +76,19 @@ describe('AlertsPage', () => {
     expect(screen.queryByRole('button', { name: /Tiếp nhận.*Lê Văn Bình/ })).toBeNull()
   })
 
+  // DESIGN.md mục 5, 7.2, 11 ("một tín hiệu cho một điều"): cảnh báo gấp nổi lên bằng dải "Cần làm ngay" và thứ tự,
+  // thẻ không cộng viền đỏ; bấm một mục trên dải mở chi tiết cảnh báo đó.
+  it('DESIGN_6_7_canhBaoGapLenDaiCanLamNgay_theKhongVienDo', async () => {
+    api.on('GET', '/alerts/2', json(200, ALERT_CRITICAL))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    const strip = await screen.findByRole('region', { name: 'Cần làm ngay' })
+    expect(within(strip).getByText('Cần làm ngay (1)')).toBeTruthy()
+    const cards = await screen.findAllByRole('article')
+    for (const card of cards) expect(card.className).not.toMatch(/ring-destructive/)
+    fireEvent.click(await within(strip).findByRole('button', { name: 'Lê Văn Bình, Mất ngủ kéo dài' }))
+    await waitFor(() => expect(api.calls('GET', '/alerts/2')).toHaveLength(1))
+  })
+
   it('FR_029_tiepNhanTheoAllowedCommands_guiIdempotencyKey_roiTaiLai', async () => {
     api.on('POST', '/alerts/1/receive', json(200, {}))
     render(<AlertsPage role="NURSING_STAFF" />)
