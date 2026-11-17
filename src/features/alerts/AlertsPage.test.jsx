@@ -58,6 +58,7 @@ beforeEach(() => {
     json(200, { id: 10, profileCode: 'HS-0010', personalInfo: { fullName: 'Lê Văn Bình' } }),
   )
   api.on('GET', '/alerts/3', json(200, ALERT_IN_PROGRESS))
+  api.on('GET', '/incident-types', json(200, [{ id: 1, code: 'FALL', name: 'Té ngã' }]))
   api.on('GET', '/alerts/1', json(200, ALERT_MEDIUM))
 })
 
@@ -114,6 +115,27 @@ describe('AlertsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và đóng cảnh báo' }))
     await waitFor(() => expect(api.calls('POST', '/alerts/3/close')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/alerts/3/close')[0][1].body)).toEqual({ resolution: 'Đã đo lại, ổn định' })
+  })
+
+  it('FR_027_canhBaoThuCong_hienTenLoaiSuCo', async () => {
+    api.on('GET', '/alerts', json(200, [{ ...ALERT_MEDIUM, type: 'FALL', origin: 'MANUAL' }]))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    expect(await screen.findByText('Té ngã')).toBeTruthy()
+  })
+
+  it('FR_029_chuyenSuCo_chonLoaiRoiGui', async () => {
+    api.on('GET', '/alerts/3', json(200, { ...ALERT_IN_PROGRESS, allowedCommands: ['convert-to-incident'] }))
+    api.on('POST', '/alerts/3/convert-to-incident', json(201, {}))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    const cards = await screen.findAllByRole('article')
+    fireEvent.click(within(cards[2]).getByRole('button', { name: /Chi tiết/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Chuyển thành sự cố' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và chuyển sự cố' }))
+    expect(await screen.findByText('Chọn loại sự cố')).toBeTruthy()
+    fireEvent.change(await screen.findByLabelText('Loại sự cố'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và chuyển sự cố' }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/3/convert-to-incident')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/alerts/3/convert-to-incident')[0][1].body)).toEqual({ incidentTypeId: 1 })
   })
 
   it('FR_029_409_hienDieuKienChuaThoa', async () => {

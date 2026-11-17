@@ -5,6 +5,7 @@ import {
   getIncidentsById,
   getProgressionTypes,
   postIncidents,
+  postIncidentsByIdAssignHandler,
   postIncidentsByIdChangeLevel,
   postIncidentsByIdClose,
   postIncidentsByIdJoinHandling,
@@ -46,6 +47,7 @@ const key = () => ({ 'Idempotency-Key': crypto.randomUUID() })
 
 const COMMANDS = {
   receive: postIncidentsByIdReceive,
+  'assign-handler': postIncidentsByIdAssignHandler,
   'join-handling': postIncidentsByIdJoinHandling,
   progressions: postIncidentsByIdProgressions,
   'change-level': postIncidentsByIdChangeLevel,

@@ -92,6 +92,44 @@ async function rows() {
 }
 
 describe('IncidentsPage', () => {
+  it('FR_048_suCoKhanCap_hienTheThongTinKhanCap', async () => {
+    api.on(
+      'GET',
+      '/incidents/11/emergency-card',
+      json(200, {
+        identification: { fullName: 'Trần Thị Mai', roomBed: 'P101-G1' },
+        allergies: [{ name: 'Penicillin' }],
+        primaryContact: { fullName: 'Trần Văn Nam', phoneNumber: '0900000001' },
+      }),
+    )
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button'))
+    expect(await screen.findByText('Penicillin')).toBeTruthy()
+    expect(screen.getByText('Trần Văn Nam, 0900000001')).toBeTruthy()
+  })
+
+  it('FR_045_giaoNguoiXuLy_chonNguoiVaGhiChu', async () => {
+    api.on('GET', '/staff', json(200, [{ id: 31, fullName: 'Trần Thu Hà' }]))
+    api.on('GET', '/incidents/11', json(200, { ...NEW_INCIDENT, allowedCommands: ['assign-handler'] }))
+    api.on('POST', '/incidents/11/assign-handler', json(200, {}))
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Giao người xử lý' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và giao' }))
+    expect(await screen.findByText('Chọn người được giao')).toBeTruthy()
+    expect(api.calls('POST', '/incidents/11/assign-handler')).toHaveLength(0)
+    fireEvent.change(await screen.findByLabelText('Người được giao'), { target: { value: '31' } })
+    fireEvent.change(screen.getByLabelText('Ghi chú giao việc'), { target: { value: 'Nhờ chị Hà xử lý' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và giao' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents/11/assign-handler')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents/11/assign-handler')[0][1].body)).toEqual({
+      assigneeId: 31,
+      note: 'Nhờ chị Hà xử lý',
+    })
+  })
+
   it('FR_045_dangMo_khanCapLenDau_tenLoaiVaHoTen', async () => {
     render(<IncidentsPage />)
     const list = await rows()

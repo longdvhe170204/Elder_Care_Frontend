@@ -18,6 +18,8 @@ import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
+import { EmergencyCardPanel } from './EmergencyCardPanel'
+import { HandoverStaffField } from './HandoverStaffField'
 import { TransferOutPanel } from './TransferOutPanel'
 import { loadIncident, loadIncidentBoard, loadResidentChoices, recordIncident, runIncidentCommand } from './incidents'
 import {
@@ -34,8 +36,8 @@ import {
 
 // Màn Sự cố (spec 007 User Story 4, FR-040 → FR-046; T037 phần web): danh sách theo phạm vi từ api-007
 // `GET /incidents`, khung chi tiết có nội dung, diễn biến và nút lệnh theo `allowedCommands` (DESIGN.md 7.4). Ghi nhận
-// sự cố bắt buộc trực tuyến; mức thấp hơn mặc định của loại cần lý do (FR-042). Giao người xử lý cần danh sách người
-// đủ điều kiện mà api-007 chưa có nên chưa có nút ở đây.
+// sự cố bắt buộc trực tuyến; mức thấp hơn mặc định của loại cần lý do (FR-042). Giao người xử lý chọn từ danh sách
+// nhân viên đang làm việc (api-008), backend kiểm người được giao đủ điều kiện.
 
 const GROUPS = [
   ['open', 'Đang mở'],
@@ -51,24 +53,28 @@ const FORM_TITLE = {
   'change-level': 'Đổi mức',
   reopen: 'Mở lại xử lý',
   close: 'Đóng sự cố',
+  'assign-handler': 'Giao người xử lý',
 }
 const SUBMIT_LABEL = {
   progressions: 'Lưu diễn biến',
   'change-level': 'Lưu mức mới',
   reopen: 'Lưu và mở lại',
   close: 'Lưu và đóng sự cố',
+  'assign-handler': 'Lưu và giao',
 }
 const TEXT_LABEL = {
   progressions: 'Nội dung',
   'change-level': 'Lý do đổi mức',
   reopen: 'Lý do mở lại',
   close: 'Kết quả xử lý',
+  'assign-handler': 'Ghi chú giao việc',
 }
 const TEXT_ERROR = {
   progressions: 'Nhập nội dung diễn biến',
   'change-level': 'Nhập lý do đổi mức',
   reopen: 'Nhập lý do mở lại',
   close: 'Nhập kết quả xử lý',
+  'assign-handler': 'Nhập ghi chú giao việc',
 }
 
 function IncidentStatus({ incident }) {
@@ -94,10 +100,11 @@ function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmi
   const [text, setText] = useState('')
   const [choice, setChoice] = useState('')
   const [outcome, setOutcome] = useState('')
+  const [assignee, setAssignee] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const needsChoice = mode === 'progressions' || mode === 'change-level'
   const textMissing = !text.trim()
-  const choiceMissing = needsChoice && !choice
+  const choiceMissing = (needsChoice && !choice) || (mode === 'assign-handler' && !assignee)
 
   function submit(event) {
     event.preventDefault()
@@ -108,6 +115,7 @@ function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmi
       progressions: { progressionTypeId: Number(choice), content: value },
       'change-level': { newLevel: choice, reason: value },
       reopen: { reason: value },
+      'assign-handler': { assigneeId: Number(assignee), note: value },
       close: { resolution: value, ...(outcome ? { infectionOutcome: outcome } : {}) },
     }[mode]
     onSubmit(mode, body)
@@ -116,6 +124,16 @@ function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmi
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <h3 className="type-card-title">{FORM_TITLE[mode]}</h3>
+      {mode === 'assign-handler' && (
+        <HandoverStaffField
+          id="incident-assignee"
+          label="Người được giao"
+          errorText="Chọn người được giao"
+          value={assignee}
+          onChange={setAssignee}
+          invalid={submitted && choiceMissing}
+        />
+      )}
       {mode === 'progressions' && (
         <Field data-invalid={(submitted && choiceMissing) || undefined}>
           <FieldLabel>Loại diễn biến</FieldLabel>
@@ -235,13 +253,16 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
   }
 
   const canTransfer =
-    ['NEW', 'IN_PROGRESS'].includes(incident.status) && incident.content?.residentId != null && commands.includes('change-level')
+    ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
+    incident.content?.residentId != null &&
+    commands.includes('transfer-out')
 
   const messages = {
     progressions: 'Đã ghi diễn biến',
     'change-level': 'Đã đổi mức sự cố',
     reopen: 'Đã mở lại xử lý',
     close: 'Đã đóng sự cố',
+    'assign-handler': 'Đã giao người xử lý',
   }
 
   return (
@@ -284,6 +305,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
           </ol>
         )}
       </section>
+      {incident.level === 'CRITICAL' && isOpen(incident) && <EmergencyCardPanel incidentId={incident.id} />}
       {problem && <ProblemAlert problem={problem} />}
       {mode === 'transfer-out' ? (
         <TransferOutPanel
@@ -311,6 +333,11 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
           {commands.includes('receive') && (
             <Button className="h-11" disabled={busy} onClick={() => run('receive', null, 'Đã tiếp nhận sự cố')}>
               Tiếp nhận
+            </Button>
+          )}
+          {commands.includes('assign-handler') && (
+            <Button variant="outline" className="h-11" onClick={() => setMode('assign-handler')}>
+              Giao người xử lý
             </Button>
           )}
           {commands.includes('close') && (

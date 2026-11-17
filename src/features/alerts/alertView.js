@@ -38,8 +38,15 @@ const TYPE_LABEL = {
 
 const ORIGIN_LABEL = { SYSTEM: 'Hệ thống', MANUAL: 'Nhân viên tạo', SOS: 'Nút SOS', ASSIST_BUTTON: 'Nút hỗ trợ' }
 
+// Cảnh báo thủ công mang mã loại sự cố: tên lấy từ danh mục loại sự cố (api-007), nạp khi tải danh sách hoặc chi tiết
+let incidentTypeNames = {}
+
+export function setIncidentTypeNames(types) {
+  incidentTypeNames = Object.fromEntries((types ?? []).map((t) => [t.code, t.name]))
+}
+
 export function typeLabel(type) {
-  return TYPE_LABEL[type] ?? 'Cảnh báo'
+  return TYPE_LABEL[type] ?? incidentTypeNames[type] ?? 'Cảnh báo'
 }
 
 export function originLabel(origin) {

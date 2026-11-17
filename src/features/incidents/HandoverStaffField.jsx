@@ -4,7 +4,14 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 
 // Nhân viên bàn giao khi Chuyển viện (từ sự cố hoặc lựa chọn nguy kịch): lệnh Chuyển viện của 001/004 bắt buộc người bàn
 // giao (quickstart 007 Q55, 2026-11-12). Danh sách nhân viên đang làm việc mà người ghi xem được (api-008), như màn ghi đón.
-export function HandoverStaffField({ id, value, onChange, invalid }) {
+export function HandoverStaffField({
+  id,
+  value,
+  onChange,
+  invalid,
+  label = 'Nhân viên bàn giao',
+  errorText = 'Chọn nhân viên bàn giao',
+}) {
   const [staff, setStaff] = useState(null)
   useEffect(() => {
     let live = true
@@ -17,7 +24,7 @@ export function HandoverStaffField({ id, value, onChange, invalid }) {
   }, [])
   return (
     <Field data-invalid={invalid || undefined}>
-      <FieldLabel htmlFor={id}>Nhân viên bàn giao</FieldLabel>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <select
         id={id}
         value={value}
@@ -32,7 +39,7 @@ export function HandoverStaffField({ id, value, onChange, invalid }) {
           </option>
         ))}
       </select>
-      {invalid && <FieldError>Chọn nhân viên bàn giao</FieldError>}
+      {invalid && <FieldError>{errorText}</FieldError>}
     </Field>
   )
 }
