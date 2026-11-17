@@ -111,7 +111,7 @@ function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile 
 }
 
 // Khung chi tiết: nguồn, thời điểm, lệnh cần nhập kết quả hoặc lý do (Đóng, Đổi mức), khối nút bấm khẩn cấp
-function AlertDetail({ id, name, Title, Description, onDone }) {
+function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
   const [alert, setAlert] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
@@ -156,7 +156,8 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
     setBusy(true)
     try {
       await runAlertCommand(alert.id, command)
-      onDone(message, name)
+      await reload()
+      onChanged(message, name)
     } catch (error) {
       setProblem(problemOf(error))
     } finally {
@@ -473,6 +474,12 @@ export function AlertsPage({ onNavigate }) {
     await load()
   }
 
+  async function changed(message, name) {
+    const alert = alerts.find((a) => a.id === openId)
+    setAnnouncement(`${message}: ${typeLabel(alert?.type)}, ${name}.`)
+    await load()
+  }
+
   const opened = alerts.find((a) => a.id === openId)
 
   return (
@@ -490,6 +497,7 @@ export function AlertsPage({ onNavigate }) {
             Title={Title}
             Description={Description}
             onDone={done}
+            onChanged={changed}
           />
         )
       }

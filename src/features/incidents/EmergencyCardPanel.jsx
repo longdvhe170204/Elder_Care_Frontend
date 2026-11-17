@@ -51,7 +51,13 @@ export function EmergencyCardPanel({ incidentId }) {
           <div className="flex flex-col">
             <dt className="type-caption text-muted-foreground">Người cao tuổi</dt>
             <dd className="type-body-sm">
-              {[who.fullName, who.dateOfBirth && formatDate(who.dateOfBirth), who.roomBed].filter(Boolean).join(', ')}
+              {[
+                who.fullName,
+                who.dateOfBirth && formatDate(who.dateOfBirth),
+                who.roomBed && `phòng/giường ${who.roomBed}`,
+              ]
+                .filter(Boolean)
+                .join(', ')}
             </dd>
           </div>
         )}

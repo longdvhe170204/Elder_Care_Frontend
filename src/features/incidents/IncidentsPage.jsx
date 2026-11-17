@@ -406,6 +406,7 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
   const [residentId, setResidentId] = useState(null)
   const [floors, setFloors] = useState([])
   const [floorId, setFloorId] = useState('')
+  const [floorsUnavailable, setFloorsUnavailable] = useState(false)
   const [typeId, setTypeId] = useState('')
   const [level, setLevel] = useState('')
   const [discoveredAt, setDiscoveredAt] = useState(() => vietnamNowLocal())
@@ -424,7 +425,7 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
     )
     loadFloorChoices().then(
       (data) => !cancelled && setFloors(data),
-      () => {},
+      () => !cancelled && setFloorsUnavailable(true),
     )
     return () => {
       cancelled = true
@@ -528,7 +529,7 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
             <ToggleGroup
               variant="outline"
               value={level ? [level] : []}
-              onValueChange={(n) => setLevel(n[0] ?? '')}
+              onValueChange={(n) => n[0] && setLevel(n[0])}
               className="flex flex-wrap"
             >
               {LEVEL_ORDER.map((l) => (
@@ -575,6 +576,12 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
                   </option>
                 ))}
               </select>
+              {floorsUnavailable && (
+                <p className="type-caption text-muted-foreground">
+                  Tài khoản của bạn chưa xem được danh sách tầng. Nhờ Trưởng tầng ghi nhận giúp, hoặc báo Quản lý viện
+                  cấp quyền tra cứu tầng.
+                </p>
+              )}
               {submitted && errors.floor && <FieldError>Chọn tầng xảy ra sự cố</FieldError>}
             </Field>
           )}
