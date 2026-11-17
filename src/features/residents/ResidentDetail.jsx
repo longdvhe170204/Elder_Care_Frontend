@@ -103,14 +103,15 @@ const PARTS = [
   { value: 'wishes', label: 'Nguyện vọng' },
 ]
 
-export function ResidentDetail({ residentId, onChanged, Title = 'h2', Description = 'p' }) {
+// initialPart: phần mở sẵn khi vào (ví dụ 'status' từ màn Hồ sơ tiếp nhận để làm lệnh Hoàn tất tiếp nhận)
+export function ResidentDetail({ residentId, onChanged, Title = 'h2', Description = 'p', initialPart = null }) {
   const [profile, setProfile] = useState(null)
   const [etag, setEtag] = useState(null)
   const [linked, setLinked] = useState([])
   const [failure, setFailure] = useState(null)
   // Phần đang xem giữ lại sau khi đóng để tiêu đề không mất trong lúc Sheet đang đóng
-  const [part, setPart] = useState(null)
-  const [partOpen, setPartOpen] = useState(false)
+  const [part, setPart] = useState(initialPart)
+  const [partOpen, setPartOpen] = useState(!!initialPart)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(null)
   const [errors, setErrors] = useState({})

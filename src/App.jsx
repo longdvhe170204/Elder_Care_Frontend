@@ -46,6 +46,7 @@ import { PickupPage } from '@/features/relatives/pickups/PickupPage'
 import { VisitsPage } from '@/features/relatives/visits/VisitsPage'
 import { FeedbackPage } from '@/features/relatives/feedback/FeedbackPage'
 import { FamilyStaysPage } from '@/features/relatives/stays/FamilyStaysPage'
+import { AdmissionWorkspacePage } from '@/features/admissions/AdmissionWorkspacePage'
 import { ApplicationsPage } from '@/features/admissions/ApplicationsPage'
 import { WaitingListPage } from '@/features/admissions/WaitingListPage'
 import { ContractsPage } from '@/features/admissions/ContractsPage'
@@ -111,6 +112,7 @@ const PAGES = {
   feedback: FeedbackPage,
   'family-stays': FamilyStaysPage,
   'admission-applications': ApplicationsPage,
+  'admission-workspace': AdmissionWorkspacePage,
   'waiting-list': WaitingListPage,
   contracts: ContractsPage,
   'residency-changes': ChangeRequestsPage,
@@ -129,6 +131,10 @@ const PAGES = {
 
 // Mục menu chỉ hiện khi đã có màn
 const BUILT = new Set(Object.keys(PAGES))
+
+// Màn con không có mục menu riêng: quyền mở và mục được chọn trên menu theo màn cha
+const PARENT_PAGE = { 'admission-workspace': 'admission-applications' }
+const menuPageOf = (page) => PARENT_PAGE[page] ?? page
 
 // Màn đang mở giữ ở hash của URL để tải lại trang (F5) không về Tổng quan (BUG-UI-002); hash lạ thì về màn mặc định.
 // Tham số id đi sau dấu ? (`#incidents?incidentId=9`, 016 Q12): mở thẳng bản ghi ở màn của feature sở hữu.
@@ -159,7 +165,7 @@ function firstPage(role, hasFunction = null) {
 function LivePermissions({ role, page, onNavigate, render }) {
   const { status, hasFunction } = usePermissions()
   const check = status === 'ready' ? hasFunction : null
-  const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === page)
+  const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === menuPageOf(page))
   const misplaced = status !== 'loading' && page !== ACCOUNT_PAGE && (!item || !canSee(item, role, check, BUILT))
   const first = misplaced ? firstPage(role, check) : null
 
@@ -224,7 +230,7 @@ function App() {
   function changeRole(nextRole) {
     setRole(nextRole)
     const allowed = navForRole(nextRole, null, BUILT).flatMap((g) => g.items.map((i) => i.key))
-    if (page !== ACCOUNT_PAGE && !allowed.includes(page)) navigate(firstPage(nextRole))
+    if (page !== ACCOUNT_PAGE && !allowed.includes(menuPageOf(page))) navigate(firstPage(nextRole))
   }
 
   if (checking) return null
@@ -232,7 +238,7 @@ function App() {
     return <FamilyPortal onExit={() => changeRole('FLOOR_MANAGER')} belongings={PortalBelongings} />
 
   const Page = PAGES[page]
-  const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === page)
+  const item = NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === menuPageOf(page))
 
   const shell = (hasFunction) => {
     // Chặn hiển thị khi không có quyền (quyền thật do backend trả, backend vẫn kiểm)
@@ -245,7 +251,7 @@ function App() {
         onRoleChange={changeRole}
         session={session}
         onLogout={logout}
-        page={page}
+        page={menuPageOf(page)}
         onPageChange={(key) => navigate(key)}
       >
         {allowed ? (

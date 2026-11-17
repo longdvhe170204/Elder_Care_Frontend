@@ -12,13 +12,15 @@ import { PermissionDeniedState } from '@/common/PageState'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { AccountDetail } from './AccountDetail'
+import { CreateFamilyAccount } from './CreateFamilyAccount'
 import { CreateResidentAccount } from './CreateResidentAccount'
 import { CreateStaffAccount } from './CreateStaffAccount'
 import { STATUS_LABELS, TYPE_LABELS, profileLabel, roleNames } from './accountLabels'
 
 // Danh sách tài khoản (002 T035; US2; FR-001, FR-051; hợp đồng GET /accounts, phân trang theo con trỏ).
 // Quản lý viện thấy mọi tài khoản; Hành chính thấy tài khoản người thân, người cao tuổi (backend lọc). canCreate,
-// canCreateResident chỉ để hiện nút tạo tài khoản nhân viên, người cao tuổi (002 T095); backend vẫn kiểm (constitution XI).
+// canCreateResident, canCreateFamily chỉ để hiện nút tạo tài khoản nhân viên, người cao tuổi (002 T095), người thân
+// (002 US6, FR-050 → FR-052, bổ sung 2026-11-17); backend vẫn kiểm (constitution XI).
 // Chi tiết mở trong DetailLayout của màn cha (DESIGN.md 5): onOpen nhận { key, label, render }, openedKey là mục đang mở.
 // Form tạo tài khoản là khung phụ, vẫn mở bằng Sheet.
 
@@ -28,7 +30,7 @@ function toQuery(filter, cursor) {
   return { type: filter.type || undefined, status: filter.status || undefined, q: filter.q.trim() || undefined, cursor }
 }
 
-export function AccountList({ canCreate, canCreateResident = false, openedKey, onOpen }) {
+export function AccountList({ canCreate, canCreateResident = false, canCreateFamily = false, openedKey, onOpen }) {
   const [draft, setDraft] = useState(EMPTY_FILTER)
   const [filter, setFilter] = useState(EMPTY_FILTER)
   const [state, setState] = useState({ status: 'loading', items: [], nextCursor: null })
@@ -129,6 +131,11 @@ export function AccountList({ canCreate, canCreateResident = false, openedKey, o
           {canCreateResident && (
             <Button type="button" className="h-10" onClick={() => setCreating('resident')}>
               Tạo tài khoản người cao tuổi
+            </Button>
+          )}
+          {canCreateFamily && (
+            <Button type="button" className="h-10" onClick={() => setCreating('family')}>
+              Tạo tài khoản người thân
             </Button>
           )}
         </div>
@@ -235,6 +242,9 @@ export function AccountList({ canCreate, canCreateResident = false, openedKey, o
           )}
           {creating === 'resident' && (
             <CreateResidentAccount onCreated={() => load(filter)} onClose={() => setCreating(null)} />
+          )}
+          {creating === 'family' && (
+            <CreateFamilyAccount onCreated={() => load(filter)} onClose={() => setCreating(null)} />
           )}
         </SheetContent>
       </Sheet>

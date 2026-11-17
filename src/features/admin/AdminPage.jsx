@@ -77,6 +77,7 @@ function AdminContent({ role }) {
         <AccountList
           canCreate={role === 'NURSING_HOME_MANAGER'}
           canCreateResident={role === 'NURSING_HOME_MANAGER' || role === 'OFFICE_STAFF'}
+          canCreateFamily={role === 'NURSING_HOME_MANAGER' || role === 'OFFICE_STAFF'}
           openedKey={detail?.key}
           onOpen={setDetail}
         />

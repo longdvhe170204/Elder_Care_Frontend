@@ -34,7 +34,7 @@ import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 
 const OPEN_STATUSES = ['IN_PROGRESS', 'WAITING']
 
-function OpinionBlock({ opinions }) {
+export function OpinionBlock({ opinions }) {
   if (!opinions.length) return <p className="type-body-sm text-muted-foreground">Chưa ghi ý kiến về việc vào ở.</p>
   return (
     <ul className="flex flex-col gap-2">
@@ -55,7 +55,7 @@ function OpinionBlock({ opinions }) {
   )
 }
 
-function OpinionForm({ applicationId, onDone, onCancel }) {
+export function OpinionForm({ applicationId, onDone, onCancel }) {
   const [source, setSource] = useState('')
   const [opinion, setOpinion] = useState('')
   const [note, setNote] = useState('')
@@ -113,7 +113,16 @@ function OpinionForm({ applicationId, onDone, onCancel }) {
   )
 }
 
-export function ApplicationDetail({ application, residentName, canUpdate, onChanged, onEdit, Title, Description }) {
+export function ApplicationDetail({
+  application,
+  residentName,
+  canUpdate,
+  onChanged,
+  onEdit,
+  onOpenWorkspace,
+  Title,
+  Description,
+}) {
   const [conditions, setConditions] = useState(null)
   const [progress, setProgress] = useState(null)
   const [failure, setFailure] = useState(null)
@@ -151,6 +160,11 @@ export function ApplicationDetail({ application, residentName, canUpdate, onChan
           {`Đăng ký ngày ${formatDate(application.applicationDate)}`}
         </Description>
       </div>
+      {onOpenWorkspace && (
+        <Button className="h-11 self-start" onClick={() => onOpenWorkspace(application)}>
+          Mở hồ sơ tiếp nhận
+        </Button>
+      )}
       <div className="grid gap-3">
         <Info label="Loại lưu trú mong muốn">{labelOf(RESIDENCE_TYPES, application.desiredResidenceType)}</Info>
         <Info label="Mức chăm sóc dự kiến">{labelOf(CARE_LEVELS, application.expectedCareLevel)}</Info>

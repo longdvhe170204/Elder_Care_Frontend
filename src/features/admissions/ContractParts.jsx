@@ -353,12 +353,15 @@ const DAYS = [
   [7, 'Chủ nhật'],
 ]
 
-// Lập hợp đồng Nháp hoặc sửa Nháp (tải lại để lấy ETag cho If-Match)
-export function ContractSheet({ contract, onClose, onDone }) {
+// Lập hợp đồng Nháp hoặc sửa Nháp (tải lại để lấy ETag cho If-Match). residentId: chọn sẵn người cao tuổi khi lập mới
+// (mở từ màn Hồ sơ tiếp nhận).
+export function ContractSheet({ contract, residentId: presetResidentId = null, onClose, onDone }) {
   const editing = !!contract
   const [etag, setEtag] = useState(null)
   const [catalog, setCatalog] = useState([])
-  const [residentId, setResidentId] = useState(contract ? String(contract.residentId) : '')
+  const [residentId, setResidentId] = useState(
+    contract ? String(contract.residentId) : presetResidentId ? String(presetResidentId) : '',
+  )
   const [type, setType] = useState(contract?.residenceType ?? '')
   const [startDate, setStartDate] = useState(contract?.startDate ?? '')
   const [endDate, setEndDate] = useState(contract?.endDate ?? '')

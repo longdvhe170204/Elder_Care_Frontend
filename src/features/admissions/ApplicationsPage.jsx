@@ -26,7 +26,7 @@ const FILTERS = [
   ['CANCELLED', 'Đã hủy'],
 ]
 
-export function ApplicationsPage() {
+export function ApplicationsPage({ onNavigate = () => {} } = {}) {
   const { can } = usePermissions()
   const [filter, setFilter] = useState('IN_PROGRESS')
   const [applications, setApplications] = useState(null)
@@ -91,6 +91,7 @@ export function ApplicationsPage() {
           canUpdate={can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE')}
           onChanged={changed}
           onEdit={(application) => setSheet({ application })}
+          onOpenWorkspace={(application) => onNavigate('admission-workspace', { id: application.id })}
           {...titles}
         />
       )}

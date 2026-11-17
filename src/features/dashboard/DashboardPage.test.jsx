@@ -63,6 +63,35 @@ describe('DashboardPage', () => {
     expect(screen.getByText(/Cập nhật lúc 10:15:30/)).toBeInTheDocument()
   })
 
+  // Đề xuất B (chủ dự án duyệt 2026-11-17): breakdown cộng đúng bằng tổng thì vẽ thanh chồng kèm chú thích tên và số
+  it('FR_020_breakdownCongDuTong_veThanhChong_kemChuThich', async () => {
+    api.on(
+      'GET',
+      '/dashboard',
+      dashboard([
+        {
+          group: 'FACILITY_LICENSES',
+          status: 'COMPLETE',
+          values: [
+            {
+              ...LICENSE,
+              value: 3,
+              breakdown: [
+                { key: 'A', value: 2 },
+                { key: 'B', value: 1 },
+              ],
+            },
+          ],
+        },
+      ]),
+    )
+    render(<DashboardPage role="NURSING_HOME_MANAGER" />)
+
+    const legend = await screen.findByRole('list', { name: 'Chú thích Giấy phép cơ sở sắp hết hạn' })
+    expect(within(legend).getAllByRole('listitem')).toHaveLength(2)
+    expect(screen.getByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ })).toHaveTextContent('3')
+  })
+
   it('FR_008_mauSo0_hienGachNgang', async () => {
     api.on(
       'GET',

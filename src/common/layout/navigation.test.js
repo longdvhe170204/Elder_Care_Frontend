@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { NAV_GROUPS, groupOfPage, navForRole } from './navigation'
+import { NAV_GROUPS, PRIMARY_BY_ROLE, groupOfPage, navForRole } from './navigation'
 
 const keys = (groups) => groups.flatMap((g) => g.items.map((i) => i.key))
 
@@ -8,11 +8,12 @@ describe('navForRole', () => {
   it('có quyền thật: chỉ hiện mục có chức năng được cấp, cùng Yêu cầu phê duyệt, Thông báo, Chờ xem lại', () => {
     const granted = new Set(['TASK_CHECKLIST', 'MEDICATION_ADMINISTRATION'])
 
+    // care-tasks đứng đầu vì thuộc nhóm "Việc chính" của Nhân viên chăm sóc
     expect(keys(navForRole('CAREGIVER', (fn) => granted.has(fn)))).toEqual([
+      'care-tasks',
       'approval-requests',
       'notifications',
       'pending-review-records',
-      'care-tasks',
       'medication',
     ])
   })
@@ -57,7 +58,9 @@ describe('navForRole', () => {
       .filter((i) => i.roles.includes('KITCHEN_STAFF'))
       .map((i) => i.key)
 
-    expect(keys(navForRole('KITCHEN_STAFF'))).toEqual(expected)
+    // cùng tập mục; mục "Việc chính" của Nhân viên bếp lên đầu
+    expect([...keys(navForRole('KITCHEN_STAFF'))].sort()).toEqual([...expected].sort())
+    expect(keys(navForRole('KITCHEN_STAFF')).slice(0, 3)).toEqual(PRIMARY_BY_ROLE.KITCHEN_STAFF)
   })
 
   it('mục chưa có màn thì ẩn, có màn thì hiện', () => {
@@ -95,7 +98,52 @@ describe('navForRole', () => {
   it('có quyền thật: nhóm không có chức năng nào được cấp thì ẩn', () => {
     const labels = navForRole('NURSING_STAFF', (fn) => fn === 'MEDICATION_ADMINISTRATION').map((g) => g.label)
 
-    expect(labels).toEqual([null, 'Thuốc và sức khỏe'])
+    // Phát thuốc là việc chính của Điều dưỡng nên nằm ở nhóm ghim; nhóm "Thuốc và sức khỏe" không còn mục nào thì ẩn
+    expect(labels).toEqual(['Việc chính', null])
+  })
+
+  // Nhóm "Việc chính" ghim đầu menu theo vai trò (chủ dự án duyệt 2026-11-17, DESIGN.md 5 "Nhóm menu")
+  it('việc chính: nhóm ghim đứng đầu, đúng thứ tự của vai trò, không lặp lại ở nhóm khác', () => {
+    const groups = navForRole('OFFICE_STAFF')
+    const [primary] = groups
+
+    expect(primary.id).toBe('primary')
+    expect(primary.label).toBe('Việc chính')
+    expect(primary.pinned).toBe(true)
+    expect(primary.items.map((i) => i.key)).toEqual([
+      'admission-applications',
+      'residents',
+      'contracts',
+      'waiting-list',
+      'beds',
+      'family-members',
+    ])
+    const all = keys(groups)
+    expect(all.filter((key, i) => all.indexOf(key) !== i)).toEqual([])
+    expect(keys(groups.slice(1))).not.toContain('admission-applications')
+  })
+
+  it('việc chính: chỉ gồm mục người xem được phép thấy; không có mục nào thì không có nhóm', () => {
+    const granted = new Set(['TASK_CHECKLIST'])
+    const groups = navForRole('CAREGIVER', (fn) => granted.has(fn))
+
+    expect(groups[0].items.map((i) => i.key)).toEqual(['care-tasks'])
+    expect(navForRole('CAREGIVER', () => false)[0].id).toBe('general')
+  })
+
+  it('việc chính: mỗi khóa đều là mục có thật và vai trò đó có quyền ở bản mẫu', () => {
+    const items = new Map(NAV_GROUPS.flatMap((g) => g.items).map((i) => [i.key, i]))
+    for (const [role, list] of Object.entries(PRIMARY_BY_ROLE)) {
+      for (const key of list) {
+        expect(items.has(key), `${role}: ${key}`).toBe(true)
+        expect(items.get(key).roles, `${role}: ${key}`).toContain(role)
+      }
+    }
+  })
+
+  it('groupOfPage: mục việc chính của vai trò thuộc nhóm ghim', () => {
+    expect(groupOfPage('admission-applications', 'OFFICE_STAFF')).toBe('primary')
+    expect(groupOfPage('admission-applications', 'NURSING_HOME_MANAGER')).toBe('residency')
   })
 
   it('groupOfPage: trả id nhóm chứa trang', () => {

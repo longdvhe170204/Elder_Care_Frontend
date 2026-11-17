@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { ReportsPage } from './ReportsPage'
 
@@ -100,6 +100,37 @@ describe('ReportsPage', () => {
     expect(await screen.findByText('Không có bản ghi')).toBeInTheDocument()
     const [url] = api.calls('GET', '/metric-details/MED.MISSED_RATE')[0]
     expect(new URL(url, 'http://localhost').searchParams.get('breakdownKey')).toBe('7')
+  })
+
+  // Đề xuất B (chủ dự án duyệt 2026-11-17): chỉ tiêu có breakdown vẽ được thì có biểu đồ trên bảng; bảng giữ nguyên
+  it('FR_009_bieuDo_chiTieuCoBreakdownVeDuoc_vaBangGiuNguyen', async () => {
+    api.on(
+      'GET',
+      '/reports/HEALTH_MEDICATION',
+      json(200, {
+        ...REPORT,
+        values: [
+          {
+            ...REPORT.values[0],
+            value: 10,
+            numerator: null,
+            denominator: null,
+            labels: [],
+            breakdown: [
+              { key: '7', value: 6 },
+              { key: '8', value: 4 },
+            ],
+          },
+        ],
+      }),
+    )
+    render(<ReportsPage role="DOCTOR" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
+
+    const charts = await screen.findByRole('region', { name: 'Biểu đồ' })
+    expect(within(charts).getByRole('heading', { name: 'Tỷ lệ liều Bỏ lỡ' })).toBeInTheDocument()
+    expect(within(charts).getByRole('list', { name: 'Chú thích Tỷ lệ liều Bỏ lỡ' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '6' })).toBeInTheDocument()
   })
 
   it('FR_042_soSuCoDaHuy_dongThamKhao', async () => {
