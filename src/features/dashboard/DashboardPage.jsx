@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/common/PageHeader'
+import { BreakdownChart } from '@/common/charts/BreakdownChart'
+import { chartKind } from '@/common/charts/chartRules'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { MetricDetailSheet } from '@/features/reports/MetricDetailSheet'
@@ -33,22 +35,37 @@ function MetricButton({ value, metric, onOpen }) {
   const breakdown = value.breakdown ?? []
   // "không có dữ liệu" đã ghi riêng dưới số
   const notes = labelNotes({ ...value, labels: (value.labels ?? []).filter((l) => l !== 'NO_DATA') })
+  // Đề xuất B (2026-11-17): breakdown vẽ thành biểu đồ khi vẽ được (BreakdownChart), không thì giữ dạng chữ; biểu đồ
+  // nằm ngoài nút vì danh sách, bảng không được đặt trong <button>
+  const charted = chartKind(value.value, breakdown) !== 'none'
   return (
-    <button
-      type="button"
-      onClick={() => onOpen({ metric, valueText: formatValue(value.value) })}
-      className="flex flex-col items-start gap-1 rounded-xl p-2 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-    >
-      <span className={`type-metric tabular-nums ${overdue ? 'text-destructive' : ''}`}>{formatValue(value.value)}</span>
-      <span className="type-caption text-muted-foreground text-balance">{metric.name}</span>
-      {value.value === null && <span className="type-caption text-muted-foreground">không có dữ liệu</span>}
-      {breakdown.length > 0 && (
-        <span className="type-body-sm">
-          {breakdown.map((b) => `${breakdownLabel(value.metricCode, b.key)} ${formatValue(b.value)}`).join(', ')}
-        </span>
+    <div className="flex flex-col gap-2">
+      <button
+        type="button"
+        onClick={() => onOpen({ metric, valueText: formatValue(value.value) })}
+        className="flex flex-col items-start gap-1 rounded-xl p-2 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
+        <span className={`type-metric tabular-nums ${overdue ? 'text-destructive' : ''}`}>{formatValue(value.value)}</span>
+        <span className="type-caption text-muted-foreground text-balance">{metric.name}</span>
+        {value.value === null && <span className="type-caption text-muted-foreground">không có dữ liệu</span>}
+        {breakdown.length > 0 && !charted && (
+          <span className="type-body-sm">
+            {breakdown.map((b) => `${breakdownLabel(value.metricCode, b.key)} ${formatValue(b.value)}`).join(', ')}
+          </span>
+        )}
+        {notes && <span className="type-caption text-muted-foreground">{notes}</span>}
+      </button>
+      {charted && (
+        <div className="px-2">
+          <BreakdownChart
+            title={metric.name}
+            total={value.value}
+            breakdown={breakdown}
+            labelOf={(key) => breakdownLabel(value.metricCode, key)}
+          />
+        </div>
       )}
-      {notes && <span className="type-caption text-muted-foreground">{notes}</span>}
-    </button>
+    </div>
   )
 }
 

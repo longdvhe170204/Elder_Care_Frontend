@@ -5,6 +5,8 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { BreakdownChart } from '@/common/charts/BreakdownChart'
+import { chartKind } from '@/common/charts/chartRules'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { breakdownLabel, formatValue, labelNotes } from './reportLabels'
@@ -71,7 +73,32 @@ export function ReportTable({
 
   const { report } = state
   const metricOf = (code) => metrics[code] ?? { code, name: code }
-  return (
+  // Đề xuất B (2026-11-17): chỉ tiêu có breakdown vẽ được thì có biểu đồ trên bảng; bảng giữ số chính xác và lối mở chi tiết
+  const charted = report.values.filter((v) => chartKind(v.value, v.breakdown) !== 'none')
+  const charts = charted.length > 0 && (
+    <section aria-labelledby="report-charts" className="flex flex-col gap-3 rounded-2xl border bg-card p-4 md:p-5">
+      <h2 id="report-charts" className="type-card-title">
+        Biểu đồ
+      </h2>
+      <div className="grid gap-5 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+        {charted.map((v) => {
+          const metric = metricOf(v.metricCode)
+          return (
+            <div key={v.metricCode} className="flex min-w-0 flex-col gap-2">
+              <h3 className="type-label">{metric.name}</h3>
+              <BreakdownChart
+                title={metric.name}
+                total={v.value}
+                breakdown={v.breakdown}
+                labelOf={(key) => breakdownLabel(v.metricCode, key, floors)}
+              />
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+  const table = (
     <section className="flex flex-col gap-3 rounded-2xl border bg-card p-4 md:p-5">
       <p className="type-body-sm text-muted-foreground">
         Tính đến {formatDateTime(report.asOf)}. Bấm giá trị để xem danh sách bản ghi.
@@ -152,5 +179,12 @@ export function ReportTable({
         </Table>
       )}
     </section>
+  )
+  if (!charts) return table
+  return (
+    <>
+      {charts}
+      {table}
+    </>
   )
 }

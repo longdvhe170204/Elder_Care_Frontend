@@ -482,13 +482,36 @@ export function canSee(item, role, hasFunction = null, built = null) {
   return item.functions ? item.functions.some(hasFunction) : role !== 'FAMILY_MEMBER'
 }
 
-export function navForRole(role, hasFunction = null, built = null) {
-  return NAV_GROUPS.map((group) => ({
-    ...group,
-    items: group.items.filter((item) => canSee(item, role, hasFunction, built)),
-  })).filter((group) => group.items.length > 0)
+// Nhóm "Việc chính" ghim đầu menu (chủ dự án duyệt 2026-11-17; DESIGN.md 5 "Nhóm menu"): mục làm hằng ngày của vai trò
+// chính theo luồng BF, đúng thứ tự dưới. Chỉ sắp lại vị trí: mục vẫn lọc theo quyền như mọi mục khác, và được bỏ khỏi
+// nhóm gốc để không hiện hai lần.
+export const PRIMARY_BY_ROLE = {
+  NURSING_HOME_MANAGER: ['dashboard', 'approval-requests', 'reports', 'alerts', 'shifts'],
+  FLOOR_MANAGER: ['care-task-planning', 'overdue-care-tasks', 'handovers', 'alerts', 'beds'],
+  DOCTOR: ['residents', 'alerts', 'incidents', 'care-plans', 'resident-diets'],
+  NURSING_STAFF: ['care-tasks', 'medication', 'alerts', 'care-plans', 'handovers'],
+  CAREGIVER: ['care-tasks', 'incidents', 'handovers', 'shifts'],
+  KITCHEN_STAFF: ['meals', 'shifts', 'procurement'],
+  OFFICE_STAFF: ['admission-applications', 'residents', 'contracts', 'waiting-list', 'beds', 'family-members'],
+  ACCOUNTANT: ['balance', 'charges', 'contracts', 'procurement'],
 }
 
-export function groupOfPage(page) {
+export function navForRole(role, hasFunction = null, built = null) {
+  const groups = NAV_GROUPS.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => canSee(item, role, hasFunction, built)),
+  }))
+  const visible = new Map(groups.flatMap((g) => g.items).map((item) => [item.key, item]))
+  const primary = (PRIMARY_BY_ROLE[role] ?? []).filter((key) => visible.has(key))
+  const pinned = new Set(primary)
+  const rest = groups
+    .map((group) => ({ ...group, items: group.items.filter((item) => !pinned.has(item.key)) }))
+    .filter((group) => group.items.length > 0)
+  if (primary.length === 0) return rest
+  return [{ id: 'primary', label: 'Việc chính', pinned: true, items: primary.map((key) => visible.get(key)) }, ...rest]
+}
+
+export function groupOfPage(page, role = null) {
+  if (role && PRIMARY_BY_ROLE[role]?.includes(page)) return 'primary'
   return NAV_GROUPS.find((group) => group.items.some((item) => item.key === page))?.id
 }

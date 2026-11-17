@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
@@ -49,10 +49,10 @@ function permissions(list) {
   )
 }
 
-function renderPage() {
+function renderPage(onNavigate = () => {}) {
   return render(
     <PermissionsProvider>
-      <ApplicationsPage role="OFFICE_STAFF" />
+      <ApplicationsPage role="OFFICE_STAFF" onNavigate={onNavigate} />
     </PermissionsProvider>,
   )
 }
@@ -98,6 +98,15 @@ describe('ApplicationsPage', () => {
     expect(screen.getByText('Chưa ghi ý kiến của người cao tuổi về việc vào ở')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Ý kiến về việc vào ở' })).toBeInTheDocument()
     expect(screen.getByText('Đăng ký')).toBeInTheDocument()
+  })
+
+  it('khung chi tiết có nút mở màn Hồ sơ tiếp nhận của lượt đăng ký (đề xuất A, 2026-11-17)', async () => {
+    const onNavigate = vi.fn()
+    renderPage(onNavigate)
+    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ tiếp nhận' }))
+    expect(onNavigate).toHaveBeenCalledWith('admission-workspace', { id: 7 })
   })
 
   it('FR_004a_ghiYKien_guiNguonVaYKien_roiTaiLai', async () => {

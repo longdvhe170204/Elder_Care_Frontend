@@ -53,23 +53,39 @@ describe('AppShell', () => {
     const group = within(sidebar).getByRole('button', { name: 'Thuốc và sức khỏe' })
 
     expect(group).toHaveAttribute('aria-expanded', 'false')
-    expect(within(sidebar).queryByRole('button', { name: 'Phát thuốc' })).toBeNull()
+    expect(within(sidebar).queryByRole('button', { name: 'Danh mục thuốc' })).toBeNull()
 
     fireEvent.click(group)
     expect(group).toHaveAttribute('aria-expanded', 'true')
-    expect(await within(sidebar).findByRole('button', { name: 'Phát thuốc' })).toBeTruthy()
+    expect(await within(sidebar).findByRole('button', { name: 'Danh mục thuốc' })).toBeTruthy()
 
     fireEvent.click(group)
     expect(group).toHaveAttribute('aria-expanded', 'false')
-    await waitFor(() => expect(within(sidebar).queryByRole('button', { name: 'Phát thuốc' })).toBeNull())
+    await waitFor(() => expect(within(sidebar).queryByRole('button', { name: 'Danh mục thuốc' })).toBeNull())
+  })
+
+  it('nhóm "Việc chính" của vai trò đứng đầu, luôn hiện mục, không có nút thu gọn', () => {
+    shell({ page: 'medication' })
+    const sidebar = screen.getByRole('navigation', { name: 'Menu chính' })
+    const primary = within(sidebar).getByRole('region', { name: 'Việc chính' })
+
+    expect(within(primary).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Checklist ca',
+      'Phát thuốc',
+      'Cảnh báo',
+      'Kế hoạch chăm sóc',
+      'Bàn giao ca',
+    ])
+    expect(within(primary).getByRole('button', { name: 'Phát thuốc' })).toHaveAttribute('aria-current', 'page')
+    expect(within(sidebar).queryByRole('button', { name: 'Việc chính' })).toBeNull()
   })
 
   it('nhóm chứa trang đang mở thì mở sẵn', () => {
-    shell({ page: 'medication' })
+    shell({ page: 'medication-catalog' })
     const sidebar = screen.getByRole('navigation', { name: 'Menu chính' })
 
     expect(within(sidebar).getByRole('button', { name: 'Thuốc và sức khỏe' })).toHaveAttribute('aria-expanded', 'true')
-    expect(within(sidebar).getByRole('button', { name: 'Phát thuốc' })).toHaveAttribute('aria-current', 'page')
+    expect(within(sidebar).getByRole('button', { name: 'Danh mục thuốc' })).toHaveAttribute('aria-current', 'page')
     expect(within(sidebar).getByRole('button', { name: 'Chăm sóc hằng ngày' })).toHaveAttribute(
       'aria-expanded',
       'false',

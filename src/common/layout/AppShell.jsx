@@ -156,9 +156,9 @@ function withGroup(ids, id) {
 }
 
 // Nhóm chứa trang đang mở thì mở sẵn (cả khi chuyển trang); người xem vẫn đóng được
-function useOpenGroups(page) {
-  const [state, setState] = useState(() => ({ page, ids: withGroup(readOpenGroups(), groupOfPage(page)) }))
-  if (state.page !== page) setState({ page, ids: withGroup(state.ids, groupOfPage(page)) })
+function useOpenGroups(page, role) {
+  const [state, setState] = useState(() => ({ page, ids: withGroup(readOpenGroups(), groupOfPage(page, role)) }))
+  if (state.page !== page) setState({ page, ids: withGroup(state.ids, groupOfPage(page, role)) })
 
   function setOpen(id, open) {
     const ids = open ? withGroup(state.ids, id) : state.ids.filter((x) => x !== id)
@@ -194,7 +194,17 @@ function NavList({ groups, page, onSelect, openGroups, onGroupOpenChange }) {
   return (
     <nav aria-label="Menu chính" className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
       {groups.map((group) =>
-        group.label ? (
+        group.pinned ? (
+          // Nhóm "Việc chính" luôn mở, không thu gọn (DESIGN.md 5 "Nhóm menu"); tên nhóm là tiêu đề của danh sách
+          <section key={group.id} aria-labelledby={`nav-${group.id}`} className="flex flex-col gap-1 pb-1">
+            <h2 id={`nav-${group.id}`} className="px-2.5 pt-1 type-caption text-sidebar-muted-foreground">
+              {group.label}
+            </h2>
+            {group.items.map((item) => (
+              <NavItem key={item.key} item={item} page={page} onSelect={onSelect} />
+            ))}
+          </section>
+        ) : group.label ? (
           <Collapsible
             key={group.id}
             open={openGroups.includes(group.id)}
@@ -231,7 +241,7 @@ const DESKTOP = '(min-width: 768px)'
 export function AppShell({ role, hasFunction, built, onRoleChange, session, onLogout, page, onPageChange, children }) {
   const groups = navForRole(role, hasFunction, built)
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [openGroups, setGroupOpen] = useOpenGroups(page)
+  const [openGroups, setGroupOpen] = useOpenGroups(page, role)
   const pageLabel =
     page === ACCOUNT_PAGE
       ? 'Tài khoản của tôi'
