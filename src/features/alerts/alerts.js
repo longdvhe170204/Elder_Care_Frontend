@@ -4,6 +4,7 @@ import {
   getIncidentTypes,
   getAlertsById,
   postAlertsByIdActivateEmergency,
+  postAlertsByIdAssign,
   postAlertsByIdChangeLevel,
   postAlertsByIdClose,
   postAlertsByIdConvertToIncident,
@@ -43,6 +44,7 @@ export async function loadAlert(id) {
 
 const COMMANDS = {
   receive: postAlertsByIdReceive,
+  assign: postAlertsByIdAssign,
   'start-handling': postAlertsByIdStartHandling,
   close: postAlertsByIdClose,
   'change-level': postAlertsByIdChangeLevel,

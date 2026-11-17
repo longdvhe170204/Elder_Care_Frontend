@@ -1,45 +1,8 @@
-import { useEffect, useState } from 'react'
-import { getStaff } from '@/api'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { StaffSelectField } from '@/common/StaffSelectField'
 
 // Nhân viên bàn giao khi Chuyển viện (từ sự cố hoặc lựa chọn nguy kịch): lệnh Chuyển viện của 001/004 bắt buộc người bàn
 // giao (quickstart 007 Q55, 2026-11-12). Danh sách nhân viên đang làm việc mà người ghi xem được (api-008), như màn ghi đón.
-export function HandoverStaffField({
-  id,
-  value,
-  onChange,
-  invalid,
-  label = 'Nhân viên bàn giao',
-  errorText = 'Chọn nhân viên bàn giao',
-}) {
-  const [staff, setStaff] = useState(null)
-  useEffect(() => {
-    let live = true
-    getStaff({ query: { status: 'WORKING' } })
-      .then(({ data }) => live && setStaff(data ?? []))
-      .catch(() => live && setStaff([]))
-    return () => {
-      live = false
-    }
-  }, [])
-  return (
-    <Field data-invalid={invalid || undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <select
-        id={id}
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        aria-invalid={invalid || undefined}
-        className="h-11 w-full rounded-md border border-input bg-transparent px-3"
-      >
-        <option value="">{staff === null ? 'Đang tải danh sách nhân viên' : 'Chưa chọn'}</option>
-        {(staff ?? []).map((s) => (
-          <option key={s.id} value={String(s.id)}>
-            {s.fullName}
-          </option>
-        ))}
-      </select>
-      {invalid && <FieldError>{errorText}</FieldError>}
-    </Field>
-  )
+// `valueKey="accountId"` khi lệnh cần mã tài khoản (Giao người xử lý sự cố).
+export function HandoverStaffField({ label = 'Nhân viên bàn giao', errorText = 'Chọn nhân viên bàn giao', ...rest }) {
+  return <StaffSelectField label={label} errorText={errorText} {...rest} />
 }

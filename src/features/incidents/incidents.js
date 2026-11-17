@@ -1,4 +1,5 @@
 import { getResidents, getResidentsById } from '@/api/api001'
+import { getFloors } from '@/api/api003'
 import {
   getIncidentTypes,
   getIncidents,
@@ -36,6 +37,11 @@ export async function loadIncident(id) {
     getProgressionTypes({}).catch(() => ({ data: [] })),
   ])
   return { incident: incident.data, progressionTypes: progressionTypes.data ?? [] }
+}
+
+export async function loadFloorChoices() {
+  const { data } = await getFloors({})
+  return (data ?? []).filter((f) => f.status !== 'INACTIVE').map((f) => ({ id: f.id, name: f.name }))
 }
 
 export async function loadResidentChoices() {

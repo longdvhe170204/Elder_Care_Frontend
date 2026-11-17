@@ -21,7 +21,14 @@ import { problemOf } from '@/common/problem'
 import { EmergencyCardPanel } from './EmergencyCardPanel'
 import { HandoverStaffField } from './HandoverStaffField'
 import { TransferOutPanel } from './TransferOutPanel'
-import { loadIncident, loadIncidentBoard, loadResidentChoices, recordIncident, runIncidentCommand } from './incidents'
+import {
+  loadFloorChoices,
+  loadIncident,
+  loadIncidentBoard,
+  loadResidentChoices,
+  recordIncident,
+  runIncidentCommand,
+} from './incidents'
 import {
   LEVEL_LABEL,
   LEVEL_ORDER,
@@ -127,6 +134,7 @@ function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmi
       {mode === 'assign-handler' && (
         <HandoverStaffField
           id="incident-assignee"
+          valueKey="accountId"
           label="Người được giao"
           errorText="Chọn người được giao"
           value={assignee}
@@ -396,6 +404,8 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
 function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
   const [residents, setResidents] = useState(null)
   const [residentId, setResidentId] = useState(null)
+  const [floors, setFloors] = useState([])
+  const [floorId, setFloorId] = useState('')
   const [typeId, setTypeId] = useState('')
   const [level, setLevel] = useState('')
   const [discoveredAt, setDiscoveredAt] = useState(() => vietnamNowLocal())
@@ -412,6 +422,10 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
       (data) => !cancelled && setResidents(data),
       (error) => !cancelled && setProblem(problemOf(error)),
     )
+    loadFloorChoices().then(
+      (data) => !cancelled && setFloors(data),
+      () => {},
+    )
     return () => {
       cancelled = true
     }
@@ -423,6 +437,7 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
   const lowerNeeded = needsLowerReason(level, type)
   const errors = {
     resident: residentRequired && residentId == null,
+    floor: !residentRequired && !floorId,
     type: !type,
     level: !level,
     description: !description.trim(),
@@ -444,6 +459,7 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
     try {
       await recordIncident({
         ...(residentId != null ? { residentId } : {}),
+        ...(!residentRequired && floorId ? { floorAreaId: Number(floorId) } : {}),
         incidentTypeId: type.id,
         level,
         discoveredAt: vietnamIso(discoveredAt),
@@ -540,6 +556,26 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
                 aria-invalid={(submitted && errors.lowerReason) || undefined}
               />
               {submitted && errors.lowerReason && <FieldError>Nhập lý do chọn mức thấp hơn mặc định</FieldError>}
+            </Field>
+          )}
+          {!residentRequired && (
+            <Field data-invalid={(submitted && errors.floor) || undefined}>
+              <FieldLabel htmlFor="incident-floor">Tầng xảy ra</FieldLabel>
+              <select
+                id="incident-floor"
+                value={floorId}
+                onChange={(e) => setFloorId(e.target.value)}
+                aria-invalid={(submitted && errors.floor) || undefined}
+                className="h-11 w-full rounded-md border border-input bg-transparent px-3"
+              >
+                <option value="">Chưa chọn</option>
+                {floors.map((f) => (
+                  <option key={f.id} value={String(f.id)}>
+                    {f.name}
+                  </option>
+                ))}
+              </select>
+              {submitted && errors.floor && <FieldError>Chọn tầng xảy ra sự cố</FieldError>}
             </Field>
           )}
           <Field>

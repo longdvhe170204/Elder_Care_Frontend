@@ -110,7 +110,7 @@ describe('IncidentsPage', () => {
   })
 
   it('FR_045_giaoNguoiXuLy_chonNguoiVaGhiChu', async () => {
-    api.on('GET', '/staff', json(200, [{ id: 31, fullName: 'Trần Thu Hà' }]))
+    api.on('GET', '/staff', json(200, [{ id: 31, accountId: 41, fullName: 'Trần Thu Hà' }]))
     api.on('GET', '/incidents/11', json(200, { ...NEW_INCIDENT, allowedCommands: ['assign-handler'] }))
     api.on('POST', '/incidents/11/assign-handler', json(200, {}))
     render(<IncidentsPage />)
@@ -120,12 +120,12 @@ describe('IncidentsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và giao' }))
     expect(await screen.findByText('Chọn người được giao')).toBeTruthy()
     expect(api.calls('POST', '/incidents/11/assign-handler')).toHaveLength(0)
-    fireEvent.change(await screen.findByLabelText('Người được giao'), { target: { value: '31' } })
+    fireEvent.change(await screen.findByLabelText('Người được giao'), { target: { value: '41' } })
     fireEvent.change(screen.getByLabelText('Ghi chú giao việc'), { target: { value: 'Nhờ chị Hà xử lý' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và giao' }))
     await waitFor(() => expect(api.calls('POST', '/incidents/11/assign-handler')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/incidents/11/assign-handler')[0][1].body)).toEqual({
-      assigneeId: 31,
+      assigneeId: 41,
       note: 'Nhờ chị Hà xử lý',
     })
   })
@@ -210,6 +210,39 @@ describe('IncidentsPage', () => {
       lowerLevelReason: 'Không chấn thương',
     })
     expect(body.discoveredAt).toMatch(/\+07:00$/)
+  })
+
+  it('BR_M05_17_coSoVatChat_batBuocChonTang', async () => {
+    api.on(
+      'GET',
+      '/incident-types',
+      json(200, [
+        ...TYPES,
+        {
+          id: 33,
+          code: 'FACILITY',
+          name: 'Cơ sở vật chất',
+          defaultLevel: 'LOW',
+          nonHealth: true,
+          allowsNoResident: true,
+          status: 'ACTIVE',
+        },
+      ]),
+    )
+    api.on('GET', '/floors', json(200, [{ id: 7, name: 'Tầng 1', status: 'ACTIVE' }]))
+    api.on('POST', '/incidents', json(201, { incident: NEW_INCIDENT }))
+    render(<IncidentsPage />)
+    await rows()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận sự cố' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cơ sở vật chất' }))
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Hỏng đèn hành lang' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu sự cố' }))
+    expect(await screen.findByText('Chọn tầng xảy ra sự cố')).toBeTruthy()
+    expect(api.calls('POST', '/incidents')).toHaveLength(0)
+    fireEvent.change(await screen.findByLabelText('Tầng xảy ra'), { target: { value: '7' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu sự cố' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents')[0][1].body)).toMatchObject({ incidentTypeId: 33, floorAreaId: 7 })
   })
 
   it('FR_080_403_khongCoQuyen', async () => {

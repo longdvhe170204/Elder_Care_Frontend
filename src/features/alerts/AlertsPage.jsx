@@ -16,6 +16,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
+import { StaffSelectField } from '@/common/StaffSelectField'
 import { Call115Panel } from './Call115Panel'
 import { PressedAlertPanel } from './PressedAlertPanel'
 import { loadAlert, loadAlertBoard, loadIncidentTypes, runAlertCommand } from './alerts'
@@ -118,6 +119,7 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
   const [level, setLevel] = useState('')
   const [incidentTypes, setIncidentTypes] = useState([])
   const [typeId, setTypeId] = useState('')
+  const [staffId, setStaffId] = useState('')
   const [initialResponse, setInitialResponse] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -150,6 +152,18 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
   const levelChoices = LEVEL_ORDER.filter((l) => l !== alert.level)
   const textMissing = !text.trim()
 
+  async function quick(command, message) {
+    setBusy(true)
+    try {
+      await runAlertCommand(alert.id, command)
+      onDone(message, name)
+    } catch (error) {
+      setProblem(problemOf(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   function openConvert(next) {
     setMode(next)
     loadIncidentTypes().then(setIncidentTypes, (error) => setProblem(problemOf(error)))
@@ -158,7 +172,8 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
   async function submit(event) {
     event.preventDefault()
     setSubmitted(true)
-    if (converting ? !typeId : textMissing || (mode === 'change-level' && !level)) return
+    if (converting ? !typeId : textMissing || (mode === 'change-level' && !level) || (mode === 'assign' && !staffId))
+      return
     setBusy(true)
     try {
       const body = converting
@@ -169,13 +184,16 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
           }
         : mode === 'close'
           ? { resolution: text.trim() }
-          : { newLevel: level, reason: text.trim() }
+          : mode === 'assign'
+            ? { staffId: Number(staffId), note: text.trim() }
+            : { newLevel: level, reason: text.trim() }
       await runAlertCommand(alert.id, mode, body)
       onDone(
         {
           close: 'Đã đóng cảnh báo',
           'convert-to-incident': 'Đã chuyển thành sự cố',
           'activate-emergency': 'Đã kích hoạt khẩn cấp',
+          assign: 'Đã giao người phụ trách',
         }[mode] ?? `Đã đổi mức sang ${LEVEL_LABEL[level].toLowerCase()}`,
         name,
       )
@@ -233,8 +251,35 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
       )}
       {problem && <ProblemAlert problem={problem} />}
       {!mode &&
-        ['close', 'change-level', 'convert-to-incident', 'activate-emergency'].some((c) => commands.includes(c)) && (
+        [
+          'receive',
+          'start-handling',
+          'assign',
+          'close',
+          'change-level',
+          'convert-to-incident',
+          'activate-emergency',
+        ].some((c) => commands.includes(c)) && (
           <div className="flex flex-col gap-2">
+            {commands.includes('receive') && (
+              <Button className="h-11" disabled={busy} onClick={() => quick('receive', 'Đã tiếp nhận cảnh báo')}>
+                Tiếp nhận
+              </Button>
+            )}
+            {commands.includes('start-handling') && (
+              <Button
+                className="h-11"
+                disabled={busy}
+                onClick={() => quick('start-handling', 'Đã bắt đầu xử lý cảnh báo')}
+              >
+                Bắt đầu xử lý
+              </Button>
+            )}
+            {commands.includes('assign') && (
+              <Button className="h-11" onClick={() => setMode('assign')}>
+                Giao người phụ trách
+              </Button>
+            )}
             {commands.includes('activate-emergency') && (
               <Button className="h-11" onClick={() => openConvert('activate-emergency')}>
                 Kích hoạt khẩn cấp
@@ -277,6 +322,16 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
               {submitted && !level && <FieldError>Chọn mức mới</FieldError>}
             </Field>
           )}
+          {mode === 'assign' && (
+            <StaffSelectField
+              id="alert-assignee"
+              label="Người phụ trách"
+              errorText="Chọn người phụ trách"
+              value={staffId}
+              onChange={setStaffId}
+              invalid={submitted && !staffId}
+            />
+          )}
           {converting && (
             <Field data-invalid={(submitted && !typeId) || undefined}>
               <FieldLabel htmlFor="alert-incident-type">Loại sự cố</FieldLabel>
@@ -311,7 +366,13 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
           )}
           <Field data-invalid={(!converting && submitted && textMissing) || undefined}>
             <FieldLabel htmlFor="alert-text">
-              {converting ? 'Mô tả (không bắt buộc)' : mode === 'close' ? 'Kết quả xử lý' : 'Lý do đổi mức'}
+              {converting
+                ? 'Mô tả (không bắt buộc)'
+                : mode === 'close'
+                  ? 'Kết quả xử lý'
+                  : mode === 'assign'
+                    ? 'Ghi chú giao việc'
+                    : 'Lý do đổi mức'}
             </FieldLabel>
             <Textarea
               id="alert-text"
@@ -322,7 +383,13 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
               aria-invalid={(!converting && submitted && textMissing) || undefined}
             />
             {!converting && submitted && textMissing && (
-              <FieldError>{mode === 'close' ? 'Nhập kết quả xử lý' : 'Nhập lý do đổi mức'}</FieldError>
+              <FieldError>
+                {mode === 'close'
+                  ? 'Nhập kết quả xử lý'
+                  : mode === 'assign'
+                    ? 'Nhập ghi chú giao việc'
+                    : 'Nhập lý do đổi mức'}
+              </FieldError>
             )}
           </Field>
           <div className="flex flex-wrap gap-2">
@@ -331,6 +398,7 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
                 close: 'Lưu và đóng cảnh báo',
                 'convert-to-incident': 'Lưu và chuyển sự cố',
                 'activate-emergency': 'Lưu và kích hoạt',
+                assign: 'Lưu và giao',
               }[mode] ?? 'Lưu mức mới'}
             </Button>
             <Button type="button" variant="ghost" className="h-11" onClick={() => setMode(null)}>
