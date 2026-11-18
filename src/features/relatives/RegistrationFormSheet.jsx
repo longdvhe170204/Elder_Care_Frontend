@@ -8,6 +8,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { CONFLICT_HINTS, RIGHT_LABELS, RIGHT_ORDER } from './relationshipLabels'
+import { FileInput } from '@/common/FileInput'
 
 // Ghi phiếu đăng ký người thân (012 T010, T013; FR-008, Q-126): người đại diện ký, bản scan bắt buộc; mỗi quyền đánh
 // dấu thành một yêu cầu Hiệu lực ngay cách "bản ký". Chỉ chép đúng các quyền ghi trên phiếu giấy; không chọn sẵn ô nào.
@@ -88,11 +89,9 @@ export function RegistrationFormSheet({ open, residentId, residentName, relation
           </Field>
           <Field data-invalid={(submitted && !scan) || undefined}>
             <FieldLabel htmlFor="form-scan">Bản scan phiếu</FieldLabel>
-            <input
+            <FileInput
               id="form-scan"
-              type="file"
               accept="application/pdf,image/jpeg,image/png"
-              className="type-body-sm h-11 rounded-lg border px-3 py-2"
               aria-invalid={(submitted && !scan) || undefined}
               onChange={(e) => setScan(e.target.files?.[0] ?? null)}
             />

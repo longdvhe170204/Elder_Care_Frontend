@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { ApiError, getStaffImportTemplate, postStaffImportPreview, postStaffImportConfirm } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { formatDate } from '@/common/dateTime'
+import { FileInput } from '@/common/FileInput'
 const COLUMNS = [
   ['fullName', 'Họ tên'],
   ['position', 'Chức danh'],
@@ -76,9 +76,8 @@ export function StaffImportPanel({ onDone }) {
       </p>
       <Field>
         <FieldLabel htmlFor="staff-import-file">File Excel</FieldLabel>
-        <Input
+        <FileInput
           id="staff-import-file"
-          type="file"
           accept=".xlsx"
           disabled={busy}
           onChange={(e) => {

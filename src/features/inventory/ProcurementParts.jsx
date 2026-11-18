@@ -29,6 +29,7 @@ import {
   vietnamIso,
 } from './procurementLabels'
 import { Choices, Info, ReasonField, SELECT, TextField } from './FormParts'
+import { FileInput } from '@/common/FileInput'
 
 // Khung chi tiết và khung lập, sửa yêu cầu mua sắm (019 T008; bảng FR-008, FR-008a, FR-008b, FR-008d). Nút lệnh chỉ
 // theo allowedCommands backend trả (api-019 bổ sung 2026-11-10; DESIGN.md 7.4), backend kiểm lại khi gọi; sửa Nháp gửi
@@ -319,12 +320,10 @@ export function ProcurementDetail({ request, departmentName, residentName, onCha
             />
             <Field data-invalid={!!show(purchaseErrors, 'receipts') || undefined}>
               <FieldLabel htmlFor="procurement-receipts">Chứng từ</FieldLabel>
-              <Input
+              <FileInput
                 id="procurement-receipts"
-                type="file"
                 multiple
                 accept="image/*,application/pdf"
-                className="h-11"
                 onChange={(e) => setReceipts([...(e.target.files ?? [])])}
                 aria-invalid={!!show(purchaseErrors, 'receipts') || undefined}
               />

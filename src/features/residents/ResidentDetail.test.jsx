@@ -195,6 +195,21 @@ describe('ResidentDetail', () => {
     expect(api.calls('GET', '/residents/7/health-items')).toHaveLength(0)
   })
 
+  it('BR_M01_17_hanhChinhGhiTuKhai_coNutSucKhoe_duBackendAnPhanSucKhoe', async () => {
+    // Hành chính không xem dữ liệu sức khỏe (hiddenFields) nhưng được lập Nháp, thêm mục tự khai khi Đang tiếp nhận
+    routes({
+      view: profile({
+        allowedCommands: ['WRITE_INITIAL_HEALTH_RECORD', 'RECORD_HEALTH_ITEM'],
+        hiddenFields: ['activeHealthItems'],
+      }),
+    })
+
+    open()
+
+    await screen.findByText('Nguyễn Văn An')
+    expect(screen.getByRole('button', { name: 'Sức khỏe' })).toBeTruthy()
+  })
+
   it('CCCD trùng hiện lỗi ở ô số giấy tờ', async () => {
     routes()
     api.on(

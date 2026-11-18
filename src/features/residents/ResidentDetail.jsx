@@ -103,15 +103,93 @@ const PARTS = [
   { value: 'wishes', label: 'Nguyện vọng' },
 ]
 
-// initialPart: phần mở sẵn khi vào (ví dụ 'status' từ màn Hồ sơ tiếp nhận để làm lệnh Hoàn tất tiếp nhận)
-export function ResidentDetail({ residentId, onChanged, Title = 'h2', Description = 'p', initialPart = null }) {
+// Nội dung một phần của hồ sơ; dùng trong khung phần của ResidentDetail và ResidentPartSheet
+function PartContent({ part, residentId, profile, onChanged }) {
+  const allowedCommands = profile.allowedCommands ?? []
+  if (part === 'health') return <HealthTab residentId={residentId} allowedCommands={allowedCommands} />
+  if (part === 'assessment')
+    return (
+      <AssessmentTab
+        residentId={residentId}
+        residentStatus={profile.status}
+        allowedCommands={allowedCommands}
+        onChanged={onChanged}
+      />
+    )
+  if (part === 'status')
+    return (
+      <StatusTab residentId={residentId} status={profile.status} allowedCommands={allowedCommands} onChanged={onChanged} />
+    )
+  if (part === 'consent')
+    return (
+      <ConsentTab residentId={residentId} status={profile.status} allowedCommands={allowedCommands} onChanged={onChanged} />
+    )
+  if (part === 'wishes')
+    return (
+      <WishTab
+        residentId={residentId}
+        status={profile.status}
+        allowedCommands={allowedCommands}
+        profile={profile}
+        onChanged={onChanged}
+      />
+    )
+  return null
+}
+
+// Một phần của hồ sơ mở riêng, không qua màn hồ sơ người cao tuổi (chủ dự án yêu cầu 2026-11-18): màn Hồ sơ tiếp nhận mở
+// đúng phần của bước; đóng là về thẳng màn gọi (onClose). Ghi xong trong phần thì nạp lại hồ sơ và báo onChanged.
+export function ResidentPartSheet({ residentId, part, onClose, onChanged }) {
+  const [profile, setProfile] = useState(null)
+  const [failure, setFailure] = useState(null)
+
+  const load = useCallback(async () => {
+    try {
+      const { data } = await getResidentsById({ path: { id: residentId } })
+      setFailure(null)
+      setProfile(data)
+    } catch (error) {
+      setFailure(problemOf(error))
+    }
+  }, [residentId])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- nạp hồ sơ khi mở phần
+    load()
+  }, [load])
+
+  const label = PARTS.find((p) => p.value === part)?.label
+  const changed = (message) => {
+    load()
+    onChanged?.(message)
+  }
+
+  return (
+    <Sheet open onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="sm:max-w-3xl">
+        <SheetHeader className="pt-6">
+          <SheetTitle className="type-title">
+            {profile ? `${label}: ${profile.personalInfo?.fullName}` : label}
+          </SheetTitle>
+          <SheetDescription>{profile?.profileCode ?? (failure ? 'Không mở được hồ sơ' : 'Đang tải hồ sơ')}</SheetDescription>
+        </SheetHeader>
+        <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-6">
+          <ProblemAlert problem={failure} />
+          {profile && <PartContent part={part} residentId={residentId} profile={profile} onChanged={changed} />}
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+export function ResidentDetail({ residentId, onChanged, Title = 'h2', Description = 'p' }) {
   const [profile, setProfile] = useState(null)
   const [etag, setEtag] = useState(null)
   const [linked, setLinked] = useState([])
   const [failure, setFailure] = useState(null)
   // Phần đang xem giữ lại sau khi đóng để tiêu đề không mất trong lúc Sheet đang đóng
-  const [part, setPart] = useState(initialPart)
-  const [partOpen, setPartOpen] = useState(!!initialPart)
+  const [part, setPart] = useState(null)
+  const [partOpen, setPartOpen] = useState(false)
   const [editing, setEditing] = useState(false)
   const [form, setForm] = useState(null)
   const [errors, setErrors] = useState({})
@@ -215,8 +293,10 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
   const canUpdate = profile?.allowedCommands?.includes('UPDATE_PERSONAL_INFO')
   const hidden = profile?.hiddenFields ?? []
   const allowedCommands = profile?.allowedCommands ?? []
-  // Vai trò không được xem phần sức khỏe (backend bỏ activeHealthItems) thì không có phần Sức khỏe (US2; FR-008)
-  const parts = PARTS.filter((p) => p.value !== 'health' || !hidden.includes('activeHealthItems'))
+  // Vai trò không được xem phần sức khỏe (backend bỏ activeHealthItems) thì không có phần Sức khỏe (US2; FR-008), trừ
+  // Hành chính được ghi phần tự khai khi Đang tiếp nhận (BR-M01-17, 001 T106): backend trả lệnh ghi trong allowedCommands
+  const writesHealth = ['WRITE_INITIAL_HEALTH_RECORD', 'RECORD_HEALTH_ITEM'].some((c) => allowedCommands.includes(c))
+  const parts = PARTS.filter((p) => p.value !== 'health' || !hidden.includes('activeHealthItems') || writesHealth)
   const allergies = (profile?.activeHealthItems ?? [])
     .filter((item) => item.type === 'ALLERGY' && item.status !== 'EXCLUDED')
     .map((item) => item.allergen?.name ?? item.freeText)
@@ -381,40 +461,7 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
                 <SheetDescription>{profile.profileCode}</SheetDescription>
               </SheetHeader>
               <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-6">
-                {part === 'health' && <HealthTab residentId={residentId} allowedCommands={allowedCommands} />}
-                {part === 'assessment' && (
-                  <AssessmentTab
-                    residentId={residentId}
-                    residentStatus={profile.status}
-                    allowedCommands={allowedCommands}
-                    onChanged={changed}
-                  />
-                )}
-                {part === 'status' && (
-                  <StatusTab
-                    residentId={residentId}
-                    status={profile.status}
-                    allowedCommands={allowedCommands}
-                    onChanged={changed}
-                  />
-                )}
-                {part === 'consent' && (
-                  <ConsentTab
-                    residentId={residentId}
-                    status={profile.status}
-                    allowedCommands={allowedCommands}
-                    onChanged={changed}
-                  />
-                )}
-                {part === 'wishes' && (
-                  <WishTab
-                    residentId={residentId}
-                    status={profile.status}
-                    allowedCommands={allowedCommands}
-                    profile={profile}
-                    onChanged={changed}
-                  />
-                )}
+                <PartContent part={part} residentId={residentId} profile={profile} onChanged={changed} />
               </div>
             </SheetContent>
           </Sheet>

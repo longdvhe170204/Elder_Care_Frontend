@@ -31,6 +31,7 @@ import {
   CARE_LEVEL_ORDER,
   RESIDENCE_TYPE_LABELS,
 } from './assessmentLabels'
+import { FamilyDeclaredList } from './FamilyDeclared'
 
 // Phiếu đánh giá đang soạn (001 T042; US3; FR-024 → FR-029, FR-031; hợp đồng GET, PUT /assessments/{id},
 // POST …/confirm, …/discard-draft). Bên trái phiếu, bên phải thông tin tham khảo (FR-024). Không có ô điểm và không có
@@ -481,7 +482,10 @@ export function AssessmentForm({
           )}
         </form>
 
-        <Reference reference={detail.reference} />
+        <div className="flex flex-col gap-4">
+          <FamilyDeclaredList entries={detail.familyDeclared} />
+          <Reference reference={detail.reference} />
+        </div>
       </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>

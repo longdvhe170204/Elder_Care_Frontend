@@ -117,6 +117,49 @@ describe('StatusTab', () => {
     expect(screen.queryByText(/chỉ hiện với người được xem thông tin sức khỏe/)).not.toBeInTheDocument()
   })
 
+  it('FR_004a_hoanTatTiepNhan_hienYKienVaoO_truocKhiNhapLyDo', async () => {
+    routes()
+    api.on(
+      'GET',
+      '/admission-applications',
+      json(200, [
+        { id: 6, residentId: 9, status: 'IN_PROGRESS' },
+        { id: 7, residentId: 5, status: 'IN_PROGRESS' },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/admission-applications/7/admission-conditions',
+      json(200, {
+        conditions: [],
+        warnings: [],
+        admissionOpinion: { id: 1, opinion: 'DISAGREE', source: { type: 'RESIDENT' }, note: 'Muốn ở nhà', status: 'CURRENT' },
+      }),
+    )
+    open({ status: 'ADMISSION_IN_PROGRESS', allowedCommands: ['COMPLETE_ADMISSION'] })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Hoàn tất tiếp nhận' }))
+    const form = await screen.findByRole('form', { name: 'Hoàn tất tiếp nhận' })
+    const opinion = await within(form).findByRole('region', { name: 'Ý kiến của người cao tuổi về việc vào ở' })
+    expect(within(opinion).getByText(/Không đồng ý/)).toBeInTheDocument()
+    expect(within(opinion).getByText(/Muốn ở nhà/)).toBeInTheDocument()
+  })
+
+  it('FR_004a_hoanTatTiepNhan_chuaGhiYKien_baoChuaGhi', async () => {
+    routes()
+    api.on('GET', '/admission-applications', json(200, [{ id: 7, residentId: 5, status: 'IN_PROGRESS' }]))
+    api.on(
+      'GET',
+      '/admission-applications/7/admission-conditions',
+      json(200, { conditions: [], warnings: [], admissionOpinion: null }),
+    )
+    open({ status: 'ADMISSION_IN_PROGRESS', allowedCommands: ['COMPLETE_ADMISSION'] })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Hoàn tất tiếp nhận' }))
+    const opinion = await screen.findByRole('region', { name: 'Ý kiến của người cao tuổi về việc vào ở' })
+    expect(within(opinion).getByText('Chưa ghi ý kiến về việc vào ở.')).toBeInTheDocument()
+  })
+
   it('nút lệnh chỉ hiện theo allowedCommands; hồ sơ trạng thái cuối không có nút', async () => {
     routes()
     const view = open({ allowedCommands: ['GRANT_TEMPORARY_ABSENCE', 'END_RESIDENCY'] })

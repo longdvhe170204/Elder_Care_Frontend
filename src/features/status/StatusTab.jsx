@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   ApiError,
+  getAdmissionApplications,
+  getAdmissionApplicationsByIdAdmissionConditions,
   getResidentsByIdConditionsByCommand,
   getResidentsByIdStatusHistory,
   postResidentsByIdCancelAdmission,
@@ -25,6 +27,8 @@ import { problemOf } from '@/common/problem'
 import { FileField } from '../consents/ConsentTab'
 import { STATUS_LABELS } from '../residents/residentLabels'
 import { uploadProblem } from '../wishes/wishUtils'
+import { OpinionBlock } from '../admissions/ApplicationParts'
+import { OPEN_STATUSES } from '../admissions/admissionLabels'
 import {
   BASIS_KINDS,
   COMMAND_EFFECTS,
@@ -65,6 +69,45 @@ function ConditionList({ conditions }) {
         </li>
       ))}
     </ul>
+  )
+}
+
+// Ý kiến của người cao tuổi về việc vào ở, hiện trước điều kiện và lý do của lệnh Hoàn tất tiếp nhận (004 FR-004a, kịch bản
+// 12; Q-361): ý kiến không chặn lệnh; "Không đồng ý" thì người làm lệnh đọc ý kiến rồi ghi lý do. Lấy từ lượt đăng ký đang
+// mở của người cao tuổi; không tải được (thiếu quyền xem đăng ký) thì không hiện khối này, backend vẫn kiểm lệnh.
+function AdmissionOpinion({ residentId }) {
+  const [state, setState] = useState({ loading: true })
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      try {
+        const { data: applications } = await getAdmissionApplications({ query: {} })
+        const open = (applications ?? []).find((a) => a.residentId === residentId && OPEN_STATUSES.includes(a.status))
+        if (!open) {
+          if (!cancelled) setState({ loading: false, failed: true })
+          return
+        }
+        const { data } = await getAdmissionApplicationsByIdAdmissionConditions({ path: { id: open.id } })
+        if (!cancelled) setState({ loading: false, opinion: data?.admissionOpinion ?? null })
+      } catch {
+        if (!cancelled) setState({ loading: false, failed: true })
+      }
+    }
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [residentId])
+
+  if (state.failed) return null
+  return (
+    <section aria-labelledby="admission-opinion-title" className="flex flex-col gap-1">
+      <h4 id="admission-opinion-title" className="type-label">
+        Ý kiến của người cao tuổi về việc vào ở
+      </h4>
+      {state.loading ? <Skeleton className="h-8" /> : <OpinionBlock opinions={state.opinion ? [state.opinion] : []} />}
+    </section>
   )
 }
 
@@ -179,6 +222,8 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
     >
       <h3 className="type-card-title">{label}</h3>
       <p className="type-body-sm text-muted-foreground">{COMMAND_EFFECTS[command]}</p>
+
+      {command === 'COMPLETE_ADMISSION' && <AdmissionOpinion residentId={residentId} />}
 
       {conditions === null ? (
         <Skeleton className="h-10" />

@@ -9,6 +9,15 @@ export const CARE_LEVEL_LABELS = {
 
 export const CARE_LEVEL_ORDER = ['BASIC', 'REGULAR', 'SPECIAL']
 
+// Chủ đề của mục "Gia đình khai" (Q-412, FR-025a; hợp đồng api-001, schema FamilyDeclaredTopic)
+export const FAMILY_DECLARED_TOPIC_LABELS = {
+  GENERAL_CONDITION: 'Tình trạng chung',
+  MOBILITY: 'Vận động',
+  SELF_CARE: 'Tự chăm sóc',
+  COGNITION: 'Nhận thức',
+  KNOWN_RISKS: 'Nguy cơ đã biết',
+}
+
 export const ASSESSMENT_TYPE_LABELS = {
   INITIAL: 'Đánh giá đầu vào',
   REASSESSMENT: 'Đánh giá lại',

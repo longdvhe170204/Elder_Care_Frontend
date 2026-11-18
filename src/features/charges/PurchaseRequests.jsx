@@ -12,6 +12,7 @@ import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { money, controlClass } from './chargeLabels'
+import { FileInput } from '@/common/FileInput'
 
 const states = {
   DRAFT: 'Nháp',
@@ -325,8 +326,7 @@ function PurchaseDetail({ row, familyMode, onChanged, onDenied }) {
               </label>
               <label>
                 Chứng từ (bắt buộc)
-                <Input
-                  type="file"
+                <FileInput
                   required
                   disabled={pending}
                   onChange={(e) => {

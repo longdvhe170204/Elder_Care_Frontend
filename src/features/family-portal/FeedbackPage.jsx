@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PageHeader } from '@/common/PageHeader'
 import { StatusBadge } from '@/common/StatusBadge'
 import { DEMO_PORTAL_FEEDBACK, DEMO_PORTAL_FEEDBACK_GROUPS, DEMO_PORTAL_FEEDBACK_TYPES } from '@/common/demoData'
 import { PortalCard } from './PortalParts'
+import { FileInput } from '@/common/FileInput'
 
 // P8 Phản hồi (14.7; 012 FR-058 → FR-066): Góp ý, Khiếu nại, Hỏi đáp; nội dung đã gửi không sửa.
 // Trả lời nhóm "Sức khỏe, thuốc" chỉ hiện ở mức chung với người chưa có quyền xem sức khỏe (FR-058).
@@ -67,7 +67,7 @@ function FeedbackForm({ viewer, onSent }) {
           </Field>
           <Field>
             <FieldLabel htmlFor="feedback-file">Tệp đính kèm</FieldLabel>
-            <Input id="feedback-file" type="file" className="h-11" />
+            <FileInput id="feedback-file" />
             <FieldDescription>Không bắt buộc.</FieldDescription>
           </Field>
         </FieldGroup>

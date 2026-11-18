@@ -191,3 +191,6 @@ export function absenceLabel(absence) {
     ? `${type}, dự kiến trở lại ${absence.expectedReturnAt ? formatDateTime(absence.expectedReturnAt) : 'chưa có'}`
     : `${type}, Đã đóng`
 }
+
+// Lượt đăng ký còn mở: được cập nhật, ghi ý kiến
+export const OPEN_STATUSES = ['IN_PROGRESS', 'WAITING']

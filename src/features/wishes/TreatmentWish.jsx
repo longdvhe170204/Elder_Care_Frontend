@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, getResidentsByIdTreatmentWishes, postResidentsByIdTreatmentWishes } from '@/api'
+import {
+  ApiError,
+  getResidentsByIdTreatmentWishDraft,
+  getResidentsByIdTreatmentWishes,
+  postResidentsByIdTreatmentWishDraftDiscard,
+  postResidentsByIdTreatmentWishDraftVerify,
+  postResidentsByIdTreatmentWishes,
+  putResidentsByIdTreatmentWishDraft,
+} from '@/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -15,6 +23,8 @@ import { problemOf } from '@/common/problem'
 import { FileField, Row } from '../consents/ConsentTab'
 import { POSITIVE_INTEGER, uploadProblem, toRequestOpinion } from './wishUtils'
 import { OpinionEditor, OpinionList } from './Opinions'
+import { DiscardDraftForm, DraftCard } from './WishDraft'
+import { useWishDraft } from './useWishDraft'
 import { ESCORT_LABELS, FINAL_STATUSES, OPINION_SOURCE_LABELS, TREATMENT_STATUS_LABELS, WISH_ERRORS } from './wishLabels'
 
 // Khối "Nguyện vọng khi điều trị" của tab Nguyện vọng (001 T080; US7 #9 → #11; FR-023j → FR-023m, BR-M01-16; bố cục đề
@@ -44,8 +54,10 @@ function TreatmentDetails({ wish }) {
             <Row label={`Bệnh viện ưu tiên ${index + 1}`}>{`${hospital.name} · ${hospital.address}`}</Row>
           </div>
         ))}
-        <Row label="Hỏi gia đình trước khi chuyển viện không khẩn cấp">{wish.askFamilyFirst ? 'Có' : 'Không'}</Row>
-        <Row label="Người đi kèm">{ESCORT_LABELS[wish.accompaniedBy]}</Row>
+        <Row label="Hỏi gia đình trước khi chuyển viện không khẩn cấp">
+          {wish.askFamilyFirst == null ? 'Chưa ghi' : wish.askFamilyFirst ? 'Có' : 'Không'}
+        </Row>
+        <Row label="Người đi kèm">{ESCORT_LABELS[wish.accompaniedBy] ?? 'Chưa ghi'}</Row>
         <div className="col-span-2">
           <Row label="Người thân cần báo">
             {wish.notifyFamilyMembers.length === 0
@@ -87,16 +99,42 @@ function TreatmentDetails({ wish }) {
   )
 }
 
-function TreatmentForm({ residentId, onCancel, onDone }) {
-  const [hospitals, setHospitals] = useState([{ name: '', address: '' }])
-  const [insurance, setInsurance] = useState({ place: '', number: '', expiry: '' })
-  const [ask, setAsk] = useState(false)
+const FORM_TITLES = {
+  record: 'Ghi phiếu nguyện vọng khi điều trị',
+  draft: 'Bản Nháp phiếu nguyện vọng khi điều trị',
+  verify: 'Kiểm chứng phiếu nguyện vọng khi điều trị',
+}
+
+const FORM_HINTS = {
+  record:
+    'Phiếu mới thay phiếu Hiệu lực hiện hành; phiếu cũ chuyển Hết hiệu lực và vẫn xem được. Chưa có phiếu không chặn việc nào và không có nhắc định kỳ.',
+  draft:
+    'Ghi theo lời người cao tuổi hoặc gia đình; chỉ cần người trả lời, các mục khác ghi được gì thì ghi. Bản Nháp chưa có hiệu lực tới khi Bác sĩ hoặc Điều dưỡng kiểm chứng.',
+  verify:
+    'Phiếu điền sẵn từ bản Nháp gia đình khai; sửa nếu cần rồi lưu. Lưu xong phiếu có hiệu lực, thay phiếu Hiệu lực hiện hành nếu có.',
+}
+
+function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial = null }) {
+  const draftMode = mode === 'draft'
+  const [hospitals, setHospitals] = useState(() =>
+    initial?.preferredHospitals?.length
+      ? initial.preferredHospitals.map((h) => ({ name: h.name ?? '', address: h.address ?? '' }))
+      : [{ name: '', address: '' }],
+  )
+  const [insurance, setInsurance] = useState({
+    place: initial?.healthInsurance?.initialRegistrationPlace ?? '',
+    number: initial?.healthInsurance?.cardNumber ?? '',
+    expiry: initial?.healthInsurance?.cardExpiry ?? '',
+  })
+  const [ask, setAsk] = useState(initial?.askFamilyFirst ?? false)
   const [idInput, setIdInput] = useState('')
-  const [ids, setIds] = useState([])
-  const [escort, setEscort] = useState(null)
-  const [note, setNote] = useState('')
-  const [respondentType, setRespondentType] = useState('RESIDENT')
-  const [respondentId, setRespondentId] = useState('')
+  const [ids, setIds] = useState(() => (initial?.notifyFamilyMembers ?? []).map((m) => m.familyMemberId))
+  const [escort, setEscort] = useState(initial?.accompaniedBy ?? null)
+  const [note, setNote] = useState(initial?.note ?? '')
+  const [respondentType, setRespondentType] = useState(initial?.respondent?.type ?? 'RESIDENT')
+  const [respondentId, setRespondentId] = useState(
+    initial?.respondent?.familyMemberId != null ? String(initial.respondent.familyMemberId) : '',
+  )
   const [opinions, setOpinions] = useState([])
   const [signedCopy, setSignedCopy] = useState(null)
   const [errors, setErrors] = useState({})
@@ -123,11 +161,13 @@ function TreatmentForm({ residentId, onCancel, onDone }) {
 
   function validate() {
     const next = {}
-    if (!hospitals[0].name.trim() || !hospitals[0].address.trim()) next.hospital1 = WISH_ERRORS.PREFERRED_HOSPITAL_REQUIRED[1]
+    if (!draftMode && (!hospitals[0].name.trim() || !hospitals[0].address.trim())) {
+      next.hospital1 = WISH_ERRORS.PREFERRED_HOSPITAL_REQUIRED[1]
+    }
     if (hospitals[1] && (!hospitals[1].name.trim() || !hospitals[1].address.trim())) {
       next.hospital2 = 'Nhập đủ tên và địa chỉ bệnh viện thứ hai hoặc bỏ bệnh viện này'
     }
-    if (!escort) next.escort = 'Chọn người đi kèm'
+    if (!draftMode && !escort) next.escort = 'Chọn người đi kèm'
     if (respondentType === 'FAMILY_MEMBER' && !POSITIVE_INTEGER.test(respondentId.trim())) {
       next.respondentId = 'Nhập mã người thân trả lời'
     }
@@ -150,11 +190,14 @@ function TreatmentForm({ residentId, onCancel, onDone }) {
       }
       uploading = false
       const hasInsurance = insurance.place.trim() || insurance.number.trim() || insurance.expiry
-      const { data } = await postResidentsByIdTreatmentWishes({
+      const save = { record: postResidentsByIdTreatmentWishes, draft: putResidentsByIdTreatmentWishDraft, verify: postResidentsByIdTreatmentWishDraftVerify }[mode]
+      const { data } = await save({
         path: { id: residentId },
         headers: { 'Idempotency-Key': key },
         body: {
-          preferredHospitals: hospitals.map((h) => ({ name: h.name.trim(), address: h.address.trim() })),
+          preferredHospitals: hospitals
+            .filter((h) => !draftMode || h.name.trim() || h.address.trim())
+            .map((h) => ({ name: h.name.trim(), address: h.address.trim() })),
           healthInsurance: hasInsurance
             ? {
                 initialRegistrationPlace: insurance.place.trim() || undefined,
@@ -164,7 +207,7 @@ function TreatmentForm({ residentId, onCancel, onDone }) {
             : undefined,
           askFamilyFirst: ask,
           notifyFamilyMemberIds: ids,
-          accompaniedBy: escort,
+          accompaniedBy: escort ?? undefined,
           note: note.trim() || undefined,
           respondent: {
             type: respondentType,
@@ -191,14 +234,11 @@ function TreatmentForm({ residentId, onCancel, onDone }) {
     <form
       onSubmit={submit}
       noValidate
-      aria-label="Ghi phiếu nguyện vọng khi điều trị"
+      aria-label={FORM_TITLES[mode]}
       className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
     >
-      <h3 className="type-card-title">Ghi phiếu nguyện vọng khi điều trị</h3>
-      <p className="type-body-sm text-muted-foreground">
-        Phiếu mới thay phiếu Hiệu lực hiện hành; phiếu cũ chuyển Hết hiệu lực và vẫn xem được. Chưa có phiếu không chặn
-        việc nào và không có nhắc định kỳ.
-      </p>
+      <h3 className="type-card-title">{FORM_TITLES[mode]}</h3>
+      <p className="type-body-sm text-muted-foreground">{FORM_HINTS[mode]}</p>
 
       {hospitals.map((hospital, index) => (
         <fieldset key={index} className="flex flex-col gap-3 rounded-lg border p-3">
@@ -397,7 +437,7 @@ function TreatmentForm({ residentId, onCancel, onDone }) {
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" className="h-11" disabled={busy}>
-          Lưu phiếu
+          {{ record: 'Lưu phiếu', draft: 'Lưu bản Nháp', verify: 'Kiểm chứng và lưu' }[mode]}
         </Button>
         <Button type="button" variant="outline" className="h-11" onClick={onCancel}>
           Thôi
@@ -414,6 +454,15 @@ export function TreatmentWish({ residentId, status, allowedCommands = [], hasWis
   const [formOpen, setFormOpen] = useState(false)
   const [done, setDone] = useState(null)
   const [warnings, setWarnings] = useState([])
+  // bản Nháp tự khai (Q-412): Hành chính lập khi Đang tiếp nhận; Bác sĩ, Điều dưỡng kiểm chứng hoặc Hủy nháp
+  const [draftMode, setDraftMode] = useState(null)
+  const canDraft = allowedCommands.includes('DRAFT_TREATMENT_WISH') && !FINAL_STATUSES.includes(status)
+  const canRecord = allowedCommands.includes('RECORD_TREATMENT_WISH') && !FINAL_STATUSES.includes(status)
+  const { draft, setDraft, reload: reloadDraft } = useWishDraft(
+    getResidentsByIdTreatmentWishDraft,
+    residentId,
+    canDraft || canRecord,
+  )
 
   const load = useCallback(async () => {
     try {
@@ -437,11 +486,71 @@ export function TreatmentWish({ residentId, status, allowedCommands = [], hasWis
 
   async function finished(result) {
     setFormOpen(false)
-    setDone('Đã ghi phiếu nguyện vọng khi điều trị.')
+    setDraftMode(null)
+    setDone(
+      draft
+        ? 'Đã kiểm chứng phiếu nguyện vọng khi điều trị; phiếu có hiệu lực.'
+        : 'Đã ghi phiếu nguyện vọng khi điều trị.',
+    )
     setWarnings(result?.warnings ?? [])
+    reloadDraft()
     await load()
     onChanged?.()
   }
+
+  async function draftSaved(data) {
+    setDraftMode(null)
+    setDraft(data)
+    setDone('Đã lưu bản Nháp tự khai.')
+  }
+
+  async function discard(reason) {
+    await postResidentsByIdTreatmentWishDraftDiscard({
+      path: { id: residentId },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: { reason },
+    })
+    setDraftMode(null)
+    setDone('Đã hủy bản Nháp tự khai.')
+    await reloadDraft()
+  }
+
+  // Hành chính: khối Nháp của mình (không xem phiếu Hiệu lực, FR-023m, FR-023q)
+  const officeDraft = canDraft && (
+    <div className="flex flex-col gap-3">
+      {draft && draftMode !== 'edit' && (
+        <DraftCard id="tw-draft-title" title="Bản Nháp tự khai" draft={draft}>
+          <TreatmentDetails wish={draft} />
+        </DraftCard>
+      )}
+      {draftMode === 'edit' ? (
+        <TreatmentForm
+          residentId={residentId}
+          mode="draft"
+          initial={draft}
+          onCancel={() => setDraftMode(null)}
+          onDone={draftSaved}
+        />
+      ) : (
+        <Button
+          type="button"
+          variant={draft ? 'outline' : 'default'}
+          className="h-11 self-start"
+          onClick={() => {
+            setDone(null)
+            setDraftMode('edit')
+          }}
+        >
+          {draft ? 'Sửa bản Nháp' : 'Lập bản Nháp tự khai'}
+        </Button>
+      )}
+      {done && (
+        <p role="status" className="type-body-sm rounded-lg border bg-muted/30 p-3">
+          {done}
+        </p>
+      )}
+    </div>
+  )
 
   const heading = (
     <h3 id="tw-title" className="type-card-title">
@@ -460,7 +569,7 @@ export function TreatmentWish({ residentId, status, allowedCommands = [], hasWis
   }
   if (state === 'forbidden') {
     // Kế toán không có cờ (hasWish rỗng): không hiện khối này (FR-023m)
-    if (hasWish == null) return null
+    if (hasWish == null && !canDraft) return null
     return (
       <section aria-labelledby="tw-title" className="flex flex-col gap-2 rounded-lg border p-4">
         {heading}
@@ -468,6 +577,7 @@ export function TreatmentWish({ residentId, status, allowedCommands = [], hasWis
         <p className="type-body-sm text-muted-foreground">
           Vai trò của bạn chỉ thấy phiếu đã có hay chưa, không xem được nội dung.
         </p>
+        {officeDraft}
       </section>
     )
   }
@@ -484,7 +594,8 @@ export function TreatmentWish({ residentId, status, allowedCommands = [], hasWis
 
   const current = summary.active
   const past = summary.history.filter((w) => w.status !== 'ACTIVE')
-  const canRecord = allowedCommands.includes('RECORD_TREATMENT_WISH') && !FINAL_STATUSES.includes(status)
+  // còn Nháp thì không ghi thẳng phiên bản mới, phải kiểm chứng hoặc Hủy nháp (FR-023p)
+  const canRecordNew = canRecord && !draft
 
   return (
     <div className="flex flex-col gap-4">
@@ -504,7 +615,7 @@ export function TreatmentWish({ residentId, status, allowedCommands = [], hasWis
             </AlertDescription>
           </Alert>
         )}
-        {canRecord && (
+        {canRecordNew && (
           <Button
             type="button"
             variant={current ? 'outline' : 'default'}
@@ -532,8 +643,49 @@ export function TreatmentWish({ residentId, status, allowedCommands = [], hasWis
           <AlertDescription>{WARNINGS[w.code] ?? w.description}</AlertDescription>
         </Alert>
       ))}
-      {formOpen && canRecord && (
+      {formOpen && canRecordNew && (
         <TreatmentForm residentId={residentId} onCancel={() => setFormOpen(false)} onDone={finished} />
+      )}
+      {canRecord && draft && (
+        <DraftCard
+          id="tw-draft-title"
+          title="Bản Nháp tự khai chờ kiểm chứng"
+          draft={draft}
+          actions={
+            draftMode === null && (
+              <>
+                <Button
+                  type="button"
+                  className="h-11"
+                  onClick={() => {
+                    setDone(null)
+                    setWarnings([])
+                    setDraftMode('verify')
+                  }}
+                >
+                  Kiểm chứng
+                </Button>
+                <Button type="button" variant="outline" className="h-11" onClick={() => setDraftMode('discard')}>
+                  Hủy nháp
+                </Button>
+              </>
+            )
+          }
+        >
+          <TreatmentDetails wish={draft} />
+          {draftMode === 'discard' && (
+            <DiscardDraftForm idPrefix="tw" onDiscard={discard} onCancel={() => setDraftMode(null)} />
+          )}
+        </DraftCard>
+      )}
+      {canRecord && draft && draftMode === 'verify' && (
+        <TreatmentForm
+          residentId={residentId}
+          mode="verify"
+          initial={draft}
+          onCancel={() => setDraftMode(null)}
+          onDone={finished}
+        />
       )}
 
       <section aria-labelledby="tw-history-title" className="flex flex-col gap-2">

@@ -15,6 +15,7 @@ import {
   REQUEST_STATUS_LABELS,
   describeRequest,
 } from './requestLabels'
+import { FileInput } from '@/common/FileInput'
 
 // Khung chi tiết một yêu cầu thay đổi quyền (012 T017; FR-015 → FR-020b). Lệnh của nhân viên: Hành chính ghi nhận bản
 // ký của người đại diện (người ký, bản scan), Quản lý viện duyệt hoặc từ chối kèm lý do, người lập hủy kèm lý do. Yêu
@@ -97,11 +98,9 @@ function CommandForm({ request, command, signers, onDone, onCancel }) {
           </Field>
           <Field data-invalid={(submitted && scanMissing) || undefined}>
             <FieldLabel htmlFor="request-scan">Bản scan bản ký</FieldLabel>
-            <input
+            <FileInput
               id="request-scan"
-              type="file"
               accept="application/pdf,image/jpeg,image/png"
-              className="type-body-sm h-11 rounded-lg border px-3 py-2"
               aria-invalid={(submitted && scanMissing) || undefined}
               onChange={(e) => setScan(e.target.files?.[0] ?? null)}
             />

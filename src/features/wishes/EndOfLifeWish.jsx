@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, getResidentsByIdEndOfLifeWishes, postResidentsByIdEndOfLifeWishes } from '@/api'
+import {
+  ApiError,
+  getResidentsByIdEndOfLifeWishDraft,
+  getResidentsByIdEndOfLifeWishes,
+  postResidentsByIdEndOfLifeWishDraftDiscard,
+  postResidentsByIdEndOfLifeWishDraftVerify,
+  postResidentsByIdEndOfLifeWishes,
+  putResidentsByIdEndOfLifeWishDraft,
+} from '@/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
@@ -14,6 +22,8 @@ import { problemOf } from '@/common/problem'
 import { FileField, Row } from '../consents/ConsentTab'
 import { POSITIVE_INTEGER, today, uploadProblem, toRequestOpinion } from './wishUtils'
 import { OpinionEditor, OpinionList } from './Opinions'
+import { DiscardDraftForm, DraftCard } from './WishDraft'
+import { useWishDraft } from './useWishDraft'
 import {
   CHOICE_LABELS,
   END_OF_LIFE_STATUS_LABELS,
@@ -117,11 +127,12 @@ function TextField({ id, label, value, onChange, error, hint, inputMode, type })
   )
 }
 
-function WishForm({ residentId, onCancel, onDone }) {
+function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = null }) {
+  const verify = mode === 'verify'
   const [v, setV] = useState({
-    choice: null,
-    firstContact: '',
-    note: '',
+    choice: initial?.choice ?? null,
+    firstContact: initial?.firstContact ?? '',
+    note: initial?.note ?? '',
     doctorId: '',
     canSelf: null,
     supportMethod: '',
@@ -204,7 +215,8 @@ function WishForm({ residentId, onCancel, onDone }) {
       }
       step = 'save'
       const signer = canSelf ? 'RESIDENT' : v.signerType
-      const { data } = await postResidentsByIdEndOfLifeWishes({
+      const save = verify ? postResidentsByIdEndOfLifeWishDraftVerify : postResidentsByIdEndOfLifeWishes
+      const { data } = await save({
         path: { id: residentId },
         headers: { 'Idempotency-Key': key },
         body: {
@@ -227,7 +239,7 @@ function WishForm({ residentId, onCancel, onDone }) {
           otherOpinions: opinions.map(toRequestOpinion),
           signedAt: new Date(`${v.signedAt}T00:00:00+07:00`).toISOString(),
           signedCopyFileId,
-          source: v.source,
+          source: verify ? undefined : v.source,
         },
       })
       onDone(data)
@@ -247,13 +259,16 @@ function WishForm({ residentId, onCancel, onDone }) {
     <form
       onSubmit={submit}
       noValidate
-      aria-label="Ghi phiếu nguyện vọng cuối đời"
+      aria-label={verify ? 'Kiểm chứng phiếu nguyện vọng cuối đời' : 'Ghi phiếu nguyện vọng cuối đời'}
       className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
     >
-      <h3 className="type-card-title">Ghi phiếu nguyện vọng cuối đời</h3>
+      <h3 className="type-card-title">
+        {verify ? 'Kiểm chứng phiếu nguyện vọng cuối đời' : 'Ghi phiếu nguyện vọng cuối đời'}
+      </h3>
       <p className="type-body-sm text-muted-foreground">
-        Phiếu mới thay phiếu Hiệu lực hiện hành; phiếu cũ vẫn xem được ở lịch sử. Phiếu mang nhận định của Bác sĩ chỉ cho
-        quyết định này, không phải dấu của người cao tuổi.
+        {verify
+          ? 'Phiếu điền sẵn từ bản Nháp gia đình khai; sửa nếu cần, ghi nhận định của Bác sĩ và bản ký. Lưu xong phiếu có hiệu lực, thay phiếu Hiệu lực hiện hành nếu có.'
+          : 'Phiếu mới thay phiếu Hiệu lực hiện hành; phiếu cũ vẫn xem được ở lịch sử. Phiếu mang nhận định của Bác sĩ chỉ cho quyết định này, không phải dấu của người cao tuổi.'}
       </p>
 
       <RadioRow
@@ -411,16 +426,18 @@ function WishForm({ residentId, onCancel, onDone }) {
         onChange={set('signedAt')}
         error={errors.signedAt}
       />
-      <RadioRow
-        label="Nguồn phiếu"
-        labelId="eol-source"
-        options={[
-          ['ADMISSION', SOURCE_LABELS.ADMISSION],
-          ['FAMILY_REQUEST', SOURCE_LABELS.FAMILY_REQUEST],
-        ]}
-        value={v.source}
-        onChange={set('source')}
-      />
+      {!verify && (
+        <RadioRow
+          label="Nguồn phiếu"
+          labelId="eol-source"
+          options={[
+            ['ADMISSION', SOURCE_LABELS.ADMISSION],
+            ['FAMILY_REQUEST', SOURCE_LABELS.FAMILY_REQUEST],
+          ]}
+          value={v.source}
+          onChange={set('source')}
+        />
+      )}
 
       <OpinionEditor idPrefix="eol" items={opinions} onChange={setOpinions} error={errors.opinions} />
 
@@ -428,7 +445,172 @@ function WishForm({ residentId, onCancel, onDone }) {
 
       <div className="flex flex-wrap gap-3">
         <Button type="submit" className="h-11" disabled={busy}>
-          Lưu phiếu
+          {verify ? 'Kiểm chứng và lưu' : 'Lưu phiếu'}
+        </Button>
+        <Button type="button" variant="outline" className="h-11" onClick={onCancel}>
+          Thôi
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// Nội dung bản Nháp tự khai: chưa có nhận định của Bác sĩ (FR-023n)
+function DraftDetails({ draft }) {
+  return (
+    <>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+        <div className="col-span-2">
+          <Row label="Lựa chọn khi nguy kịch">{CHOICE_LABELS[draft.choice] ?? 'Chưa ghi'}</Row>
+        </div>
+        <Row label="Người cần liên hệ trước khi thực hiện">{draft.firstContact ?? 'Chưa ghi'}</Row>
+        {draft.signerType && (
+          <Row label="Người ký">
+            {SIGNER_LABELS[draft.signerType]}
+            {draft.signer && ` · ${draft.signer}`}
+          </Row>
+        )}
+        {draft.note && (
+          <div className="col-span-2">
+            <Row label="Ghi chú">{draft.note}</Row>
+          </div>
+        )}
+      </dl>
+      <OpinionList opinions={draft.otherOpinions ?? []} />
+    </>
+  )
+}
+
+// Hành chính lập, sửa bản Nháp tự khai khi Đang tiếp nhận (Q-412, FR-023n): không có nhận định tự quyết (chỉ Bác sĩ,
+// BR-M01-15); người trả lời là người cao tuổi hoặc người đại diện; bản ký nếu đã có. Hợp đồng không trả người trả lời của
+// Nháp nên sửa Nháp phải chọn lại người trả lời.
+function EndOfLifeDraftForm({ residentId, initial, onCancel, onDone }) {
+  const [v, setV] = useState({
+    choice: initial?.choice ?? null,
+    firstContact: initial?.firstContact ?? '',
+    note: initial?.note ?? '',
+    respondent: 'RESIDENT',
+    respondentId: '',
+    relationship: '',
+  })
+  const [opinions, setOpinions] = useState([])
+  const [signedCopy, setSignedCopy] = useState(null)
+  const [errors, setErrors] = useState({})
+  const [failure, setFailure] = useState(null)
+  const [busy, setBusy] = useState(false)
+  const [key] = useState(() => crypto.randomUUID())
+  const set = (name) => (value) => setV((current) => ({ ...current, [name]: value }))
+  const representative = v.respondent !== 'RESIDENT'
+
+  async function submit(event) {
+    event.preventDefault()
+    const next = {}
+    if (representative && !POSITIVE_INTEGER.test(v.respondentId.trim())) next.respondentId = 'Nhập mã người thân trả lời'
+    if (representative && !v.relationship.trim()) next.relationship = 'Nhập quan hệ với người cao tuổi'
+    setErrors(next)
+    if (Object.keys(next).length > 0) return
+    setFailure(null)
+    setBusy(true)
+    let uploading = true
+    try {
+      const signedCopyFileId = signedCopy ? await uploadFile(signedCopy) : undefined
+      uploading = false
+      const { data, status } = await putResidentsByIdEndOfLifeWishDraft({
+        path: { id: residentId },
+        headers: { 'Idempotency-Key': key },
+        body: {
+          choice: v.choice ?? undefined,
+          firstContact: v.firstContact.trim() || undefined,
+          note: v.note.trim() || undefined,
+          respondentType: v.respondent,
+          respondentFamilyMemberId: representative ? Number(v.respondentId.trim()) : undefined,
+          relationship: representative ? v.relationship.trim() : undefined,
+          otherOpinions: opinions.map(toRequestOpinion),
+          signedCopyFileId,
+        },
+      })
+      onDone(data, status)
+    } catch (error) {
+      const problem = problemOf(error)
+      const fileMessage = uploading ? uploadProblem(problem) : null
+      const mapped = error instanceof ApiError ? WISH_ERRORS[problem.errorCode] : null
+      if (fileMessage) setErrors({ signedCopy: fileMessage })
+      else if (mapped) setErrors({ [mapped[0]]: mapped[1] })
+      else setFailure(problem)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      aria-label="Bản Nháp phiếu nguyện vọng cuối đời"
+      className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
+    >
+      <h3 className="type-card-title">Bản Nháp tự khai phiếu nguyện vọng cuối đời</h3>
+      <p className="type-body-sm text-muted-foreground">
+        Ghi theo lời người cao tuổi hoặc gia đình. Bản Nháp chưa có hiệu lực tới khi Bác sĩ hoặc Điều dưỡng kiểm chứng; nhận
+        định người cao tuổi có tự quyết được hay không do Bác sĩ ghi khi kiểm chứng.
+      </p>
+      <RadioRow
+        label="Lựa chọn khi nguy kịch"
+        labelId="eol-draft-choice"
+        options={Object.entries(CHOICE_LABELS)}
+        value={v.choice}
+        onChange={set('choice')}
+      />
+      <TextField
+        id="eol-draft-first-contact"
+        label="Người cần liên hệ trước khi thực hiện"
+        value={v.firstContact}
+        onChange={set('firstContact')}
+      />
+      <Field>
+        <FieldLabel htmlFor="eol-draft-note">Ghi chú</FieldLabel>
+        <Textarea id="eol-draft-note" rows={2} value={v.note} onChange={(e) => set('note')(e.target.value)} />
+      </Field>
+      <RadioRow
+        label="Người trả lời"
+        labelId="eol-draft-respondent"
+        options={[
+          ['RESIDENT', SIGNER_LABELS.RESIDENT],
+          ['PATIENT_REPRESENTATIVE', SIGNER_LABELS.PATIENT_REPRESENTATIVE],
+        ]}
+        value={v.respondent}
+        onChange={set('respondent')}
+      />
+      {representative && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <TextField
+            id="eol-draft-respondent-id"
+            label="Mã người thân trả lời"
+            inputMode="numeric"
+            value={v.respondentId}
+            onChange={set('respondentId')}
+            error={errors.respondentId}
+          />
+          <TextField
+            id="eol-draft-relationship"
+            label="Quan hệ với người cao tuổi"
+            value={v.relationship}
+            onChange={set('relationship')}
+            error={errors.relationship}
+          />
+        </div>
+      )}
+      <OpinionEditor idPrefix="eol-draft" items={opinions} onChange={setOpinions} error={errors.opinions} />
+      <FileField
+        id="eol-draft-signed-copy"
+        label="Bản ký đã scan (nếu đã có)"
+        error={errors.signedCopy}
+        onPick={setSignedCopy}
+      />
+      <ProblemAlert problem={failure} />
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" className="h-11" disabled={busy}>
+          Lưu bản Nháp
         </Button>
         <Button type="button" variant="outline" className="h-11" onClick={onCancel}>
           Thôi
@@ -444,6 +626,15 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
   const [failure, setFailure] = useState(null)
   const [formOpen, setFormOpen] = useState(false)
   const [done, setDone] = useState(null)
+  // bản Nháp tự khai (Q-412): Hành chính lập khi Đang tiếp nhận; Bác sĩ, Điều dưỡng kiểm chứng hoặc Hủy nháp
+  const [draftMode, setDraftMode] = useState(null)
+  const canDraft = allowedCommands.includes('DRAFT_END_OF_LIFE_WISH') && !FINAL_STATUSES.includes(status)
+  const canRecord = allowedCommands.includes('RECORD_END_OF_LIFE_WISH') && !FINAL_STATUSES.includes(status)
+  const { draft, setDraft, reload: reloadDraft } = useWishDraft(
+    getResidentsByIdEndOfLifeWishDraft,
+    residentId,
+    canDraft || canRecord,
+  )
 
   const load = useCallback(async () => {
     try {
@@ -467,10 +658,65 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
 
   async function finished() {
     setFormOpen(false)
-    setDone('Đã ghi phiếu nguyện vọng cuối đời.')
+    setDraftMode(null)
+    setDone(draft ? 'Đã kiểm chứng phiếu nguyện vọng cuối đời; phiếu có hiệu lực.' : 'Đã ghi phiếu nguyện vọng cuối đời.')
+    reloadDraft()
     await load()
     onChanged?.()
   }
+
+  async function draftSaved(data) {
+    setDraftMode(null)
+    setDraft(data)
+    setDone('Đã lưu bản Nháp tự khai.')
+  }
+
+  async function discard(reason) {
+    await postResidentsByIdEndOfLifeWishDraftDiscard({
+      path: { id: residentId },
+      headers: { 'Idempotency-Key': crypto.randomUUID() },
+      body: { reason },
+    })
+    setDraftMode(null)
+    setDone('Đã hủy bản Nháp tự khai.')
+    await reloadDraft()
+  }
+
+  // Hành chính: khối Nháp của mình (không xem phiếu Hiệu lực, FR-023e, FR-023q)
+  const officeDraft = canDraft && (
+    <div className="flex flex-col gap-3">
+      {draft && draftMode !== 'edit' && (
+        <DraftCard id="eol-draft-title" title="Bản Nháp tự khai" draft={draft}>
+          <DraftDetails draft={draft} />
+        </DraftCard>
+      )}
+      {draftMode === 'edit' ? (
+        <EndOfLifeDraftForm
+          residentId={residentId}
+          initial={draft}
+          onCancel={() => setDraftMode(null)}
+          onDone={draftSaved}
+        />
+      ) : (
+        <Button
+          type="button"
+          variant={draft ? 'outline' : 'default'}
+          className="h-11 self-start"
+          onClick={() => {
+            setDone(null)
+            setDraftMode('edit')
+          }}
+        >
+          {draft ? 'Sửa bản Nháp' : 'Lập bản Nháp tự khai'}
+        </Button>
+      )}
+      {done && (
+        <p role="status" className="type-body-sm rounded-lg border bg-muted/30 p-3">
+          {done}
+        </p>
+      )}
+    </div>
+  )
 
   const heading = (
     <h3 id="eol-title" className="type-card-title">
@@ -495,6 +741,7 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
         <p className="type-body-sm text-muted-foreground">
           Vai trò của bạn chỉ thấy phiếu đã có hay chưa, không xem được nội dung.
         </p>
+        {officeDraft}
       </section>
     )
   }
@@ -511,7 +758,8 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
 
   const current = summary.current
   const past = summary.history.filter((w) => w.status !== 'ACTIVE')
-  const canRecord = allowedCommands.includes('RECORD_END_OF_LIFE_WISH') && !FINAL_STATUSES.includes(status)
+  // còn Nháp thì không ghi thẳng phiên bản mới, phải kiểm chứng hoặc Hủy nháp (FR-023p)
+  const canRecordNew = canRecord && !draft
 
   return (
     <div className="flex flex-col gap-4">
@@ -531,7 +779,7 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
             </AlertDescription>
           </Alert>
         )}
-        {canRecord && (
+        {canRecordNew && (
           <Button
             type="button"
             variant={current ? 'outline' : 'default'}
@@ -552,7 +800,49 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
           {done}
         </p>
       )}
-      {formOpen && canRecord && <WishForm residentId={residentId} onCancel={() => setFormOpen(false)} onDone={finished} />}
+      {formOpen && canRecordNew && (
+        <WishForm residentId={residentId} onCancel={() => setFormOpen(false)} onDone={finished} />
+      )}
+      {canRecord && draft && (
+        <DraftCard
+          id="eol-draft-title"
+          title="Bản Nháp tự khai chờ kiểm chứng"
+          draft={draft}
+          actions={
+            draftMode === null && (
+              <>
+                <Button
+                  type="button"
+                  className="h-11"
+                  onClick={() => {
+                    setDone(null)
+                    setDraftMode('verify')
+                  }}
+                >
+                  Kiểm chứng
+                </Button>
+                <Button type="button" variant="outline" className="h-11" onClick={() => setDraftMode('discard')}>
+                  Hủy nháp
+                </Button>
+              </>
+            )
+          }
+        >
+          <DraftDetails draft={draft} />
+          {draftMode === 'discard' && (
+            <DiscardDraftForm idPrefix="eol" onDiscard={discard} onCancel={() => setDraftMode(null)} />
+          )}
+        </DraftCard>
+      )}
+      {canRecord && draft && draftMode === 'verify' && (
+        <WishForm
+          residentId={residentId}
+          mode="verify"
+          initial={draft}
+          onCancel={() => setDraftMode(null)}
+          onDone={finished}
+        />
+      )}
 
       <section aria-labelledby="eol-history-title" className="flex flex-col gap-2">
         <h4 id="eol-history-title" className="type-label">

@@ -14,6 +14,7 @@ import { formatDateTime } from '@/common/dateTime'
 import { openFile, uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { CONSENTER_LABELS, FINAL_STATUSES, STATUS_LABELS } from './consentLabels'
+import { FileInput } from '@/common/FileInput'
 
 // Tab "Đồng ý" trong khung chi tiết hồ sơ (001 T059; US5; FR-010 → FR-016; bố cục duyệt 2026-10-23): thẻ bản đồng ý hiện
 // hành kèm nút theo allowedCommands, form ghi nhận hoặc rút lại mở ngay dưới thẻ, lịch sử các bản đã rút lại hoặc được
@@ -45,13 +46,11 @@ export function FileField({ id, label, error, onPick, hint = FILE_HINT, multiple
   return (
     <Field data-invalid={!!error || undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <input
+      <FileInput
         id={id}
-        type="file"
         accept="application/pdf,image/jpeg,image/png"
         multiple={multiple}
         aria-invalid={!!error || undefined}
-        className="type-body-sm h-11 rounded-lg border px-3 py-2"
         onChange={picked}
       />
       {error ? <FieldError>{error}</FieldError> : <FieldDescription>{hint}</FieldDescription>}

@@ -23,6 +23,7 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { formatMoney } from './balanceLabels'
 import { saveBlob } from './download'
+import { FileInput } from '@/common/FileInput'
 
 // Quyết toán của một người cao tuổi (017 T033; FR-022, FR-034, FR-037, BR-M11-22, DBR-38): hai điều kiện kết thúc lưu
 // trú kèm lý do, lệnh Xác nhận quyết toán (mỗi lần tạo một phiên bản bảng PDF, phiên bản mới nhất là hiện hành), tải
@@ -171,11 +172,9 @@ export function SettlementPanel({ residentId }) {
                 </Button>
                 {version.current && !version.hasSignedCopy && can('SETTLEMENT_RECORD', 'UPDATE') && (
                   <>
-                    <input
-                      type="file"
+                    <FileInput
                       aria-label={`Bản ký phiên bản ${version.version}`}
                       accept="application/pdf,image/jpeg,image/png"
-                      className="type-body-sm h-11 rounded-lg border px-3 py-2"
                       onChange={(e) => setFiles((s) => ({ ...s, [version.id]: e.target.files?.[0] }))}
                     />
                     <Button className="h-11" disabled={busy || !files[version.id]} onClick={() => attach(version)}>
