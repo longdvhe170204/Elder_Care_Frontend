@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 import { StaffSelectField } from '@/common/StaffSelectField'
 import { Call115Panel } from './Call115Panel'
 import { PressedAlertPanel } from './PressedAlertPanel'
-import { loadAlert, loadAlertBoard, loadIncidentTypes, runAlertCommand } from './alerts'
+import { joinIncident, loadAlert, loadAlertBoard, loadIncidentTypes, runAlertCommand } from './alerts'
 import {
   LEVEL_LABEL,
   LEVEL_ORDER,
@@ -137,6 +137,7 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
   const [typeId, setTypeId] = useState('')
   const [staffId, setStaffId] = useState('')
   const [createdIncidentId, setCreatedIncidentId] = useState(null)
+  const [blockingIncidentId, setBlockingIncidentId] = useState(null)
   const [initialResponse, setInitialResponse] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -177,6 +178,20 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
       for (const each of [command].flat()) await runAlertCommand(alert.id, each)
       await reload()
       onChanged(message, name)
+    } catch (error) {
+      setProblem(problemOf(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function joinBlocking() {
+    setBusy(true)
+    try {
+      await joinIncident(blockingIncidentId)
+      setCreatedIncidentId(blockingIncidentId)
+      setBlockingIncidentId(null)
+      onChanged(`Đã tham gia xử lý sự cố SC-${blockingIncidentId}`, name)
     } catch (error) {
       setProblem(problemOf(error))
     } finally {
@@ -230,15 +245,14 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
         name,
       )
     } catch (error) {
-      const existingId = error?.problem?.errorCode === 'OPEN_EMERGENCY_INCIDENT_EXISTS' && error.problem.incidentId
-      setProblem(
-        existingId
-          ? {
-              ...problemOf(error),
-              detail: `Người cao tuổi này đã có sự cố Khẩn cấp đang mở: SC-${existingId}. Vào menu Sự cố, mở SC-${existingId} rồi bấm "Tham gia xử lý".`,
-            }
-          : problemOf(error),
-      )
+      // FR-041: một người chỉ có một sự cố Khẩn cấp đang mở; chỉ ra sự cố đó và cho tham gia hoặc mở, không tự gộp
+      if (error?.problem?.errorCode === 'OPEN_EMERGENCY_INCIDENT_EXISTS' && error.problem.incidentId != null) {
+        setBlockingIncidentId(error.problem.incidentId)
+        setMode(null)
+        setProblem(null)
+      } else {
+        setProblem(problemOf(error))
+      }
     } finally {
       setBusy(false)
     }
@@ -265,6 +279,32 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
         <dd className="tabular-nums">{alert.occurrenceCount}</dd>
         <dt className="text-muted-foreground">Phụ trách</dt>
         <dd>{alert.assignee ?? 'Chưa ai nhận'}</dd>
+        {blockingIncidentId != null && (
+          <section
+            role="alert"
+            className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 type-body-sm"
+          >
+            <p>
+              Chưa tạo sự cố mới: người cao tuổi này đang có sự cố Khẩn cấp chưa đóng, mã{' '}
+              <strong>SC-{blockingIncidentId}</strong>. Mỗi người chỉ có một sự cố Khẩn cấp đang mở, hệ thống không tự
+              gộp. Bạn cùng xử lý sự cố đó, hoặc mở ra xem trước.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button className="h-11" disabled={busy} onClick={joinBlocking}>
+                Tham gia xử lý SC-{blockingIncidentId}
+              </Button>
+              {onNavigate && (
+                <Button
+                  variant="outline"
+                  className="h-11"
+                  onClick={() => onNavigate('incidents', { incidentId: blockingIncidentId })}
+                >
+                  Mở sự cố SC-{blockingIncidentId}
+                </Button>
+              )}
+            </div>
+          </section>
+        )}
         {(createdIncidentId ?? alert.incidentId) != null && (
           <section aria-label="Sự cố liên kết" className="flex flex-col gap-2 rounded-lg border p-3 type-body-sm">
             <span>

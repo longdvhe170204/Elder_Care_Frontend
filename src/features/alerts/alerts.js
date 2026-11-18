@@ -10,6 +10,7 @@ import {
   postAlertsByIdConvertToIncident,
   postAlertsByIdReceive,
   postAlertsByIdStartHandling,
+  postIncidentsByIdJoinHandling,
 } from '@/api/api007'
 import { residentName, setIncidentTypeNames } from './alertView'
 
@@ -26,6 +27,14 @@ export async function loadAlertBoard() {
     if (profiles[i].status === 'fulfilled') names[id] = residentName(profiles[i].value.data)
   })
   return { alerts: data, names }
+}
+
+// Tham gia xử lý sự cố Khẩn cấp đang mở của cùng người cao tuổi (FR-041), thay cho việc tạo thêm sự cố
+export function joinIncident(incidentId) {
+  return postIncidentsByIdJoinHandling({
+    path: { id: incidentId },
+    headers: { 'Idempotency-Key': crypto.randomUUID() },
+  })
 }
 
 export async function loadIncidentTypes() {
