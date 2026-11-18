@@ -125,8 +125,7 @@ function Section({ label, sub, count, defaultOpen, urgent, current, children }) 
   )
 }
 
-function ReconciliationMode({ isDoctor, onSaved }) {
-  const [resident, setResident] = useState(null)
+function ReconciliationMode({ resident, setResident, isDoctor, onSaved }) {
   const name = resident && (resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`)
   return (
     <div className="flex flex-col gap-5">
@@ -147,6 +146,8 @@ export function MedicationPage({ role }) {
   const [clock, setClock] = useState(() => hhmm(new Date()))
   const [opening, setOpening] = useState(null)
   const [announcement, setAnnouncement] = useState('')
+  // Người đang chọn ở chế độ Đối chiếu thuốc; tab Đơn thuốc chuyển sang đúng người khi có đơn chờ đối chiếu (006 T074)
+  const [reconciling, setReconciling] = useState(null)
 
   const reload = useCallback(async () => {
     try {
@@ -269,9 +270,22 @@ export function MedicationPage({ role }) {
       {mode === 'prn' ? (
         <PrnPanel canRecord={canRecord} now={shift.now} onSaved={setAnnouncement} />
       ) : mode === 'reconciliation' ? (
-        <ReconciliationMode isDoctor={role === 'DOCTOR'} onSaved={setAnnouncement} />
+        <ReconciliationMode
+          resident={reconciling}
+          setResident={setReconciling}
+          isDoctor={role === 'DOCTOR'}
+          onSaved={setAnnouncement}
+        />
       ) : mode === 'prescriptions' ? (
-        <PrescriptionPanel role={role} canRecord={canRecord} onSaved={setAnnouncement} />
+        <PrescriptionPanel
+          role={role}
+          canRecord={canRecord}
+          onSaved={setAnnouncement}
+          onReconcile={(resident) => {
+            setReconciling(resident)
+            setMode('reconciliation')
+          }}
+        />
       ) : !round ? (
         !problem && <p className="rounded-xl border bg-card px-4 py-3 type-body-sm">Đang tải vòng phát thuốc…</p>
       ) : (

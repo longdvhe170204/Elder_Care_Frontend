@@ -96,4 +96,18 @@ describe('MedicationPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     expect(await screen.findByText('Trần Thị Mai chưa có phiếu đối chiếu thuốc.')).toBeTruthy()
   })
+
+  it('006_T074_donChoDoiChieu_nutMoChuyenSangDoiChieuDungNguoi', async () => {
+    api.on('GET', '/residents', json(200, { items: [{ id: 9, profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }] }))
+    api.on('GET', '/residents/9/prescriptions', json(200, [{ id: 7, residentId: 9, medicationId: 1, dosage: 1, route: 'Uống', prescriptionType: 'PERIODIC', frequency: { type: 'TIMED_SLOTS', timedSlots: ['08:00'] }, startedAt: '2026-11-01T01:00:00Z', status: 'SUSPENDED', suspensionReason: 'RECONCILIATION_PENDING', prescriber: { type: 'INTERNAL' }, allowedCommands: [] }]))
+    api.on('GET', '/medications', json(200, []))
+    api.on('GET', '/residents/9/initial-health-record', json(200, {}))
+    api.on('GET', '/residents/9/medication-reconciliations', json(200, []))
+    render(<MedicationPage role="NURSING_STAFF" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Đơn thuốc' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở đối chiếu thuốc của Trần Thị Mai' }))
+    expect(await screen.findByText('Trần Thị Mai chưa có phiếu đối chiếu thuốc.')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Đối chiếu thuốc' })).toHaveAttribute('aria-pressed', 'true')
+  })
 })

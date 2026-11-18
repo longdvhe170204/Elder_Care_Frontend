@@ -182,4 +182,21 @@ describe('PrescriptionPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     expect(await screen.findByText('Không có quyền thực hiện')).toBeTruthy()
   })
+
+  it('FR_034_donChoDoiChieu_hienDauVaNutMoDoiChieuDungNguoi', async () => {
+    api.on('GET', '/residents/9/prescriptions', json(200, [{ ...ACTIVE, status: 'SUSPENDED', suspensionReason: 'RECONCILIATION_PENDING' }, STOPPED]))
+    const onReconcile = vi.fn()
+    render(<PrescriptionPanel role="NURSING_STAFF" onSaved={() => {}} onReconcile={onReconcile} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    expect(await screen.findByText('Chờ đối chiếu thuốc')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Mở đối chiếu thuốc của Trần Thị Mai' }))
+    expect(onReconcile).toHaveBeenCalledWith(expect.objectContaining({ id: 9 }))
+  })
+
+  it('FR_034_khongCoDonChoDoiChieu_khongCoNutMoDoiChieu', async () => {
+    render(<PrescriptionPanel role="NURSING_STAFF" onSaved={() => {}} onReconcile={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    await screen.findAllByText('Amlodipin 5mg')
+    expect(screen.queryByRole('button', { name: /Mở đối chiếu thuốc/ })).toBeNull()
+  })
 })

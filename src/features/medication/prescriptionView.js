@@ -62,6 +62,8 @@ export function prescriptionView({ prescription: p, medication }) {
     replacesId: p.replacesId,
     replacedById: p.replacedById,
     noMedicationAvailable: p.noMedicationAvailable,
+    // Tạm dừng do tiếp nhận hoặc trở về từ bệnh viện, chờ phiếu đối chiếu (FR-034; api-006 suspensionReason)
+    awaitingReconciliation: p.status === 'SUSPENDED' && p.suspensionReason === 'RECONCILIATION_PENDING',
     confirmedIssues: (p.confirmedIssues ?? []).map((i) => ({ issueCode: i.issueCode, text: issueText(i) })),
     allowedCommands: p.allowedCommands ?? [],
     raw: p,
