@@ -33,6 +33,16 @@ export async function loadIncidentBoard() {
 }
 
 // Cảnh báo đã chuyển thành sự cố này (nếu có và người xem xem được cảnh báo); không đọc được thì không hiện liên kết
+// Trạng thái hiện tại của người cao tuổi (api-001) để báo vì sao chưa chuyển viện được; không đọc được thì trả null
+export async function loadResidentStatus(residentId) {
+  try {
+    const { data } = await getResidentsById({ path: { id: residentId } })
+    return data?.status ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function loadSourceAlert(incidentId) {
   try {
     const { data } = await getAlerts({})

@@ -382,6 +382,43 @@ describe('IncidentsPage', () => {
     })
   })
 
+  it('FR_049_nguoiDangODBenhVien_khoaNutChuyenVienVaNoiLyDo', async () => {
+    api.on(
+      'GET',
+      '/incidents/11',
+      json(200, { ...NEW_INCIDENT, status: 'IN_PROGRESS', allowedCommands: ['progressions', 'transfer-out'] }),
+    )
+    api.on(
+      'GET',
+      '/residents/9',
+      json(200, { id: 9, status: 'HOSPITALIZED', profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }),
+    )
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button', { name: /Trần Thị Mai/ }))
+    expect(await screen.findByText(/Chưa chuyển viện được/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Chuyển viện' })).toBeDisabled()
+  })
+
+  it('FR_049_nguoiDangLuuTru_choChuyenVien', async () => {
+    api.on(
+      'GET',
+      '/incidents/11',
+      json(200, { ...NEW_INCIDENT, status: 'IN_PROGRESS', allowedCommands: ['progressions', 'transfer-out'] }),
+    )
+    api.on(
+      'GET',
+      '/residents/9',
+      json(200, { id: 9, status: 'IN_RESIDENCE', profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }),
+    )
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button', { name: /Trần Thị Mai/ }))
+    const button = await screen.findByRole('button', { name: 'Chuyển viện' })
+    await waitFor(() => expect(button).not.toBeDisabled())
+    expect(screen.queryByText(/Chưa chuyển viện được/)).toBeNull()
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)

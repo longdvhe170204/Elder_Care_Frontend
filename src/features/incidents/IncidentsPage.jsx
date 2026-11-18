@@ -26,6 +26,7 @@ import {
   loadIncident,
   loadIncidentBoard,
   loadResidentChoices,
+  loadResidentStatus,
   loadSourceAlert,
   recordIncident,
   runIncidentCommand,
@@ -105,6 +106,15 @@ function Facts({ rows }) {
 }
 
 const RESIDENT_LIST_MAX = 6
+// Lệnh Chuyển viện (001) chỉ làm được từ ba trạng thái này; ngoài ra báo rõ người đó đang ở trạng thái nào
+const TRANSFERABLE_STATUS = ['IN_RESIDENCE', 'TEMPORARILY_ABSENT', 'OFF_SITE_ACTIVITY']
+const RESIDENT_STATUS_TEXT = {
+  ADMISSION_IN_PROGRESS: 'đang trong quá trình tiếp nhận',
+  ADMISSION_CANCELLED: 'đã hủy tiếp nhận',
+  HOSPITALIZED: 'đang điều trị tại bệnh viện (đã chuyển viện)',
+  RESIDENCY_ENDED: 'đã kết thúc lưu trú',
+  DECEASED: 'đã mất',
+}
 // Loại hay gặp lên đầu theo thứ tự cố định; loại "khác" xuống cuối, đứng sau dòng "Không có loại phù hợp?"
 const COMMON_TYPE_CODES = [
   'FALL',
@@ -328,10 +338,22 @@ function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode
 function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavigate }) {
   const [state, setState] = useState(null)
   const [sourceAlert, setSourceAlert] = useState(null)
+  const [residentStatus, setResidentStatus] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
   const [busy, setBusy] = useState(false)
   const [showMore, setShowMore] = useState(false)
+
+  // Trạng thái người cao tuổi, tải lại mỗi khi sự cố được tải lại (sau chuyển viện thì khóa nút Chuyển viện)
+  const residentIdForStatus = state?.incident?.content?.residentId ?? null
+  useEffect(() => {
+    if (residentIdForStatus == null) return undefined
+    let live = true
+    loadResidentStatus(residentIdForStatus).then((status) => live && setResidentStatus(status))
+    return () => {
+      live = false
+    }
+  }, [residentIdForStatus, state])
 
   useEffect(() => {
     let live = true
@@ -376,10 +398,12 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
 
   const missingGroups = missingMonitoringGroups(incident, progressionTypes)
   const hasMore = ['move-to-monitoring', 'change-level', 'assign-handler'].some((c) => commands.includes(c))
-  const canTransfer =
+  const transferOffered =
     ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
     incident.content?.residentId != null &&
     commands.includes('transfer-out')
+  const statusBlocksTransfer = residentStatus != null && !TRANSFERABLE_STATUS.includes(residentStatus)
+  const canTransfer = transferOffered && !statusBlocksTransfer
 
   const messages = {
     progressions: 'Đã ghi diễn biến',
@@ -492,6 +516,18 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
               <Button variant="outline" className="h-11" onClick={() => setMode('transfer-out')}>
                 Chuyển viện
               </Button>
+            )}
+            {transferOffered && statusBlocksTransfer && (
+              <div className="flex flex-col gap-1">
+                <Button variant="outline" className="h-11" disabled>
+                  Chuyển viện
+                </Button>
+                <span className="type-caption text-muted-foreground">
+                  Chưa chuyển viện được: {name}{' '}
+                  {RESIDENT_STATUS_TEXT[residentStatus] ?? 'đang ở trạng thái không cho chuyển viện'}. Chỉ chuyển viện
+                  được khi người cao tuổi đang lưu trú, tạm vắng hoặc đang hoạt động bên ngoài.
+                </span>
+              </div>
             )}
             {commands.includes('close') && (
               <Button variant="outline" className="h-11" onClick={() => setMode('close')}>
