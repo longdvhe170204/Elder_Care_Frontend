@@ -221,6 +221,20 @@ describe('AlertsPage', () => {
     await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('incidents', { incidentId: 55 }))
   })
 
+  it('FR_029_chuyenSuCo_nguoiDangXuLyTiepNhanSuCoLuon', async () => {
+    api.on('GET', '/alerts/3', json(200, { ...ALERT_IN_PROGRESS, allowedCommands: ['convert-to-incident'] }))
+    api.on('POST', '/alerts/3/convert-to-incident', json(201, { id: 78, allowedCommands: ['receive'] }))
+    api.on('POST', '/incidents/78/receive', json(200, {}))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    const cards = await screen.findAllByRole('article')
+    fireEvent.click(within(cards[2]).getByRole('button', { name: /Chi tiết/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Chuyển thành sự cố' }))
+    fireEvent.change(await screen.findByLabelText('Loại sự cố'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và chuyển sự cố' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents/78/receive')).toHaveLength(1))
+    expect(await screen.findByText(/bạn đang xử lý/)).toBeTruthy()
+  })
+
   it('FR_029_409_hienDieuKienChuaThoa', async () => {
     api.on('POST', '/alerts/1/receive', problem(409, 'ALREADY_RECEIVED'))
     render(<AlertsPage role="NURSING_STAFF" />)

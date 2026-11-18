@@ -19,7 +19,14 @@ import { cn } from '@/lib/utils'
 import { StaffSelectField } from '@/common/StaffSelectField'
 import { Call115Panel } from './Call115Panel'
 import { PressedAlertPanel } from './PressedAlertPanel'
-import { joinIncident, loadAlert, loadAlertBoard, loadIncidentTypes, runAlertCommand } from './alerts'
+import {
+  joinIncident,
+  loadAlert,
+  loadAlertBoard,
+  loadIncidentTypes,
+  receiveCreatedIncident,
+  runAlertCommand,
+} from './alerts'
 import {
   LEVEL_LABEL,
   LEVEL_ORDER,
@@ -254,12 +261,14 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
       const result = await runAlertCommand(alert.id, mode, body)
       if (converting) {
         // Ở lại chi tiết để người dùng thấy ngay sự cố vừa tạo mang mã nào và mở được sang màn Sự cố
-        const incidentId = result?.data?.incident?.id ?? result?.data?.id ?? null
+        const created = result?.data?.incident ?? result?.data ?? null
+        const incidentId = created?.id ?? null
+        const taken = await receiveCreatedIncident(created)
         setCreatedIncidentId(incidentId)
         setMode(null)
         await reload()
         onChanged(
-          `${mode === 'activate-emergency' ? 'Đã kích hoạt khẩn cấp' : 'Đã chuyển thành sự cố'}${incidentId ? ` SC-${incidentId}` : ''}`,
+          `${mode === 'activate-emergency' ? 'Đã kích hoạt khẩn cấp' : 'Đã chuyển thành sự cố'}${incidentId ? ` SC-${incidentId}` : ''}${taken ? ', bạn đang xử lý' : ''}`,
           name,
         )
         // Khẩn cấp: sang thẳng sự cố để thấy thẻ thông tin khẩn cấp và Gọi 115, không bắt tìm lại ở menu

@@ -11,6 +11,7 @@ import {
   postAlertsByIdReceive,
   postAlertsByIdStartHandling,
   postIncidentsByIdJoinHandling,
+  postIncidentsByIdReceive,
 } from '@/api/api007'
 import { residentName, setIncidentTypeNames } from './alertView'
 
@@ -27,6 +28,18 @@ export async function loadAlertBoard() {
     if (profiles[i].status === 'fulfilled') names[id] = residentName(profiles[i].value.data)
   })
   return { alerts: data, names }
+}
+
+// Người đang xử lý cảnh báo đã nhận việc rồi: sự cố vừa tạo từ cảnh báo của họ thì họ là người xử lý luôn, không bắt
+// tiếp nhận lần hai. Không nhận được (thiếu quyền, người khác đã nhận) thì để sự cố ở Mới cho người có quyền.
+export async function receiveCreatedIncident(incident) {
+  if (!incident?.id || !(incident.allowedCommands ?? []).includes('receive')) return false
+  try {
+    await postIncidentsByIdReceive({ path: { id: incident.id }, headers: { 'Idempotency-Key': crypto.randomUUID() } })
+    return true
+  } catch {
+    return false
+  }
 }
 
 // Tham gia xử lý sự cố Khẩn cấp đang mở của cùng người cao tuổi (FR-041), thay cho việc tạo thêm sự cố
