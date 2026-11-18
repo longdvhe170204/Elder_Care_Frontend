@@ -111,6 +111,8 @@ function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile 
 }
 
 // Khung chi tiết: nguồn, thời điểm, lệnh cần nhập kết quả hoặc lý do (Đóng, Đổi mức), khối nút bấm khẩn cấp
+const CRITICAL_CLOSE_MIN = 10
+
 function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
   const [alert, setAlert] = useState(null)
   const [problem, setProblem] = useState(null)
@@ -150,7 +152,9 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
   const commands = alert.allowedCommands ?? []
   const converting = mode === 'convert-to-incident' || mode === 'activate-emergency'
   const levelChoices = LEVEL_ORDER.filter((l) => l !== alert.level)
-  const textMissing = !text.trim()
+  // Đóng cảnh báo Khẩn cấp: kết quả phải nêu lý do không kích hoạt khẩn cấp, tối thiểu ít chữ để không đóng bằng "ok"
+  const criticalClose = mode === 'close' && alert.level === 'CRITICAL'
+  const textMissing = criticalClose ? text.trim().length < CRITICAL_CLOSE_MIN : !text.trim()
 
   async function quick(command, message) {
     setBusy(true)
@@ -365,12 +369,20 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
               />
             </Field>
           )}
+          {criticalClose && (
+            <p role="note" className="rounded-md border border-warning/40 bg-warning/10 p-3 type-body-sm">
+              Cảnh báo Khẩn cấp thường cần bấm "Kích hoạt khẩn cấp" hoặc "Chuyển thành sự cố". Chỉ đóng khi đã xác nhận
+              không phải tình huống khẩn cấp thật.
+            </p>
+          )}
           <Field data-invalid={(!converting && submitted && textMissing) || undefined}>
             <FieldLabel htmlFor="alert-text">
               {converting
                 ? 'Mô tả (không bắt buộc)'
                 : mode === 'close'
-                  ? 'Kết quả xử lý'
+                  ? criticalClose
+                    ? 'Kết quả và lý do không kích hoạt khẩn cấp'
+                    : 'Kết quả xử lý'
                   : mode === 'assign'
                     ? 'Ghi chú giao việc'
                     : 'Lý do đổi mức'}
@@ -386,7 +398,9 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
             {!converting && submitted && textMissing && (
               <FieldError>
                 {mode === 'close'
-                  ? 'Nhập kết quả xử lý'
+                  ? criticalClose
+                    ? `Nhập kết quả và lý do không kích hoạt khẩn cấp (ít nhất ${CRITICAL_CLOSE_MIN} ký tự)`
+                    : 'Nhập kết quả xử lý'
                   : mode === 'assign'
                     ? 'Nhập ghi chú giao việc'
                     : 'Nhập lý do đổi mức'}

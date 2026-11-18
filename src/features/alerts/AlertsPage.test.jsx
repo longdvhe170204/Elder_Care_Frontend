@@ -138,6 +138,25 @@ describe('AlertsPage', () => {
     expect(JSON.parse(api.calls('POST', '/alerts/3/convert-to-incident')[0][1].body)).toEqual({ incidentTypeId: 1 })
   })
 
+  it('FR_029_dongCanhBaoKhanCap_canLyDoDaiHon', async () => {
+    api.on('GET', '/alerts/3', json(200, { ...ALERT_IN_PROGRESS, level: 'CRITICAL', allowedCommands: ['close'] }))
+    api.on('POST', '/alerts/3/close', json(200, {}))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    const cards = await screen.findAllByRole('article')
+    fireEvent.click(within(cards[2]).getByRole('button', { name: /Chi tiết/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Đóng cảnh báo' }))
+    expect(screen.getByRole('note').textContent).toMatch(/Kích hoạt khẩn cấp/)
+    fireEvent.change(screen.getByLabelText('Kết quả và lý do không kích hoạt khẩn cấp'), { target: { value: 'ok' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và đóng cảnh báo' }))
+    expect(await screen.findByText(/ít nhất 10 ký tự/)).toBeTruthy()
+    expect(api.calls('POST', '/alerts/3/close')).toHaveLength(0)
+    fireEvent.change(screen.getByLabelText('Kết quả và lý do không kích hoạt khẩn cấp'), {
+      target: { value: 'Đã kiểm tra, người cao tuổi ổn định, không phải khẩn cấp' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và đóng cảnh báo' }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/3/close')).toHaveLength(1))
+  })
+
   it('FR_029_409_hienDieuKienChuaThoa', async () => {
     api.on('POST', '/alerts/1/receive', problem(409, 'ALREADY_RECEIVED'))
     render(<AlertsPage role="NURSING_STAFF" />)
