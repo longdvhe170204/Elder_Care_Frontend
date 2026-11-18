@@ -67,7 +67,7 @@ export async function loadFloorChoices() {
 
 export async function loadResidentChoices() {
   const { data } = await getResidents({})
-  return (data.items ?? []).map((r) => ({ id: r.id, code: r.profileCode, name: residentName(r) }))
+  return (data.items ?? []).map((r) => ({ id: r.id, code: r.profileCode, name: residentName(r), status: r.status }))
 }
 
 const key = () => ({ 'Idempotency-Key': crypto.randomUUID() })

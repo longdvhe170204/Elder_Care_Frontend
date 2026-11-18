@@ -464,6 +464,21 @@ describe('IncidentsPage', () => {
     expect(section.textContent).toMatch(/Người thân: 1 người.*đã xem 0\/1/)
   })
 
+  it('BR_M05_19_nguoiDangODBenhVien_vanGhiDuocNhungCoNhacNho', async () => {
+    api.on(
+      'GET',
+      '/residents',
+      json(200, {
+        items: [{ id: 9, status: 'HOSPITALIZED', profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }],
+      }),
+    )
+    render(<IncidentsPage />)
+    await rows()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận sự cố' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    expect((await screen.findByRole('note')).textContent).toMatch(/đang điều trị tại bệnh viện, không có mặt ở viện/)
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)

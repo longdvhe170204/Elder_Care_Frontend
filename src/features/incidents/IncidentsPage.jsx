@@ -151,6 +151,12 @@ function Facts({ rows }) {
 const RESIDENT_LIST_MAX = 6
 // Lệnh Chuyển viện (001) chỉ làm được từ ba trạng thái này; ngoài ra báo rõ người đó đang ở trạng thái nào
 const TRANSFERABLE_STATUS = ['IN_RESIDENCE', 'TEMPORARILY_ABSENT', 'OFF_SITE_ACTIVITY']
+// Người cao tuổi không có mặt ở viện vẫn ghi được sự cố (BR-M05-19, ví dụ đồ gửi, thông tin) nhưng phải nhắc người ghi
+const AWAY_STATUS_TEXT = {
+  HOSPITALIZED: 'đang điều trị tại bệnh viện',
+  TEMPORARILY_ABSENT: 'đang tạm vắng',
+  OFF_SITE_ACTIVITY: 'đang ở hoạt động bên ngoài',
+}
 const RESIDENT_STATUS_TEXT = {
   ADMISSION_IN_PROGRESS: 'đang trong quá trình tiếp nhận',
   ADMISSION_CANCELLED: 'đã hủy tiếp nhận',
@@ -814,6 +820,12 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
                   </p>
                 )}
               </div>
+            )}
+            {pickedResident && AWAY_STATUS_TEXT[pickedResident.status] && (
+              <p role="note" className="rounded-md border border-warning/40 bg-warning/10 p-3 type-body-sm">
+                {pickedResident.name} {AWAY_STATUS_TEXT[pickedResident.status]}, không có mặt ở viện. Chỉ ghi sự cố nếu
+                việc thật sự liên quan (ví dụ đồ gửi, thông tin, theo dõi sau chuyển viện).
+              </p>
             )}
             {submitted && errors.resident && <FieldError>Chọn người cao tuổi</FieldError>}
           </Field>
