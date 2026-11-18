@@ -172,7 +172,7 @@ function ProgressionPicker({ types, value, onChange, missing }) {
           <section key={group} aria-label={label} className="flex flex-col gap-1.5">
             <h4 className="type-caption text-muted-foreground">
               {label}
-              {missing.includes(group) && ' (còn thiếu để chuyển theo dõi)'}
+              {missing.includes(group) && ' (cần ít nhất 1 mục để Chuyển theo dõi)'}
             </h4>
             {plain.length > 0 && <div className="flex flex-wrap gap-2">{plain.map(chip)}</div>}
             {resuscitation.length > 0 && (
