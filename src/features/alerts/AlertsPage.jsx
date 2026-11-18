@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -45,81 +45,81 @@ function AlertStatus({ alert }) {
   return <Badge variant={statusTone(alert)}>{statusLabel(alert)}</Badge>
 }
 
+// Một dòng cảnh báo: người và loại ở bên trái, trạng thái và hạn ở giữa, đúng một nút chính ở bên phải (DESIGN.md 7.1).
+// Vạch trái theo mức: đỏ khi Khẩn cấp hoặc đã leo thang tối đa, hổ phách khi Trung bình, xám khi Nhẹ (3.5).
 // onReconcile: cảnh báo "chưa đối chiếu thuốc" mở thẳng phiếu đối chiếu của người đó ở màn Phát thuốc (006 T078); là lối
 // chuyển màn, không phải lệnh trên cảnh báo
-function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }) {
+function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }) {
   const urgent = isUrgent(alert)
   const commands = alert.allowedCommands ?? []
   // Người xử lý (không phải Quản lý viện) tiếp nhận xong thường xử lý ngay: một nút làm cả hai lệnh (FR-029 giữ hai trạng thái)
   const handler = commands.includes('activate-emergency')
+  const waiting = isOpen(alert) && alert.acknowledgementDeadline && ['NEW', 'ESCALATED'].includes(alert.status)
   return (
-    <Card role="article" aria-label={`${typeLabel(alert.type)}, ${name}`} className="gap-3">
-      <CardHeader className="flex flex-row items-center gap-2.5">
-        <ResidentAvatar name={name} code={String(alert.residentId ?? alert.id)} />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate type-label">{name}</span>
-          <span className="type-caption text-muted-foreground">{originLabel(alert.origin)}</span>
-        </div>
-        <StatusBadge status={LEVEL_LABEL[alert.level]} />
-      </CardHeader>
-      <CardContent className="flex flex-1 flex-col gap-2 type-body-sm">
-        <span className="type-card-title">{typeLabel(alert.type)}</span>
-        <span className="text-muted-foreground tabular-nums">
-          Lần gần nhất {formatDateTime(alert.latestAt)}
-          {alert.occurrenceCount > 1 && `, ${alert.occurrenceCount} lần cùng loại đã gộp`}
-        </span>
-        <div className="flex flex-wrap items-center gap-2">
+    <article
+      aria-label={`${typeLabel(alert.type)}, ${name}`}
+      className={cn(
+        'flex flex-col gap-3 rounded-xl border border-l-4 bg-card p-4 sm:flex-row sm:items-center',
+        urgent ? 'border-l-destructive' : alert.level === 'MEDIUM' ? 'border-l-warning-foreground' : 'border-l-border',
+      )}
+    >
+      <ResidentAvatar name={name} code={String(alert.residentId ?? alert.id)} />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="type-label">{name}</span>
+          <StatusBadge status={LEVEL_LABEL[alert.level]} />
           <AlertStatus alert={alert} />
-          <span className="type-caption text-muted-foreground">Phụ trách: {alert.assignee ?? 'Chưa ai nhận'}</span>
         </div>
-        {isOpen(alert) && alert.acknowledgementDeadline && ['NEW', 'ESCALATED'].includes(alert.status) && (
+        <span className="type-card-title">{typeLabel(alert.type)}</span>
+        <span className="type-caption text-muted-foreground tabular-nums">
+          {originLabel(alert.origin)}, lần gần nhất {formatDateTime(alert.latestAt)}
+          {alert.occurrenceCount > 1 && `, ${alert.occurrenceCount} lần cùng loại đã gộp`}
+          {`, phụ trách: ${alert.assignee ?? 'chưa ai nhận'}`}
+        </span>
+        {waiting && (
           <span className={cn('type-caption tabular-nums', urgent ? 'text-destructive' : 'text-muted-foreground')}>
             Hạn tiếp nhận {formatDateTime(alert.acknowledgementDeadline)}
           </span>
         )}
-        <div className="mt-auto flex flex-wrap justify-end gap-2 border-t pt-3">
-          <Button variant="ghost" size="sm" onClick={() => onOpen(alert)} aria-label={`Chi tiết cảnh báo của ${name}`}>
-            Chi tiết
+      </div>
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        {commands.includes('receive') && (
+          <Button
+            variant={urgent ? 'default' : 'tonal'}
+            className="h-11"
+            disabled={busy}
+            onClick={() => onReceive(alert, handler)}
+            aria-label={handler ? `Tiếp nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
+          >
+            {handler ? 'Tiếp nhận và xử lý' : 'Tiếp nhận'}
           </Button>
-          {onReconcile && alert.type === 'CHUA_DOI_CHIEU' && alert.residentId && isOpen(alert) && (
-            <Button variant="outline" size="sm" onClick={() => onReconcile(alert)}>
-              {`Mở đối chiếu thuốc của ${name}`}
-            </Button>
-          )}
-          {commands.includes('receive') && handler && (
-            <Button
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              onClick={() => onReceive(alert, false)}
-              aria-label={`Chỉ tiếp nhận cảnh báo của ${name}`}
-            >
-              Chỉ tiếp nhận
-            </Button>
-          )}
-          {commands.includes('receive') && (
-            <Button
-              variant={urgent ? 'default' : 'tonal'}
-              disabled={busy}
-              onClick={() => onReceive(alert, handler)}
-              aria-label={handler ? `Tiếp nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
-            >
-              {handler ? 'Tiếp nhận và xử lý' : 'Tiếp nhận'}
-            </Button>
-          )}
-          {commands.includes('start-handling') && (
-            <Button
-              variant="tonal"
-              disabled={busy}
-              onClick={() => onStart(alert)}
-              aria-label={`Bắt đầu xử lý cảnh báo của ${name}`}
-            >
-              Bắt đầu xử lý
-            </Button>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        )}
+        {commands.includes('start-handling') && (
+          <Button
+            variant="tonal"
+            className="h-11"
+            disabled={busy}
+            onClick={() => onStart(alert)}
+            aria-label={`Bắt đầu xử lý cảnh báo của ${name}`}
+          >
+            Bắt đầu xử lý
+          </Button>
+        )}
+        {onReconcile && alert.type === 'CHUA_DOI_CHIEU' && alert.residentId && isOpen(alert) && (
+          <Button variant="outline" className="h-11" onClick={() => onReconcile(alert)}>
+            {`Mở đối chiếu thuốc của ${name}`}
+          </Button>
+        )}
+        <Button
+          variant="outline"
+          className="h-11"
+          onClick={() => onOpen(alert)}
+          aria-label={`Chi tiết cảnh báo của ${name}`}
+        >
+          Chi tiết
+        </Button>
+      </div>
+    </article>
   )
 }
 
@@ -501,6 +501,25 @@ export function AlertsPage({ onNavigate }) {
   const nameOf = (a) => board?.names?.[a.residentId] ?? (a.residentId ? 'Người cao tuổi' : 'Chưa gắn người cao tuổi')
   const inGroup = alerts.filter((a) => (group === 'open' ? isOpen(a) : !isOpen(a)))
   const visible = sortAlerts(inGroup.filter((a) => levelFilter === 'ALL' || a.level === levelFilter))
+  // Đang mở chia hai nhóm theo việc cần làm: chưa ai nhận (cần tiếp nhận) và đã có người nhận (đang xử lý); đã đóng một nhóm
+  const sections = (
+    group === 'open'
+      ? [
+          {
+            key: 'waiting',
+            title: 'Cần tiếp nhận',
+            hint: 'Chưa ai nhận. Quá hạn thì tự leo thang lên cấp trên.',
+            items: visible.filter((a) => ['NEW', 'ESCALATED'].includes(a.status)),
+          },
+          {
+            key: 'handling',
+            title: 'Đang được xử lý',
+            hint: 'Đã có người nhận. Mở Chi tiết để chuyển sự cố, đổi mức hoặc đóng.',
+            items: visible.filter((a) => !['NEW', 'ESCALATED'].includes(a.status)),
+          },
+        ]
+      : [{ key: 'closed', title: 'Đã đóng', hint: null, items: visible }]
+  ).filter((section) => section.items.length > 0)
 
   async function command(alert, name, cmd, message) {
     setBusy(true)
@@ -611,29 +630,40 @@ export function AlertsPage({ onNavigate }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-3 *:max-w-[480px]">
-          {visible.map((a) => (
-            <AlertCard
-              key={a.id}
-              alert={a}
-              name={nameOf(a)}
-              busy={busy}
-              onReceive={(x, andStart) =>
-                command(
-                  x,
-                  nameOf(x),
-                  andStart ? ['receive', 'start-handling'] : 'receive',
-                  andStart ? 'Đã tiếp nhận và bắt đầu xử lý' : 'Đã tiếp nhận cảnh báo',
-                )
-              }
-              onStart={(x) => command(x, nameOf(x), 'start-handling', 'Đã bắt đầu xử lý')}
-              onOpen={(x) => setOpenId(x.id)}
-              onReconcile={
-                onNavigate &&
-                ((x) =>
-                  onNavigate('medication', { mode: 'reconciliation', residentId: x.residentId }))
-              }
-            />
+        <div className="flex flex-col gap-6">
+          {sections.map((section) => (
+            <section key={section.key} aria-label={section.title} className="flex flex-col gap-3">
+              <div className="flex flex-col gap-0.5">
+                <h2 className="type-card-title">
+                  {section.title} <span className="tabular-nums text-muted-foreground">{section.items.length}</span>
+                </h2>
+                {section.hint && <p className="type-caption text-muted-foreground">{section.hint}</p>}
+              </div>
+              <div className="flex flex-col gap-2">
+                {section.items.map((a) => (
+                  <AlertRow
+                    key={a.id}
+                    alert={a}
+                    name={nameOf(a)}
+                    busy={busy}
+                    onReceive={(x, andStart) =>
+                      command(
+                        x,
+                        nameOf(x),
+                        andStart ? ['receive', 'start-handling'] : 'receive',
+                        andStart ? 'Đã tiếp nhận và bắt đầu xử lý' : 'Đã tiếp nhận cảnh báo',
+                      )
+                    }
+                    onStart={(x) => command(x, nameOf(x), 'start-handling', 'Đã bắt đầu xử lý')}
+                    onOpen={(x) => setOpenId(x.id)}
+                    onReconcile={
+                      onNavigate &&
+                      ((x) => onNavigate('medication', { mode: 'reconciliation', residentId: x.residentId }))
+                    }
+                  />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
