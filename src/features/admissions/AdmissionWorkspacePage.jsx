@@ -5,6 +5,7 @@ import {
   getAdmissionApplicationsByIdProgress,
   getContracts,
   getResidentsById,
+  getResidentsByResidentIdMedicationReconciliations,
 } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -17,6 +18,8 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { BedAllocationForm } from '../beds/BedAllocationForm'
+import { ReconciliationPanel } from '../medication/ReconciliationPanel'
+import { STATUS as RECONCILIATION_STATUS, admissionTicket } from '../medication/reconciliationView'
 import { ResidentDetail } from '../residents/ResidentDetail'
 import { CONDITION_STATUS, RESIDENCE_TYPES, labelOf } from './admissionLabels'
 import { OpinionBlock, OpinionForm } from './ApplicationParts'
@@ -24,7 +27,8 @@ import { ContractDetail, ContractSheet } from './ContractParts'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.2): một màn cho một lượt tiếp nhận, đi theo các
 // bước BF-01. Trạng thái từng bước lấy từ tiến trình và điều kiện tiếp nhận của 004 (FR-003, FR-004; mã ADM_A → ADM_F);
-// nút mở đúng form đang có trong khung trượt, hoặc màn sở hữu khi form nằm ở màn khác. Chỉ hiện trạng thái đã ghi, không
+// nút mở đúng form đang có trong khung trượt, hoặc màn sở hữu khi form nằm ở màn khác. Bước đối chiếu thuốc mở phiếu của
+// 006 (T073) trong khung trượt; trạng thái theo phiếu lý do "tiếp nhận", không chặn Hoàn tất tiếp nhận. Chỉ hiện trạng thái đã ghi, không
 // tự làm bước thay người (Q-306, Q-307); backend vẫn kiểm mọi lệnh.
 
 const CLOSED_CONTRACTS = ['CANCELLED', 'TERMINATED']
@@ -111,7 +115,8 @@ const PHASES = [
         key: 'reconciliation',
         label: 'Phiếu đối chiếu thuốc "tiếp nhận"',
         who: 'Bác sĩ, Điều dưỡng',
-        note: 'Chưa có màn trên web; không chặn Hoàn tất tiếp nhận',
+        note: 'Không chặn Hoàn tất tiếp nhận',
+        action: 'reconciliation',
       },
       { key: 'complete', label: 'Hoàn tất tiếp nhận', who: 'Hành chính', progress: 'ADMISSION', action: 'complete' },
     ],
@@ -152,11 +157,15 @@ function useWorkspace(id) {
     async function load() {
       try {
         const { data: application } = await getAdmissionApplicationsById({ path: { id } })
-        const [conditions, progress, resident, contracts] = await Promise.all([
+        // Phiếu đối chiếu thuốc của 006 (bước 12 BF-01, 006 T073): không đọc được (không có quyền) thì bước ghi chưa có
+        const [conditions, progress, resident, contracts, reconciliations] = await Promise.all([
           getAdmissionApplicationsByIdAdmissionConditions({ path: { id } }),
           getAdmissionApplicationsByIdProgress({ path: { id } }),
           getResidentsById({ path: { id: application.residentId } }),
           getContracts({ query: { residentId: application.residentId } }).catch(() => ({ data: [] })),
+          getResidentsByResidentIdMedicationReconciliations({ path: { residentId: application.residentId } }).catch(
+            () => ({ data: null }),
+          ),
         ])
         if (cancelled) return
         const open = (contracts.data ?? [])
@@ -169,6 +178,7 @@ function useWorkspace(id) {
           progress: progress.data,
           resident: resident.data,
           contract: open[0] ?? null,
+          reconciliation: reconciliations.data ? { ticket: admissionTicket(reconciliations.data) } : null,
         })
       } catch (e) {
         if (!cancelled) setState({ loading: false, failure: problemOf(e) })
@@ -183,7 +193,7 @@ function useWorkspace(id) {
   return [state, useCallback(() => setReload((n) => n + 1), [])]
 }
 
-function StepStatus({ step, conditionOf, progressDone, opinion }) {
+function StepStatus({ step, conditionOf, progressDone, opinion, reconciliation }) {
   if (step.condition) {
     const line = conditionOf(step.condition)
     const extra = step.extra && conditionOf(step.extra)
@@ -214,12 +224,27 @@ function StepStatus({ step, conditionOf, progressDone, opinion }) {
       <span className="type-label text-warning-foreground">Chưa ghi</span>
     )
   }
+  if (step.key === 'reconciliation') {
+    const ticket = reconciliation?.ticket
+    return (
+      <span className="flex flex-col">
+        {ticket ? (
+          <span className={cn('type-label', ticket.status === 'CONFIRMED' ? 'text-success-foreground' : ticket.overdue ? 'text-destructive' : 'text-warning-foreground')}>
+            {`${RECONCILIATION_STATUS[ticket.status] ?? ticket.status}${ticket.overdue ? ', quá hạn' : ''}`}
+          </span>
+        ) : (
+          <span className="type-label text-muted-foreground">{reconciliation ? 'Chưa lập phiếu' : 'Chưa có dữ liệu'}</span>
+        )}
+        <span className="type-caption text-muted-foreground">{step.note}</span>
+      </span>
+    )
+  }
   if (step.recorded) return <span className="type-label text-success-foreground">Đã có</span>
   return <span className="type-caption text-muted-foreground">{step.note}</span>
 }
 
-export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
-  const { can } = usePermissions()
+export function AdmissionWorkspacePage({ id, role, onNavigate = () => {} }) {
+  const { can, hasFunction } = usePermissions()
   const [state, refresh] = useWorkspace(id)
   const [sheet, setSheet] = useState(null)
   const [announcement, setAnnouncement] = useState('')
@@ -235,7 +260,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   if (state.failure?.status === 403) return <PermissionDeniedState label="Hồ sơ tiếp nhận" />
   if (state.failure) return <ProblemAlert problem={state.failure} />
 
-  const { application, conditions, progress, resident, contract } = state
+  const { application, conditions, progress, resident, contract, reconciliation } = state
   const name = resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`
   const lines = conditions?.conditions ?? []
   const conditionOf = (code) => lines.find((c) => c.code === code)
@@ -271,6 +296,12 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       return (
         <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'opinion' })}>
           Ghi ý kiến
+        </Button>
+      )
+    if (step.action === 'reconciliation' && reconciliation && hasFunction('MEDICATION_RECONCILIATION'))
+      return (
+        <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'reconciliation' })}>
+          Mở đối chiếu thuốc
         </Button>
       )
     if (step.action === 'bed')
@@ -349,7 +380,13 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                       <span className="type-body-sm">{step.label}</span>
                       <span className="type-caption text-muted-foreground">{step.who}</span>
                     </span>
-                    <StepStatus step={step} conditionOf={conditionOf} progressDone={progressDone} opinion={opinion} />
+                    <StepStatus
+                      step={step}
+                      conditionOf={conditionOf}
+                      progressDone={progressDone}
+                      opinion={opinion}
+                      reconciliation={reconciliation}
+                    />
                     <span className="sm:justify-self-end">{actionOf(step)}</span>
                   </li>
                 ))}
@@ -420,6 +457,24 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                 <SheetDescription>{name}</SheetDescription>
               </SheetHeader>
               <OpinionForm applicationId={application.id} onCancel={() => setSheet(null)} onDone={changed} />
+            </>
+          )}
+          {sheet?.kind === 'reconciliation' && (
+            <>
+              <SheetHeader className="p-0">
+                <SheetTitle>Đối chiếu thuốc khi tiếp nhận</SheetTitle>
+                <SheetDescription>{name}</SheetDescription>
+              </SheetHeader>
+              <ReconciliationPanel
+                residentId={resident.id}
+                residentName={name}
+                defaultReason="ADMISSION"
+                isDoctor={role === 'DOCTOR'}
+                onChanged={(message) => {
+                  if (message) setAnnouncement(message)
+                  refresh()
+                }}
+              />
             </>
           )}
           {sheet?.kind === 'bed' && (

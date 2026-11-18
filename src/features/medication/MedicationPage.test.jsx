@@ -84,4 +84,16 @@ describe('MedicationPage', () => {
     const [, init] = api.calls('POST', '/medication-doses/7-202611080900/refuse')[0]
     expect(JSON.parse(init.body)).toEqual({ reason: 'Người cao tuổi không muốn uống' })
   })
+
+  it('006_T072_cheDoDoiChieuThuoc_chonNguoi_hienPhieuCuaNguoiDo', async () => {
+    api.on('GET', '/residents', json(200, { items: [{ id: 9, profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }] }))
+    api.on('GET', '/residents/9/prescriptions', json(200, []))
+    api.on('GET', '/medications', json(200, []))
+    api.on('GET', '/residents/9/initial-health-record', json(200, {}))
+    api.on('GET', '/residents/9/medication-reconciliations', json(200, []))
+    render(<MedicationPage role="NURSING_STAFF" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Đối chiếu thuốc' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    expect(await screen.findByText('Trần Thị Mai chưa có phiếu đối chiếu thuốc.')).toBeTruthy()
+  })
 })
