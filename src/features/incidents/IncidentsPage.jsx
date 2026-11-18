@@ -577,6 +577,10 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
   const [level, setLevel] = useState('')
   const [discoveredAt, setDiscoveredAt] = useState(() => vietnamNowLocal())
   const [description, setDescription] = useState('')
+  const [moreDetail, setMoreDetail] = useState(false)
+  const [place, setPlace] = useState('')
+  const [initialResponse, setInitialResponse] = useState('')
+  const [occurredAt, setOccurredAt] = useState('')
   const [lowerReason, setLowerReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [problem, setProblem] = useState(null)
@@ -637,6 +641,9 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
         level,
         discoveredAt: vietnamIso(discoveredAt),
         description: description.trim(),
+        ...(place.trim() ? { location: place.trim() } : {}),
+        ...(initialResponse.trim() ? { initialResponse: initialResponse.trim() } : {}),
+        ...(occurredAt ? { occurredAt: vietnamIso(occurredAt) } : {}),
         ...(lowerNeeded ? { lowerLevelReason: lowerReason.trim() } : {}),
       })
       onRecorded('Đã ghi nhận sự cố')
@@ -870,6 +877,51 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
             />
             {submitted && errors.description && <FieldError>Nhập mô tả sự cố</FieldError>}
           </Field>
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-11 self-start"
+            aria-expanded={moreDetail}
+            onClick={() => setMoreDetail((v) => !v)}
+          >
+            {moreDetail ? 'Ẩn chi tiết thêm' : 'Thêm chi tiết (không bắt buộc): nơi xảy ra, xử lý ban đầu'}
+          </Button>
+          {moreDetail && (
+            <div className="flex flex-col gap-4">
+              <Field>
+                <FieldLabel htmlFor="incident-place">Nơi xảy ra</FieldLabel>
+                <Input
+                  id="incident-place"
+                  className="h-11"
+                  maxLength={200}
+                  placeholder="Ví dụ: phòng tắm tầng 1"
+                  value={place}
+                  onChange={(e) => setPlace(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="incident-initial-response">Xử lý ban đầu</FieldLabel>
+                <Textarea
+                  id="incident-initial-response"
+                  rows={2}
+                  maxLength={2000}
+                  placeholder="Đã làm gì ngay lúc đó"
+                  value={initialResponse}
+                  onChange={(e) => setInitialResponse(e.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="incident-occurred-at">Xảy ra lúc (nếu khác lúc phát hiện)</FieldLabel>
+                <Input
+                  id="incident-occurred-at"
+                  type="datetime-local"
+                  className="h-11"
+                  value={occurredAt}
+                  onChange={(e) => setOccurredAt(e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
           {existingId != null && (
             <section
               role="alert"

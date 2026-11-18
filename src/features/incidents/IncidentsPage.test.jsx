@@ -362,6 +362,26 @@ describe('IncidentsPage', () => {
     expect(screen.getByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeTruthy()
   })
 
+  it('FR_040_ghiNhan_chiTietThemKhongBatBuoc_guiNoiXayRaVaXuLyBanDau', async () => {
+    api.on('POST', '/incidents', json(201, { incident: NEW_INCIDENT }))
+    render(<IncidentsPage />)
+    await rows()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận sự cố' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ngã' }))
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Trượt chân' } })
+    expect(screen.queryByLabelText('Nơi xảy ra')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Thêm chi tiết/ }))
+    fireEvent.change(screen.getByLabelText('Nơi xảy ra'), { target: { value: 'Phòng tắm tầng 1' } })
+    fireEvent.change(screen.getByLabelText('Xử lý ban đầu'), { target: { value: 'Đỡ dậy, đo huyết áp' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu sự cố' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents')[0][1].body)).toMatchObject({
+      location: 'Phòng tắm tầng 1',
+      initialResponse: 'Đỡ dậy, đo huyết áp',
+    })
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)
