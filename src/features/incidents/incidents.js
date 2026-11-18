@@ -1,6 +1,7 @@
 import { getResidents, getResidentsById } from '@/api/api001'
 import { getFloors } from '@/api/api003'
 import {
+  getAlerts,
   getIncidentTypes,
   getIncidents,
   getIncidentsById,
@@ -29,6 +30,16 @@ export async function loadIncidentBoard() {
     if (profiles[i].status === 'fulfilled') names[id] = residentName(profiles[i].value.data)
   })
   return { incidents: incidents.data, types: types.data ?? [], names }
+}
+
+// Cảnh báo đã chuyển thành sự cố này (nếu có và người xem xem được cảnh báo); không đọc được thì không hiện liên kết
+export async function loadSourceAlert(incidentId) {
+  try {
+    const { data } = await getAlerts({})
+    return (data ?? []).find((a) => a.incidentId === incidentId) ?? null
+  } catch {
+    return null
+  }
 }
 
 export async function loadIncident(id) {

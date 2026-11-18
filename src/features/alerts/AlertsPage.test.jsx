@@ -202,6 +202,25 @@ describe('AlertsPage', () => {
     await waitFor(() => expect(api.calls('POST', '/incidents/13/join-handling')).toHaveLength(1))
   })
 
+  it('FR_029_kichHoatKhanCap_chonSanLoaiTheoCanhBao_haiLanBam', async () => {
+    const onNavigate = vi.fn()
+    const fall = { ...ALERT_MEDIUM, type: 'FALL', origin: 'MANUAL', allowedCommands: ['activate-emergency'] }
+    api.on('GET', '/alerts', json(200, [fall]))
+    api.on(
+      'GET',
+      '/alerts/1',
+      json(200, { ...ALERT_MEDIUM, type: 'FALL', origin: 'MANUAL', allowedCommands: ['activate-emergency'] }),
+    )
+    api.on('POST', '/alerts/1/activate-emergency', json(201, { incident: { id: 55 } }))
+    render(<AlertsPage role="NURSING_STAFF" onNavigate={onNavigate} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết cảnh báo của Trần Thị Mai' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt khẩn cấp' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lưu và kích hoạt' }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/1/activate-emergency')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/alerts/1/activate-emergency')[0][1].body)).toEqual({ incidentTypeId: 1 })
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('incidents', { incidentId: 55 }))
+  })
+
   it('FR_029_409_hienDieuKienChuaThoa', async () => {
     api.on('POST', '/alerts/1/receive', problem(409, 'ALREADY_RECEIVED'))
     render(<AlertsPage role="NURSING_STAFF" />)

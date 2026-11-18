@@ -124,6 +124,27 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
   )
 }
 
+function ActionGroup({ title, children }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="type-caption text-muted-foreground">{title}</h3>
+      {children}
+    </div>
+  )
+}
+
+// Nút kèm một dòng nói rõ việc sẽ xảy ra (DESIGN.md 8: nút nói đúng việc), để phân biệt Kích hoạt khẩn cấp, Chuyển sự cố, Đổi mức
+function Action({ label, hint, variant = 'default', ...props }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <Button variant={variant} className="h-11 w-full" {...props}>
+        {label}
+      </Button>
+      <span className="type-caption text-muted-foreground">{hint}</span>
+    </div>
+  )
+}
+
 // Khung chi tiết: nguồn, thời điểm, lệnh cần nhập kết quả hoặc lý do (Đóng, Đổi mức), khối nút bấm khẩn cấp
 const CRITICAL_CLOSE_MIN = 10
 
@@ -201,7 +222,15 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
 
   function openConvert(next) {
     setMode(next)
-    loadIncidentTypes().then(setIncidentTypes, (error) => setProblem(problemOf(error)))
+    // Cảnh báo thủ công mang mã loại sự cố: chọn sẵn đúng loại đó để chỉ còn bấm lưu (ưu tiên thời gian xử lý)
+    loadIncidentTypes().then(
+      (types) => {
+        setIncidentTypes(types)
+        const same = types.find((t) => t.code === alert.type)
+        if (same) setTypeId(String(same.id))
+      },
+      (error) => setProblem(problemOf(error)),
+    )
   }
 
   async function submit(event) {
@@ -233,6 +262,8 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
           `${mode === 'activate-emergency' ? 'Đã kích hoạt khẩn cấp' : 'Đã chuyển thành sự cố'}${incidentId ? ` SC-${incidentId}` : ''}`,
           name,
         )
+        // Khẩn cấp: sang thẳng sự cố để thấy thẻ thông tin khẩn cấp và Gọi 115, không bắt tìm lại ở menu
+        if (mode === 'activate-emergency' && incidentId && onNavigate) onNavigate('incidents', { incidentId })
         return
       }
       onDone(
@@ -347,72 +378,93 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
         <Call115Panel subject="alerts" id={alert.id} />
       )}
       {problem && <ProblemAlert problem={problem} />}
-      {!mode &&
-        [
-          'receive',
-          'start-handling',
-          'assign',
-          'close',
-          'change-level',
-          'convert-to-incident',
-          'activate-emergency',
-        ].some((c) => commands.includes(c)) && (
-          <div className="flex flex-col gap-2">
-            {commands.includes('receive') && commands.includes('activate-emergency') && (
-              <Button
-                className="h-11"
-                disabled={busy}
-                onClick={() => quick(['receive', 'start-handling'], 'Đã tiếp nhận và bắt đầu xử lý')}
-              >
-                Tiếp nhận và xử lý
-              </Button>
-            )}
-            {commands.includes('receive') && (
-              <Button
-                className="h-11"
-                variant={commands.includes('activate-emergency') ? 'outline' : 'default'}
-                disabled={busy}
-                onClick={() => quick('receive', 'Đã tiếp nhận cảnh báo')}
-              >
-                {commands.includes('activate-emergency') ? 'Chỉ tiếp nhận' : 'Tiếp nhận'}
-              </Button>
-            )}
-            {commands.includes('start-handling') && (
-              <Button
-                className="h-11"
-                disabled={busy}
-                onClick={() => quick('start-handling', 'Đã bắt đầu xử lý cảnh báo')}
-              >
-                Bắt đầu xử lý
-              </Button>
-            )}
-            {commands.includes('assign') && (
-              <Button className="h-11" onClick={() => setMode('assign')}>
-                Giao người phụ trách
-              </Button>
-            )}
-            {commands.includes('activate-emergency') && (
-              <Button className="h-11" onClick={() => openConvert('activate-emergency')}>
-                Kích hoạt khẩn cấp
-              </Button>
-            )}
-            {commands.includes('convert-to-incident') && (
-              <Button className="h-11" onClick={() => openConvert('convert-to-incident')}>
-                Chuyển thành sự cố
-              </Button>
-            )}
-            {commands.includes('close') && (
-              <Button className="h-11" onClick={() => setMode('close')}>
-                Đóng cảnh báo
-              </Button>
-            )}
-            {commands.includes('change-level') && (
-              <Button variant="outline" className="h-11" onClick={() => setMode('change-level')}>
-                Đổi mức
-              </Button>
-            )}
-          </div>
-        )}
+      {!mode && (
+        <section aria-label="Việc cần làm" className="flex flex-col gap-4">
+          {['receive', 'start-handling', 'assign'].some((c) => commands.includes(c)) && (
+            <ActionGroup title="Bước tiếp theo">
+              {commands.includes('receive') && commands.includes('activate-emergency') && (
+                <Action
+                  label="Tiếp nhận và xử lý"
+                  hint="Nhận việc và bắt đầu xử lý ngay. Cảnh báo dừng leo thang."
+                  disabled={busy}
+                  onClick={() => quick(['receive', 'start-handling'], 'Đã tiếp nhận và bắt đầu xử lý')}
+                />
+              )}
+              {commands.includes('receive') && (
+                <Action
+                  label={commands.includes('activate-emergency') ? 'Chỉ tiếp nhận' : 'Tiếp nhận'}
+                  hint={
+                    commands.includes('activate-emergency')
+                      ? 'Chỉ báo đã nhận để dừng leo thang, xử lý sau.'
+                      : 'Nhận cảnh báo này. Cảnh báo dừng leo thang.'
+                  }
+                  variant={commands.includes('activate-emergency') ? 'outline' : 'default'}
+                  disabled={busy}
+                  onClick={() => quick('receive', 'Đã tiếp nhận cảnh báo')}
+                />
+              )}
+              {commands.includes('start-handling') && (
+                <Action
+                  label="Bắt đầu xử lý"
+                  hint="Đã nhận, bắt đầu làm. Sau đó mới đóng được hoặc chuyển thành sự cố."
+                  disabled={busy}
+                  onClick={() => quick('start-handling', 'Đã bắt đầu xử lý cảnh báo')}
+                />
+              )}
+              {commands.includes('assign') && (
+                <Action
+                  label="Giao người phụ trách"
+                  hint="Giao cho người sẽ xử lý, kèm ghi chú."
+                  onClick={() => setMode('assign')}
+                />
+              )}
+            </ActionGroup>
+          )}
+          {commands.includes('activate-emergency') && (
+            <ActionGroup title="Nếu là tình huống khẩn cấp thật">
+              <Action
+                label="Kích hoạt khẩn cấp"
+                hint="Tạo ngay sự cố Khẩn cấp có thẻ thông tin khẩn cấp, báo Bác sĩ trực, Trưởng tầng và người liên hệ chính."
+                variant={alert.level === 'CRITICAL' ? 'default' : 'outline'}
+                onClick={() => openConvert('activate-emergency')}
+              />
+            </ActionGroup>
+          )}
+          {['convert-to-incident', 'close', 'change-level'].some((c) => commands.includes(c)) && (
+            <ActionGroup title="Khi đang xử lý">
+              {commands.includes('convert-to-incident') && (
+                <Action
+                  label="Chuyển thành sự cố"
+                  hint="Cần ghi nhận chính thức để theo dõi, ghi diễn biến, chuyển viện. Sự cố cùng mức với cảnh báo."
+                  variant="outline"
+                  onClick={() => openConvert('convert-to-incident')}
+                />
+              )}
+              {commands.includes('close') && (
+                <Action
+                  label="Đóng cảnh báo"
+                  hint="Đã xử lý xong, ghi kết quả."
+                  variant="outline"
+                  onClick={() => setMode('close')}
+                />
+              )}
+              {commands.includes('change-level') && (
+                <Action
+                  label="Đổi mức"
+                  hint="Nâng hoặc hạ mức, cần lý do. Vẫn là cảnh báo, chưa tạo sự cố."
+                  variant="outline"
+                  onClick={() => setMode('change-level')}
+                />
+              )}
+            </ActionGroup>
+          )}
+          {commands.includes('activate-emergency') && !commands.includes('convert-to-incident') && (
+            <p className="type-caption text-muted-foreground">
+              "Chuyển thành sự cố" và "Đóng cảnh báo" dùng được sau khi bấm "Bắt đầu xử lý".
+            </p>
+          )}
+        </section>
+      )}
       {mode && (
         <form onSubmit={submit} noValidate className="flex flex-col gap-4">
           {mode === 'change-level' && (
@@ -532,12 +584,13 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNaviga
   )
 }
 
-export function AlertsPage({ onNavigate } = {}) {
+// alertId: mở thẳng một cảnh báo (từ chi tiết sự cố "Mở cảnh báo gốc")
+export function AlertsPage({ onNavigate, alertId = null } = {}) {
   const [board, setBoard] = useState(null)
   const [problem, setProblem] = useState(null)
   const [group, setGroup] = useState('open')
   const [levelFilter, setLevelFilter] = useState('ALL')
-  const [openId, setOpenId] = useState(null)
+  const [openId, setOpenId] = useState(alertId)
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
 

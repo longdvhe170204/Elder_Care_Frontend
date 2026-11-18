@@ -26,6 +26,7 @@ import {
   loadIncident,
   loadIncidentBoard,
   loadResidentChoices,
+  loadSourceAlert,
   recordIncident,
   runIncidentCommand,
 } from './incidents'
@@ -221,11 +222,20 @@ function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmi
   )
 }
 
-function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
+function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavigate }) {
   const [state, setState] = useState(null)
+  const [sourceAlert, setSourceAlert] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    loadSourceAlert(id).then((alert) => live && setSourceAlert(alert))
+    return () => {
+      live = false
+    }
+  }, [id])
 
   useEffect(() => {
     let cancelled = false
@@ -295,6 +305,23 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
           ['Kết quả', incident.resolution],
         ]}
       />
+      {sourceAlert && (
+        <section aria-label="Cảnh báo gốc" className="flex flex-col gap-2 rounded-lg border p-3 type-body-sm">
+          <span>
+            Phát sinh từ cảnh báo {types.find((t) => t.code === sourceAlert.type)?.name ?? 'của hệ thống'}, mức{' '}
+            {LEVEL_LABEL[sourceAlert.level]?.toLowerCase()}.
+          </span>
+          {onNavigate && (
+            <Button
+              variant="outline"
+              className="h-11 self-start"
+              onClick={() => onNavigate('alerts', { alertId: sourceAlert.id })}
+            >
+              Mở cảnh báo gốc
+            </Button>
+          )}
+        </section>
+      )}
       {incident.noOnDutyDoctor && <p className="type-body-sm text-destructive">Không có bác sĩ trực lúc ghi nhận</p>}
       <section className="flex flex-col gap-2">
         <h3 className="type-caption text-muted-foreground">Diễn biến</h3>
@@ -662,7 +689,7 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
 }
 
 // incidentId: mở thẳng một sự cố (016 Q12, từ dòng chi tiết báo cáo)
-export function IncidentsPage({ incidentId = null } = {}) {
+export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
   const [board, setBoard] = useState(null)
   const [problem, setProblem] = useState(null)
   const [group, setGroup] = useState('open')
@@ -728,6 +755,7 @@ export function IncidentsPage({ incidentId = null } = {}) {
             Title={Title}
             Description={Description}
             onChanged={changed}
+            onNavigate={onNavigate}
           />
         )
       }
@@ -769,6 +797,7 @@ export function IncidentsPage({ incidentId = null } = {}) {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>Mã</TableHead>
                   <TableHead>Người cao tuổi</TableHead>
                   <TableHead>Loại</TableHead>
                   <TableHead>Mức</TableHead>
@@ -780,6 +809,7 @@ export function IncidentsPage({ incidentId = null } = {}) {
               <TableBody>
                 {visible.map((i) => (
                   <TableRow key={i.id} data-state={i.id === openId ? 'selected' : undefined}>
+                    <TableCell className="type-body-sm tabular-nums text-muted-foreground">SC-{i.id}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
