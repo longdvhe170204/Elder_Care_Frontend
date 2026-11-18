@@ -104,7 +104,67 @@ function Facts({ rows }) {
   )
 }
 
-function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmit, onCancel }) {
+const PROGRESSION_SECTIONS = [
+  ['EVALUATION', 'Đánh giá'],
+  ['ACTION', 'Xử lý'],
+  ['NOTIFICATION', 'Gọi, báo tin'],
+  ['MONITORING', 'Theo dõi'],
+  ['OTHER', 'Khác'],
+]
+const KNOWN_GROUPS = ['EVALUATION', 'ACTION', 'NOTIFICATION', 'MONITORING']
+const GROUP_LABEL = { EVALUATION: 'đánh giá', ACTION: 'xử lý' }
+
+// Nhóm diễn biến còn thiếu để Chuyển theo dõi (cần ít nhất một đánh giá và một xử lý)
+function missingMonitoringGroups(incident, progressionTypes) {
+  const groupOf = new Map(progressionTypes.map((t) => [t.id, t.group]))
+  const recorded = new Set((incident.progressions ?? []).map((p) => groupOf.get(p.progressionTypeId)))
+  return ['EVALUATION', 'ACTION'].filter((g) => !recorded.has(g))
+}
+
+// Chọn loại diễn biến theo nhóm Đánh giá, Xử lý, Gọi báo tin, Theo dõi: mắt dừng ở đúng nhóm cần, không đọc cả dãy dài.
+// Nhóm còn thiếu cho "Chuyển theo dõi" được đánh dấu; loại hồi sức nằm riêng dưới Xử lý vì cần xác nhận nguyện vọng.
+function ProgressionPicker({ types, value, onChange, missing }) {
+  const active = types.filter((t) => t.status !== 'INACTIVE' && t.group !== 'SYSTEM')
+  const chip = (t) => (
+    <Button
+      key={t.id}
+      type="button"
+      variant={value === String(t.id) ? 'default' : 'outline'}
+      className="h-11 px-4"
+      aria-pressed={value === String(t.id)}
+      onClick={() => onChange(value === String(t.id) ? '' : String(t.id))}
+    >
+      {t.name}
+    </Button>
+  )
+  return (
+    <div className="flex flex-col gap-3">
+      {PROGRESSION_SECTIONS.map(([group, label]) => {
+        const inGroup = active.filter((t) => (group === 'OTHER' ? !KNOWN_GROUPS.includes(t.group) : t.group === group))
+        if (inGroup.length === 0) return null
+        const plain = inGroup.filter((t) => !t.resuscitation)
+        const resuscitation = inGroup.filter((t) => t.resuscitation)
+        return (
+          <section key={group} aria-label={label} className="flex flex-col gap-1.5">
+            <h4 className="type-caption text-muted-foreground">
+              {label}
+              {missing.includes(group) && ' (còn thiếu để chuyển theo dõi)'}
+            </h4>
+            {plain.length > 0 && <div className="flex flex-wrap gap-2">{plain.map(chip)}</div>}
+            {resuscitation.length > 0 && (
+              <>
+                {plain.length > 0 && <h5 className="type-caption text-muted-foreground">Cấp cứu hồi sức</h5>}
+                <div className="flex flex-wrap gap-2">{resuscitation.map(chip)}</div>
+              </>
+            )}
+          </section>
+        )
+      })}
+    </div>
+  )
+}
+
+function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode, busy, onSubmit, onCancel }) {
   const [text, setText] = useState('')
   const [choice, setChoice] = useState('')
   const [outcome, setOutcome] = useState('')
@@ -132,6 +192,19 @@ function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmi
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <h3 className="type-card-title">{FORM_TITLE[mode]}</h3>
+      {mode === 'change-level' && (
+        <p className="type-caption text-muted-foreground">
+          Điều dưỡng, Trưởng tầng, Bác sĩ có quyền với người này được đổi mức, phải ghi lý do. Hạ từ Khẩn cấp xuống thấp
+          hơn chỉ Bác sĩ làm được. Nâng lên Khẩn cấp sẽ báo ngay Bác sĩ trực, Trưởng tầng và người liên hệ chính.
+        </p>
+      )}
+      {mode === 'assign-handler' && (
+        <p className="type-caption text-muted-foreground">
+          {incident.assignee
+            ? `Hiện ${incident.assignee} đang xử lý. Chỉ dùng khi muốn bàn giao cho người khác; người nhận phải là Điều dưỡng, Trưởng tầng hoặc Bác sĩ có quyền với người cao tuổi này.`
+            : 'Giao cho Điều dưỡng, Trưởng tầng hoặc Bác sĩ có quyền với người cao tuổi này. Người được giao nhận thông báo.'}
+        </p>
+      )}
       {mode === 'assign-handler' && (
         <HandoverStaffField
           id="incident-assignee"
@@ -146,20 +219,7 @@ function CommandForm({ mode, incident, progressionTypes, typeCode, busy, onSubmi
       {mode === 'progressions' && (
         <Field data-invalid={(submitted && choiceMissing) || undefined}>
           <FieldLabel>Loại diễn biến</FieldLabel>
-          <ToggleGroup
-            variant="outline"
-            value={choice ? [choice] : []}
-            onValueChange={(n) => setChoice(n[0] ?? '')}
-            className="flex flex-wrap"
-          >
-            {progressionTypes
-              .filter((t) => t.status !== 'INACTIVE')
-              .map((t) => (
-                <ToggleGroupItem key={t.id} value={String(t.id)} className="h-11 px-4">
-                  {t.name}
-                </ToggleGroupItem>
-              ))}
-          </ToggleGroup>
+          <ProgressionPicker types={progressionTypes} value={choice} onChange={setChoice} missing={missingGroups} />
           {submitted && choiceMissing && <FieldError>Chọn loại diễn biến</FieldError>}
         </Field>
       )}
@@ -228,6 +288,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [showMore, setShowMore] = useState(false)
 
   useEffect(() => {
     let live = true
@@ -270,6 +331,8 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
     }
   }
 
+  const missingGroups = missingMonitoringGroups(incident, progressionTypes)
+  const hasMore = ['move-to-monitoring', 'change-level', 'assign-handler'].some((c) => commands.includes(c))
   const canTransfer =
     ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
     incident.content?.residentId != null &&
@@ -358,67 +421,97 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
           mode={mode}
           incident={incident}
           progressionTypes={progressionTypes}
+          missingGroups={missingGroups}
           typeCode={type?.code}
           busy={busy}
           onSubmit={(command, body) => run(command, body, messages[command])}
           onCancel={() => setMode(null)}
         />
       ) : (
-        <div className="flex flex-col gap-2">
-          {commands.includes('receive') && (
-            <Button className="h-11" disabled={busy} onClick={() => run('receive', null, 'Đã tiếp nhận sự cố')}>
-              Tiếp nhận
-            </Button>
-          )}
-          {commands.includes('assign-handler') && (
-            <Button variant="outline" className="h-11" onClick={() => setMode('assign-handler')}>
-              Giao người xử lý
-            </Button>
-          )}
-          {commands.includes('close') && (
-            <Button className="h-11" onClick={() => setMode('close')}>
-              Đóng sự cố
-            </Button>
-          )}
-          {commands.includes('progressions') && (
-            <Button variant="outline" className="h-11" onClick={() => setMode('progressions')}>
-              Ghi diễn biến
-            </Button>
-          )}
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            {commands.includes('receive') && (
+              <Button className="h-11" disabled={busy} onClick={() => run('receive', null, 'Đã tiếp nhận sự cố')}>
+                Tiếp nhận
+              </Button>
+            )}
+            {commands.includes('progressions') && (
+              <Button
+                variant={incident.status === 'IN_PROGRESS' ? 'default' : 'outline'}
+                className="h-11"
+                onClick={() => setMode('progressions')}
+              >
+                Ghi diễn biến
+              </Button>
+            )}
+            {canTransfer && (
+              <Button variant="outline" className="h-11" onClick={() => setMode('transfer-out')}>
+                Chuyển viện
+              </Button>
+            )}
+            {commands.includes('close') && (
+              <Button variant="outline" className="h-11" onClick={() => setMode('close')}>
+                Đóng sự cố
+              </Button>
+            )}
+            {commands.includes('reopen') && (
+              <Button variant="outline" className="h-11" onClick={() => setMode('reopen')}>
+                Mở lại xử lý
+              </Button>
+            )}
+            {commands.includes('join-handling') && (
+              <Button
+                variant="outline"
+                className="h-11"
+                disabled={busy}
+                onClick={() => run('join-handling', null, 'Đã tham gia xử lý')}
+              >
+                Tham gia xử lý
+              </Button>
+            )}
+          </div>
           {commands.includes('move-to-monitoring') && (
-            <Button
-              variant="outline"
-              className="h-11"
-              disabled={busy}
-              onClick={() => run('move-to-monitoring', null, 'Đã chuyển theo dõi')}
-            >
-              Chuyển theo dõi
-            </Button>
+            <p className="type-caption text-muted-foreground">
+              {missingGroups.length === 0
+                ? 'Đủ điều kiện chuyển theo dõi (đã có diễn biến đánh giá và xử lý).'
+                : `Chuyển theo dõi cần thêm diễn biến ${missingGroups.map((g) => GROUP_LABEL[g]).join(' và ')}.`}
+            </p>
           )}
-          {commands.includes('reopen') && (
-            <Button variant="outline" className="h-11" onClick={() => setMode('reopen')}>
-              Mở lại xử lý
-            </Button>
-          )}
-          {commands.includes('change-level') && (
-            <Button variant="outline" className="h-11" onClick={() => setMode('change-level')}>
-              Đổi mức
-            </Button>
-          )}
-          {canTransfer && (
-            <Button variant="outline" className="h-11" onClick={() => setMode('transfer-out')}>
-              Chuyển viện
-            </Button>
-          )}
-          {commands.includes('join-handling') && (
-            <Button
-              variant="outline"
-              className="h-11"
-              disabled={busy}
-              onClick={() => run('join-handling', null, 'Đã tham gia xử lý')}
-            >
-              Tham gia xử lý
-            </Button>
+          {hasMore && (
+            <div className="flex flex-col gap-2">
+              <Button
+                variant="ghost"
+                className="h-11 self-start"
+                aria-expanded={showMore}
+                onClick={() => setShowMore((v) => !v)}
+              >
+                {showMore ? 'Ẩn bớt' : 'Thêm'}
+              </Button>
+              {showMore && (
+                <div className="flex flex-col gap-2">
+                  {commands.includes('move-to-monitoring') && (
+                    <Button
+                      variant="outline"
+                      className="h-11"
+                      disabled={busy || missingGroups.length > 0}
+                      onClick={() => run('move-to-monitoring', null, 'Đã chuyển theo dõi')}
+                    >
+                      Chuyển theo dõi
+                    </Button>
+                  )}
+                  {commands.includes('change-level') && (
+                    <Button variant="outline" className="h-11" onClick={() => setMode('change-level')}>
+                      Đổi mức
+                    </Button>
+                  )}
+                  {commands.includes('assign-handler') && (
+                    <Button variant="outline" className="h-11" onClick={() => setMode('assign-handler')}>
+                      {incident.assignee ? 'Chuyển cho người khác' : 'Giao người xử lý'}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
       )}

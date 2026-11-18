@@ -29,7 +29,18 @@ const TYPES = [
     status: 'ACTIVE',
   },
 ]
-const PROGRESSION_TYPES = [{ id: 51, code: 'CALL_SUPPORT', name: 'Gọi hỗ trợ', status: 'ACTIVE' }]
+const PROGRESSION_TYPES = [
+  { id: 51, code: 'CALL_SUPPORT', name: 'Gọi hỗ trợ', group: 'NOTIFICATION', status: 'ACTIVE' },
+  { id: 52, code: 'INITIAL_ASSESSMENT', name: 'Đánh giá ban đầu', group: 'EVALUATION', status: 'ACTIVE' },
+  {
+    id: 53,
+    code: 'EMERGENCY_MEDICATION',
+    name: 'Dùng thuốc cấp cứu',
+    group: 'ACTION',
+    resuscitation: true,
+    status: 'ACTIVE',
+  },
+]
 const content = (residentId, typeId, level) => ({
   residentId,
   incidentTypeId: typeId,
@@ -116,6 +127,7 @@ describe('IncidentsPage', () => {
     render(<IncidentsPage />)
     const list = await rows()
     fireEvent.click(within(list[0]).getByRole('button'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Giao người xử lý' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và giao' }))
     expect(await screen.findByText('Chọn người được giao')).toBeTruthy()
@@ -166,6 +178,26 @@ describe('IncidentsPage', () => {
     const [, init] = api.calls('POST', '/incidents/12/progressions')[0]
     expect(new Headers(init.headers).get('Idempotency-Key')).toBeTruthy()
     expect(JSON.parse(init.body)).toEqual({ progressionTypeId: 51, content: 'Đã báo bác sĩ' })
+  })
+
+  it('FR_045_chuyenTheoDoi_noiRoConThieuGi_vaKhoaNutKhiThieu', async () => {
+    api.on('GET', '/incidents/12', json(200, { ...HANDLING, progressions: HANDLING.progressions }))
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
+    expect(await screen.findByText(/Chuyển theo dõi cần thêm diễn biến đánh giá và xử lý/)).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+    expect(screen.getByRole('button', { name: 'Chuyển theo dõi' })).toBeDisabled()
+  })
+
+  it('FR_045_ghiDienBien_chiaNhomDeChonNhanh', async () => {
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi diễn biến' }))
+    expect(screen.getByRole('region', { name: 'Đánh giá' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Xử lý' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Gọi, báo tin' })).toBeTruthy()
   })
 
   it('FR_045_dongSuCo_canKetQua_409HienDieuKien', async () => {
