@@ -388,6 +388,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
           ['Mô tả', incident.content?.description],
           ['Xử lý ban đầu', incident.content?.initialResponse],
           ['Người xử lý', incident.assignee ?? 'Chưa ai nhận'],
+          ['Cùng xử lý', (incident.handlers ?? []).join(', ')],
           ['Tiếp nhận lúc', incident.receivedAt && formatDateTime(incident.receivedAt)],
           ['Kết quả', incident.resolution],
         ]}
