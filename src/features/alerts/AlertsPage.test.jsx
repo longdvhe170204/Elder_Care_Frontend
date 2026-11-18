@@ -157,6 +157,20 @@ describe('AlertsPage', () => {
     await waitFor(() => expect(api.calls('POST', '/alerts/3/close')).toHaveLength(1))
   })
 
+  it('FR_029_tiepNhanVaXuLy_motNutHaiLenh', async () => {
+    api.on(
+      'GET',
+      '/alerts',
+      json(200, [{ ...ALERT_MEDIUM, allowedCommands: ['receive', 'change-level', 'activate-emergency'] }]),
+    )
+    api.on('POST', '/alerts/1/receive', json(200, {}))
+    api.on('POST', '/alerts/1/start-handling', json(200, {}))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận và xử lý cảnh báo của Trần Thị Mai' }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/1/start-handling')).toHaveLength(1))
+    expect(api.calls('POST', '/alerts/1/receive')).toHaveLength(1)
+  })
+
   it('FR_029_409_hienDieuKienChuaThoa', async () => {
     api.on('POST', '/alerts/1/receive', problem(409, 'ALREADY_RECEIVED'))
     render(<AlertsPage role="NURSING_STAFF" />)

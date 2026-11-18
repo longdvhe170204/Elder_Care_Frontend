@@ -401,12 +401,13 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
 
 // Ghi nhận sự cố (FR-040, FR-042): người cao tuổi (loại cơ sở vật chất được bỏ trống), loại, mức, thời điểm phát hiện,
 // mô tả; mức thấp hơn mặc định cần lý do. Khẩn cấp kích hoạt quy trình ở backend trong cùng lệnh.
-function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
+function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOpenExisting }) {
   const [residents, setResidents] = useState(null)
   const [residentId, setResidentId] = useState(null)
   const [floors, setFloors] = useState([])
   const [floorId, setFloorId] = useState('')
   const [floorsUnavailable, setFloorsUnavailable] = useState(false)
+  const [existingId, setExistingId] = useState(null)
   const [typeId, setTypeId] = useState('')
   const [level, setLevel] = useState('')
   const [discoveredAt, setDiscoveredAt] = useState(() => vietnamNowLocal())
@@ -469,11 +470,32 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
       })
       onRecorded('Đã ghi nhận sự cố')
     } catch (error) {
+      // FR-041: người đã có sự cố Khẩn cấp đang mở thì chỉ ra sự cố đó, không tự gộp, không tự tạo thêm
+      if (error?.problem?.errorCode === 'OPEN_EMERGENCY_INCIDENT_EXISTS' && error.problem.incidentId != null) {
+        setExistingId(error.problem.incidentId)
+      } else {
+        setProblem(problemOf(error))
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function joinExisting() {
+    setBusy(true)
+    setProblem(null)
+    try {
+      await runIncidentCommand(existingId, 'join-handling')
+      onRecorded(`Đã tham gia xử lý sự cố SC-${existingId}`)
+    } catch (error) {
       setProblem(problemOf(error))
     } finally {
       setBusy(false)
     }
   }
+
+  const existing = existingId != null ? incidents.find((i) => i.id === existingId) : null
+  const existingType = existing && types.find((t) => t.id === existing.currentTypeId)
 
   return (
     <Sheet open={open} onOpenChange={(next) => !next && onClose()}>
@@ -607,6 +629,28 @@ function RecordIncidentSheet({ open, types, onClose, onRecorded }) {
             />
             {submitted && errors.description && <FieldError>Nhập mô tả sự cố</FieldError>}
           </Field>
+          {existingId != null && (
+            <section
+              role="alert"
+              className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 type-body-sm"
+            >
+              <p>
+                Người cao tuổi này đang có sự cố Khẩn cấp chưa đóng: <strong>SC-{existingId}</strong>
+                {existingType && `, ${existingType.name}`}
+                {existing?.content?.discoveredAt && `, phát hiện ${formatDateTime(existing.content.discoveredAt)}`}
+                {existing && `, người xử lý: ${existing.assignee ?? 'chưa ai nhận'}`}. Hệ thống không tự gộp. Bạn cùng
+                xử lý sự cố đó, hoặc mở ra xem trước.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button type="button" className="h-11" disabled={busy} onClick={joinExisting}>
+                  Tham gia xử lý SC-{existingId}
+                </Button>
+                <Button type="button" variant="outline" className="h-11" onClick={() => onOpenExisting(existingId)}>
+                  Mở sự cố đó
+                </Button>
+              </div>
+            </section>
+          )}
           {problem && <ProblemAlert problem={problem} />}
           <Button type="submit" className="h-11" disabled={busy}>
             Lưu sự cố
@@ -769,6 +813,11 @@ export function IncidentsPage({ incidentId = null } = {}) {
         <RecordIncidentSheet
           open={recording}
           types={types}
+          incidents={board?.incidents ?? []}
+          onOpenExisting={(id) => {
+            setRecording(false)
+            setOpenId(id)
+          }}
           onClose={() => setRecording(false)}
           onRecorded={async (message) => {
             setRecording(false)

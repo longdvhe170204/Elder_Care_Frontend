@@ -245,6 +245,22 @@ describe('IncidentsPage', () => {
     expect(JSON.parse(api.calls('POST', '/incidents')[0][1].body)).toMatchObject({ incidentTypeId: 33, floorAreaId: 7 })
   })
 
+  it('FR_041_daCoSuCoKhanCapDangMo_chiRaSuCoVaChoThamGia', async () => {
+    api.on('POST', '/incidents', problem(409, 'OPEN_EMERGENCY_INCIDENT_EXISTS', { incidentId: 11, detail: 'x' }))
+    api.on('POST', '/incidents/11/join-handling', json(200, {}))
+    render(<IncidentsPage />)
+    await rows()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận sự cố' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Ngã' }))
+    fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Ngã lần hai' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu sự cố' }))
+    const note = await screen.findByText(/SC-11/, { selector: 'strong' })
+    expect(note).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Tham gia xử lý SC-11' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents/11/join-handling')).toHaveLength(1))
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)

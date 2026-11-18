@@ -50,6 +50,8 @@ function AlertStatus({ alert }) {
 function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }) {
   const urgent = isUrgent(alert)
   const commands = alert.allowedCommands ?? []
+  // Người xử lý (không phải Quản lý viện) tiếp nhận xong thường xử lý ngay: một nút làm cả hai lệnh (FR-029 giữ hai trạng thái)
+  const handler = commands.includes('activate-emergency')
   return (
     <Card role="article" aria-label={`${typeLabel(alert.type)}, ${name}`} className="gap-3">
       <CardHeader className="flex flex-row items-center gap-2.5">
@@ -84,14 +86,25 @@ function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile 
               {`Mở đối chiếu thuốc của ${name}`}
             </Button>
           )}
+          {commands.includes('receive') && handler && (
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={busy}
+              onClick={() => onReceive(alert, false)}
+              aria-label={`Chỉ tiếp nhận cảnh báo của ${name}`}
+            >
+              Chỉ tiếp nhận
+            </Button>
+          )}
           {commands.includes('receive') && (
             <Button
               variant={urgent ? 'default' : 'tonal'}
               disabled={busy}
-              onClick={() => onReceive(alert)}
-              aria-label={`Tiếp nhận cảnh báo của ${name}`}
+              onClick={() => onReceive(alert, handler)}
+              aria-label={handler ? `Tiếp nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
             >
-              Tiếp nhận
+              {handler ? 'Tiếp nhận và xử lý' : 'Tiếp nhận'}
             </Button>
           )}
           {commands.includes('start-handling') && (
@@ -159,7 +172,7 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
   async function quick(command, message) {
     setBusy(true)
     try {
-      await runAlertCommand(alert.id, command)
+      for (const each of [command].flat()) await runAlertCommand(alert.id, each)
       await reload()
       onChanged(message, name)
     } catch (error) {
@@ -203,7 +216,15 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
         name,
       )
     } catch (error) {
-      setProblem(problemOf(error))
+      const existingId = error?.problem?.errorCode === 'OPEN_EMERGENCY_INCIDENT_EXISTS' && error.problem.incidentId
+      setProblem(
+        existingId
+          ? {
+              ...problemOf(error),
+              detail: `Người cao tuổi này đã có sự cố Khẩn cấp đang mở: SC-${existingId}. Vào menu Sự cố, mở SC-${existingId} rồi bấm "Tham gia xử lý".`,
+            }
+          : problemOf(error),
+      )
     } finally {
       setBusy(false)
     }
@@ -266,9 +287,23 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
           'activate-emergency',
         ].some((c) => commands.includes(c)) && (
           <div className="flex flex-col gap-2">
+            {commands.includes('receive') && commands.includes('activate-emergency') && (
+              <Button
+                className="h-11"
+                disabled={busy}
+                onClick={() => quick(['receive', 'start-handling'], 'Đã tiếp nhận và bắt đầu xử lý')}
+              >
+                Tiếp nhận và xử lý
+              </Button>
+            )}
             {commands.includes('receive') && (
-              <Button className="h-11" disabled={busy} onClick={() => quick('receive', 'Đã tiếp nhận cảnh báo')}>
-                Tiếp nhận
+              <Button
+                className="h-11"
+                variant={commands.includes('activate-emergency') ? 'outline' : 'default'}
+                disabled={busy}
+                onClick={() => quick('receive', 'Đã tiếp nhận cảnh báo')}
+              >
+                {commands.includes('activate-emergency') ? 'Chỉ tiếp nhận' : 'Tiếp nhận'}
               </Button>
             )}
             {commands.includes('start-handling') && (
@@ -470,7 +505,7 @@ export function AlertsPage({ onNavigate }) {
   async function command(alert, name, cmd, message) {
     setBusy(true)
     try {
-      await runAlertCommand(alert.id, cmd)
+      for (const each of [cmd].flat()) await runAlertCommand(alert.id, each)
       setProblem(null)
       setAnnouncement(`${message}: ${typeLabel(alert.type)}, ${name}.`)
       await load()
@@ -583,7 +618,14 @@ export function AlertsPage({ onNavigate }) {
               alert={a}
               name={nameOf(a)}
               busy={busy}
-              onReceive={(x) => command(x, nameOf(x), 'receive', 'Đã tiếp nhận cảnh báo')}
+              onReceive={(x, andStart) =>
+                command(
+                  x,
+                  nameOf(x),
+                  andStart ? ['receive', 'start-handling'] : 'receive',
+                  andStart ? 'Đã tiếp nhận và bắt đầu xử lý' : 'Đã tiếp nhận cảnh báo',
+                )
+              }
               onStart={(x) => command(x, nameOf(x), 'start-handling', 'Đã bắt đầu xử lý')}
               onOpen={(x) => setOpenId(x.id)}
               onReconcile={
