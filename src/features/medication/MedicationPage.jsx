@@ -27,7 +27,7 @@ import { ResidentPicker } from './ResidentPicker'
 // (api-006); họ tên, dị ứng từ api-001, phòng từ api-003, ca từ api-008. Chỉ Điều dưỡng xác nhận liều (FR-026); trạng
 // thái liều do hệ thống tính (FR-021). Thuốc khi cần (PrnPanel) và Đơn thuốc (PrescriptionPanel) đọc, ghi api-006 theo từng
 // người cao tuổi được chọn. Đối chiếu thuốc (ReconciliationPanel, 006 T072) lập, xử lý phiếu của người được chọn: phiếu trở
-// về từ bệnh viện, theo yêu cầu chuyên môn, hoặc phiếu tiếp nhận (cũng mở được từ Hồ sơ tiếp nhận).
+// về từ bệnh viện, theo yêu cầu chuyên môn, hoặc phiếu tiếp nhận (lối vào duy nhất trên web, chủ dự án 2026-11-18).
 
 const RECORD_ROLE = 'NURSING_STAFF'
 const OPEN = ['Đến giờ', 'Trễ']

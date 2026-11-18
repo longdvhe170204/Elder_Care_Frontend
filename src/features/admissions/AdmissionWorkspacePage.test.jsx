@@ -77,7 +77,6 @@ beforeEach(() => {
     }),
   )
   api.on('GET', '/contracts', json(200, []))
-  api.on('GET', '/residents/5/medication-reconciliations', json(200, []))
 })
 
 function renderPage(onNavigate = vi.fn()) {
@@ -126,34 +125,6 @@ describe('AdmissionWorkspacePage', () => {
     expect(onNavigate).toHaveBeenCalledWith('family-members')
     fireEvent.click(screen.getByRole('button', { name: 'Mở Số dư, thu chi' }))
     expect(onNavigate).toHaveBeenCalledWith('balance')
-  })
-
-  it('006 T073: bước đối chiếu thuốc chưa lập phiếu, không có quyền thì không có nút mở', async () => {
-    renderPage()
-
-    const step = await screen.findByRole('listitem', { name: /Phiếu đối chiếu thuốc/ })
-    expect(within(step).getByText('Chưa lập phiếu')).toBeTruthy()
-    expect(within(step).getByText('Không chặn Hoàn tất tiếp nhận')).toBeTruthy()
-    expect(within(step).queryByRole('button')).toBeNull()
-  })
-
-  it('006 T073: bước đối chiếu thuốc lấy trạng thái phiếu tiếp nhận, nút mở khung đối chiếu', async () => {
-    api.on(
-      'GET',
-      '/me/permissions',
-      json(200, [{ function: 'MEDICATION_RECONCILIATION', operation: 'VIEW' }]),
-    )
-    api.on(
-      'GET',
-      '/residents/5/medication-reconciliations',
-      json(200, [{ id: 4, residentId: 5, reason: 'ADMISSION', status: 'PENDING_CONFIRMATION', items: [], allowedCommands: [] }]),
-    )
-    renderPage()
-
-    const step = await screen.findByRole('listitem', { name: /Phiếu đối chiếu thuốc/ })
-    expect(within(step).getByText('Chờ xác nhận')).toBeTruthy()
-    fireEvent.click(await within(step).findByRole('button', { name: 'Mở đối chiếu thuốc' }))
-    expect(await screen.findByRole('heading', { name: 'Đối chiếu thuốc khi tiếp nhận' })).toBeTruthy()
   })
 
   it('quay lại danh sách đăng ký tiếp nhận', async () => {
