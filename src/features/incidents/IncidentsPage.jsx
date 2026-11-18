@@ -104,6 +104,12 @@ function Facts({ rows }) {
   )
 }
 
+const RESIDENT_LIST_MAX = 6
+// Loại sự cố chia hai nhóm theo cờ nonHealth của danh mục: liên quan sức khỏe, chăm sóc và việc khác (đồ gửi, cơ sở vật chất)
+const TYPE_SECTIONS = [
+  ['Sức khỏe, chăm sóc', false],
+  ['Việc khác', true],
+]
 const PROGRESSION_SECTIONS = [
   ['EVALUATION', 'Đánh giá'],
   ['ACTION', 'Xử lý'],
@@ -524,6 +530,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
 function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOpenExisting }) {
   const [residents, setResidents] = useState(null)
   const [residentId, setResidentId] = useState(null)
+  const [residentQuery, setResidentQuery] = useState('')
   const [floors, setFloors] = useState([])
   const [floorId, setFloorId] = useState('')
   const [floorsUnavailable, setFloorsUnavailable] = useState(false)
@@ -553,6 +560,12 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
     }
   }, [open])
 
+  const pickedResident = residents?.find((r) => r.id === residentId) ?? null
+  const needle = residentQuery.trim().toLowerCase()
+  const matchedResidents = (residents ?? []).filter(
+    (r) => !needle || `${r.name} ${r.code}`.toLowerCase().includes(needle),
+  )
+  const shownResidents = matchedResidents.slice(0, RESIDENT_LIST_MAX)
   const activeTypes = types.filter((t) => t.status !== 'INACTIVE')
   const type = activeTypes.find((t) => String(t.id) === typeId)
   const residentRequired = !type?.allowsNoResident
@@ -569,7 +582,7 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
   function pickType(value) {
     setTypeId(value)
     const picked = activeTypes.find((t) => String(t.id) === value)
-    if (picked && !level) setLevel(picked.defaultLevel)
+    if (picked) setLevel(picked.defaultLevel)
   }
 
   async function submit(event) {
@@ -629,14 +642,30 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
             <FieldLabel>Người cao tuổi</FieldLabel>
             {!residents ? (
               <Skeleton className="h-11 w-full" />
+            ) : pickedResident ? (
+              <div className="flex items-center gap-2 rounded-lg border p-2">
+                <ResidentAvatar name={pickedResident.name} code={String(pickedResident.id)} className="size-8" />
+                <span className="flex-1 type-label">{pickedResident.name}</span>
+                <Button type="button" variant="ghost" className="h-11" onClick={() => setResidentId(null)}>
+                  Đổi người
+                </Button>
+              </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                {residents.map((r) => (
+                {residents.length > RESIDENT_LIST_MAX && (
+                  <Input
+                    className="h-11"
+                    placeholder="Gõ tên hoặc mã để tìm"
+                    aria-label="Tìm người cao tuổi"
+                    value={residentQuery}
+                    onChange={(e) => setResidentQuery(e.target.value)}
+                  />
+                )}
+                {shownResidents.map((r) => (
                   <Button
                     key={r.id}
                     type="button"
-                    variant={residentId === r.id ? 'default' : 'outline'}
-                    aria-pressed={residentId === r.id}
+                    variant="outline"
                     aria-label={`${r.name}, ${r.code}`}
                     className="h-11 justify-start gap-2"
                     onClick={() => setResidentId(r.id)}
@@ -646,47 +675,88 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
                     <span className="type-caption">{r.code}</span>
                   </Button>
                 ))}
+                {matchedResidents.length > shownResidents.length && (
+                  <p className="type-caption text-muted-foreground">
+                    Còn {matchedResidents.length - shownResidents.length} người nữa, gõ thêm để lọc.
+                  </p>
+                )}
               </div>
             )}
             {submitted && errors.resident && <FieldError>Chọn người cao tuổi</FieldError>}
           </Field>
           <Field data-invalid={(submitted && errors.type) || undefined}>
             <FieldLabel>Loại sự cố</FieldLabel>
-            <ToggleGroup
-              variant="outline"
-              value={typeId ? [typeId] : []}
-              onValueChange={(n) => pickType(n[0] ?? '')}
-              className="flex flex-wrap"
-            >
-              {activeTypes.map((t) => (
-                <ToggleGroupItem key={t.id} value={String(t.id)} className="h-11 px-4">
-                  {t.name}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
+            {type ? (
+              <div className="flex items-center gap-2 rounded-lg border p-2">
+                <span className="flex-1 type-label">
+                  {type.name}
+                  <span className="ml-2 type-caption font-normal text-muted-foreground">
+                    mặc định {LEVEL_LABEL[type.defaultLevel].toLowerCase()}
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-11"
+                  onClick={() => {
+                    setTypeId('')
+                    setLevel('')
+                  }}
+                >
+                  Đổi loại
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {TYPE_SECTIONS.map(([label, nonHealth]) => {
+                  const inSection = activeTypes.filter((t) => !!t.nonHealth === nonHealth)
+                  if (inSection.length === 0) return null
+                  return (
+                    <section key={label} aria-label={label} className="flex flex-col gap-1.5">
+                      <h4 className="type-caption text-muted-foreground">{label}</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {inSection.map((t) => (
+                          <Button
+                            key={t.id}
+                            type="button"
+                            variant="outline"
+                            className="h-11 px-4"
+                            onClick={() => pickType(String(t.id))}
+                          >
+                            {t.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </section>
+                  )
+                })}
+              </div>
+            )}
             {submitted && errors.type && <FieldError>Chọn loại sự cố</FieldError>}
           </Field>
-          <Field data-invalid={(submitted && errors.level) || undefined}>
-            <FieldLabel>Mức</FieldLabel>
-            <ToggleGroup
-              variant="outline"
-              value={level ? [level] : []}
-              onValueChange={(n) => n[0] && setLevel(n[0])}
-              className="flex flex-wrap"
-            >
-              {LEVEL_ORDER.map((l) => (
-                <ToggleGroupItem key={l} value={l} className="h-11 px-4">
-                  {LEVEL_LABEL[l]}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            {type && (
-              <span className="type-caption text-muted-foreground">
-                Mặc định của loại: {LEVEL_LABEL[type.defaultLevel]}
-              </span>
-            )}
-            {submitted && errors.level && <FieldError>Chọn mức</FieldError>}
-          </Field>
+          {type && (
+            <Field data-invalid={(submitted && errors.level) || undefined}>
+              <FieldLabel>Mức</FieldLabel>
+              <ToggleGroup
+                variant="outline"
+                value={level ? [level] : []}
+                onValueChange={(n) => n[0] && setLevel(n[0])}
+                className="flex flex-wrap"
+              >
+                {LEVEL_ORDER.map((l) => (
+                  <ToggleGroupItem key={l} value={l} className="h-11 px-4">
+                    {LEVEL_LABEL[l]}
+                  </ToggleGroupItem>
+                ))}
+              </ToggleGroup>
+              {type && (
+                <span className="type-caption text-muted-foreground">
+                  Mặc định của loại: {LEVEL_LABEL[type.defaultLevel]}
+                </span>
+              )}
+              {submitted && errors.level && <FieldError>Chọn mức</FieldError>}
+            </Field>
+          )}
           {lowerNeeded && (
             <Field data-invalid={(submitted && errors.lowerReason) || undefined}>
               <FieldLabel htmlFor="incident-lower-reason">Lý do chọn mức thấp hơn</FieldLabel>

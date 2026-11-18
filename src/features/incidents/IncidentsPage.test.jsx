@@ -293,6 +293,27 @@ describe('IncidentsPage', () => {
     await waitFor(() => expect(api.calls('POST', '/incidents/11/join-handling')).toHaveLength(1))
   })
 
+  it('FR_040_ghiNhan_chonXongThiGonLai_loaiChiaNhom_mucTuDien', async () => {
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: 100 + i,
+      profileCode: `HS-01${i}`,
+      personalInfo: { fullName: `Người số ${i}` },
+    }))
+    api.on('GET', '/residents', json(200, { items: many }))
+    render(<IncidentsPage />)
+    await rows()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận sự cố' }))
+    expect(await screen.findByLabelText('Tìm người cao tuổi')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Tìm người cao tuổi'), { target: { value: 'số 3' } })
+    fireEvent.click(await screen.findByRole('button', { name: /Người số 3/ }))
+    expect(screen.getByRole('button', { name: 'Đổi người' })).toBeTruthy()
+    expect(screen.getByRole('region', { name: 'Sức khỏe, chăm sóc' })).toBeTruthy()
+    expect(screen.queryByText(/Mặc định của loại/)).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Ngã' }))
+    expect(screen.getByRole('button', { name: 'Đổi loại' })).toBeTruthy()
+    expect(screen.getByText(/Mặc định của loại/)).toBeTruthy()
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)
