@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Field, FieldError, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -486,6 +486,10 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
                 thống không tự kiểm phần này.
               </p>
             )}
+            <p>
+              Kiểm căn cứ của dòng Ngừng, Thay đổi liều: do Bác sĩ có quyền kê đơn quyết, hoặc có căn cứ từ cơ sở kê bên
+              ngoài (cơ sở, người, ngày) ghi trong lý do (Q-411).
+            </p>
             <div className="flex flex-wrap gap-2">
               <Button
                 className="h-11"
@@ -652,7 +656,13 @@ function LineEditor({ index, item, errors, prescriptions, onChange, onRemove, on
             value={item.reason ?? ''}
             onChange={(e) => onChange({ reason: e.target.value })}
             aria-invalid={!!errors.reason || undefined}
+            aria-describedby={['DISCONTINUE', 'CHANGE_DOSE'].includes(item.decision) ? fid('basis') : undefined}
           />
+          {['DISCONTINUE', 'CHANGE_DOSE'].includes(item.decision) && (
+            <FieldDescription id={fid('basis')}>
+              Không phải Bác sĩ có quyền kê đơn thì ghi căn cứ từ cơ sở kê bên ngoài: cơ sở, người, ngày (Q-411).
+            </FieldDescription>
+          )}
           {errors.reason && <FieldError>{errors.reason}</FieldError>}
         </Field>
       </div>

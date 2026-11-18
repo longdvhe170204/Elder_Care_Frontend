@@ -110,6 +110,8 @@ describe('ReconciliationPanel', () => {
     fireEvent.change(within(line).getByLabelText('Nguồn'), { target: { value: 'ADMISSION_CURRENT_MEDICATION' } })
     fireEvent.change(within(line).getByLabelText('Thuốc'), { target: { value: 'Amlodipine 5mg sáng' } })
     fireEvent.change(within(line).getByLabelText('Quyết định'), { target: { value: 'DISCONTINUE' } })
+    // Q-411 (4): người không phải Bác sĩ có quyền kê đơn ghi căn cứ từ cơ sở kê bên ngoài trong lý do
+    expect(within(line).getByText(/ghi căn cứ từ cơ sở kê bên ngoài/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu các dòng' }))
     expect(await within(line).findByText('Nhập lý do ngừng')).toBeTruthy()
     expect(api.calls('PUT', '/medication-reconciliations/4/items')).toHaveLength(0)
@@ -187,6 +189,7 @@ describe('ReconciliationPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận phiếu' }))
     // Q mới (chủ dự án 2026-11-18): người xác nhận kiểm đủ dòng cho thuốc đang dùng khi tiếp nhận
     expect(screen.getByText(/mỗi thuốc đang dùng khi tiếp nhận đã có một dòng/)).toBeTruthy()
+    expect(screen.getByText(/căn cứ của dòng Ngừng, Thay đổi liều/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận và áp dụng quyết định' }))
     expect(await screen.findByText('Người xác nhận phải khác người gửi')).toBeTruthy()
 
