@@ -314,6 +314,34 @@ describe('IncidentsPage', () => {
     expect(screen.getByText(/Mặc định của loại/)).toBeTruthy()
   })
 
+  it('FR_040_loaiHayGapLenDau_loaiKhacXuongCuoiSauDongGoiY', async () => {
+    api.on(
+      'GET',
+      '/incident-types',
+      json(200, [
+        {
+          id: 40,
+          code: 'OTHER_HEALTH_CARE',
+          name: 'Sức khỏe, chăm sóc khác',
+          defaultLevel: 'MEDIUM',
+          nonHealth: false,
+          status: 'ACTIVE',
+        },
+        { id: 41, code: 'BEHAVIOR', name: 'Kích động', defaultLevel: 'MEDIUM', nonHealth: false, status: 'ACTIVE' },
+        { id: 42, code: 'FALL', name: 'Ngã', defaultLevel: 'CRITICAL', nonHealth: false, status: 'ACTIVE' },
+      ]),
+    )
+    render(<IncidentsPage />)
+    await rows()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận sự cố' }))
+    const region = await screen.findByRole('region', { name: 'Sức khỏe, chăm sóc' })
+    const names = within(region)
+      .getAllByRole('button')
+      .map((b) => b.textContent)
+    expect(names).toEqual(['Ngã', 'Kích động', 'Sức khỏe, chăm sóc khác'])
+    expect(within(region).getByText('Không có loại phù hợp?')).toBeTruthy()
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)

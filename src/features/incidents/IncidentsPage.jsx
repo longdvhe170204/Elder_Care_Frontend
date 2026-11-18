@@ -105,6 +105,24 @@ function Facts({ rows }) {
 }
 
 const RESIDENT_LIST_MAX = 6
+// Loại hay gặp lên đầu theo thứ tự cố định; loại "khác" xuống cuối, đứng sau dòng "Không có loại phù hợp?"
+const COMMON_TYPE_CODES = [
+  'FALL',
+  'BREATHING_OR_CONSCIOUSNESS',
+  'CHOKING_OR_AIRWAY_OBSTRUCTION',
+  'MEDICATION',
+  'BEHAVIOR',
+  'MISSING_OR_NOT_RETURNED',
+  'WRONG_MEAL_SERVED',
+]
+const isOtherType = (t) => /^OTHER/.test(t.code ?? '')
+function orderedTypes(list) {
+  const rank = (t) => {
+    const i = COMMON_TYPE_CODES.indexOf(t.code)
+    return i < 0 ? COMMON_TYPE_CODES.length : i
+  }
+  return list.toSorted((a, b) => rank(a) - rank(b))
+}
 // Loại sự cố chia hai nhóm theo cờ nonHealth của danh mục: liên quan sức khỏe, chăm sóc và việc khác (đồ gửi, cơ sở vật chất)
 const TYPE_SECTIONS = [
   ['Sức khỏe, chăm sóc', false],
@@ -709,28 +727,41 @@ function RecordIncidentSheet({ open, types, incidents, onClose, onRecorded, onOp
             ) : (
               <div className="flex flex-col gap-3">
                 {TYPE_SECTIONS.map(([label, nonHealth]) => {
-                  const inSection = activeTypes.filter((t) => !!t.nonHealth === nonHealth)
+                  const inSection = orderedTypes(activeTypes.filter((t) => !!t.nonHealth === nonHealth))
                   if (inSection.length === 0) return null
+                  const common = inSection.filter((t) => !isOtherType(t))
+                  const others = inSection.filter(isOtherType)
+                  const chip = (t) => (
+                    <Button
+                      key={t.id}
+                      type="button"
+                      variant="outline"
+                      className="h-11 px-4"
+                      onClick={() => pickType(String(t.id))}
+                    >
+                      {t.name}
+                    </Button>
+                  )
                   return (
                     <section key={label} aria-label={label} className="flex flex-col gap-1.5">
                       <h4 className="type-caption text-muted-foreground">{label}</h4>
-                      <div className="flex flex-wrap gap-2">
-                        {inSection.map((t) => (
-                          <Button
-                            key={t.id}
-                            type="button"
-                            variant="outline"
-                            className="h-11 px-4"
-                            onClick={() => pickType(String(t.id))}
-                          >
-                            {t.name}
-                          </Button>
-                        ))}
-                      </div>
+                      {common.length > 0 && <div className="flex flex-wrap gap-2">{common.map(chip)}</div>}
+                      {others.length > 0 && (
+                        <>
+                          <p className="type-caption text-muted-foreground">Không có loại phù hợp?</p>
+                          <div className="flex flex-wrap gap-2">{others.map(chip)}</div>
+                        </>
+                      )}
                     </section>
                   )
                 })}
               </div>
+            )}
+            {!type && (
+              <p className="type-caption text-muted-foreground">
+                Chọn loại gần nhất hoặc loại "khác", rồi ghi rõ ở Mô tả. Hay gặp loại nào chưa có thì nhờ Quản lý viện
+                thêm vào danh mục.
+              </p>
             )}
             {submitted && errors.type && <FieldError>Chọn loại sự cố</FieldError>}
           </Field>
