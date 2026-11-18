@@ -419,6 +419,30 @@ describe('IncidentsPage', () => {
     expect(screen.queryByText(/Chưa chuyển viện được/)).toBeNull()
   })
 
+  it('FR_049_daChuyenVien_hienDauHieuVaDongTomTat', async () => {
+    api.on(
+      'GET',
+      '/incidents/12',
+      json(200, {
+        ...HANDLING,
+        progressions: [
+          {
+            id: 9,
+            progressionTypeId: 51,
+            typeCode: 'TRANSFERRED_OUT',
+            content: 'Đã chuyển viện sang Bệnh viện X, người đi kèm: Hà',
+            occurredAt: '2026-11-08T03:00:00Z',
+          },
+        ],
+      }),
+    )
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
+    expect(await screen.findByText('Đã chuyển viện')).toBeTruthy()
+    expect(screen.getAllByText(/Bệnh viện X/).length).toBeGreaterThan(0)
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)

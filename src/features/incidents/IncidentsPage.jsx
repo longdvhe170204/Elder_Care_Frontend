@@ -397,6 +397,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
   }
 
   const missingGroups = missingMonitoringGroups(incident, progressionTypes)
+  const transferredNote = (incident.progressions ?? []).find((p) => p.typeCode === 'TRANSFERRED_OUT') ?? null
   const hasMore = ['move-to-monitoring', 'change-level', 'assign-handler'].some((c) => commands.includes(c))
   const transferOffered =
     ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
@@ -421,7 +422,14 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
         <div className="flex flex-wrap gap-2">
           <StatusBadge status={LEVEL_LABEL[incident.level]} />
           <IncidentStatus incident={incident} />
+          {transferredNote && <Badge variant="attention">Đã chuyển viện</Badge>}
         </div>
+        {transferredNote && (
+          <p className="type-body-sm">
+            {transferredNote.content}, lúc {formatDateTime(transferredNote.occurredAt)}. Sự cố vẫn mở để theo dõi, đóng
+            kèm kết quả khi xong.
+          </p>
+        )}
       </div>
       <Facts
         rows={[
