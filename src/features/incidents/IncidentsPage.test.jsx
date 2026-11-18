@@ -342,6 +342,26 @@ describe('IncidentsPage', () => {
     expect(within(region).getByText('Không có loại phù hợp?')).toBeTruthy()
   })
 
+  it('BR_M05_20_bienPhapHoiSucChiHienKhiKhanCap_vaGapLai', async () => {
+    render(<IncidentsPage />)
+    const list = await rows()
+    // Sự cố Trung bình: không có biện pháp hồi sức
+    fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi diễn biến' }))
+    expect(screen.queryByRole('button', { name: /Cấp cứu hồi sức/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeNull()
+  })
+
+  it('BR_M05_20_suCoKhanCap_bienPhapHoiSucGapSan_bamMoiThay', async () => {
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button', { name: /Trần Thị Mai/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi diễn biến' }))
+    expect(screen.queryByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: /Cấp cứu hồi sức/ }))
+    expect(screen.getByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeTruthy()
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)

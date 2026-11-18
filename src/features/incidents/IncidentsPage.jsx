@@ -147,7 +147,8 @@ function missingMonitoringGroups(incident, progressionTypes) {
 
 // Chọn loại diễn biến theo nhóm Đánh giá, Xử lý, Gọi báo tin, Theo dõi: mắt dừng ở đúng nhóm cần, không đọc cả dãy dài.
 // Nhóm còn thiếu cho "Chuyển theo dõi" được đánh dấu; loại hồi sức nằm riêng dưới Xử lý vì cần xác nhận nguyện vọng.
-function ProgressionPicker({ types, value, onChange, missing }) {
+function ProgressionPicker({ types, value, onChange, missing, emergency }) {
+  const [showResuscitation, setShowResuscitation] = useState(false)
   const active = types.filter((t) => t.status !== 'INACTIVE' && t.group !== 'SYSTEM')
   const chip = (t) => (
     <Button
@@ -177,10 +178,20 @@ function ProgressionPicker({ types, value, onChange, missing }) {
               {missing.includes(group) && ' (cần ít nhất 1 mục để Chuyển theo dõi)'}
             </h4>
             {plain.length > 0 && <div className="flex flex-wrap gap-2">{plain.map(chip)}</div>}
-            {resuscitation.length > 0 && (
+            {resuscitation.length > 0 && emergency && (
               <>
-                {plain.length > 0 && <h5 className="type-caption text-muted-foreground">Cấp cứu hồi sức</h5>}
-                <div className="flex flex-wrap gap-2">{resuscitation.map(chip)}</div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-11 self-start"
+                  aria-expanded={showResuscitation}
+                  onClick={() => setShowResuscitation((v) => !v)}
+                >
+                  {showResuscitation ? 'Ẩn cấp cứu hồi sức' : 'Cấp cứu hồi sức (chỉ khi ngừng tim, ngừng thở)'}
+                </Button>
+                {(showResuscitation || resuscitation.some((t) => String(t.id) === value)) && (
+                  <div className="flex flex-wrap gap-2">{resuscitation.map(chip)}</div>
+                )}
               </>
             )}
           </section>
@@ -245,7 +256,13 @@ function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode
       {mode === 'progressions' && (
         <Field data-invalid={(submitted && choiceMissing) || undefined}>
           <FieldLabel>Loại diễn biến</FieldLabel>
-          <ProgressionPicker types={progressionTypes} value={choice} onChange={setChoice} missing={missingGroups} />
+          <ProgressionPicker
+            types={progressionTypes}
+            value={choice}
+            onChange={setChoice}
+            missing={missingGroups}
+            emergency={incident.level === 'CRITICAL'}
+          />
           {submitted && choiceMissing && <FieldError>Chọn loại diễn biến</FieldError>}
         </Field>
       )}
