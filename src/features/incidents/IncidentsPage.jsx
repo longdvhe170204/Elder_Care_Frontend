@@ -166,7 +166,9 @@ function ProgressionPicker({ types, value, onChange, missing }) {
       {PROGRESSION_SECTIONS.map(([group, label]) => {
         const inGroup = active.filter((t) => (group === 'OTHER' ? !KNOWN_GROUPS.includes(t.group) : t.group === group))
         if (inGroup.length === 0) return null
-        const plain = inGroup.filter((t) => !t.resuscitation)
+        const plain = inGroup
+          .filter((t) => !t.resuscitation)
+          .toSorted((a, b) => Number(isOtherType(a)) - Number(isOtherType(b)))
         const resuscitation = inGroup.filter((t) => t.resuscitation)
         return (
           <section key={group} aria-label={label} className="flex flex-col gap-1.5">
