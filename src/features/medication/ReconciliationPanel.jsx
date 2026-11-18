@@ -480,6 +480,12 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
               Quyết định của từng dòng được áp vào đơn thuốc của {residentName} trong một lệnh; phiếu đã xác nhận chỉ
               sửa được bằng đính chính. Người xác nhận phải khác người gửi và người đã ghi quyết định.
             </p>
+            {ticket.reason === 'ADMISSION' && (
+              <p>
+                So phiếu với thuốc đang dùng khi tiếp nhận ở trên: mỗi thuốc đang dùng khi tiếp nhận đã có một dòng. Hệ
+                thống không tự kiểm phần này.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
               <Button
                 className="h-11"

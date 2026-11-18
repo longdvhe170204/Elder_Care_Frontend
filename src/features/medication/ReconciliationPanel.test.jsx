@@ -185,6 +185,8 @@ describe('ReconciliationPanel', () => {
     expect(screen.queryByRole('button', { name: 'Lưu các dòng' })).toBeNull()
 
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận phiếu' }))
+    // Q mới (chủ dự án 2026-11-18): người xác nhận kiểm đủ dòng cho thuốc đang dùng khi tiếp nhận
+    expect(screen.getByText(/mỗi thuốc đang dùng khi tiếp nhận đã có một dòng/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận và áp dụng quyết định' }))
     expect(await screen.findByText('Người xác nhận phải khác người gửi')).toBeTruthy()
 
