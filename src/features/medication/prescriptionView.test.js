@@ -129,4 +129,10 @@ describe('changeDosageBody', () => {
       instructionNote: 'Sau ăn tối',
     })
   })
+
+  it('FR_034_donTamDungChoDoiChieu_coDauChoDoiChieu', () => {
+    const view = (p) => prescriptionView({ prescription: p, medication })
+    expect(view({ ...prescription, status: 'SUSPENDED', suspensionReason: 'RECONCILIATION_PENDING' }).awaitingReconciliation).toBe(true)
+    expect(view({ ...prescription, status: 'SUSPENDED', suspensionReason: 'ORDER' }).awaitingReconciliation).toBe(false)
+  })
 })

@@ -19,12 +19,15 @@ import { hhmm } from './doseRoundView'
 import { windowOf } from './medicationTime'
 import { PrescriptionPanel } from './PrescriptionPanel'
 import { PrnPanel } from './PrnPanel'
+import { ReconciliationPanel } from './ReconciliationPanel'
+import { ResidentPicker } from './ResidentPicker'
 
 // Màn Phát thuốc (M14; spec 006 User Story 2, 6), theo DESIGN.md 5.1: lưới thẻ theo giờ dự kiến, mỗi thẻ là một
 // người cao tuổi trong giờ đó. Liều theo lịch đọc từ GET /medication-doses/rounds, ghi bằng administer, refuse, skip
 // (api-006); họ tên, dị ứng từ api-001, phòng từ api-003, ca từ api-008. Chỉ Điều dưỡng xác nhận liều (FR-026); trạng
 // thái liều do hệ thống tính (FR-021). Thuốc khi cần (PrnPanel) và Đơn thuốc (PrescriptionPanel) đọc, ghi api-006 theo từng
-// người cao tuổi được chọn.
+// người cao tuổi được chọn. Đối chiếu thuốc (ReconciliationPanel, 006 T072) lập, xử lý phiếu của người được chọn: phiếu trở
+// về từ bệnh viện, theo yêu cầu chuyên môn, hoặc phiếu tiếp nhận (lối vào duy nhất trên web, chủ dự án 2026-11-18).
 
 const RECORD_ROLE = 'NURSING_STAFF'
 const OPEN = ['Đến giờ', 'Trễ']
@@ -122,6 +125,18 @@ function Section({ label, sub, count, defaultOpen, urgent, current, children }) 
   )
 }
 
+function ReconciliationMode({ resident, setResident, isDoctor, onSaved }) {
+  const name = resident && (resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`)
+  return (
+    <div className="flex flex-col gap-5">
+      <ResidentPicker onPick={setResident} selectedId={resident?.id} />
+      {resident && (
+        <ReconciliationPanel key={resident.id} residentId={resident.id} residentName={name} isDoctor={isDoctor} onChanged={onSaved} />
+      )}
+    </div>
+  )
+}
+
 export function MedicationPage({ role }) {
   const canRecord = role === RECORD_ROLE
   const [mode, setMode] = useState('scheduled')
@@ -131,6 +146,8 @@ export function MedicationPage({ role }) {
   const [clock, setClock] = useState(() => hhmm(new Date()))
   const [opening, setOpening] = useState(null)
   const [announcement, setAnnouncement] = useState('')
+  // Người đang chọn ở chế độ Đối chiếu thuốc; tab Đơn thuốc chuyển sang đúng người khi có đơn chờ đối chiếu (006 T074)
+  const [reconciling, setReconciling] = useState(null)
 
   const reload = useCallback(async () => {
     try {
@@ -204,6 +221,9 @@ export function MedicationPage({ role }) {
             <ToggleGroupItem value="prescriptions" className="h-11 px-4">
               Đơn thuốc
             </ToggleGroupItem>
+            <ToggleGroupItem value="reconciliation" className="h-11 px-4">
+              Đối chiếu thuốc
+            </ToggleGroupItem>
           </ToggleGroup>
           {mode === 'scheduled' && (
             <ToggleGroup
@@ -249,8 +269,23 @@ export function MedicationPage({ role }) {
 
       {mode === 'prn' ? (
         <PrnPanel canRecord={canRecord} now={shift.now} onSaved={setAnnouncement} />
+      ) : mode === 'reconciliation' ? (
+        <ReconciliationMode
+          resident={reconciling}
+          setResident={setReconciling}
+          isDoctor={role === 'DOCTOR'}
+          onSaved={setAnnouncement}
+        />
       ) : mode === 'prescriptions' ? (
-        <PrescriptionPanel role={role} canRecord={canRecord} onSaved={setAnnouncement} />
+        <PrescriptionPanel
+          role={role}
+          canRecord={canRecord}
+          onSaved={setAnnouncement}
+          onReconcile={(resident) => {
+            setReconciling(resident)
+            setMode('reconciliation')
+          }}
+        />
       ) : !round ? (
         !problem && <p className="rounded-xl border bg-card px-4 py-3 type-body-sm">Đang tải vòng phát thuốc…</p>
       ) : (
