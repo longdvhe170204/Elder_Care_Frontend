@@ -171,6 +171,20 @@ describe('AlertsPage', () => {
     expect(api.calls('POST', '/alerts/1/receive')).toHaveLength(1)
   })
 
+  it('FR_029_chuyenSuCo_hienMaSuCoVaMoSangManSuCo', async () => {
+    const onNavigate = vi.fn()
+    api.on('GET', '/alerts/3', json(200, { ...ALERT_IN_PROGRESS, allowedCommands: ['convert-to-incident'] }))
+    api.on('POST', '/alerts/3/convert-to-incident', json(201, { id: 77 }))
+    render(<AlertsPage role="NURSING_STAFF" onNavigate={onNavigate} />)
+    const cards = await screen.findAllByRole('article')
+    fireEvent.click(within(cards[2]).getByRole('button', { name: /Chi tiết/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Chuyển thành sự cố' }))
+    fireEvent.change(await screen.findByLabelText('Loại sự cố'), { target: { value: '1' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và chuyển sự cố' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở sự cố SC-77' }))
+    expect(onNavigate).toHaveBeenCalledWith('incidents', { incidentId: 77 })
+  })
+
   it('FR_029_409_hienDieuKienChuaThoa', async () => {
     api.on('POST', '/alerts/1/receive', problem(409, 'ALREADY_RECEIVED'))
     render(<AlertsPage role="NURSING_STAFF" />)

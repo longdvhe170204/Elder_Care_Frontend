@@ -75,6 +75,7 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
           {originLabel(alert.origin)}, lần gần nhất {formatDateTime(alert.latestAt)}
           {alert.occurrenceCount > 1 && `, ${alert.occurrenceCount} lần cùng loại đã gộp`}
           {`, phụ trách: ${alert.assignee ?? 'chưa ai nhận'}`}
+          {alert.incidentId != null && `, đã thành sự cố SC-${alert.incidentId}`}
         </span>
         {waiting && (
           <span className={cn('type-caption tabular-nums', urgent ? 'text-destructive' : 'text-muted-foreground')}>
@@ -126,7 +127,7 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
 // Khung chi tiết: nguồn, thời điểm, lệnh cần nhập kết quả hoặc lý do (Đóng, Đổi mức), khối nút bấm khẩn cấp
 const CRITICAL_CLOSE_MIN = 10
 
-function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
+function AlertDetail({ id, name, Title, Description, onDone, onChanged, onNavigate }) {
   const [alert, setAlert] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
@@ -135,6 +136,7 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
   const [incidentTypes, setIncidentTypes] = useState([])
   const [typeId, setTypeId] = useState('')
   const [staffId, setStaffId] = useState('')
+  const [createdIncidentId, setCreatedIncidentId] = useState(null)
   const [initialResponse, setInitialResponse] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -205,7 +207,19 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
           : mode === 'assign'
             ? { staffId: Number(staffId), note: text.trim() }
             : { newLevel: level, reason: text.trim() }
-      await runAlertCommand(alert.id, mode, body)
+      const result = await runAlertCommand(alert.id, mode, body)
+      if (converting) {
+        // Ở lại chi tiết để người dùng thấy ngay sự cố vừa tạo mang mã nào và mở được sang màn Sự cố
+        const incidentId = result?.data?.incident?.id ?? result?.data?.id ?? null
+        setCreatedIncidentId(incidentId)
+        setMode(null)
+        await reload()
+        onChanged(
+          `${mode === 'activate-emergency' ? 'Đã kích hoạt khẩn cấp' : 'Đã chuyển thành sự cố'}${incidentId ? ` SC-${incidentId}` : ''}`,
+          name,
+        )
+        return
+      }
       onDone(
         {
           close: 'Đã đóng cảnh báo',
@@ -251,6 +265,23 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
         <dd className="tabular-nums">{alert.occurrenceCount}</dd>
         <dt className="text-muted-foreground">Phụ trách</dt>
         <dd>{alert.assignee ?? 'Chưa ai nhận'}</dd>
+        {(createdIncidentId ?? alert.incidentId) != null && (
+          <section aria-label="Sự cố liên kết" className="flex flex-col gap-2 rounded-lg border p-3 type-body-sm">
+            <span>
+              Cảnh báo này đã thành sự cố <strong>SC-{createdIncidentId ?? alert.incidentId}</strong>. Xử lý tiếp ở màn
+              Sự cố.
+            </span>
+            {onNavigate && (
+              <Button
+                variant="outline"
+                className="h-11 self-start"
+                onClick={() => onNavigate('incidents', { incidentId: createdIncidentId ?? alert.incidentId })}
+              >
+                Mở sự cố SC-{createdIncidentId ?? alert.incidentId}
+              </Button>
+            )}
+          </section>
+        )}
         {alert.noOnDutyDoctor && (
           <>
             <dt className="text-muted-foreground">Bác sĩ trực</dt>
@@ -461,7 +492,7 @@ function AlertDetail({ id, name, Title, Description, onDone, onChanged }) {
   )
 }
 
-export function AlertsPage({ onNavigate }) {
+export function AlertsPage({ onNavigate } = {}) {
   const [board, setBoard] = useState(null)
   const [problem, setProblem] = useState(null)
   const [group, setGroup] = useState('open')
@@ -566,6 +597,7 @@ export function AlertsPage({ onNavigate }) {
             Description={Description}
             onDone={done}
             onChanged={changed}
+            onNavigate={onNavigate}
           />
         )
       }

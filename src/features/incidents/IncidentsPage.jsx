@@ -277,7 +277,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Title className="type-title">{type?.name ?? 'Sự cố'}</Title>
-        <Description className="type-body-sm text-muted-foreground">{name}</Description>
+        <Description className="type-body-sm text-muted-foreground">{`SC-${incident.id}, ${name}`}</Description>
         <div className="flex flex-wrap gap-2">
           <StatusBadge status={LEVEL_LABEL[incident.level]} />
           <IncidentStatus incident={incident} />
