@@ -1,4 +1,5 @@
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { FileInput } from '@/common/FileInput'
 
 // Ô dùng chung trong các form đồ gửi (013): ô chọn native và ô tệp (ảnh, bản ký). Giữ cùng kiểu với ô của 001.
 
@@ -32,13 +33,11 @@ export function FilesField({ id, label, files, onChange, error, hint, multiple =
   return (
     <Field data-invalid={!!error || undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <input
+      <FileInput
         id={id}
-        type="file"
         multiple={multiple}
         accept={accept ?? (multiple ? 'image/jpeg,image/png' : 'application/pdf,image/jpeg,image/png')}
         aria-invalid={!!error || undefined}
-        className="type-body-sm h-11 rounded-lg border px-3 py-2"
         onChange={(e) => {
           onChange(Array.from(e.target.files ?? []))
         }}

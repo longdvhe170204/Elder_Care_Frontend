@@ -4,9 +4,9 @@ import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { ApplicationsPage } from './ApplicationsPage'
 
-// 004 T019 (US1; FR-001, FR-003, FR-004, FR-004a, FR-005): danh sách lượt đăng ký lọc theo trạng thái kèm số đếm; khung
-// chi tiết có tiến trình, danh sách điều kiện tiếp nhận tách khỏi ý kiến của người cao tuổi về việc vào ở (ý kiến không là
-// điều kiện, Q-356), ghi ý kiến mới và lập đăng ký cho người Đang tiếp nhận.
+// 004 T019 (US1; FR-001, FR-006): danh sách lượt đăng ký lọc theo trạng thái kèm số đếm và lập đăng ký cho người Đang
+// tiếp nhận. Bấm tên người cao tuổi mở thẳng màn Hồ sơ tiếp nhận (004 T114, chủ dự án yêu cầu 2026-11-17); điều kiện, ý
+// kiến về việc vào ở, cập nhật đăng ký ở màn đó (AdmissionWorkspacePage.test.jsx).
 
 let api
 
@@ -21,22 +21,6 @@ const OPEN = {
   admissionOpinion: [],
 }
 const WAITING = { ...OPEN, id: 8, residentId: 6, status: 'WAITING' }
-
-const CONDITIONS = {
-  conditions: [
-    { code: 'ADM_B_CONTRACT', name: 'Hợp đồng Hiệu lực', status: 'NOT_MET', basis: 'FR-004' },
-    { code: 'ADM_C_DEPOSIT', name: 'Đặt cọc', status: 'MET', basis: 'FR-030' },
-  ],
-  warnings: [{ code: 'ADMISSION_OPINION_MISSING', description: 'Chưa ghi ý kiến của người cao tuổi về việc vào ở' }],
-  admissionOpinion: null,
-}
-
-const PROGRESS = {
-  steps: [
-    { name: 'APPLICATION', done: true },
-    { name: 'ASSESSMENT', done: false },
-  ],
-}
 
 function permissions(list) {
   api.on(
@@ -67,9 +51,6 @@ beforeEach(() => {
   api.on('GET', '/admission-applications', json(200, [OPEN, WAITING]))
   api.on('GET', '/residents/5', json(200, { id: 5, personalInfo: { fullName: 'Nguyễn Thị Lan' } }))
   api.on('GET', '/residents/6', json(200, { id: 6, personalInfo: { fullName: 'Lê Văn Hải' } }))
-  api.on('GET', '/admission-applications/7', json(200, OPEN, { ETag: '"3"' }))
-  api.on('GET', '/admission-applications/7/admission-conditions', json(200, CONDITIONS))
-  api.on('GET', '/admission-applications/7/progress', json(200, PROGRESS))
   api.on(
     'GET',
     '/residents',
@@ -89,40 +70,13 @@ describe('ApplicationsPage', () => {
     expect(await screen.findByRole('button', { name: 'Lê Văn Hải' })).toBeInTheDocument()
   })
 
-  it('FR_004a_khungChiTiet_dieuKienTachKhoiYKienVaoO_vaCoCanhBao', async () => {
-    renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
-
-    expect(await screen.findByText('Hợp đồng Hiệu lực')).toBeInTheDocument()
-    expect(screen.getByText(/Chưa đạt/)).toBeInTheDocument()
-    expect(screen.getByText('Chưa ghi ý kiến của người cao tuổi về việc vào ở')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Ý kiến về việc vào ở' })).toBeInTheDocument()
-    expect(screen.getByText('Đăng ký')).toBeInTheDocument()
-  })
-
-  it('khung chi tiết có nút mở màn Hồ sơ tiếp nhận của lượt đăng ký (đề xuất A, 2026-11-17)', async () => {
+  it('004_T114_bamTenNguoiCaoTuoi_moThangHoSoTiepNhan', async () => {
     const onNavigate = vi.fn()
     renderPage(onNavigate)
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Mở hồ sơ tiếp nhận' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
     expect(onNavigate).toHaveBeenCalledWith('admission-workspace', { id: 7 })
-  })
-
-  it('FR_004a_ghiYKien_guiNguonVaYKien_roiTaiLai', async () => {
-    api.on('POST', '/admission-applications/7/admission-opinion', json(201, { id: 1, opinion: 'AGREE' }))
-    renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
-    await screen.findByText('Hợp đồng Hiệu lực')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Ghi ý kiến mới' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Người cao tuổi' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Đồng ý' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu ý kiến' }))
-
-    await waitFor(() => expect(api.calls('POST', '/admission-applications/7/admission-opinion')).toHaveLength(1))
-    const body = JSON.parse(api.calls('POST', '/admission-applications/7/admission-opinion')[0][1].body)
-    expect(body).toEqual({ opinion: 'AGREE', source: { type: 'RESIDENT' } })
+    expect(screen.queryByRole('heading', { name: 'Ý kiến về việc vào ở' })).not.toBeInTheDocument()
   })
 
   it('FR_001_lapDangKy_thieuTruong_baoTaiO_vaThanhCongThiTaiLaiDanhSach', async () => {
@@ -165,6 +119,61 @@ describe('ApplicationsPage', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu đăng ký' }))
 
     expect(await within(dialog).findByRole('alert')).toBeInTheDocument()
+  })
+
+  // Chủ dự án yêu cầu 2026-11-18: tạo hồ sơ xong thì sang ngay form lập đăng ký của chính người đó, lưu xong vào màn Hồ
+  // sơ tiếp nhận để làm các bước sau; không phải đóng khung, chuyển màn, chọn lại người cao tuổi.
+  it('tiepNhanMoi_taoHoSo_sangLapDangKy_luuXongMoHoSoTiepNhan', async () => {
+    api.on(
+      'POST',
+      '/residents',
+      json(201, {
+        profile: { id: 20, profileCode: 'NCT-2026-000020', personalInfo: { fullName: 'Đỗ Thị Hoa' } },
+        warnings: [{ code: 'MISSING_CONSENT', description: 'Chưa có bản đồng ý chia sẻ dữ liệu' }],
+      }),
+    )
+    api.on('POST', '/admission-applications', json(201, { ...OPEN, id: 31, residentId: 20 }))
+    const onNavigate = vi.fn()
+    renderPage(onNavigate)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận mới' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: 'Đỗ Thị Hoa' } })
+    fireEvent.change(within(dialog).getByLabelText('Ngày sinh'), { target: { value: '1944-03-02' } })
+    fireEvent.change(within(dialog).getByLabelText('Giới tính'), { target: { value: 'FEMALE' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo hồ sơ' }))
+
+    const form = await screen.findByRole('dialog')
+    expect(await within(form).findByText('Lập đăng ký tiếp nhận')).toBeInTheDocument()
+    expect(within(form).getByText(/Đã tạo hồ sơ NCT-2026-000020/)).toBeInTheDocument()
+    expect(within(form).getByText('Chưa có bản đồng ý chia sẻ dữ liệu')).toBeInTheDocument()
+    expect(within(form).getByText('Đỗ Thị Hoa')).toBeInTheDocument()
+    expect(within(form).queryByLabelText('Người cao tuổi')).toBeNull()
+
+    fireEvent.change(within(form).getByLabelText('Ngày đăng ký'), { target: { value: '2026-11-18' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Nội trú dài hạn' }))
+    fireEvent.click(within(form).getByRole('button', { name: 'Thường xuyên' }))
+    fireEvent.click(within(form).getByRole('button', { name: 'Lưu đăng ký' }))
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('admission-workspace', { id: 31 }))
+    const body = JSON.parse(api.calls('POST', '/admission-applications')[0][1].body)
+    expect(body).toMatchObject({ residentId: 20, applicationDate: '2026-11-18' })
+  })
+
+  it('lapDangKy_choNguoiCoSan_luuXongMoHoSoTiepNhan', async () => {
+    api.on('POST', '/admission-applications', json(201, { ...OPEN, id: 32, residentId: 9 }))
+    const onNavigate = vi.fn()
+    renderPage(onNavigate)
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập đăng ký' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: 'Phạm Thị Mai (NCT-0009)' })
+    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '9' } })
+    fireEvent.change(within(dialog).getByLabelText('Ngày đăng ký'), { target: { value: '2026-11-06' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Bán trú' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cơ bản' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu đăng ký' }))
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('admission-workspace', { id: 32 }))
   })
 
   it('FR_006_khongCoQuyenTao_anNutLapDangKy', async () => {

@@ -111,6 +111,7 @@ export function ContractsPage() {
       {sheet && (
         <ContractSheet
           contract={sheet.contract}
+          residentName={sheet.contract ? nameOf(sheet.contract) : null}
           onClose={() => setSheet(null)}
           onDone={(message) => {
             setSheet(null)

@@ -10,6 +10,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { CONFLICT_HINTS, RELATIONSHIP_LABELS } from './relationshipLabels'
+import { FileInput } from '@/common/FileInput'
 
 // Thêm người thân cho một người cao tuổi (012 T013; FR-001, FR-002, FR-005, FR-008): tìm hồ sơ đã có theo họ tên, số
 // điện thoại, số giấy tờ (một người thân nhiều quan hệ, FR-002) hoặc lập hồ sơ mới, rồi lập quan hệ. Mọi quyền tắt khi
@@ -237,11 +238,9 @@ export function AddRelationshipSheet({
             <>
               <Field data-invalid={(submitted && !evidence) || undefined}>
                 <FieldLabel htmlFor="new-evidence">Bằng chứng (văn bản ủy quyền, giấy tờ quan hệ, hợp đồng)</FieldLabel>
-                <input
+                <FileInput
                   id="new-evidence"
-                  type="file"
                   accept="application/pdf,image/jpeg,image/png"
-                  className="type-body-sm h-11 rounded-lg border px-3 py-2"
                   onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
                 />
                 {submitted && !evidence && <FieldError>Chọn tệp bằng chứng</FieldError>}

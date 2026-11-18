@@ -14,6 +14,7 @@ import { problemOf } from '@/common/problem'
 import { formatDate } from '@/common/dateTime'
 import { openFile, uploadFile } from '@/common/files'
 import { Choice } from './ShiftForm'
+import { FileInput } from '@/common/FileInput'
 const VALIDITY = {
   VALID: 'Còn hiệu lực',
   EXPIRED: 'Hết hạn',
@@ -240,9 +241,8 @@ function CredentialForm({ kind, credential, person, types, scopes, onDone, onCan
           )}
           <Field>
             <FieldLabel htmlFor="credential-scan">Bản scan (PDF, JPEG, PNG)</FieldLabel>
-            <Input
+            <FileInput
               id="credential-scan"
-              type="file"
               accept="application/pdf,image/jpeg,image/png"
               onChange={(e) => {
                 setFile(e.target.files?.[0] ?? null)

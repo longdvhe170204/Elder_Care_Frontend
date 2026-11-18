@@ -5,7 +5,6 @@ import { Card } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { DetailLayout } from '@/common/DetailLayout'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -14,10 +13,13 @@ import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { APPLICATION_STATUS, CARE_LEVELS, RESIDENCE_TYPES, labelOf } from './admissionLabels'
-import { ApplicationDetail, ApplicationSheet } from './ApplicationParts'
+import { PROFILE_CREATORS } from '../residents/residentLabels'
+import { ApplicationSheet } from './ApplicationParts'
+import { NewAdmissionSheet } from './NewAdmissionSheet'
 
-// Đăng ký tiếp nhận (004 T019; US1, FR-001, FR-003 → FR-006): bảng lượt đăng ký lọc theo trạng thái kèm số đếm, khung chi
-// tiết có tiến trình, điều kiện tiếp nhận và ý kiến về việc vào ở (DESIGN.md mục 5, 7.2 detail-panel; G1 duyệt 2026-11-05).
+// Đăng ký tiếp nhận (004 T019; US1, FR-001, FR-003 → FR-006): bảng lượt đăng ký lọc theo trạng thái kèm số đếm (G1 duyệt
+// 2026-11-05). Bấm tên người cao tuổi mở thẳng màn Hồ sơ tiếp nhận của lượt đó (004 T114, chủ dự án yêu cầu 2026-11-17):
+// tiến trình, điều kiện, ý kiến về việc vào ở, cập nhật đăng ký ở màn đó; khung chi tiết cũ bỏ.
 
 const FILTERS = [
   ['IN_PROGRESS', 'Đang tiếp nhận'],
@@ -26,12 +28,11 @@ const FILTERS = [
   ['CANCELLED', 'Đã hủy'],
 ]
 
-export function ApplicationsPage({ onNavigate = () => {} } = {}) {
+export function ApplicationsPage({ role, onNavigate = () => {} } = {}) {
   const { can } = usePermissions()
   const [filter, setFilter] = useState('IN_PROGRESS')
   const [applications, setApplications] = useState(null)
   const [failure, setFailure] = useState(null)
-  const [opened, setOpened] = useState(null)
   const [sheet, setSheet] = useState(null)
   const [announcement, setAnnouncement] = useState('')
   const [names, setNames] = useState({})
@@ -70,52 +71,43 @@ export function ApplicationsPage({ onNavigate = () => {} } = {}) {
 
   const nameOf = (a) => names[a.residentId] ?? `Người cao tuổi mã ${a.residentId}`
   const rows = (applications ?? []).filter((a) => a.status === filter)
-  const current = (applications ?? []).find((a) => a.id === opened)
 
-  function changed(message) {
+  // Lập đăng ký xong thì mở màn Hồ sơ tiếp nhận của lượt đó để làm các bước sau (chủ dự án yêu cầu 2026-11-18)
+  function opened(message, application) {
+    setSheet(null)
+    if (application?.id) {
+      onNavigate('admission-workspace', { id: application.id })
+      return
+    }
     setAnnouncement(message)
     load()
   }
 
   return (
-    <DetailLayout
-      open={!!current}
-      detailKey={opened}
-      onClose={() => setOpened(null)}
-      label="Chi tiết đăng ký tiếp nhận"
-      renderDetail={(titles) => (
-        <ApplicationDetail
-          key={opened}
-          application={current}
-          residentName={nameOf(current)}
-          canUpdate={can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE')}
-          onChanged={changed}
-          onEdit={(application) => setSheet({ application })}
-          onOpenWorkspace={(application) => onNavigate('admission-workspace', { id: application.id })}
-          {...titles}
-        />
-      )}
-    >
+    <div className="flex flex-col gap-5">
       <PageHeader
         title="Đăng ký tiếp nhận"
         subtitle="Lượt đăng ký của người cao tuổi đang được tiếp nhận; điều kiện tiếp nhận kiểm theo từng lượt."
         aside={
           can('ADMISSION_CONTRACT_DEPOSIT', 'CREATE') && (
-            <Button className="h-11" onClick={() => setSheet({})}>
-              Lập đăng ký
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" className="h-11" onClick={() => setSheet({})}>
+                Lập đăng ký
+              </Button>
+              {PROFILE_CREATORS.includes(role) && (
+                <Button className="h-11" onClick={() => setSheet({ kind: 'new' })}>
+                  Tiếp nhận mới
+                </Button>
+              )}
+            </div>
           )
         }
       />
-      {sheet && (
-        <ApplicationSheet
-          application={sheet.application}
-          onClose={() => setSheet(null)}
-          onDone={(message) => {
-            setSheet(null)
-            changed(message)
-          }}
-        />
+      {sheet?.kind === 'new' && (
+        <NewAdmissionSheet onClose={() => setSheet(null)} onDone={opened} />
+      )}
+      {sheet && sheet.kind !== 'new' && (
+        <ApplicationSheet application={sheet.application} onClose={() => setSheet(null)} onDone={opened} />
       )}
       <ToggleGroup
         variant="filter"
@@ -151,13 +143,12 @@ export function ApplicationsPage({ onNavigate = () => {} } = {}) {
             </TableHeader>
             <TableBody>
               {rows.map((a) => (
-                <TableRow key={a.id} className={a.id === opened ? 'bg-accent/40' : undefined}>
+                <TableRow key={a.id}>
                   <TableCell className="whitespace-normal pl-4">
                     <button
                       type="button"
                       className="text-left underline-offset-4 hover:underline"
-                      aria-pressed={a.id === opened}
-                      onClick={() => setOpened(a.id)}
+                      onClick={() => onNavigate('admission-workspace', { id: a.id })}
                     >
                       {nameOf(a)}
                     </button>
@@ -178,6 +169,6 @@ export function ApplicationsPage({ onNavigate = () => {} } = {}) {
           </Table>
         </Card>
       )}
-    </DetailLayout>
+    </div>
   )
 }

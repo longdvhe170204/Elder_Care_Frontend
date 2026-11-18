@@ -11,6 +11,7 @@ import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { RELATIONSHIP_LABELS, RIGHT_LABELS, RIGHT_ORDER } from '../relationshipLabels'
 import { REQUEST_HINTS } from './requestLabels'
+import { FileInput } from '@/common/FileInput'
 
 // Lập yêu cầu thay đổi quyền tại quầy (012 T017; FR-013 → FR-018, FR-005): Hành chính lập theo đề nghị của gia đình.
 // Có bản ký của người đại diện thì yêu cầu có hiệu lực ngay (FR-015 b); không thì Chờ xác nhận. Người đón mới chưa có
@@ -310,11 +311,9 @@ export function CreateRightChangeRequestSheet({ open, residentId, residentName, 
               <FieldLabel htmlFor="request-file">
                 {signed ? 'Bản scan bản ký' : 'Bằng chứng (văn bản ủy quyền, giấy tờ quan hệ)'}
               </FieldLabel>
-              <input
+              <FileInput
                 id="request-file"
-                type="file"
                 accept="application/pdf,image/jpeg,image/png"
-                className="type-body-sm h-11 rounded-lg border px-3 py-2"
                 aria-invalid={show('file') || undefined}
                 onChange={(e) => setFile(e.target.files?.[0] ?? null)}
               />

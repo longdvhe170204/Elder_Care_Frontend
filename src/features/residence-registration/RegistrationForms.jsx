@@ -9,6 +9,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { CHANNEL_LABELS, COMMANDS } from './registrationLabels'
+import { FileInput } from '@/common/FileInput'
 
 // Form lệnh trên khai báo (018 T008, T010, T014; api-018 POST /residence-registrations/{id}/{command}; bố cục K4, K7).
 // Mỗi form kiểm trước các trường bắt buộc rồi gửi; 409 và 422 hiện bằng Alert trong khung (DESIGN.md 7.4). Idempotency-Key
@@ -90,12 +91,10 @@ function EvidenceField({ id, label, files, onChange, error }) {
   return (
     <Field data-invalid={!!error || undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <input
+      <FileInput
         id={id}
-        type="file"
         accept="application/pdf,image/jpeg,image/png"
         aria-invalid={!!error || undefined}
-        className="type-body-sm h-11 rounded-lg border px-3 py-2"
         onChange={(event) => onChange(Array.from(event.target.files ?? []))}
       />
       {files.length > 0 && (

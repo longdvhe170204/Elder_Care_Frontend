@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { DetailLayout } from '@/common/DetailLayout'
@@ -18,7 +17,7 @@ import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { CARE_LEVEL_LABELS, RESIDENCE_TYPE_LABELS } from '../assessments/assessmentLabels'
-import { CreateResident } from './CreateResident'
+import { NewAdmissionSheet } from '../admissions/NewAdmissionSheet'
 import { ResidentDetail } from './ResidentDetail'
 import { PROFILE_CREATORS, STATUS_LABELS } from './residentLabels'
 
@@ -52,7 +51,7 @@ function ReassessmentCell({ item }) {
   )
 }
 
-export function ResidentListPage({ role }) {
+export function ResidentListPage({ role, onNavigate = () => {} }) {
   const [text, setText] = useState('')
   const [applied, setApplied] = useState('')
   const [filter, setFilter] = useState('ALL')
@@ -272,13 +271,17 @@ export function ResidentListPage({ role }) {
         </Button>
       )}
 
-      <Sheet open={creating} onOpenChange={setCreating}>
-        <SheetContent className="sm:max-w-lg">
-          {creating && (
-            <CreateResident onCreated={() => setReloadKey((k) => k + 1)} onClose={() => setCreating(false)} />
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Hồ sơ mới luôn ở Đang tiếp nhận: tạo xong sang ngay lập đăng ký, rồi mở Hồ sơ tiếp nhận (chủ dự án yêu cầu 2026-11-18) */}
+      {creating && (
+        <NewAdmissionSheet
+          onClose={() => setCreating(false)}
+          onResidentCreated={() => setReloadKey((k) => k + 1)}
+          onDone={(_, application) => {
+            setCreating(false)
+            if (application?.id) onNavigate('admission-workspace', { id: application.id })
+          }}
+        />
+      )}
     </DetailLayout>
   )
 }

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { Button } from '@/components/ui/button'
 import { ApiError, getMe, postAuthLogout } from '@/api'
 import { AppShell } from '@/common/layout/AppShell'
 import { ACCOUNT_PAGE, NAV_GROUPS, canSee, navForRole } from '@/common/layout/navigation'
@@ -136,6 +137,14 @@ const BUILT = new Set(Object.keys(PAGES))
 const PARENT_PAGE = { 'admission-workspace': 'admission-applications' }
 const menuPageOf = (page) => PARENT_PAGE[page] ?? page
 
+// Tên màn cho nút "Quay lại <tên màn>": màn có mục menu lấy tên mục; màn con, màn tài khoản ghi ở đây
+const PAGE_LABELS = { 'admission-workspace': 'Hồ sơ tiếp nhận', [ACCOUNT_PAGE]: 'Tài khoản của tôi' }
+const MAX_TRAIL = 20
+
+function pageLabel(page) {
+  return PAGE_LABELS[page] ?? NAV_GROUPS.flatMap((g) => g.items).find((i) => i.key === page)?.label ?? 'màn trước'
+}
+
 // Màn đang mở giữ ở hash của URL để tải lại trang (F5) không về Tổng quan (BUG-UI-002); hash lạ thì về màn mặc định.
 // Tham số id đi sau dấu ? (`#incidents?incidentId=9`, 016 Q12): mở thẳng bản ghi ở màn của feature sở hữu.
 function pageFromUrl() {
@@ -221,16 +230,39 @@ function App() {
     }
   }
 
-  function navigate(nextPage, nextParams = {}) {
+  // Các màn đã đi qua trong phiên làm việc, để nút "Quay lại" về đúng màn trước (chủ dự án yêu cầu 2026-11-17).
+  // Chuyển màn do hệ thống (màn không được phép, đổi vai trò) thay màn hiện tại, không thêm vào lối đã đi.
+  const [trail, setTrail] = useState([])
+
+  const show = useCallback((nextPage, nextParams) => {
     setPage(nextPage)
     setParams(nextParams)
     window.history.replaceState(null, '', hashOf(nextPage, nextParams))
+  }, [])
+
+  function navigate(nextPage, nextParams = {}) {
+    if (nextPage !== page || JSON.stringify(nextParams) !== JSON.stringify(params)) {
+      setTrail((current) => [...current, { page, params }].slice(-MAX_TRAIL))
+    }
+    show(nextPage, nextParams)
+  }
+
+  const redirect = useCallback((nextPage) => show(nextPage, {}), [show])
+
+  function goBack() {
+    const previous = trail.at(-1)
+    if (!previous) return
+    setTrail((current) => current.slice(0, -1))
+    show(previous.page, previous.params)
   }
 
   function changeRole(nextRole) {
     setRole(nextRole)
     const allowed = navForRole(nextRole, null, BUILT).flatMap((g) => g.items.map((i) => i.key))
-    if (page !== ACCOUNT_PAGE && !allowed.includes(menuPageOf(page))) navigate(firstPage(nextRole))
+    if (page !== ACCOUNT_PAGE && !allowed.includes(menuPageOf(page))) {
+      setTrail([])
+      redirect(firstPage(nextRole))
+    }
   }
 
   if (checking) return null
@@ -254,6 +286,11 @@ function App() {
         page={menuPageOf(page)}
         onPageChange={(key) => navigate(key)}
       >
+        {trail.length > 0 && (
+          <Button type="button" variant="outline" className="mb-4 h-11" onClick={goBack}>
+            {`Quay lại ${pageLabel(trail.at(-1).page)}`}
+          </Button>
+        )}
         {allowed ? (
           <Page
             key={`${page}:${JSON.stringify(params)}`}
@@ -274,7 +311,7 @@ function App() {
   return (
     <SessionGuard accountId={session.accountId} timeoutSeconds={session.sessionIdleTimeoutSeconds} onLogout={logout}>
       <PermissionsProvider>
-        <LivePermissions role={role} page={page} onNavigate={navigate} render={shell} />
+        <LivePermissions role={role} page={page} onNavigate={redirect} render={shell} />
       </PermissionsProvider>
     </SessionGuard>
   )

@@ -70,7 +70,7 @@ beforeEach(() => {
     'GET',
     '/residents/6/relationships',
     json(200, [
-      { id: 1, status: 'ACTIVE', relationship: 'CHILD', familyMember: { id: 41, fullName: 'Trần Văn Minh' } },
+      { id: 1, status: 'ACTIVE', relationship: 'CHILD', representative: true, familyMember: { id: 41, fullName: 'Trần Văn Minh' } },
     ]),
   )
   api.on(

@@ -111,6 +111,27 @@ describe('App', () => {
     window.history.replaceState(null, '', '/')
   })
 
+  it('nút Quay lại về đúng màn trước, màn đầu tiên không có nút', async () => {
+    api.on('GET', '/me', new Response(null, { status: 500 }))
+    api.on('GET', '/residents', json(200, { items: [], nextCursor: null }))
+    window.history.replaceState(null, '', '/#dashboard')
+    render(<App />)
+
+    expect(await screen.findByLabelText('Xem với vai trò')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Quay lại/ })).toBeNull()
+    // nhóm menu mở, đóng được nhớ trong localStorage từ test trước: chỉ mở khi đang đóng
+    if (!screen.queryByRole('button', { name: 'Người cao tuổi' })) {
+      fireEvent.click(screen.getByRole('button', { name: 'Người cao tuổi, lưu trú' }))
+    }
+    fireEvent.click(await screen.findByRole('button', { name: 'Người cao tuổi' }))
+    await waitFor(() => expect(window.location.hash).toBe('#residents'))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Quay lại Tổng quan' }))
+    await waitFor(() => expect(window.location.hash).toBe('#dashboard'))
+    expect(screen.queryByRole('button', { name: /^Quay lại/ })).toBeNull()
+    window.history.replaceState(null, '', '/')
+  })
+
   it('khongCoBackend_giuBanMauDoiVaiTro', async () => {
     api.on('GET', '/me', new Response(null, { status: 500 }))
     render(<App />)

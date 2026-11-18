@@ -18,6 +18,7 @@ import { formatDate, formatDateTime } from '@/common/dateTime'
 import { CorrectionBadge } from '@/common/correction/CorrectionBadge'
 import { CorrectionHistorySheet } from '@/common/correction/CorrectionHistorySheet'
 import { AssessmentForm } from './AssessmentForm'
+import { FamilyDeclaredEditor } from './FamilyDeclared'
 import { ReassessmentNotice } from './ReassessmentNotice'
 import {
   ASSESSMENT_CORRECTION_FIELDS,
@@ -149,7 +150,15 @@ function HistoryItem({ item, canCorrect, onCorrect }) {
   )
 }
 
-export function AssessmentTab({ residentId, residentStatus, allowedCommands = [], onChanged }) {
+// Hành chính chỉ ghi phần "Gia đình khai" khi Đang tiếp nhận (Q-412, FR-025a): không tải lịch sử, mức, nhận xét (19.3)
+export function AssessmentTab(props) {
+  if ((props.allowedCommands ?? []).includes('RECORD_FAMILY_DECLARED')) {
+    return <FamilyDeclaredEditor residentId={props.residentId} />
+  }
+  return <AssessmentTabContent {...props} />
+}
+
+function AssessmentTabContent({ residentId, residentStatus, allowedCommands = [], onChanged }) {
   const [state, setState] = useState('loading')
   const [level, setLevel] = useState(null)
   const [reassessment, setReassessment] = useState(null)

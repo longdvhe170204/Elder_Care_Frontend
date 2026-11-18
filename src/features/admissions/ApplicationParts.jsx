@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
   getAdmissionApplicationsById,
-  getAdmissionApplicationsByIdAdmissionConditions,
-  getAdmissionApplicationsByIdProgress,
   postAdmissionApplications,
   postAdmissionApplicationsByIdAdmissionOpinion,
   postAdmissionApplicationsByIdUpdate,
@@ -13,16 +11,12 @@ import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { StatusBadge } from '@/common/StatusBadge'
-import { formatDate, formatDateTime } from '@/common/dateTime'
+import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import {
-  APPLICATION_STATUS,
   CARE_LEVELS,
-  CONDITION_STATUS,
   OPINIONS,
   OPINION_SOURCES,
-  PROGRESS_STEPS,
   RESIDENCE_TYPES,
   labelOf,
   newKey,
@@ -32,7 +26,6 @@ import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 // Khung chi tiết và form của lượt đăng ký tiếp nhận (004 T019; FR-001, FR-003, FR-004, FR-004a, FR-005). Danh sách điều
 // kiện tiếp nhận (a) → (f) tách khỏi ý kiến của người cao tuổi về việc vào ở: ý kiến không là điều kiện (Q-356).
 
-const OPEN_STATUSES = ['IN_PROGRESS', 'WAITING']
 
 export function OpinionBlock({ opinions }) {
   if (!opinions.length) return <p className="type-body-sm text-muted-foreground">Chưa ghi ý kiến về việc vào ở.</p>
@@ -113,152 +106,32 @@ export function OpinionForm({ applicationId, onDone, onCancel }) {
   )
 }
 
-export function ApplicationDetail({
-  application,
-  residentName,
-  canUpdate,
-  onChanged,
-  onEdit,
-  onOpenWorkspace,
-  Title,
-  Description,
-}) {
-  const [conditions, setConditions] = useState(null)
-  const [progress, setProgress] = useState(null)
-  const [failure, setFailure] = useState(null)
-  const [writing, setWriting] = useState(false)
-  const [reload, setReload] = useState(0)
-  const id = application.id
-  const open = OPEN_STATUSES.includes(application.status)
-
-  useEffect(() => {
-    let cancelled = false
-    Promise.all([
-      getAdmissionApplicationsByIdAdmissionConditions({ path: { id } }),
-      getAdmissionApplicationsByIdProgress({ path: { id } }),
-    ])
-      .then(([c, p]) => {
-        if (cancelled) return
-        setConditions(c.data)
-        setProgress(p.data)
-        setFailure(null)
-      })
-      .catch((e) => !cancelled && setFailure(problemOf(e)))
-    return () => {
-      cancelled = true
-    }
-  }, [id, reload])
-
-  const opinions = conditions?.admissionOpinion ? [conditions.admissionOpinion] : (application.admissionOpinion ?? [])
-
+// Lập mới (chưa có application) hoặc cập nhật (có application: tải lại để lấy ETag cho If-Match, lý do bắt buộc).
+// residentId, residentName: người cao tuổi đã biết (vừa tạo hồ sơ ở luồng Tiếp nhận mới), chỉ hiện họ tên, không có ô chọn.
+// notice: nội dung hiện đầu form (kết quả tạo hồ sơ). onDone(message, application) nhận lượt đăng ký backend trả khi lập mới.
+export function ApplicationSheet(props) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <StatusBadge status={APPLICATION_STATUS[application.status] ?? application.status} />
-        <Title className="type-title">{residentName}</Title>
-        <Description className="type-body-sm text-muted-foreground">
-          {`Đăng ký ngày ${formatDate(application.applicationDate)}`}
-        </Description>
-      </div>
-      {onOpenWorkspace && (
-        <Button className="h-11 self-start" onClick={() => onOpenWorkspace(application)}>
-          Mở hồ sơ tiếp nhận
-        </Button>
-      )}
-      <div className="grid gap-3">
-        <Info label="Loại lưu trú mong muốn">{labelOf(RESIDENCE_TYPES, application.desiredResidenceType)}</Info>
-        <Info label="Mức chăm sóc dự kiến">{labelOf(CARE_LEVELS, application.expectedCareLevel)}</Info>
-        {application.desiredAdmissionDate && (
-          <Info label="Ngày vào dự kiến">{formatDate(application.desiredAdmissionDate)}</Info>
-        )}
-        {application.contactPerson && <Info label="Người liên hệ">{application.contactPerson}</Info>}
-        {application.needs && <Info label="Nhu cầu">{application.needs}</Info>}
-        {application.note && <Info label="Ghi chú">{application.note}</Info>}
-      </div>
-      <ProblemAlert problem={failure} />
-
-      {progress && (
-        <section className="flex flex-col gap-2">
-          <h3 className="type-card-title">Tiến trình</h3>
-          <ol className="flex flex-col gap-1">
-            {progress.steps.map((s) => (
-              <li key={s.name} className="type-body-sm">
-                {PROGRESS_STEPS[s.name] ?? s.name}
-                <span className="text-muted-foreground">{s.done ? ', đã xong' : ', chưa xong'}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
-      )}
-
-      {conditions && (
-        <section className="flex flex-col gap-2">
-          <h3 className="type-card-title">Điều kiện tiếp nhận</h3>
-          <ul className="flex flex-col gap-2">
-            {conditions.conditions.map((c) => (
-              <li key={c.code} className="flex flex-col">
-                <span className="type-body-sm">{c.name ?? c.code}</span>
-                <span className="type-caption text-muted-foreground">
-                  {CONDITION_STATUS[c.status] ?? c.status}
-                  {c.basis ? `, ${c.basis}` : ''}
-                </span>
-              </li>
-            ))}
-          </ul>
-          {conditions.warnings?.length > 0 && (
-            <ul className="flex flex-col gap-1" aria-label="Cảnh báo">
-              {conditions.warnings.map((w) => (
-                <li key={w.code} className="type-body-sm text-warning-foreground">
-                  {w.description}
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      <section className="flex flex-col gap-2">
-        <h3 className="type-card-title">Ý kiến về việc vào ở</h3>
-        <p className="type-caption text-muted-foreground">
-          Ghi nhận ý kiến của người cao tuổi, không phải điều kiện tiếp nhận.
-        </p>
-        <OpinionBlock opinions={opinions} />
-        {open && canUpdate && !writing && (
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="h-11" onClick={() => setWriting(true)}>
-              Ghi ý kiến mới
-            </Button>
-          </div>
-        )}
-        {writing && (
-          <OpinionForm
-            applicationId={id}
-            onCancel={() => setWriting(false)}
-            onDone={(message) => {
-              setWriting(false)
-              setReload((n) => n + 1)
-              onChanged(message)
-            }}
-          />
-        )}
-      </section>
-
-      {open && canUpdate && (
-        <div className="flex justify-end border-t pt-4">
-          <Button className="h-11" onClick={() => onEdit(application)}>
-            Cập nhật đăng ký
-          </Button>
-        </div>
-      )}
-    </div>
+    <Sheet open onOpenChange={(next) => !next && props.onClose()}>
+      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
+        <ApplicationForm {...props} />
+      </SheetContent>
+    </Sheet>
   )
 }
 
-// Lập mới (chưa có application) hoặc cập nhật (có application: tải lại để lấy ETag cho If-Match, lý do bắt buộc)
-export function ApplicationSheet({ application, onClose, onDone }) {
+export function ApplicationForm({
+  application,
+  residentId: presetResidentId = null,
+  residentName = null,
+  notice = null,
+  onClose,
+  onDone,
+}) {
   const editing = !!application
   const [etag, setEtag] = useState(null)
-  const [residentId, setResidentId] = useState(application ? String(application.residentId) : '')
+  const [residentId, setResidentId] = useState(
+    application ? String(application.residentId) : presetResidentId != null ? String(presetResidentId) : '',
+  )
   const [applicationDate, setApplicationDate] = useState(application?.applicationDate ?? '')
   const [type, setType] = useState(application?.desiredResidenceType ?? '')
   const [level, setLevel] = useState(application?.expectedCareLevel ?? '')
@@ -310,8 +183,8 @@ export function ApplicationSheet({ application, onClose, onDone }) {
         })
         onDone('Đã cập nhật đăng ký')
       } else {
-        await postAdmissionApplications({ headers: newKey(), body })
-        onDone('Đã lập đăng ký tiếp nhận')
+        const { data } = await postAdmissionApplications({ headers: newKey(), body })
+        onDone('Đã lập đăng ký tiếp nhận', data)
       }
     } catch (e) {
       setFailure(problemOf(e))
@@ -323,15 +196,17 @@ export function ApplicationSheet({ application, onClose, onDone }) {
   const shown = (key) => (submitted ? errors[key] : null)
 
   return (
-    <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
+    <>
         <SheetTitle>{editing ? 'Cập nhật đăng ký tiếp nhận' : 'Lập đăng ký tiếp nhận'}</SheetTitle>
         <SheetDescription>
           Người cao tuổi phải đang ở trạng thái Đang tiếp nhận; mỗi người một lượt đang mở.
         </SheetDescription>
+        {notice && <div className="mt-4">{notice}</div>}
         <FieldGroup className="mt-4">
           {editing ? (
             <Info label="Người cao tuổi">{`Mã ${application.residentId}`}</Info>
+          ) : presetResidentId != null ? (
+            <Info label="Người cao tuổi">{residentName ?? `Mã ${presetResidentId}`}</Info>
           ) : (
             <ResidentSelect
               id="application-resident"
@@ -410,7 +285,6 @@ export function ApplicationSheet({ application, onClose, onDone }) {
             Lưu đăng ký
           </Button>
         </div>
-      </SheetContent>
-    </Sheet>
+    </>
   )
 }

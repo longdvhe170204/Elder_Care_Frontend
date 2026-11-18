@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import {
   getAdmissionApplicationsById,
   getAdmissionApplicationsByIdAdmissionConditions,
-  getAdmissionApplicationsByIdProgress,
   getContracts,
   getResidentsById,
 } from '@/api'
@@ -17,19 +16,27 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { BedAllocationForm } from '../beds/BedAllocationForm'
-import { ResidentDetail } from '../residents/ResidentDetail'
-import { CONDITION_STATUS, RESIDENCE_TYPES, labelOf } from './admissionLabels'
-import { OpinionBlock, OpinionForm } from './ApplicationParts'
+import { ResidentDetail, ResidentPartSheet } from '../residents/ResidentDetail'
+import { APPLICATION_STATUS, CONDITION_STATUS, OPEN_STATUSES, RESIDENCE_TYPES, labelOf } from './admissionLabels'
+import { ApplicationSheet, OpinionBlock, OpinionForm } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.2): một màn cho một lượt tiếp nhận, đi theo các
-// bước BF-01. Trạng thái từng bước lấy từ tiến trình và điều kiện tiếp nhận của 004 (FR-003, FR-004; mã ADM_A → ADM_F);
+// bước BF-01. Trạng thái từng bước lấy từ điều kiện tiếp nhận của 004 (FR-004; mã ADM_A → ADM_F);
 // nút mở đúng form đang có trong khung trượt, hoặc màn sở hữu khi form nằm ở màn khác. Chỉ hiện trạng thái đã ghi, không
-// tự làm bước thay người (Q-306, Q-307); backend vẫn kiểm mọi lệnh.
+// tự làm bước thay người (Q-306, Q-307); backend vẫn kiểm mọi lệnh. 004 T114 (chủ dự án yêu cầu 2026-11-17): danh sách đăng
+// ký mở thẳng màn này; bước thuộc hồ sơ người cao tuổi mở đúng phần (part) của ResidentDetail; cập nhật đăng ký ở đây.
 
 const CLOSED_CONTRACTS = ['CANCELLED', 'TERMINATED']
 
-// action: resident (hồ sơ người cao tuổi), opinion, bed, contract, hoặc tên màn sở hữu ở `page`
+// action: resident (hồ sơ người cao tuổi, mở sẵn phần `part` nếu có), opinion, bed, contract, hoặc màn sở hữu ở `page`
+const PART_LABELS = {
+  consent: 'Đồng ý',
+  health: 'Sức khỏe',
+  wishes: 'Nguyện vọng',
+  assessment: 'Đánh giá',
+}
+
 const PHASES = [
   {
     title: 'Hồ sơ và đăng ký',
@@ -37,30 +44,27 @@ const PHASES = [
       {
         key: 'profile',
         label: 'Hồ sơ người cao tuổi và lượt đăng ký',
-        who: 'Hành chính',
         recorded: true,
         action: 'resident',
       },
       {
         key: 'opinion',
         label: 'Ý kiến của người cao tuổi về việc vào ở',
-        who: 'Hành chính',
         note: 'Không là điều kiện',
         action: 'opinion',
       },
       {
         key: 'contacts',
         label: 'Người thân: liên hệ chính, người đại diện',
-        who: 'Hành chính',
         condition: 'ADM_F_CONTACTS',
         page: ['family-members', 'Mở Người thân và quyền'],
       },
       {
         key: 'consent',
         label: 'Bản đồng ý chia sẻ dữ liệu',
-        who: 'Hành chính',
         note: 'Không chặn tiếp nhận',
         action: 'resident',
+        part: 'consent',
       },
     ],
   },
@@ -69,28 +73,34 @@ const PHASES = [
     steps: [
       {
         key: 'health',
-        label: 'Hồ sơ sức khỏe ban đầu, nguyện vọng cuối đời',
-        who: 'Bác sĩ, Điều dưỡng',
+        label: 'Hồ sơ sức khỏe ban đầu',
         note: 'Không chặn tiếp nhận',
         action: 'resident',
+        part: 'health',
+      },
+      {
+        key: 'wishes',
+        label: 'Nguyện vọng cuối đời, nguyện vọng khi điều trị',
+        note: 'Không chặn tiếp nhận',
+        action: 'resident',
+        part: 'wishes',
       },
       {
         key: 'assessment',
         label: 'Đánh giá đầu vào và mức chăm sóc',
-        who: 'Bác sĩ',
         condition: 'ADM_A_ASSESSMENT',
         action: 'resident',
+        part: 'assessment',
       },
     ],
   },
   {
     title: 'Giường, hợp đồng, đặt cọc',
     steps: [
-      { key: 'bed', label: 'Phân bổ giường', who: 'Hành chính', condition: 'ADM_D_BED', action: 'bed' },
+      { key: 'bed', label: 'Phân bổ giường', condition: 'ADM_D_BED', action: 'bed' },
       {
         key: 'contract',
         label: 'Hợp đồng',
-        who: 'Hành chính',
         condition: 'ADM_B_CONTRACT',
         extra: 'ADM_E_CONTRACT_LEVEL',
         action: 'contract',
@@ -98,42 +108,33 @@ const PHASES = [
       {
         key: 'deposit',
         label: 'Đặt cọc',
-        who: 'Kế toán',
         condition: 'ADM_C_DEPOSIT',
         page: ['balance', 'Mở Số dư, thu chi'],
       },
     ],
   },
-  {
-    title: 'Hoàn tất tiếp nhận',
-    steps: [
-      {
-        key: 'reconciliation',
-        label: 'Phiếu đối chiếu thuốc "tiếp nhận"',
-        who: 'Bác sĩ, Điều dưỡng',
-        note: 'Chưa có màn trên web; không chặn Hoàn tất tiếp nhận',
-      },
-      { key: 'complete', label: 'Hoàn tất tiếp nhận', who: 'Hành chính', progress: 'ADMISSION', action: 'complete' },
-    ],
-  },
+  // Nhóm "Hoàn tất tiếp nhận" (phiếu đối chiếu thuốc, dòng Hoàn tất) bỏ ngày 2026-11-18 theo yêu cầu chủ dự án: trùng cột
+  // Điều kiện Hoàn tất tiếp nhận bên phải, nơi có nút Hoàn tất tiếp nhận
   {
     title: 'Sau tiếp nhận',
     steps: [
       {
         key: 'registration',
         label: 'Khai báo cư trú',
-        who: 'Hành chính',
         page: ['residence-registrations', 'Mở Khai báo cư trú'],
       },
       {
         key: 'care-plan',
         label: 'Kế hoạch chăm sóc',
-        who: 'Điều dưỡng, Bác sĩ duyệt',
         page: ['care-plans', 'Mở Kế hoạch chăm sóc'],
       },
     ],
   },
 ]
+
+// Dòng chưa đạt của (a), (d), (f) mang mã của module sở hữu (INITIAL_ASSESSMENT_…, mã của 003, DBR_02), chỉ dòng đạt mang
+// mã cố định; nên bước tìm theo mã, không thấy thì theo module của dòng (AdmissionConditionService, FR-004).
+const CONDITION_MODULE = { ADM_A_ASSESSMENT: 'M01', ADM_D_BED: 'M03', ADM_F_CONTACTS: 'M10' }
 
 const TONE = {
   MET: 'text-success-foreground',
@@ -152,23 +153,23 @@ function useWorkspace(id) {
     async function load() {
       try {
         const { data: application } = await getAdmissionApplicationsById({ path: { id } })
-        const [conditions, progress, resident, contracts] = await Promise.all([
-          getAdmissionApplicationsByIdAdmissionConditions({ path: { id } }),
-          getAdmissionApplicationsByIdProgress({ path: { id } }),
+        // Lượt đã đóng (Đã vào, Đã hủy) không còn danh sách điều kiện: backend trả 409 APPLICATION_CLOSED (004 FR-004)
+        const open = OPEN_STATUSES.includes(application.status)
+        const [conditions, resident, contracts] = await Promise.all([
+          open ? getAdmissionApplicationsByIdAdmissionConditions({ path: { id } }) : { data: null },
           getResidentsById({ path: { id: application.residentId } }),
           getContracts({ query: { residentId: application.residentId } }).catch(() => ({ data: [] })),
         ])
         if (cancelled) return
-        const open = (contracts.data ?? [])
+        const openContracts = (contracts.data ?? [])
           .filter((c) => c.residentId === application.residentId && !CLOSED_CONTRACTS.includes(c.status))
           .sort((a, b) => b.id - a.id)
         setState({
           loading: false,
           application,
           conditions: conditions.data,
-          progress: progress.data,
           resident: resident.data,
-          contract: open[0] ?? null,
+          contract: openContracts[0] ?? null,
         })
       } catch (e) {
         if (!cancelled) setState({ loading: false, failure: problemOf(e) })
@@ -183,7 +184,7 @@ function useWorkspace(id) {
   return [state, useCallback(() => setReload((n) => n + 1), [])]
 }
 
-function StepStatus({ step, conditionOf, progressDone, opinion }) {
+function StepStatus({ step, conditionOf, opinion }) {
   if (step.condition) {
     const line = conditionOf(step.condition)
     const extra = step.extra && conditionOf(step.extra)
@@ -198,13 +199,6 @@ function StepStatus({ step, conditionOf, progressDone, opinion }) {
           <span className="type-caption text-muted-foreground">{`${extra.name}: ${CONDITION_STATUS[extra.status] ?? extra.status}`}</span>
         )}
       </span>
-    )
-  }
-  if (step.progress) {
-    return progressDone(step.progress) ? (
-      <span className="type-label text-success-foreground">Đã xong</span>
-    ) : (
-      <span className="type-label text-warning-foreground">Chưa xong</span>
     )
   }
   if (step.key === 'opinion') {
@@ -235,13 +229,12 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   if (state.failure?.status === 403) return <PermissionDeniedState label="Hồ sơ tiếp nhận" />
   if (state.failure) return <ProblemAlert problem={state.failure} />
 
-  const { application, conditions, progress, resident, contract } = state
+  const { application, conditions, resident, contract } = state
   const name = resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`
   const lines = conditions?.conditions ?? []
-  const conditionOf = (code) => lines.find((c) => c.code === code)
-  const progressDone = (step) => progress?.steps?.some((s) => s.name === step && s.done)
-  const doneCount = progress?.steps?.filter((s) => s.done).length ?? 0
-  const total = progress?.steps?.length ?? 0
+  const conditionOf = (code) =>
+    lines.find((c) => c.code === code) ??
+    lines.find((c) => c.status === 'NOT_MET' && CONDITION_MODULE[code] && c.module === CONDITION_MODULE[code])
   const unmet = lines.filter((c) => c.status === 'NOT_MET').length
   const opinion = conditions?.admissionOpinion ?? null
   const canComplete = resident.allowedCommands?.includes('COMPLETE_ADMISSION')
@@ -263,8 +256,9 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
     }
     if (step.action === 'resident')
       return (
-        <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'resident' })}>
-          Mở hồ sơ
+        <Button variant="outline" className="h-11" onClick={() => setSheet(step.part ? { kind: 'part', part: step.part } : { kind: 'resident' })}
+        >
+          {step.part ? `Mở ${PART_LABELS[step.part]}` : 'Mở hồ sơ'}
         </Button>
       )
     if (step.action === 'opinion' && can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE'))
@@ -309,25 +303,18 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           .filter(Boolean)
           .join(' · ')}
         aside={
-          <Button variant="outline" className="h-11" onClick={() => onNavigate('admission-applications')}>
-            Danh sách đăng ký
-          </Button>
-        }
-      >
-        <div className="flex max-w-md flex-col gap-1">
-          <span className="type-caption text-muted-foreground">{`${doneCount} / ${total} bước đã xong`}</span>
-          <div
-            role="progressbar"
-            aria-label="Tiến độ tiếp nhận"
-            aria-valuemin={0}
-            aria-valuemax={total}
-            aria-valuenow={doneCount}
-            className="h-2 overflow-hidden rounded-full bg-muted"
-          >
-            <div className="h-full bg-chart-2" style={{ width: total ? `${(doneCount / total) * 100}%` : '0%' }} />
+          <div className="flex flex-wrap gap-2">
+            {can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE') && OPEN_STATUSES.includes(application.status) && (
+              <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'edit-application' })}>
+                Cập nhật đăng ký
+              </Button>
+            )}
+            <Button variant="outline" className="h-11" onClick={() => onNavigate('admission-applications')}>
+              Danh sách đăng ký
+            </Button>
           </div>
-        </div>
-      </PageHeader>
+        }
+      />
 
       <p className="sr-only" aria-live="polite">
         {announcement}
@@ -345,11 +332,8 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                     aria-label={step.label}
                     className="grid grid-cols-1 gap-2 px-4 py-2 sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center"
                   >
-                    <span className="flex flex-col">
-                      <span className="type-body-sm">{step.label}</span>
-                      <span className="type-caption text-muted-foreground">{step.who}</span>
-                    </span>
-                    <StepStatus step={step} conditionOf={conditionOf} progressDone={progressDone} opinion={opinion} />
+                    <span className="type-body-sm">{step.label}</span>
+                    <StepStatus step={step} conditionOf={conditionOf} opinion={opinion} />
                     <span className="sm:justify-self-end">{actionOf(step)}</span>
                   </li>
                 ))}
@@ -365,6 +349,11 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           <h2 id="admission-conditions" className="type-card-title">
             Điều kiện Hoàn tất tiếp nhận
           </h2>
+          {!conditions && (
+            <p className="type-body-sm text-muted-foreground">
+              {`Lượt đăng ký đã đóng (${APPLICATION_STATUS[application.status] ?? application.status}), không còn danh sách điều kiện.`}
+            </p>
+          )}
           <ul className="flex flex-col gap-2">
             {lines.map((c) => (
               <li key={c.code} className="flex items-start justify-between gap-3">
@@ -389,22 +378,39 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
             <OpinionBlock opinions={opinion ? [opinion] : []} />
           </div>
           {canComplete && (
-            <Button className="h-11" onClick={() => setSheet({ kind: 'resident', part: 'status' })}>
+            <Button className="h-11" onClick={() => setSheet({ kind: 'part', part: 'status' })}>
               Hoàn tất tiếp nhận
             </Button>
           )}
-          <span className="type-caption text-muted-foreground">
-            {unmet > 0 ? `Còn ${unmet} điều kiện chưa đạt` : 'Các điều kiện đã đạt'}
-          </span>
+          {conditions && (
+            <span className="type-caption text-muted-foreground">
+              {unmet > 0 ? `Còn ${unmet} điều kiện chưa đạt` : 'Các điều kiện đã đạt'}
+            </span>
+          )}
         </section>
       </div>
 
-      <Sheet open={!!sheet && sheet.kind !== 'new-contract'} onOpenChange={(open) => !open && changed()}>
+      {/* Phần của hồ sơ mở riêng: đóng là về thẳng màn này, không qua màn hồ sơ người cao tuổi (chủ dự án yêu cầu 2026-11-18) */}
+      {sheet?.kind === 'part' && (
+        <ResidentPartSheet
+          residentId={resident.id}
+          part={sheet.part}
+          onClose={() => changed()}
+          onChanged={(message) => {
+            if (message) setAnnouncement(message)
+            refresh()
+          }}
+        />
+      )}
+
+      <Sheet
+        open={!!sheet && !['new-contract', 'edit-application', 'part'].includes(sheet.kind)}
+        onOpenChange={(open) => !open && changed()}
+      >
         <SheetContent className="overflow-y-auto p-6 sm:max-w-3xl">
           {sheet?.kind === 'resident' && (
             <ResidentDetail
               residentId={resident.id}
-              initialPart={sheet.part ?? null}
               onChanged={(message) => {
                 if (message) setAnnouncement(message)
                 refresh()
@@ -457,7 +463,10 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       </Sheet>
 
       {sheet?.kind === 'new-contract' && (
-        <ContractSheet residentId={resident.id} onClose={() => setSheet(null)} onDone={changed} />
+        <ContractSheet residentId={resident.id} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+      )}
+      {sheet?.kind === 'edit-application' && (
+        <ApplicationSheet application={application} onClose={() => setSheet(null)} onDone={changed} />
       )}
     </div>
   )
