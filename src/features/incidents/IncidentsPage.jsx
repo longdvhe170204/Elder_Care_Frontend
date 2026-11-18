@@ -86,6 +86,49 @@ const TEXT_ERROR = {
   'assign-handler': 'Nhập ghi chú giao việc',
 }
 
+// Ai đã được báo về sự cố (api-007 notifiedRecipients, nguồn 009): đếm theo nhóm Nhân viên, Người thân, ghi kênh, giờ gửi và
+// số người đã xem. Người nhận ghi dạng "STAFF:9004", "FAMILY_MEMBER:9001"; chưa có thì ghi rõ chưa báo ai.
+const RECIPIENT_GROUPS = [
+  ['STAFF', 'Nhân viên'],
+  ['FAMILY_MEMBER', 'Người thân'],
+  ['RESIDENT', 'Người cao tuổi'],
+]
+const CHANNEL_TEXT = {
+  IN_APP: 'trong ứng dụng',
+  SMS: 'tin nhắn',
+  PUSH: 'thông báo đẩy',
+  EMAIL: 'thư điện tử',
+  CALL: 'cuộc gọi',
+}
+
+function NotifiedSection({ recipients }) {
+  const rows = RECIPIENT_GROUPS.map(([prefix, label]) => {
+    const group = recipients.filter((r) => String(r.recipient).startsWith(`${prefix}:`))
+    return { prefix, label, group }
+  }).filter((row) => row.group.length > 0)
+  return (
+    <section aria-label="Đã báo cho" className="flex flex-col gap-1.5">
+      <h3 className="type-caption text-muted-foreground">Đã báo cho</h3>
+      {rows.length === 0 ? (
+        <p className="type-body-sm text-muted-foreground">Chưa báo cho ai qua hệ thống.</p>
+      ) : (
+        <ul className="flex flex-col gap-1 type-body-sm">
+          {rows.map(({ prefix, label, group }) => {
+            const viewed = group.filter((r) => r.viewedAt).length
+            const channel = CHANNEL_TEXT[group[0].channel] ?? group[0].channel
+            return (
+              <li key={prefix}>
+                <strong>{label}</strong>: {group.length} người, {channel}, lúc {formatDateTime(group[0].sentAt)}, đã xem{' '}
+                {viewed}/{group.length}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function IncidentStatus({ incident }) {
   return <Badge variant={statusTone(incident)}>{STATUS_LABEL[incident.status] ?? incident.status}</Badge>
 }
@@ -461,6 +504,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
           )}
         </section>
       )}
+      <NotifiedSection recipients={incident.notifiedRecipients ?? []} />
       {incident.noOnDutyDoctor && <p className="type-body-sm text-destructive">Không có bác sĩ trực lúc ghi nhận</p>}
       <section className="flex flex-col gap-2">
         <h3 className="type-caption text-muted-foreground">Diễn biến</h3>

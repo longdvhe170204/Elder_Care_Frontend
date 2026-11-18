@@ -443,6 +443,27 @@ describe('IncidentsPage', () => {
     expect(screen.getAllByText(/Bệnh viện X/).length).toBeGreaterThan(0)
   })
 
+  it('FR_048b_hienAiDaDuocBao_nhanVienVaNguoiThan', async () => {
+    api.on(
+      'GET',
+      '/incidents/12',
+      json(200, {
+        ...HANDLING,
+        notifiedRecipients: [
+          { recipient: 'STAFF:1', channel: 'IN_APP', sentAt: '2026-11-08T02:00:00Z', viewedAt: '2026-11-08T02:01:00Z' },
+          { recipient: 'STAFF:2', channel: 'IN_APP', sentAt: '2026-11-08T02:00:00Z', viewedAt: null },
+          { recipient: 'FAMILY_MEMBER:9', channel: 'IN_APP', sentAt: '2026-11-08T02:00:00Z', viewedAt: null },
+        ],
+      }),
+    )
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
+    const section = await screen.findByRole('region', { name: 'Đã báo cho' })
+    expect(section.textContent).toMatch(/Nhân viên: 2 người.*đã xem 1\/2/)
+    expect(section.textContent).toMatch(/Người thân: 1 người.*đã xem 0\/1/)
+  })
+
   it('FR_080_403_khongCoQuyen', async () => {
     api.on('GET', '/incidents', problem(403, 'PERMISSION_DENIED'))
     render(<IncidentsPage />)
