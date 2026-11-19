@@ -118,6 +118,28 @@ describe('DashboardPage', () => {
 
     const card = await screen.findByRole('region', { name: /Cần chú ý/ })
     expect(within(card).getByText('Không có việc tồn trong phạm vi của bạn.')).toBeInTheDocument()
+    // bản phác phương án B: nói rõ đã xét bao nhiêu chỉ tiêu (TASK.OVERDUE và cảnh báo leo thang tối đa)
+    expect(await within(card).findByText('Đã xét 2 chỉ tiêu lúc 10:15:30.')).toBeInTheDocument()
+  })
+
+  // Danh mục chỉ tiêu tải lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần làm mới, không hiện mã
+  it('danhMucChiTieu_loiLanDau_thuLaiKhiLamMoi', async () => {
+    let metricCalls = 0
+    api.on('GET', '/metrics', () => {
+      metricCalls += 1
+      return metricCalls === 1
+        ? problem(403, 'PERMISSION_DENIED')
+        : json(200, [{ code: 'TASK.TODAY', group: 'CARE_TASKS', name: 'Công việc hôm nay', definition: '', source: '005' }])
+    })
+    api.on('GET', '/dashboard', () =>
+      dashboard([{ group: 'CARE_TASKS', status: 'COMPLETE', values: [value('TASK.TODAY', 40)] }]),
+    )
+    render(<DashboardPage role="NURSING_HOME_MANAGER" />)
+    const card = await screen.findByRole('region', { name: 'Tình hình' })
+    await within(card).findByText('TASK.TODAY')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }))
+    expect(await within(card).findByText('Công việc hôm nay')).toBeInTheDocument()
   })
 
   // Tình hình: số chính của Người cao tuổi, Phòng giường, Công việc; chia theo tầng hiện tên tầng của 003

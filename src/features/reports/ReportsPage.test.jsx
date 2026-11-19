@@ -66,7 +66,8 @@ describe('ReportsPage', () => {
     await screen.findByText('Tỷ lệ liều Bỏ lỡ')
     const reportCalls = () => api.fetchMock.mock.calls.map(([u]) => new URL(u, 'http://localhost')).filter((u) => u.pathname === '/api/v1/reports/INCURRED_COSTS')
     expect(reportCalls().at(-1).searchParams.get('costMode')).toBe('FINALIZED')
-    fireEvent.click(screen.getByRole('button', { name: 'Tạm tính' }))
+    // DESIGN.md 6.18.0: bộ lọc là ô chọn trên một hàng (hàng ô lọc, mục 7.2)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Chế độ chi phí' }), { target: { value: 'PROVISIONAL' } })
     await waitFor(() => expect(reportCalls().at(-1).searchParams.get('costMode')).toBe('PROVISIONAL'))
   })
 
@@ -76,10 +77,10 @@ describe('ReportsPage', () => {
     await screen.findByText('Tỷ lệ liều Bỏ lỡ')
     const reportCalls = () => api.fetchMock.mock.calls.map(([u]) => new URL(u, 'http://localhost')).filter((u) => u.pathname === '/api/v1/reports/RESIDENTS')
     expect(reportCalls().at(-1).searchParams.get('careLevel')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Thường xuyên' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mức chăm sóc' }), { target: { value: 'REGULAR' } })
     await waitFor(() => expect(reportCalls().at(-1).searchParams.get('careLevel')).toBe('REGULAR'))
     fireEvent.click(screen.getByRole('button', { name: 'Chăm sóc' }))
-    expect(screen.queryByRole('button', { name: 'Thường xuyên' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Mức chăm sóc' })).toBeNull()
   })
 
   it('FR_009_bangTongVaChiaNhom_bamGiaTriMoDanhSach', async () => {
@@ -236,7 +237,7 @@ describe('ReportsPage', () => {
     render(<ReportsPage role="FLOOR_MANAGER" />)
     fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Tầng 2' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Tầng' }), { target: { value: '2' } })
     await screen.findByText('Tỷ lệ liều Bỏ lỡ')
   }
 
@@ -277,8 +278,26 @@ describe('ReportsPage', () => {
     render(<ReportsPage role="DOCTOR" />)
     fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
 
-    expect(await screen.findByRole('button', { name: 'Tầng 2' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Mọi tầng' })).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: 'Tầng 2' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Mọi tầng' })).toBeInTheDocument()
+  })
+
+  // Danh mục chỉ tiêu tải lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần tải báo cáo sau, không hiện mã
+  it('danhMucChiTieu_loiLanDau_thuLaiKhiTaiBaoCao', async () => {
+    let metricCalls = 0
+    api.on('GET', '/metrics', () => {
+      metricCalls += 1
+      return metricCalls === 1
+        ? problem(403, 'PERMISSION_DENIED')
+        : json(200, [
+            { code: 'MED.MISSED_RATE', group: 'MEDICATION_DOSES', name: 'Tỷ lệ liều Bỏ lỡ', definition: '', source: '006' },
+          ])
+    })
+    render(<ReportsPage role="DOCTOR" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
+
+    expect(await screen.findByText('Tỷ lệ liều Bỏ lỡ')).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Liều thuốc' })).toBeInTheDocument()
   })
 
   it('FR_062_lanXuat_bang', async () => {
