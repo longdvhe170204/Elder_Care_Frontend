@@ -135,4 +135,12 @@ describe('PaymentRecording', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tìm hồ sơ' }))
     expect(await screen.findByText(/Không tìm thấy hồ sơ với mã này/)).toBeInTheDocument()
   })
+
+  // Audit luồng tiếp nhận 2026-11-18: mở từ bước Đặt cọc của Hồ sơ tiếp nhận thì chọn sẵn người cao tuổi
+  it('audit_moTuHoSoTiepNhan_chonSanNguoiCaoTuoi', async () => {
+    api.on('GET', '/residents/41/balance', json(200, BALANCE))
+    render(<PaymentRecording residentId={41} />)
+    expect(await screen.findByText('Nguyễn Thị Lan')).toBeInTheDocument()
+    expect(api.calls('GET', '/balances/by-payment-code')).toHaveLength(0)
+  })
 })

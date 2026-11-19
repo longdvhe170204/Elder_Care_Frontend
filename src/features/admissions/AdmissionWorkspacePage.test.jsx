@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { json, mockRoutes } from '@/test/fetchRoutes'
+import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { AdmissionWorkspacePage } from './AdmissionWorkspacePage'
 
@@ -229,7 +229,7 @@ describe('AdmissionWorkspacePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mở Người thân và quyền' }))
     expect(onNavigate).toHaveBeenCalledWith('family-members')
     fireEvent.click(screen.getByRole('button', { name: 'Mở Số dư, thu chi' }))
-    expect(onNavigate).toHaveBeenCalledWith('balance')
+    expect(onNavigate).toHaveBeenCalledWith('balance', { residentId: 5 })
   })
 
   it('lượt đã đóng (Đã vào): không hỏi điều kiện (backend trả 409), màn vẫn mở và ghi lượt đã đóng', async () => {
@@ -247,5 +247,71 @@ describe('AdmissionWorkspacePage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Danh sách đăng ký' }))
     expect(onNavigate).toHaveBeenCalledWith('admission-applications')
+  })
+
+  // Audit luồng tiếp nhận 2026-11-18 (điểm nhỏ): bước Phân bổ giường chỉ có nút khi điều kiện Chưa đạt, kèm lối sang
+  // Danh sách chờ (BF-01 bước 7b); đã có giường hoặc bán trú thì không có nút
+  it('audit_buocGiuong_daDat_khongCoNut', async () => {
+    renderPage()
+    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const bed = within(steps).getByRole('listitem', { name: /Phân bổ giường/ })
+    expect(within(bed).queryByRole('button', { name: 'Phân bổ giường' })).toBeNull()
+  })
+
+  it('audit_buocGiuong_chuaDat_coNutVaDanhSachCho', async () => {
+    api.on(
+      'GET',
+      '/admission-applications/7/admission-conditions',
+      json(200, {
+        ...CONDITIONS,
+        conditions: CONDITIONS.conditions.map((c) =>
+          c.code === 'ADM_D_BED' ? { code: 'RESERVED_BED_NOT_READY', name: 'Chưa phân bổ giường', status: 'NOT_MET', module: 'M03' } : c,
+        ),
+      }),
+    )
+    const onNavigate = renderPage()
+    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const bed = within(steps).getByRole('listitem', { name: /Phân bổ giường/ })
+    expect(within(bed).getByRole('button', { name: 'Phân bổ giường' })).toBeTruthy()
+    fireEvent.click(within(bed).getByRole('button', { name: 'Mở Danh sách chờ' }))
+    expect(onNavigate).toHaveBeenCalledWith('waiting-list')
+  })
+
+  // Đặt cọc: mở màn Số dư, thu chi chọn sẵn người cao tuổi này
+  it('audit_datCoc_moSoDuChonSanNguoiCaoTuoi', async () => {
+    const onNavigate = renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở Số dư, thu chi' }))
+    expect(onNavigate).toHaveBeenCalledWith('balance', { residentId: 5 })
+  })
+
+  // Sửa hợp đồng nháp ngay trên màn, không chuyển sang màn Hợp đồng
+  it('audit_suaHopDong_moFormTrenMan', async () => {
+    api.on('GET', '/contracts', json(200, [
+      { id: 3, residentId: 5, status: 'DRAFT', residenceType: 'LONG_TERM_RESIDENTIAL', startDate: '2026-11-20', careLevel: 'REGULAR', allowedCommands: ['update'] },
+    ]))
+    api.on('GET', '/contracts/3', json(200, { id: 3, residentId: 5, status: 'DRAFT' }, { ETag: '"1"' }))
+    api.on('GET', '/contracts/3/deposit', json(200, { status: 'NOT_SATISFIED' }))
+    api.on('GET', '/contracts/3/addenda', json(200, []))
+    api.on('GET', '/contracts/3/non-standard-terms', json(200, []))
+    api.on('GET', '/services', json(200, []))
+    api.on('GET', '/me/permissions', json(200, [
+      { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'VIEW' },
+      { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'UPDATE' },
+    ]))
+    const onNavigate = renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở hợp đồng' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Sửa nội dung' }))
+    expect(await screen.findByRole('heading', { name: 'Sửa hợp đồng nháp' })).toBeTruthy()
+    expect(onNavigate).not.toHaveBeenCalledWith('contracts')
+  })
+
+  // Không tải được hợp đồng thì báo, không hiện nút Lập hợp đồng như khi chưa có hợp đồng
+  it('audit_taiHopDongLoi_khongHienLapHopDong', async () => {
+    api.on('GET', '/contracts', problem(500, 'INTERNAL'))
+    renderPage()
+    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const contract = within(steps).getByRole('listitem', { name: /Hợp đồng/ })
+    expect(within(contract).queryByRole('button', { name: 'Lập hợp đồng' })).toBeNull()
+    expect(within(contract).getByText('Không tải được hợp đồng')).toBeTruthy()
   })
 })
