@@ -40,8 +40,9 @@ const ATTENTION = [
   'LICENSE.FACILITY',
   'LICENSE.STAFF',
 ]
-// Số chính của cột "Tình hình" (DESIGN.md 5.1)
-const SITUATION = ['RES.AT_DATE', 'BED.STATUS', 'TASK.TODAY']
+// Cột "Tình hình" theo bản phác phương án B (DESIGN.md 5.1): một số chính kèm biểu đồ, còn lại là dòng gọn
+const SITUATION_MAIN = 'RES.AT_DATE'
+const SITUATION_ROWS = ['BED.STATUS', 'TASK.TODAY', 'SHIFT.UNCONFIRMED_HANDOVERS', 'HEALTH.CONTAINMENT_ZONES']
 
 const GROUPS_KEY = 'elder-care-dashboard-groups'
 
@@ -136,7 +137,7 @@ function MetricRow({ value, metric, floors, onOpen }) {
   )
 }
 
-function AttentionCard({ rows, onOpen, onNavigate }) {
+function AttentionCard({ rows, checked, asOf, onOpen, onNavigate }) {
   return (
     <Card role="region" aria-labelledby="dashboard-attention">
       <CardHeader>
@@ -146,7 +147,14 @@ function AttentionCard({ rows, onOpen, onNavigate }) {
       </CardHeader>
       <CardContent className="flex flex-col">
         {rows.length === 0 ? (
-          <p className="type-body text-success-foreground">Không có việc tồn trong phạm vi của bạn.</p>
+          <div className="flex flex-col gap-1">
+            <p className="type-body text-success-foreground">Không có việc tồn trong phạm vi của bạn.</p>
+            {checked > 0 && (
+              <p className="type-caption text-muted-foreground">
+                Đã xét {checked} chỉ tiêu lúc {asOf}.
+              </p>
+            )}
+          </div>
         ) : (
           rows.map((r) => (
             <button
@@ -171,19 +179,25 @@ function AttentionCard({ rows, onOpen, onNavigate }) {
   )
 }
 
+// Một dòng nhóm trong thẻ "Các nhóm chỉ tiêu" (bản phác phương án B): đóng là một dòng của lưới, mở thì chiếm cả hàng
+// và các chỉ tiêu xếp thành lưới bên trong, để lưới không lệch cột
 function GroupPanel({ block, metricOf, floors, open, onOpenChange, onOpen }) {
   const label = METRIC_GROUP_LABELS[block.group] ?? block.group
   const id = `dashboard-group-${block.group}`
   return (
-    <Collapsible open={open} onOpenChange={onOpenChange} className="self-start rounded-2xl border bg-card">
-      <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-3 rounded-2xl px-4 py-3 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
-        <span id={id} className="type-card-title flex-1">
+    <Collapsible open={open} onOpenChange={onOpenChange} className={`border-t ${open ? 'col-span-full' : ''}`}>
+      <CollapsibleTrigger className="flex min-h-11 w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+        <span id={id} className="type-label flex-1">
           {label}
         </span>
         <span className="type-caption text-muted-foreground">{block.values.length} chỉ tiêu</span>
         <ChevronRight aria-hidden="true" className={`size-4 transition-transform ${open ? 'rotate-90' : ''}`} />
       </CollapsibleTrigger>
-      <CollapsibleContent role="region" aria-labelledby={id} className="flex flex-col gap-1 px-2 pb-3">
+      <CollapsibleContent
+        role="region"
+        aria-labelledby={id}
+        className="grid gap-x-6 pb-3 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]"
+      >
         {block.values.length === 0 ? (
           <p className="px-2 type-body-sm text-muted-foreground">
             Chưa có dữ liệu: module nguồn chưa cung cấp số liệu cho nhóm này.
@@ -208,8 +222,27 @@ export function DashboardPage({ role, onNavigate }) {
   const [paused, setPaused] = useState(false)
   const [openGroups, setOpenGroups] = useState(readOpenGroups)
   const etag = useRef(null)
+  const catalogs = useRef({ metrics: false, floors: false })
 
   const load = useCallback(async (background = false) => {
+    // Danh mục tên chỉ tiêu, tên tầng: tải tới khi được; lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần
+    // làm mới sau, không để màn hiện mã chỉ tiêu mãi. Không xem được danh mục tầng thì giữ "Tầng/khu <mã>".
+    if (!catalogs.current.metrics) {
+      getMetrics()
+        .then(({ data }) => {
+          catalogs.current.metrics = true
+          setMetrics(Object.fromEntries(data.map((m) => [m.code, m])))
+        })
+        .catch(() => {})
+    }
+    if (!catalogs.current.floors) {
+      getFloors()
+        .then(({ data }) => {
+          catalogs.current.floors = true
+          setFloors(data)
+        })
+        .catch(() => {})
+    }
     // 007 FR-034: cảnh báo đã leo thang tối đa chưa tiếp nhận; vai trò không xem được cảnh báo thì không có dòng này
     getAlerts({
       query: { maxEscalationReached: true, status: ['NEW', 'ESCALATED'] },
@@ -236,13 +269,6 @@ export function DashboardPage({ role, onNavigate }) {
   useEffect(() => {
     // tải khi mở màn
     load()
-    getMetrics()
-      .then(({ data }) => setMetrics(Object.fromEntries(data.map((m) => [m.code, m]))))
-      .catch(() => {})
-    // tên tầng cho ô chia theo tầng (003); không xem được danh mục thì giữ "Tầng/khu <mã>"
-    getFloors()
-      .then(({ data }) => setFloors(data))
-      .catch(() => {})
   }, [load])
 
   useEffect(() => {
@@ -288,7 +314,10 @@ export function DashboardPage({ role, onNavigate }) {
       urgent: URGENT.includes(code),
     })),
   ]
-  const situation = SITUATION.filter((code) => values[code])
+  const situationRows = SITUATION_ROWS.filter((code) => values[code])
+  const hasSituation = Boolean(values[SITUATION_MAIN]) || situationRows.length > 0
+  // số chỉ tiêu "Cần chú ý" backend trả cho vai trò, cộng dòng cảnh báo leo thang tối đa khi xem được cảnh báo
+  const checked = [...URGENT, ...ATTENTION].filter((code) => values[code]).length + (escalated === null ? 0 : 1)
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6">
@@ -343,35 +372,53 @@ export function DashboardPage({ role, onNavigate }) {
       {state.status === 'ready' && dashboard.blocks.length > 0 && (
         <>
           <div
-            className={`grid items-start gap-5 ${situation.length > 0 ? 'lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]' : ''}`}
+            className={`grid items-start gap-5 ${hasSituation ? 'lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]' : ''}`}
           >
-            <AttentionCard rows={attentionRows} onOpen={setOpened} onNavigate={onNavigate} />
-            {situation.length > 0 && (
+            <AttentionCard
+              rows={attentionRows}
+              checked={checked}
+              asOf={TIME.format(new Date(dashboard.asOf))}
+              onOpen={setOpened}
+              onNavigate={onNavigate}
+            />
+            {hasSituation && (
               <Card role="region" aria-labelledby="dashboard-situation">
                 <CardHeader>
                   <CardTitle id="dashboard-situation" className="type-card-title">
                     Tình hình
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(200px,1fr))]">
-                  {situation.map((code) => (
+                <CardContent className="flex flex-col gap-2">
+                  {values[SITUATION_MAIN] && (
                     <MainMetric
-                      key={code}
-                      value={values[code]}
-                      metric={metricOf(code)}
+                      value={values[SITUATION_MAIN]}
+                      metric={metricOf(SITUATION_MAIN)}
                       floors={floors}
                       onOpen={setOpened}
                     />
-                  ))}
+                  )}
+                  <div className="flex flex-col">
+                    {situationRows.map((code) => (
+                      <MetricRow
+                        key={code}
+                        value={values[code]}
+                        metric={metricOf(code)}
+                        floors={floors}
+                        onOpen={setOpened}
+                      />
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             )}
           </div>
-          <section aria-labelledby="dashboard-groups" className="flex flex-col gap-3">
-            <h2 id="dashboard-groups" className="type-title">
-              Các nhóm chỉ tiêu
-            </h2>
-            <div className="grid items-start gap-3 [grid-template-columns:repeat(auto-fit,minmax(280px,1fr))]">
+          <Card role="region" aria-labelledby="dashboard-groups">
+            <CardHeader>
+              <CardTitle id="dashboard-groups" className="type-card-title">
+                Các nhóm chỉ tiêu
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid gap-x-6 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
               {dashboard.blocks.map((b) => (
                 <GroupPanel
                   key={b.group}
@@ -383,8 +430,8 @@ export function DashboardPage({ role, onNavigate }) {
                   onOpen={setOpened}
                 />
               ))}
-            </div>
-          </section>
+            </CardContent>
+          </Card>
         </>
       )}
       <MetricDetailSheet opened={opened} onClose={() => setOpened(null)} onNavigate={onNavigate} />
