@@ -26,9 +26,10 @@ const SECTIONS = [
   { value: 'resident', label: 'Theo người cao tuổi', function: 'BALANCE_LEDGER' },
 ]
 
-export function BalancePage() {
+// residentId: mở từ bước Đặt cọc của Hồ sơ tiếp nhận, vào thẳng Ghi nhận tiền nộp với người cao tuổi đó (audit 2026-11-18)
+export function BalancePage({ residentId = null } = {}) {
   const { status, hasFunction, can } = usePermissions()
-  const [section, setSection] = useState('resident')
+  const [section, setSection] = useState(residentId != null ? 'payments' : 'resident')
   const [resident, setResident] = useState(null)
 
   if (status === 'loading') return <Skeleton className="mx-auto h-32 w-full max-w-[1600px]" />
@@ -51,7 +52,7 @@ export function BalancePage() {
           ))}
         </ToggleGroup>
       </PageHeader>
-      {current === 'payments' && <PaymentRecording />}
+      {current === 'payments' && <PaymentRecording residentId={residentId} />}
       {current === 'statuses' && <BalanceStatuses />}
       {current === 'notices' && <PaymentNotices />}
       {current === 'pending' && <PendingTransactions />}

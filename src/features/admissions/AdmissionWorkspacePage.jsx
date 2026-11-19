@@ -109,7 +109,8 @@ const PHASES = [
         key: 'deposit',
         label: 'Đặt cọc',
         condition: 'ADM_C_DEPOSIT',
-        page: ['balance', 'Mở Số dư, thu chi'],
+        // Kế toán ghi thu tiền cọc ở Số dư, thu chi; mở với người cao tuổi này đã chọn sẵn (audit 2026-11-18)
+        page: ['balance', 'Mở Số dư, thu chi', 'resident'],
       },
     ],
   },
@@ -158,7 +159,8 @@ function useWorkspace(id) {
         const [conditions, resident, contracts] = await Promise.all([
           open ? getAdmissionApplicationsByIdAdmissionConditions({ path: { id } }) : { data: null },
           getResidentsById({ path: { id: application.residentId } }),
-          getContracts({ query: { residentId: application.residentId } }).catch(() => ({ data: [] })),
+          // Không tải được hợp đồng thì báo ở bước Hợp đồng, không coi như chưa có hợp đồng (audit 2026-11-18)
+          getContracts({ query: { residentId: application.residentId } }).catch(() => ({ data: [], failed: true })),
         ])
         if (cancelled) return
         const openContracts = (contracts.data ?? [])
@@ -170,6 +172,7 @@ function useWorkspace(id) {
           conditions: conditions.data,
           resident: resident.data,
           contract: openContracts[0] ?? null,
+          contractsFailed: !!contracts.failed,
         })
       } catch (e) {
         if (!cancelled) setState({ loading: false, failure: problemOf(e) })
@@ -229,7 +232,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   if (state.failure?.status === 403) return <PermissionDeniedState label="Hồ sơ tiếp nhận" />
   if (state.failure) return <ProblemAlert problem={state.failure} />
 
-  const { application, conditions, resident, contract } = state
+  const { application, conditions, resident, contract, contractsFailed } = state
   const name = resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`
   const lines = conditions?.conditions ?? []
   const conditionOf = (code) =>
@@ -247,9 +250,13 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
 
   function actionOf(step) {
     if (step.page) {
-      const [page, label] = step.page
+      const [page, label, withResident] = step.page
       return (
-        <Button variant="outline" className="h-11" onClick={() => onNavigate(page)}>
+        <Button
+          variant="outline"
+          className="h-11"
+          onClick={() => (withResident ? onNavigate(page, { residentId: resident.id }) : onNavigate(page))}
+        >
           {label}
         </Button>
       )
@@ -267,13 +274,23 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           Ghi ý kiến
         </Button>
       )
-    if (step.action === 'bed')
+    // Chỉ khi điều kiện giường Chưa đạt: đã có phân bổ (Đạt) hoặc bán trú (Không áp dụng) thì không có nút. Chưa có giường
+    // phù hợp thì Hành chính đưa vào danh sách chờ ở màn Danh sách chờ (BF-01 bước 7b; audit 2026-11-18)
+    if (step.action === 'bed') {
+      if (conditionOf(step.condition)?.status !== 'NOT_MET') return null
       return (
-        <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'bed' })}>
-          Phân bổ giường
-        </Button>
+        <span className="flex flex-wrap gap-2 sm:justify-end">
+          <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'bed' })}>
+            Phân bổ giường
+          </Button>
+          <Button variant="outline" className="h-11" onClick={() => onNavigate('waiting-list')}>
+            Mở Danh sách chờ
+          </Button>
+        </span>
       )
+    }
     if (step.action === 'contract') {
+      if (contractsFailed) return <span className="type-caption text-destructive">Không tải được hợp đồng</span>
       if (contract)
         return (
           <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'contract' })}>
@@ -404,7 +421,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       )}
 
       <Sheet
-        open={!!sheet && !['new-contract', 'edit-application', 'part'].includes(sheet.kind)}
+        open={!!sheet && !['new-contract', 'edit-contract', 'edit-application', 'part'].includes(sheet.kind)}
         onOpenChange={(open) => !open && changed()}
       >
         <SheetContent className="overflow-y-auto p-6 sm:max-w-3xl">
@@ -454,7 +471,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                 if (message) setAnnouncement(message)
                 refresh()
               }}
-              onEdit={() => onNavigate('contracts')}
+              onEdit={(c) => setSheet({ kind: 'edit-contract', contract: c })}
               Title={SheetTitle}
               Description={SheetDescription}
             />
@@ -464,6 +481,10 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
 
       {sheet?.kind === 'new-contract' && (
         <ContractSheet residentId={resident.id} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+      )}
+      {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
+      {sheet?.kind === 'edit-contract' && (
+        <ContractSheet contract={sheet.contract} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
       )}
       {sheet?.kind === 'edit-application' && (
         <ApplicationSheet application={application} onClose={() => setSheet(null)} onDone={changed} />
