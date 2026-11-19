@@ -230,4 +230,54 @@ describe('ReconciliationPanel', () => {
     expect(screen.queryByRole('button', { name: 'Xác nhận phiếu' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Trả lại phiếu' })).toBeNull()
   })
+
+  it('T077_FR_039_deNghiDinhChinh_hienTrenPhieu_xacNhanVaTraLaiTheoLenhDuocPhep', async () => {
+    const correction = {
+      id: 101,
+      reconciliationId: 4,
+      correctedContent: { description: 'Dòng 1 ghi nhầm liều' },
+      reason: 'Ghi nhầm khi đối chiếu',
+      status: 'PENDING_CONFIRMATION',
+      createdBy: '21',
+      allowedCommands: ['CONFIRM', 'RETURN'],
+    }
+    const rejected = {
+      ...correction,
+      id: 100,
+      correctedContent: {},
+      status: 'REJECTED',
+      returnReason: 'Thiếu nội dung đúng',
+      allowedCommands: [],
+    }
+    setup({ ...CONFIRMED, corrections: [correction, rejected] })
+    api.on('POST', '/reconciliation-corrections/101/confirm', json(200, {}))
+    api.on('POST', '/reconciliation-corrections/101/return', json(200, {}))
+    renderPanel()
+    const list = await screen.findByRole('list', { name: 'Đề nghị đính chính' })
+    expect(within(list).getByText('Dòng 1 ghi nhầm liều')).toBeTruthy()
+    expect(within(list).getByText('Thiếu nội dung đúng', { exact: false })).toBeTruthy()
+    expect(within(list).getAllByRole('button', { name: /Xác nhận đính chính/ })).toHaveLength(1)
+
+    fireEvent.click(within(list).getByRole('button', { name: 'Trả lại đề nghị #101' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận trả lại đề nghị' }))
+    expect(await screen.findByText('Nhập lý do trả lại đề nghị')).toBeTruthy()
+    expect(api.calls('POST', '/reconciliation-corrections/101/return')).toHaveLength(0)
+    fireEvent.change(screen.getByLabelText('Lý do trả lại đề nghị'), { target: { value: 'Nội dung chưa rõ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận trả lại đề nghị' }))
+    await waitFor(() => expect(api.calls('POST', '/reconciliation-corrections/101/return')).toHaveLength(1))
+    const [, init] = api.calls('POST', '/reconciliation-corrections/101/return')[0]
+    expect(JSON.parse(init.body)).toEqual({ reason: 'Nội dung chưa rõ' })
+    expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đính chính #101' }))
+    await waitFor(() => expect(api.calls('POST', '/reconciliation-corrections/101/confirm')).toHaveLength(1))
+  })
+
+  it('T077_lenhThanhCong_taiLaiChiTietPhieu', async () => {
+    setup(OPEN)
+    api.on('POST', '/medication-reconciliations/4/submit', json(200, {}))
+    renderPanel()
+    fireEvent.click(await screen.findByRole('button', { name: 'Gửi xác nhận' }))
+    await waitFor(() => expect(api.calls('GET', '/medication-reconciliations/4').length).toBeGreaterThan(1))
+  })
 })

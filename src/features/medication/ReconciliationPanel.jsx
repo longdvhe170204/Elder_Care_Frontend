@@ -14,12 +14,14 @@ import { PrescriptionSheet } from './PrescriptionSheet'
 import { idempotencyKeys } from './prescriptions'
 import { issueText } from './prescriptionView'
 import {
+  confirmCorrection,
   confirmReconciliation,
   createReconciliation,
   getReconciliation,
   listReconciliations,
   loadReconciliationSources,
   proposeCorrection,
+  returnCorrection,
   returnReconciliation,
   saveItems,
   submitReconciliation,
@@ -59,6 +61,8 @@ export function ReconciliationPanel({
   const [problem, setProblem] = useState(null)
   const [selectedId, setSelectedId] = useState(null)
   const [announcement, setAnnouncement] = useState('')
+  // Tăng sau mỗi lệnh thành công để khung chi tiết đọc lại phiếu (trạng thái, đề nghị đính chính mới)
+  const [revision, setRevision] = useState(0)
 
   const load = useCallback(async () => {
     try {
@@ -89,6 +93,7 @@ export function ReconciliationPanel({
     setAnnouncement(message)
     onChanged?.(message)
     await load()
+    setRevision((n) => n + 1)
   }
 
   if (!tickets) {
@@ -135,7 +140,7 @@ export function ReconciliationPanel({
 
       {selectedId && (
         <TicketDetail
-          key={selectedId}
+          key={`${selectedId}:${revision}`}
           id={selectedId}
           sources={sources}
           residentId={residentId}
@@ -551,6 +556,27 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
           </div>
         ))}
 
+      {(ticket.corrections ?? []).length > 0 && (
+        <CorrectionList
+          corrections={ticket.corrections}
+          saving={saving}
+          onConfirm={(c) =>
+            run(
+              (key) => confirmCorrection(c.id, key),
+              `Đã xác nhận đề nghị đính chính #${c.id}.`,
+              keyFor({ confirmCorrection: c.id }),
+            )
+          }
+          onReturn={(c, reason) =>
+            run(
+              (key) => returnCorrection(c.id, reason, key),
+              `Đã trả lại đề nghị đính chính #${c.id}.`,
+              keyFor({ returnCorrection: c.id, reason }),
+            )
+          }
+        />
+      )}
+
       {collecting !== null && sources && (
         <PrescriptionSheet
           open
@@ -710,6 +736,90 @@ function ItemList({ items, lineText }) {
         </li>
       ))}
     </ol>
+  )
+}
+
+const CORRECTION_STATUS = {
+  PENDING_CONFIRMATION: 'Chờ xác nhận',
+  CONFIRMED: 'Đã xác nhận',
+  REJECTED: 'Đã trả lại',
+}
+
+const contentText = (content) =>
+  content?.description ?? (content && Object.keys(content).length > 0 ? JSON.stringify(content) : 'Không ghi nội dung')
+
+// Đề nghị đính chính của phiếu (FR-039; 006 T077): người xác nhận là Bác sĩ hoặc Điều dưỡng khác người lập; nút theo
+// allowedCommands của từng đề nghị, backend kiểm quy tắc hai người
+function CorrectionList({ corrections, saving, onConfirm, onReturn }) {
+  const [returning, setReturning] = useState(null)
+  return (
+    <section aria-labelledby="reconciliation-corrections" className="flex flex-col gap-2 border-t pt-3">
+      <h4 id="reconciliation-corrections" className="type-label">
+        Đề nghị đính chính
+      </h4>
+      <ul aria-label="Đề nghị đính chính" className="flex flex-col gap-3">
+        {corrections.map((c) => {
+          const commands = c.allowedCommands ?? []
+          return (
+            <li key={c.id} className="flex flex-col gap-1 rounded-lg border p-3">
+              <span className="type-body-sm">{`Đề nghị #${c.id}`}</span>
+              <span className={c.status === 'CONFIRMED' ? 'type-label text-success-foreground' : 'type-label'}>
+                {CORRECTION_STATUS[c.status] ?? c.status}
+              </span>
+              <span className="type-caption text-muted-foreground">Nội dung đúng</span>
+              <span className="type-body-sm whitespace-pre-line">{contentText(c.correctedContent)}</span>
+              <span className="type-body-sm">{`Lý do: ${c.reason}`}</span>
+              <span className="type-caption text-muted-foreground">
+                {[
+                  c.createdBy && `Lập bởi ${staff(c.createdBy)}`,
+                  c.createdAt && formatDateTime(c.createdAt),
+                  c.confirmedBy && `xử lý bởi ${staff(c.confirmedBy)}`,
+                ]
+                  .filter(Boolean)
+                  .join(', ')}
+              </span>
+              {c.returnReason && <span className="type-body-sm">{`Lý do trả lại: ${c.returnReason}`}</span>}
+              {returning === c.id ? (
+                <ReasonForm
+                  id={`correction-return-${c.id}`}
+                  label="Lý do trả lại đề nghị"
+                  missing="Nhập lý do trả lại đề nghị"
+                  submitLabel="Xác nhận trả lại đề nghị"
+                  saving={saving}
+                  onCancel={() => setReturning(null)}
+                  onSubmit={(reason) => onReturn(c, reason)}
+                />
+              ) : (
+                (commands.includes('CONFIRM') || commands.includes('RETURN')) && (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {commands.includes('CONFIRM') && (
+                      <Button
+                        className="h-11"
+                        disabled={saving}
+                        aria-label={`Xác nhận đính chính #${c.id}`}
+                        onClick={() => onConfirm(c)}
+                      >
+                        Xác nhận đính chính
+                      </Button>
+                    )}
+                    {commands.includes('RETURN') && (
+                      <Button
+                        variant="outline"
+                        className="h-11"
+                        aria-label={`Trả lại đề nghị #${c.id}`}
+                        onClick={() => setReturning(c.id)}
+                      >
+                        Trả lại
+                      </Button>
+                    )}
+                  </div>
+                )
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
   )
 }
 
