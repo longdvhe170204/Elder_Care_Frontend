@@ -1,5 +1,6 @@
 import { getResidentsByIdInitialHealthRecord } from '@/api/api001'
 import {
+  getMedicationReconciliationWorklist,
   getMedicationReconciliationsById,
   getResidentsByResidentIdMedicationReconciliations,
   postMedicationReconciliationsByIdConfirm,
@@ -7,6 +8,8 @@ import {
   postMedicationReconciliationsByIdReturn,
   postMedicationReconciliationsByIdSubmit,
   postResidentsByResidentIdMedicationReconciliations,
+  postReconciliationCorrectionsByIdConfirm,
+  postReconciliationCorrectionsByIdReturn,
   putMedicationReconciliationsByIdItems,
 } from '@/api/api006'
 import { loadPrescriptionBoard } from './prescriptions'
@@ -38,6 +41,16 @@ export const returnReconciliation = (id, reason, key) =>
 
 export const proposeCorrection = (id, body, key) =>
   postMedicationReconciliationsByIdProposeCorrection({ path: { id }, headers: keyed(key), body })
+
+// Xác nhận, trả lại đề nghị đính chính (FR-039; 006 T077): người xác nhận khác người lập, backend kiểm
+export const confirmCorrection = (id, key) =>
+  postReconciliationCorrectionsByIdConfirm({ path: { id }, headers: keyed(key) })
+
+export const returnCorrection = (id, reason, key) =>
+  postReconciliationCorrectionsByIdReturn({ path: { id }, headers: keyed(key), body: { reason } })
+
+// Danh sách "Cần đối chiếu" trong phạm vi người dùng (006 T075, T078)
+export const listWorklist = () => getMedicationReconciliationWorklist({}).then(({ data }) => data ?? [])
 
 // Đơn của người cao tuổi, danh mục thuốc, hồ sơ (dị ứng) và "thuốc đang sử dụng khi tiếp nhận" (chữ tự do của 001
 // FR-017, chỉ để đọc). Hồ sơ sức khỏe không đọc được thì ghi "chưa có", không chặn phiếu.

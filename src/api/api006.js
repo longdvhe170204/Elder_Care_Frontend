@@ -90,6 +90,9 @@ export const postSuppliedMedicationIntakes = (params) => request('POST', '/suppl
 /** Các lần tiếp nhận theo yêu cầu mua sắm (FR-054) */
 export const getSuppliedMedicationIntakes = (params) => request('GET', '/supplied-medication-intakes', params)
 
+/** Danh sách "Cần đối chiếu" (bổ sung 2026-11-19, 006 T075, T076) (FR-034, FR-034a, FR-034b, BR-M07-09) */
+export const getMedicationReconciliationWorklist = (params) => request('GET', '/medication-reconciliation-worklist', params)
+
 /** Xem phiếu kèm dòng, dấu "thuốc đã bỏ khỏi hồ sơ" (tính lúc đọc), lịch sử, allowedCommands[] (FR-035, FR-038, FR-034a) */
 export const getMedicationReconciliationsById = (params) => request('GET', '/medication-reconciliations/{id}', params)
 

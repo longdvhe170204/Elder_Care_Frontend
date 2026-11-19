@@ -43,7 +43,9 @@ function AlertStatus({ alert }) {
   return <Badge variant={statusTone(alert)}>{statusLabel(alert)}</Badge>
 }
 
-function AlertCard({ alert, name, busy, onReceive, onStart, onOpen }) {
+// onReconcile: cảnh báo "chưa đối chiếu thuốc" mở thẳng phiếu đối chiếu của người đó ở màn Phát thuốc (006 T078); là lối
+// chuyển màn, không phải lệnh trên cảnh báo
+function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }) {
   const urgent = isUrgent(alert)
   const commands = alert.allowedCommands ?? []
   return (
@@ -79,6 +81,11 @@ function AlertCard({ alert, name, busy, onReceive, onStart, onOpen }) {
           <Button variant="ghost" size="sm" onClick={() => onOpen(alert)} aria-label={`Chi tiết cảnh báo của ${name}`}>
             Chi tiết
           </Button>
+          {onReconcile && alert.type === 'CHUA_DOI_CHIEU' && alert.residentId && isOpen(alert) && (
+            <Button variant="outline" size="sm" onClick={() => onReconcile(alert)}>
+              {`Mở đối chiếu thuốc của ${name}`}
+            </Button>
+          )}
           {commands.includes('receive') && (
             <Button
               variant={urgent ? 'default' : 'tonal'}
@@ -263,7 +270,7 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
   )
 }
 
-export function AlertsPage() {
+export function AlertsPage({ onNavigate }) {
   const [board, setBoard] = useState(null)
   const [problem, setProblem] = useState(null)
   const [group, setGroup] = useState('open')
@@ -416,6 +423,11 @@ export function AlertsPage() {
               onReceive={(x) => command(x, nameOf(x), 'receive', 'Đã tiếp nhận cảnh báo')}
               onStart={(x) => command(x, nameOf(x), 'start-handling', 'Đã bắt đầu xử lý')}
               onOpen={(x) => setOpenId(x.id)}
+              onReconcile={
+                onNavigate &&
+                ((x) =>
+                  onNavigate('medication', { mode: 'reconciliation', residentId: x.residentId }))
+              }
             />
           ))}
         </div>
