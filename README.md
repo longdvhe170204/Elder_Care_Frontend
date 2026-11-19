@@ -7,7 +7,7 @@ Giao diện web của hệ thống quản lý viện dưỡng lão: React 19, Vi
 | Kho | Nội dung |
 | --- | --- |
 | [Elder_Care](https://github.com/longdvhe170204/Elder_Care) | Backend (Spring Boot), đặc tả (`specs/`), hợp đồng API, tài liệu nghiệp vụ và quy ước chung |
-| Elder_Care_Frontend (kho này) | Web cho nhân viên và cổng người thân |
+| Elder_Care_Frontend (kho này) | Web cho nhân viên và cổng người thân; [DESIGN.md](DESIGN.md) quy tắc giao diện web và app (từ 2026-11-20); [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md) cho công cụ AI |
 | [Elder_Care_Mobile](https://github.com/longdvhe170204/Elder_Care_Mobile) | App Flutter cho nhân viên, người thân, người cao tuổi |
 
 Web chỉ nói chuyện với backend qua API `/api/v1`. Kho này tự cài, tự kiểm, tự build được mà không cần mã của hai kho kia; riêng lệnh `npm run gen:api` đọc hợp đồng API từ kho backend (mục "Sinh lại client API").
