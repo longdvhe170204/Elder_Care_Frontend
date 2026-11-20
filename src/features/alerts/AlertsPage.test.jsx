@@ -137,4 +137,14 @@ describe('AlertsPage', () => {
     expect(cards).toHaveLength(1)
     expect(within(cards[0]).getByText('Đã đóng')).toBeTruthy()
   })
+
+  it('006_T078_canhBaoChuaDoiChieu_coNutMoDoiChieuDungNguoi', async () => {
+    api.on('GET', '/alerts', json(200, [{ ...ALERT_MEDIUM, id: 5, type: 'CHUA_DOI_CHIEU', allowedCommands: ['receive'] }, ALERT_CRITICAL]))
+    const onNavigate = vi.fn()
+    render(<AlertsPage role="NURSING_STAFF" onNavigate={onNavigate} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở đối chiếu thuốc của Trần Thị Mai' }))
+    // Chỉ mã người cao tuổi đi vào URL, không có họ tên
+    expect(onNavigate).toHaveBeenCalledWith('medication', { mode: 'reconciliation', residentId: 9 })
+    expect(screen.getAllByRole('button', { name: /Mở đối chiếu thuốc/ })).toHaveLength(1)
+  })
 })

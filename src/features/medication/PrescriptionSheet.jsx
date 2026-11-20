@@ -31,7 +31,8 @@ export function PrescriptionSheet({ open, onOpenChange, ...props }) {
   )
 }
 
-function PrescriptionForm({ onOpenChange, residentId, resident, medications, isDoctor, onSaved }) {
+// onCollect (phiếu đối chiếu, 006 T072): trả thân đơn cho dòng Thay đổi liều, Thêm mới thay vì gọi POST …/prescriptions
+function PrescriptionForm({ onOpenChange, residentId, resident, medications, isDoctor, onSaved, onCollect }) {
   const usable = medications.filter((m) => m.active !== false)
   const [form, setForm] = useState({
     medicationId: usable[0]?.id ?? '',
@@ -105,6 +106,11 @@ function PrescriptionForm({ onOpenChange, residentId, resident, medications, isD
     setSaving(true)
     setProblem(null)
     const body = newPrescriptionBody(form)
+    if (onCollect) {
+      onCollect(body, medication)
+      onOpenChange(false)
+      return
+    }
     try {
       await createPrescription(residentId, body, keyFor(body))
       await onSaved(`Đã lưu đơn ${medication.name} cho ${resident.name}.`)
@@ -125,7 +131,7 @@ function PrescriptionForm({ onOpenChange, residentId, resident, medications, isD
       <SheetHeader className="border-b pb-4">
         <SheetTitle className="flex items-center gap-2 type-title">
           <FileText className="size-5" aria-hidden="true" />
-          Nhập đơn thuốc mới
+          {onCollect ? 'Đơn mới cho dòng đối chiếu' : 'Nhập đơn thuốc mới'}
         </SheetTitle>
         <SheetDescription>
           Cho {resident.name}. Hệ thống kiểm tra trùng hoạt chất và dị ứng theo BR-M07-05, BR-M07-06.
@@ -312,7 +318,7 @@ function PrescriptionForm({ onOpenChange, residentId, resident, medications, isD
             Hủy
           </Button>
           <Button type="submit" disabled={saving}>
-            Lưu đơn thuốc
+            {onCollect ? 'Ghi đơn vào dòng' : 'Lưu đơn thuốc'}
           </Button>
         </SheetFooter>
       </form>

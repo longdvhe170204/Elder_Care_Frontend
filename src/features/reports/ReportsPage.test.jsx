@@ -32,7 +32,7 @@ beforeEach(() => {
   api = mockRoutes()
   api.on(
     'GET',
-    '/metrics',
+    '/metric-catalog',
     json(200, [
       { code: 'MED.MISSED_RATE', group: 'MEDICATION_DOSES', name: 'Tỷ lệ liều Bỏ lỡ', definition: '', source: '006' },
     ]),
@@ -66,7 +66,8 @@ describe('ReportsPage', () => {
     await screen.findByText('Tỷ lệ liều Bỏ lỡ')
     const reportCalls = () => api.fetchMock.mock.calls.map(([u]) => new URL(u, 'http://localhost')).filter((u) => u.pathname === '/api/v1/reports/INCURRED_COSTS')
     expect(reportCalls().at(-1).searchParams.get('costMode')).toBe('FINALIZED')
-    fireEvent.click(screen.getByRole('button', { name: 'Tạm tính' }))
+    // DESIGN.md 6.18.0: bộ lọc là ô chọn trên một hàng (hàng ô lọc, mục 7.2)
+    fireEvent.change(screen.getByRole('combobox', { name: 'Chế độ chi phí' }), { target: { value: 'PROVISIONAL' } })
     await waitFor(() => expect(reportCalls().at(-1).searchParams.get('costMode')).toBe('PROVISIONAL'))
   })
 
@@ -76,10 +77,10 @@ describe('ReportsPage', () => {
     await screen.findByText('Tỷ lệ liều Bỏ lỡ')
     const reportCalls = () => api.fetchMock.mock.calls.map(([u]) => new URL(u, 'http://localhost')).filter((u) => u.pathname === '/api/v1/reports/RESIDENTS')
     expect(reportCalls().at(-1).searchParams.get('careLevel')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Thường xuyên' }))
+    fireEvent.change(screen.getByRole('combobox', { name: 'Mức chăm sóc' }), { target: { value: 'REGULAR' } })
     await waitFor(() => expect(reportCalls().at(-1).searchParams.get('careLevel')).toBe('REGULAR'))
     fireEvent.click(screen.getByRole('button', { name: 'Chăm sóc' }))
-    expect(screen.queryByRole('button', { name: 'Thường xuyên' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'Mức chăm sóc' })).toBeNull()
   })
 
   it('FR_009_bangTongVaChiaNhom_bamGiaTriMoDanhSach', async () => {
@@ -92,8 +93,11 @@ describe('ReportsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
 
     expect(await screen.findByText('Tỷ lệ liều Bỏ lỡ')).toBeInTheDocument()
+    // DESIGN.md 6.17.0 `report-table`: dòng tiêu đề nhóm chỉ tiêu; "ngày chưa kết thúc" gộp một lần trên bảng
+    expect(screen.getByRole('cell', { name: 'Liều thuốc' })).toBeInTheDocument()
     expect(screen.getByText('12 / 571')).toBeInTheDocument()
-    expect(screen.getByText('ngày chưa kết thúc')).toBeInTheDocument()
+    expect(screen.getByText(/Khoảng có ngày chưa kết thúc/)).toBeInTheDocument()
+    expect(screen.queryByText('ngày chưa kết thúc')).toBeNull()
     expect(screen.getByText('Ca 7')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '1,8' }))
 
@@ -102,8 +106,8 @@ describe('ReportsPage', () => {
     expect(new URL(url, 'http://localhost').searchParams.get('breakdownKey')).toBe('7')
   })
 
-  // Đề xuất B (chủ dự án duyệt 2026-11-17): chỉ tiêu có breakdown vẽ được thì có biểu đồ trên bảng; bảng giữ nguyên
-  it('FR_009_bieuDo_chiTieuCoBreakdownVeDuoc_vaBangGiuNguyen', async () => {
+  // DESIGN.md 6.17.0 (5.2 "Thanh trong ô bảng"): dòng chia nhóm có thanh dài theo phần của tổng; số vẫn là nút
+  it('FR_009_thanhTrongO_dongChiaNhom_vaBangGiuNguyen', async () => {
     api.on(
       'GET',
       '/reports/HEALTH_MEDICATION',
@@ -127,10 +131,16 @@ describe('ReportsPage', () => {
     render(<ReportsPage role="DOCTOR" />)
     fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
 
-    const charts = await screen.findByRole('region', { name: 'Biểu đồ' })
-    expect(within(charts).getByRole('heading', { name: 'Tỷ lệ liều Bỏ lỡ' })).toBeInTheDocument()
-    expect(within(charts).getByRole('list', { name: 'Chú thích Tỷ lệ liều Bỏ lỡ' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '6' })).toBeInTheDocument()
+    const row = (await screen.findByText('Ca 7')).closest('tr')
+    expect(row.querySelector('[data-slot="cell-bar"]').style.width).toBe('60%')
+    expect(within(row).getByRole('button', { name: '6' })).toBeInTheDocument()
+    expect(screen.getByText('Ca 8').closest('tr').querySelector('[data-slot="cell-bar"]').style.width).toBe('40%')
+    expect(screen.queryByRole('region', { name: 'Biểu đồ' })).toBeNull()
+  })
+
+  it('FR_060_hienKhoangNgayDangXem', async () => {
+    render(<ReportsPage role="DOCTOR" />)
+    expect(await screen.findByText(/^\d{2}\/\d{2} → \d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument()
   })
 
   it('FR_042_soSuCoDaHuy_dongThamKhao', async () => {
@@ -227,7 +237,7 @@ describe('ReportsPage', () => {
     render(<ReportsPage role="FLOOR_MANAGER" />)
     fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Tầng 2' }))
+    fireEvent.change(await screen.findByRole('combobox', { name: 'Tầng' }), { target: { value: '2' } })
     await screen.findByText('Tỷ lệ liều Bỏ lỡ')
   }
 
@@ -268,8 +278,26 @@ describe('ReportsPage', () => {
     render(<ReportsPage role="DOCTOR" />)
     fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
 
-    expect(await screen.findByRole('button', { name: 'Tầng 2' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Mọi tầng' })).toBeInTheDocument()
+    expect(await screen.findByRole('option', { name: 'Tầng 2' })).toBeInTheDocument()
+    expect(screen.getByRole('option', { name: 'Mọi tầng' })).toBeInTheDocument()
+  })
+
+  // Danh mục chỉ tiêu tải lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần tải báo cáo sau, không hiện mã
+  it('danhMucChiTieu_loiLanDau_thuLaiKhiTaiBaoCao', async () => {
+    let metricCalls = 0
+    api.on('GET', '/metric-catalog', () => {
+      metricCalls += 1
+      return metricCalls === 1
+        ? problem(403, 'PERMISSION_DENIED')
+        : json(200, [
+            { code: 'MED.MISSED_RATE', group: 'MEDICATION_DOSES', name: 'Tỷ lệ liều Bỏ lỡ', definition: '', source: '006' },
+          ])
+    })
+    render(<ReportsPage role="DOCTOR" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Sức khỏe, thuốc' }))
+
+    expect(await screen.findByText('Tỷ lệ liều Bỏ lỡ')).toBeInTheDocument()
+    expect(screen.getByRole('cell', { name: 'Liều thuốc' })).toBeInTheDocument()
   })
 
   it('FR_062_lanXuat_bang', async () => {

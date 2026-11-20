@@ -9,18 +9,13 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
-import { recordLink } from './reportLabels'
+import { detailResultText, detailStatusLabel, recordLink } from './reportLabels'
 
 // Danh sách bản ghi tạo nên một con số (016 FR-009; DESIGN.md `metric-detail-sheet`). Có khoảng thì như báo cáo, không
 // có thì như dashboard. Dòng người cao tuổi ngoài phạm vi hiện hành ở dạng rút gọn (Q-196), không mở được bản ghi.
+// Trạng thái, kết quả hiện bằng chữ (`detailStatusLabel`, `detailResultText`), không hiện mã backend trả.
 
 const PAGE_SIZE = 50
-
-function resultText(result) {
-  return Object.entries(result ?? {})
-    .map(([k, v]) => `${k}: ${v}`)
-    .join(', ')
-}
 
 function DetailBody({ metric, from, to, floorAreaId, careLevel, breakdownKey, onOpenRecord }) {
   const [page, setPage] = useState(1)
@@ -97,8 +92,8 @@ function DetailBody({ metric, from, to, floorAreaId, careLevel, breakdownKey, on
                 <TableCell>{r.performedBy ?? '—'}</TableCell>
                 <TableCell>
                   <div className="flex flex-wrap items-center gap-2">
-                    {r.status && <span>{r.status}</span>}
-                    {resultText(r.result) && <span>{resultText(r.result)}</span>}
+                    {r.status && <span>{detailStatusLabel(r.status)}</span>}
+                    {detailResultText(r.result) && <span>{detailResultText(r.result)}</span>}
                     {r.pendingReview && <StatusBadge status="Chờ xem lại" />}
                     {onOpenRecord && recordLink(r) && (
                       <Button variant="link" size="sm" className="h-auto p-0" onClick={() => onOpenRecord(recordLink(r))}>

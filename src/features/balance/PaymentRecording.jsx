@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ApiError,
   getBalancesByPaymentCode,
   getResidentsById,
+  getResidentsByResidentIdBalance,
   postResidentsByResidentIdBankTransferPayments,
   postResidentsByResidentIdCashPayments,
 } from '@/api'
@@ -72,7 +73,8 @@ function Found({ found }) {
   )
 }
 
-export function PaymentRecording() {
+// residentId: mở từ bước Đặt cọc của Hồ sơ tiếp nhận thì nạp sẵn hồ sơ đó, không phải tìm theo mã nộp tiền (audit 2026-11-18)
+export function PaymentRecording({ residentId: presetResidentId = null } = {}) {
   const [code, setCode] = useState('')
   const [found, setFound] = useState(null)
   const [searchError, setSearchError] = useState('')
@@ -93,6 +95,29 @@ export function PaymentRecording() {
   const [duplicates, setDuplicates] = useState(null)
   const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
+
+  useEffect(() => {
+    if (presetResidentId == null) return
+    let cancelled = false
+    async function preload() {
+      try {
+        const { data } = await getResidentsByResidentIdBalance({ path: { residentId: presetResidentId } })
+        let fullName = null
+        try {
+          fullName = (await getResidentsById({ path: { id: presetResidentId } })).data?.fullName ?? null
+        } catch {
+          // Không đọc được hồ sơ thì chỉ hiện mã hồ sơ
+        }
+        if (!cancelled) setFound({ balance: data, fullName })
+      } catch (error) {
+        if (!cancelled) setSearchError(problemOf(error).title)
+      }
+    }
+    preload()
+    return () => {
+      cancelled = true
+    }
+  }, [presetResidentId])
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 

@@ -23,10 +23,11 @@ function dashboard(blocks, message = null) {
 }
 
 beforeEach(() => {
+  localStorage.clear()
   api = mockRoutes()
   api.on(
     'GET',
-    '/metrics',
+    '/metric-catalog',
     json(200, [
       {
         code: 'LICENSE.FACILITY',
@@ -44,6 +45,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
+// Nhóm chỉ tiêu mở tại chỗ (DESIGN.md 6.17.0): mặc định đóng, bấm tên nhóm thì mở
+function openGroup(name) {
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }))
+}
+
+const value = (metricCode, v, breakdown = []) => ({ ...LICENSE, metricCode, value: v, breakdown })
+
 describe('DashboardPage', () => {
   it('FR_020_khoiTheoNhom_soVaNhan_khoiChuaCoNguon', async () => {
     api.on(
@@ -56,11 +64,121 @@ describe('DashboardPage', () => {
     )
     render(<DashboardPage role="NURSING_HOME_MANAGER" />)
 
-    expect(await screen.findByText('Giấy phép cơ sở')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /^Giấy phép cơ sở/ })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Tổng quan toàn viện hôm nay' })).toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ })).toHaveTextContent('1')
-    expect(screen.getByText(/Chưa có dữ liệu: module nguồn/)).toBeInTheDocument()
     expect(screen.getByText(/Cập nhật lúc 10:15:30/)).toBeInTheDocument()
+    openGroup('Chi phí')
+    expect(screen.getByText(/Chưa có dữ liệu: module nguồn/)).toBeInTheDocument()
+  })
+
+  // DESIGN.md 7.2 `dashboard-attention`: chỉ chỉ tiêu trong bảng tông có giá trị > 0; Gấp trước Cần chú ý; cảnh báo leo
+  // thang tối đa chưa tiếp nhận (007 FR-034) đứng đầu và mở màn Cảnh báo
+  it('canChuY_chiGiaTriLonHon0_thuTuTong_leoThangToiDaDauTien', async () => {
+    api.on(
+      'GET',
+      '/dashboard',
+      dashboard([
+        { group: 'FACILITY_LICENSES', status: 'COMPLETE', values: [LICENSE] },
+        { group: 'CARE_TASKS', status: 'COMPLETE', values: [value('TASK.OVERDUE', 3), value('TASK.TODAY', 40)] },
+        { group: 'HEALTH_EVENTS', status: 'COMPLETE', values: [value('HEALTH.ALERTS', 0)] },
+      ]),
+    )
+    api.on(
+      'GET',
+      (u) => u.pathname === '/api/v1/alerts' && u.searchParams.get('maxEscalationReached') === 'true',
+      json(200, [{ id: 1 }, { id: 2 }]),
+    )
+    const onNavigate = vi.fn()
+    render(<DashboardPage role="NURSING_HOME_MANAGER" onNavigate={onNavigate} />)
+
+    const card = await screen.findByRole('region', { name: /Cần chú ý/ })
+    await within(card).findByText(/leo thang tối đa/)
+    const rows = within(card).getAllByRole('button')
+    expect(rows.map((r) => r.textContent)).toEqual([
+      expect.stringMatching(/^2.*leo thang tối đa/),
+      expect.stringMatching(/^3/),
+      expect.stringMatching(/^1.*Giấy phép cơ sở sắp hết hạn/),
+    ])
+    expect(within(card).queryByText(/HEALTH.ALERTS|TASK.TODAY/)).not.toBeInTheDocument()
+    const [url] = api.calls('GET', '/alerts')[0]
+    expect(new URL(url, 'http://localhost').searchParams.getAll('status')).toEqual(['NEW', 'ESCALATED'])
+
+    fireEvent.click(rows[0])
+    expect(onNavigate).toHaveBeenCalledWith('alerts', undefined)
+  })
+
+  it('canChuY_khongCoViecTon_motDong', async () => {
+    api.on(
+      'GET',
+      '/dashboard',
+      dashboard([{ group: 'CARE_TASKS', status: 'COMPLETE', values: [value('TASK.OVERDUE', 0)] }]),
+    )
+    api.on('GET', '/alerts', json(200, []))
+    render(<DashboardPage role="NURSING_HOME_MANAGER" />)
+
+    const card = await screen.findByRole('region', { name: /Cần chú ý/ })
+    expect(within(card).getByText('Không có việc tồn trong phạm vi của bạn.')).toBeInTheDocument()
+    // bản phác phương án B: nói rõ đã xét bao nhiêu chỉ tiêu (TASK.OVERDUE và cảnh báo leo thang tối đa)
+    expect(await within(card).findByText('Đã xét 2 chỉ tiêu lúc 10:15:30.')).toBeInTheDocument()
+  })
+
+  // Danh mục chỉ tiêu tải lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần làm mới, không hiện mã
+  it('danhMucChiTieu_loiLanDau_thuLaiKhiLamMoi', async () => {
+    let metricCalls = 0
+    api.on('GET', '/metric-catalog', () => {
+      metricCalls += 1
+      return metricCalls === 1
+        ? problem(403, 'PERMISSION_DENIED')
+        : json(200, [{ code: 'TASK.TODAY', group: 'CARE_TASKS', name: 'Công việc hôm nay', definition: '', source: '005' }])
+    })
+    api.on('GET', '/dashboard', () =>
+      dashboard([{ group: 'CARE_TASKS', status: 'COMPLETE', values: [value('TASK.TODAY', 40)] }]),
+    )
+    render(<DashboardPage role="NURSING_HOME_MANAGER" />)
+    const card = await screen.findByRole('region', { name: 'Tình hình' })
+    await within(card).findByText('TASK.TODAY')
+    // không lặng lẽ hiện mã: báo rõ và cho thử lại ngay (trình duyệt có thể chặn request, 2026-11-20)
+    expect(await screen.findByText(/Không tải được tên chỉ tiêu/)).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
+    expect(await within(card).findByText('Công việc hôm nay')).toBeInTheDocument()
+    expect(screen.queryByText(/Không tải được tên chỉ tiêu/)).toBeNull()
+  })
+
+  // Tình hình: số chính của Người cao tuổi, Phòng giường, Công việc; chia theo tầng hiện tên tầng của 003
+  it('tinhHinh_soChinh_tenTang', async () => {
+    api.on(
+      'GET',
+      '/dashboard',
+      dashboard([
+        {
+          group: 'BEDS',
+          status: 'COMPLETE',
+          values: [
+            value('BED.OCCUPANTS', 2, [
+              { key: '9001', value: 1 },
+              { key: '9002', value: 1 },
+            ]),
+          ],
+        },
+        { group: 'CARE_TASKS', status: 'COMPLETE', values: [value('TASK.TODAY', 40)] },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/floors',
+      json(200, [
+        { id: 9001, name: 'Tầng 1' },
+        { id: 9002, name: 'Tầng 2' },
+      ]),
+    )
+    render(<DashboardPage role="NURSING_HOME_MANAGER" />)
+
+    const card = await screen.findByRole('region', { name: 'Tình hình' })
+    expect(within(card).getByRole('button', { name: /TASK.TODAY/ })).toHaveTextContent('40')
+    openGroup('Phòng, giường')
+    expect(await screen.findAllByText(/Tầng 1/)).not.toHaveLength(0)
+    expect(screen.queryByText(/Tầng\/khu 9001/)).not.toBeInTheDocument()
   })
 
   // Đề xuất B (chủ dự án duyệt 2026-11-17): breakdown cộng đúng bằng tổng thì vẽ thanh chồng kèm chú thích tên và số
@@ -87,9 +205,12 @@ describe('DashboardPage', () => {
     )
     render(<DashboardPage role="NURSING_HOME_MANAGER" />)
 
+    await screen.findByText('Giấy phép cơ sở')
+    openGroup('Giấy phép cơ sở')
     const legend = await screen.findByRole('list', { name: 'Chú thích Giấy phép cơ sở sắp hết hạn' })
     expect(within(legend).getAllByRole('listitem')).toHaveLength(2)
-    expect(screen.getByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ })).toHaveTextContent('3')
+    const group = screen.getByRole('region', { name: 'Giấy phép cơ sở' })
+    expect(within(group).getByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ })).toHaveTextContent('3')
   })
 
   it('FR_008_mauSo0_hienGachNgang', async () => {
@@ -106,6 +227,8 @@ describe('DashboardPage', () => {
     )
     render(<DashboardPage role="NURSING_HOME_MANAGER" />)
 
+    await screen.findByText('Giấy phép cơ sở')
+    openGroup('Giấy phép cơ sở')
     const button = await screen.findByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ })
     expect(within(button).getByText('—')).toBeInTheDocument()
     expect(within(button).getAllByText('không có dữ liệu').length).toBeGreaterThan(0)
@@ -139,8 +262,9 @@ describe('DashboardPage', () => {
     )
     render(<DashboardPage role="NURSING_HOME_MANAGER" />)
 
-    fireEvent.click(await screen.findByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ }))
-    expect(await screen.findByText(/name: Giấy phép hoạt động, daysRemaining: 45/)).toBeInTheDocument()
+    const card = await screen.findByRole('region', { name: /Cần chú ý/ })
+    fireEvent.click(within(card).getByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ }))
+    expect(await screen.findByText(/Tên: Giấy phép hoạt động, Số ngày còn lại: 45/)).toBeInTheDocument()
     expect(screen.getByText('1 bản ghi')).toBeInTheDocument()
   })
 

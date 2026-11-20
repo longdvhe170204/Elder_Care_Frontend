@@ -26,7 +26,8 @@ const COMMAND_BUTTONS = [
   { command: 'EXTEND', label: 'Gia hạn', Icon: CalendarPlus },
 ]
 
-export function PrescriptionPanel({ role, onSaved }) {
+// onReconcile(resident): mở chế độ Đối chiếu thuốc cho người đang chọn khi có đơn chờ đối chiếu (006 T074)
+export function PrescriptionPanel({ role, onSaved, onReconcile }) {
   const isDoctor = role === 'DOCTOR'
   const canPrescribe = isDoctor || role === 'NURSING_STAFF'
 
@@ -60,6 +61,8 @@ export function PrescriptionPanel({ role, onSaved }) {
     await load(resident.id)
   }
 
+  const awaiting = (board?.prescriptions ?? []).filter((p) => p.awaitingReconciliation).length
+  const residentName = resident?.personalInfo?.fullName ?? `người cao tuổi mã ${resident?.id}`
   const prescriptions = (board?.prescriptions ?? []).filter((p) => statusFilter === 'Tất cả' || p.status === statusFilter)
 
   return (
@@ -92,6 +95,14 @@ export function PrescriptionPanel({ role, onSaved }) {
       )}
 
       <ProblemAlert problem={problem} />
+      {awaiting > 0 && onReconcile && (
+        <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="type-body-sm">{`${awaiting} đơn của ${residentName} đang tạm dừng chờ đối chiếu thuốc; liều chỉ chạy lại khi phiếu được xác nhận.`}</p>
+          <Button variant="outline" className="h-11 shrink-0" onClick={() => onReconcile(resident)}>
+            {`Mở đối chiếu thuốc của ${residentName}`}
+          </Button>
+        </div>
+      )}
       {resident && !board && !problem && <p className="rounded-xl border bg-card px-4 py-3 type-body-sm">Đang tải đơn thuốc…</p>}
 
       {board && !problem && prescriptions.length === 0 && (
@@ -130,6 +141,7 @@ export function PrescriptionPanel({ role, onSaved }) {
                     Đã được thay thế bởi đơn <strong>#{p.replacedById}</strong>
                   </span>
                 )}
+                {p.awaitingReconciliation && <span className="type-label text-warning-foreground">Chờ đối chiếu thuốc</span>}
                 {p.noMedicationAvailable && <span className="type-caption text-muted-foreground">Chưa có thuốc để phát (FR-009)</span>}
 
                 <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5 type-caption">

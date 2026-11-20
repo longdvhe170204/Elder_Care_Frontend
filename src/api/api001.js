@@ -96,6 +96,36 @@ export const getResidentsByIdTreatmentWishes = (params) => request('GET', '/resi
 /** Ghi phiên bản mới (Bác sĩ, Điều dưỡng); phiên bản cũ chuyển Hết hiệu lực (bổ sung 2026-10-22) (FR-023j, FR-023k, FR-023g, BR-M01-16, BR-M01-14) */
 export const postResidentsByIdTreatmentWishes = (params) => request('POST', '/residents/{id}/treatment-wishes', params)
 
+/** Bản Nháp tự khai của phiếu nguyện vọng cuối đời (bổ sung 2026-11-17, Q-412) (FR-023n, FR-023o, FR-023q, BR-M01-18) */
+export const getResidentsByIdEndOfLifeWishDraft = (params) => request('GET', '/residents/{id}/end-of-life-wish-draft', params)
+
+/** Lập hoặc sửa bản Nháp tự khai (Hành chính, khi Đang tiếp nhận; bổ sung 2026-11-17, Q-412) (FR-023n, FR-023q, BR-M01-18, BR-M01-14) */
+export const putResidentsByIdEndOfLifeWishDraft = (params) => request('PUT', '/residents/{id}/end-of-life-wish-draft', params)
+
+/** Kiểm chứng bản Nháp (Bác sĩ, Điều dưỡng; bổ sung 2026-11-17, Q-412) (FR-023p, BR-M01-18, BR-M01-15) */
+export const postResidentsByIdEndOfLifeWishDraftVerify = (params) => request('POST', '/residents/{id}/end-of-life-wish-draft/verify', params)
+
+/** Hủy nháp kèm lý do (Bác sĩ, Điều dưỡng; Hành chính 403; bổ sung 2026-11-17, Q-412) (FR-023p, BR-M01-18) */
+export const postResidentsByIdEndOfLifeWishDraftDiscard = (params) => request('POST', '/residents/{id}/end-of-life-wish-draft/discard', params)
+
+/** Bản Nháp tự khai của phiếu nguyện vọng khi điều trị (bổ sung 2026-11-17, Q-412) (FR-023n, FR-023o, FR-023q, BR-M01-18) */
+export const getResidentsByIdTreatmentWishDraft = (params) => request('GET', '/residents/{id}/treatment-wish-draft', params)
+
+/** Lập hoặc sửa bản Nháp tự khai (Hành chính, khi Đang tiếp nhận; bổ sung 2026-11-17, Q-412) (FR-023n, FR-023q, BR-M01-18, BR-M01-14) */
+export const putResidentsByIdTreatmentWishDraft = (params) => request('PUT', '/residents/{id}/treatment-wish-draft', params)
+
+/** Kiểm chứng bản Nháp (Bác sĩ, Điều dưỡng; bổ sung 2026-11-17, Q-412) (FR-023p, BR-M01-18, BR-M01-16) */
+export const postResidentsByIdTreatmentWishDraftVerify = (params) => request('POST', '/residents/{id}/treatment-wish-draft/verify', params)
+
+/** Hủy nháp kèm lý do (Bác sĩ, Điều dưỡng; Hành chính 403; bổ sung 2026-11-17, Q-412) (FR-023p, BR-M01-18) */
+export const postResidentsByIdTreatmentWishDraftDiscard = (params) => request('POST', '/residents/{id}/treatment-wish-draft/discard', params)
+
+/** Phần "Gia đình khai" của lần đánh giá đầu vào Nháp đang mở (Hành chính khi Đang tiếp nhận; bổ sung 2026-11-17, Q-412) (FR-025a, BR-M01-18) */
+export const getResidentsByIdInitialAssessmentFamilyDeclared = (params) => request('GET', '/residents/{id}/initial-assessment/family-declared', params)
+
+/** Ghi phần "Gia đình khai" (chỉ Hành chính, khi Đang tiếp nhận; bổ sung 2026-11-17, Q-412) (FR-025a, BR-M01-18, BR-M01-13, BR-M01-14) */
+export const putResidentsByIdInitialAssessmentFamilyDeclared = (params) => request('PUT', '/residents/{id}/initial-assessment/family-declared', params)
+
 /** Lịch sử đánh giá (chỉ vai trò có quyền xem Đánh giá; Nhân viên chăm sóc 403) (FR-008, FR-025) */
 export const getResidentsByIdAssessments = (params) => request('GET', '/residents/{id}/assessments', params)
 

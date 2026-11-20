@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { uploadFile } from '@/common/files'
+import { FileInput } from '@/common/FileInput'
 
 // Ngày theo giờ Việt Nam (NFR-11), dạng yyyy-MM-dd cho ô ngày.
 const todayIso = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
@@ -111,8 +112,7 @@ export function ManualCostForm({ today = todayIso(), onCreated = () => {} }) {
       </label>
       <label>
         Bằng chứng (nếu có)
-        <Input
-          type="file"
+        <FileInput
           disabled={pending}
           onChange={(e) => {
             setEvidence(e.target.files?.[0] ?? null)

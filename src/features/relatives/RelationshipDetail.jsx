@@ -9,6 +9,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { CONFLICT_HINTS, RELATIONSHIP_LABELS, rightLines, rolesOf } from './relationshipLabels'
+import { FileInput } from '@/common/FileInput'
 
 // Khung chi tiết một quan hệ (012 T013; FR-002 → FR-012): hồ sơ người thân, vai trò, sáu quyền đang bật và tác dụng;
 // lệnh của Hành chính mở form ngay dưới, lý do bắt buộc (DESIGN.md 7.4). Quyền chỉ đổi qua yêu cầu (US3), không có nút
@@ -99,11 +100,9 @@ function CommandForm({ relationship, command, onDone, onCancel }) {
           <FieldLabel htmlFor="representative-evidence">
             Bằng chứng (văn bản ủy quyền, giấy tờ quan hệ, hợp đồng)
           </FieldLabel>
-          <input
+          <FileInput
             id="representative-evidence"
-            type="file"
             accept="application/pdf,image/jpeg,image/png"
-            className="type-body-sm h-11 rounded-lg border px-3 py-2"
             aria-invalid={(submitted && fileMissing) || undefined}
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />

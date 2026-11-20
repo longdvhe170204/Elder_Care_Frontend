@@ -38,6 +38,7 @@ import {
   newKey,
 } from './admissionLabels'
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
+import { FileInput } from '@/common/FileInput'
 
 // Hôm nay ở Việt Nam, dạng yyyy-MM-dd (en-CA định dạng đúng kiểu này)
 const vietnamToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
@@ -73,7 +74,8 @@ function RecordSignedForm({ contract, onDone, onCancel }) {
 
   useEffect(() => {
     getResidentsByResidentIdRelationships({ path: { residentId: contract.residentId } })
-      .then(({ data }) => setRepresentatives(data.filter((r) => r.status === 'ACTIVE')))
+      // chỉ người đại diện có quan hệ Hiệu lực mới ký được (backend REPRESENTATIVE_REQUIRED)
+      .then(({ data }) => setRepresentatives(data.filter((r) => r.status === 'ACTIVE' && r.representative)))
       .catch((e) => setFailure(problemOf(e)))
   }, [contract.residentId])
 
@@ -137,11 +139,9 @@ function RecordSignedForm({ contract, onDone, onCancel }) {
         </Field>
         <Field data-invalid={(submitted && !!errors.file) || undefined}>
           <FieldLabel htmlFor="signed-scan">Bản scan hợp đồng</FieldLabel>
-          <Input
+          <FileInput
             id="signed-scan"
-            type="file"
             accept="application/pdf,image/*"
-            className="h-11"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           />
           {submitted && errors.file && <FieldError>{errors.file}</FieldError>}
@@ -377,10 +377,12 @@ const DAYS = [
   [7, 'Chủ nhật'],
 ]
 
-// Lập hợp đồng Nháp hoặc sửa Nháp (tải lại để lấy ETag cho If-Match). residentId: chọn sẵn người cao tuổi khi lập mới
-// (mở từ màn Hồ sơ tiếp nhận).
-export function ContractSheet({ contract, residentId: presetResidentId = null, onClose, onDone }) {
+// Lập hợp đồng Nháp hoặc sửa Nháp (tải lại để lấy ETag cho If-Match). residentId: người cao tuổi đã biết khi lập mới
+// (mở từ màn Hồ sơ tiếp nhận); khi đó và khi sửa chỉ hiện họ tên (residentName), không có ô chọn người cao tuổi khác
+// (chủ dự án yêu cầu 2026-11-17). Ô chọn chỉ còn khi lập từ danh sách Hợp đồng, chưa gắn với ai.
+export function ContractSheet({ contract, residentId: presetResidentId = null, residentName = null, onClose, onDone }) {
   const editing = !!contract
+  const fixedResident = editing || presetResidentId != null
   const [etag, setEtag] = useState(null)
   const [catalog, setCatalog] = useState([])
   const [residentId, setResidentId] = useState(
@@ -470,8 +472,8 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, o
           Đúng một dịch vụ chăm sóc theo mức của hợp đồng; người cao tuổi phải có người đại diện.
         </SheetDescription>
         <FieldGroup className="mt-4">
-          {editing ? (
-            <Info label="Người cao tuổi">{`Mã ${contract.residentId}`}</Info>
+          {fixedResident ? (
+            <Info label="Người cao tuổi">{residentName ?? `Mã ${residentId}`}</Info>
           ) : (
             <ResidentSelect
               id="contract-resident"

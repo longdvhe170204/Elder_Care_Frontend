@@ -66,6 +66,39 @@ describe('ResidentListPage', () => {
     expect(await screen.findByRole('button', { name: 'Tạo hồ sơ' })).toBeTruthy()
   })
 
+  // Chủ dự án yêu cầu 2026-11-18: hồ sơ mới luôn ở Đang tiếp nhận nên tạo xong sang ngay form lập đăng ký của người đó,
+  // lưu xong vào màn Hồ sơ tiếp nhận
+  it('taoHoSo_xongSangLapDangKy_luuXongMoHoSoTiepNhan', async () => {
+    setup()
+    api.on(
+      'POST',
+      '/residents',
+      json(201, {
+        profile: { id: 20, profileCode: 'NCT-2026-000020', personalInfo: { fullName: 'Đỗ Thị Hoa' } },
+        warnings: [],
+      }),
+    )
+    api.on('POST', '/admission-applications', json(201, { id: 31, residentId: 20, status: 'IN_PROGRESS' }))
+    const onNavigate = vi.fn()
+    render(<ResidentListPage role="OFFICE_STAFF" onNavigate={onNavigate} />)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo hồ sơ' }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: 'Đỗ Thị Hoa' } })
+    fireEvent.change(within(dialog).getByLabelText('Ngày sinh'), { target: { value: '1944-03-02' } })
+    fireEvent.change(within(dialog).getByLabelText('Giới tính'), { target: { value: 'FEMALE' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo hồ sơ' }))
+
+    const form = await screen.findByRole('dialog')
+    expect(await within(form).findByText('Lập đăng ký tiếp nhận')).toBeInTheDocument()
+    fireEvent.change(within(form).getByLabelText('Ngày đăng ký'), { target: { value: '2026-11-18' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Bán trú' }))
+    fireEvent.click(within(form).getByRole('button', { name: 'Cơ bản' }))
+    fireEvent.click(within(form).getByRole('button', { name: 'Lưu đăng ký' }))
+
+    await waitFor(() => expect(onNavigate).toHaveBeenCalledWith('admission-workspace', { id: 31 }))
+  })
+
   it('một ô tìm duy nhất; tìm gửi q, bảng hiện mức chăm sóc, loại hình, trạng thái theo hợp đồng', async () => {
     setup()
     render(<ResidentListPage role="NURSING_STAFF" />)

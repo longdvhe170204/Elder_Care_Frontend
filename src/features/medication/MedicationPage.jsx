@@ -11,6 +11,7 @@ import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
+import { getResidentsById } from '@/api/api001'
 import { cn } from '@/lib/utils'
 import { DoseSheet } from './DoseSheet'
 import { DoseTags } from './DoseTags'
@@ -19,12 +20,17 @@ import { hhmm } from './doseRoundView'
 import { windowOf } from './medicationTime'
 import { PrescriptionPanel } from './PrescriptionPanel'
 import { PrnPanel } from './PrnPanel'
+import { ReconciliationPanel } from './ReconciliationPanel'
+import { listWorklist } from './reconciliationApi'
+import { STATUS as RECONCILIATION_STATUS } from './reconciliationView'
+import { ResidentPicker } from './ResidentPicker'
 
 // Màn Phát thuốc (M14; spec 006 User Story 2, 6), theo DESIGN.md 5.1: lưới thẻ theo giờ dự kiến, mỗi thẻ là một
 // người cao tuổi trong giờ đó. Liều theo lịch đọc từ GET /medication-doses/rounds, ghi bằng administer, refuse, skip
 // (api-006); họ tên, dị ứng từ api-001, phòng từ api-003, ca từ api-008. Chỉ Điều dưỡng xác nhận liều (FR-026); trạng
 // thái liều do hệ thống tính (FR-021). Thuốc khi cần (PrnPanel) và Đơn thuốc (PrescriptionPanel) đọc, ghi api-006 theo từng
-// người cao tuổi được chọn.
+// người cao tuổi được chọn. Đối chiếu thuốc (ReconciliationPanel, 006 T072) lập, xử lý phiếu của người được chọn: phiếu trở
+// về từ bệnh viện, theo yêu cầu chuyên môn, hoặc phiếu tiếp nhận (lối vào duy nhất trên web, chủ dự án 2026-11-18).
 
 const RECORD_ROLE = 'NURSING_STAFF'
 const OPEN = ['Đến giờ', 'Trễ']
@@ -122,15 +128,88 @@ function Section({ label, sub, count, defaultOpen, urgent, current, children }) 
   )
 }
 
-export function MedicationPage({ role }) {
+// Dải "Cần đối chiếu" (006 T078): người cao tuổi trong phạm vi có phiếu Mở, Chờ xác nhận hoặc đơn chờ đối chiếu, theo
+// thứ tự backend trả (quá hạn trước); họ tên từ api-001. Chỉ hiện số liệu đã có (Q-306, Q-307).
+function useWorklist(revision) {
+  const [entries, setEntries] = useState([])
+  useEffect(() => {
+    let cancelled = false
+    listWorklist()
+      .then(async (list) => {
+        const named = await Promise.all(
+          list.map((e) =>
+            getResidentsById({ path: { id: e.residentId } }).then(
+              ({ data }) => ({ ...e, name: data?.personalInfo?.fullName ?? `Người cao tuổi mã ${e.residentId}` }),
+              () => ({ ...e, name: `Người cao tuổi mã ${e.residentId}` }),
+            ),
+          ),
+        )
+        if (!cancelled) setEntries(named)
+      })
+      .catch(() => !cancelled && setEntries([]))
+    return () => {
+      cancelled = true
+    }
+  }, [revision])
+  return entries
+}
+
+const worklistState = (e) =>
+  e.overdue ? 'quá hạn' : e.status ? RECONCILIATION_STATUS[e.status].toLowerCase() : 'chưa lập phiếu'
+
+function ReconciliationMode({ resident, setResident, isDoctor, onSaved }) {
+  const [revision, setRevision] = useState(0)
+  const entries = useWorklist(revision)
+  // Mở từ nơi khác chỉ có mã người cao tuổi: đọc họ tên trước khi mở phiếu
+  const needsName = resident && !resident.personalInfo
+  useEffect(() => {
+    if (!needsName) return
+    getResidentsById({ path: { id: resident.id } }).then(
+      ({ data }) => setResident(data ?? { id: resident.id, personalInfo: {} }),
+      () => setResident({ id: resident.id, personalInfo: {} }),
+    )
+  }, [needsName, resident?.id, setResident])
+  const name = resident && (resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`)
+  return (
+    <div className="flex flex-col gap-5">
+      <NowStrip
+        label="Cần đối chiếu"
+        items={entries.map((e) => ({
+          key: e.residentId,
+          label: `${e.name}, ${worklistState(e)}`,
+          onSelect: () => setResident({ id: e.residentId, personalInfo: { fullName: e.name } }),
+        }))}
+      />
+      <ResidentPicker onPick={setResident} selectedId={resident?.id} />
+      {resident && !needsName && (
+        <ReconciliationPanel
+          key={resident.id}
+          residentId={resident.id}
+          residentName={name}
+          isDoctor={isDoctor}
+          onChanged={(message) => {
+            onSaved(message)
+            setRevision((n) => n + 1)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// mode, residentId: mở thẳng một chế độ, một người (ví dụ từ cảnh báo "chưa đối chiếu thuốc", 006 T078); chỉ mã người
+// cao tuổi đi qua URL, họ tên đọc từ api-001
+export function MedicationPage({ role, mode: initialMode = 'scheduled', residentId }) {
   const canRecord = role === RECORD_ROLE
-  const [mode, setMode] = useState('scheduled')
+  const [mode, setMode] = useState(initialMode)
   const [filter, setFilter] = useState('Tất cả')
   const [round, setRound] = useState(null)
   const [problem, setProblem] = useState(null)
   const [clock, setClock] = useState(() => hhmm(new Date()))
   const [opening, setOpening] = useState(null)
   const [announcement, setAnnouncement] = useState('')
+  // Người đang chọn ở chế độ Đối chiếu thuốc; tab Đơn thuốc chuyển sang đúng người khi có đơn chờ đối chiếu (006 T074)
+  const [reconciling, setReconciling] = useState(() => (residentId ? { id: Number(residentId) } : null))
 
   const reload = useCallback(async () => {
     try {
@@ -204,6 +283,9 @@ export function MedicationPage({ role }) {
             <ToggleGroupItem value="prescriptions" className="h-11 px-4">
               Đơn thuốc
             </ToggleGroupItem>
+            <ToggleGroupItem value="reconciliation" className="h-11 px-4">
+              Đối chiếu thuốc
+            </ToggleGroupItem>
           </ToggleGroup>
           {mode === 'scheduled' && (
             <ToggleGroup
@@ -249,8 +331,23 @@ export function MedicationPage({ role }) {
 
       {mode === 'prn' ? (
         <PrnPanel canRecord={canRecord} now={shift.now} onSaved={setAnnouncement} />
+      ) : mode === 'reconciliation' ? (
+        <ReconciliationMode
+          resident={reconciling}
+          setResident={setReconciling}
+          isDoctor={role === 'DOCTOR'}
+          onSaved={setAnnouncement}
+        />
       ) : mode === 'prescriptions' ? (
-        <PrescriptionPanel role={role} canRecord={canRecord} onSaved={setAnnouncement} />
+        <PrescriptionPanel
+          role={role}
+          canRecord={canRecord}
+          onSaved={setAnnouncement}
+          onReconcile={(resident) => {
+            setReconciling(resident)
+            setMode('reconciliation')
+          }}
+        />
       ) : !round ? (
         !problem && <p className="rounded-xl border bg-card px-4 py-3 type-body-sm">Đang tải vòng phát thuốc…</p>
       ) : (

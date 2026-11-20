@@ -1,23 +1,53 @@
-import { useEffect, useState } from 'react'
-import { getFloors, getMetrics } from '@/api'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { getFloors, getMetricCatalog } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PageHeader } from '@/common/PageHeader'
+import { formatDate } from '@/common/dateTime'
 import { ExportDialog } from './ExportDialog'
 import { ExportList } from './ExportList'
+import { MetricCatalogNotice } from './MetricCatalogNotice'
 import { MetricDetailSheet } from './MetricDetailSheet'
 import { ReportTable } from './ReportTable'
 import { CARE_LEVELS, REPORT_GROUPS, isoDate } from './reportLabels'
 
-// Mục menu "Báo cáo" (016; bố cục duyệt 2026-10-24, DESIGN.md 5.21.0): tab theo nhóm báo cáo vai trò thấy (bảng FR-010)
-// và tab "Lần xuất"; chọn khoảng (FR-060, tối đa CFG-M14-01, backend từ chối khi dài hơn); nút chính "Xuất file".
+// Mục menu "Báo cáo" (016; bố cục DESIGN.md 6.17.0): danh sách nhóm báo cáo vai trò thấy (bảng FR-010) và "Lần xuất";
+// chọn khoảng, hiện khoảng ngày đang xem (FR-060, tối đa CFG-M14-01, backend từ chối khi dài hơn); nút chính "Xuất file".
 // Lọc tầng chỉ có giá trị trong phạm vi (FR-013): báo cáo trả các giá trị, phạm vi toàn viện thì lấy danh mục tầng của 003.
 
 const EXPORTS = 'EXPORTS'
 const ALL_FLOORS = 'ALL'
 const ALL_CARE_LEVELS = 'ALL'
+const PRESETS = [
+  { value: 'TODAY', label: 'Hôm nay' },
+  { value: 'WEEK', label: '7 ngày qua' },
+  { value: 'MONTH', label: 'Tháng này' },
+  { value: 'CUSTOM', label: 'Tùy chọn' },
+]
+const COST_MODES = [
+  { value: 'FINALIZED', label: 'Đã chốt' },
+  { value: 'PROVISIONAL', label: 'Tạm tính' },
+]
+
+// Bộ lọc là ô chọn gốc trên một hàng (bản phác phương án B; DESIGN.md 7.2 "Hàng ô lọc": ô chọn gốc `select`, kiểu
+// chung ở lớp base của index.css); nhãn đọc bằng trình đọc màn hình vì giá trị đang chọn đã nói rõ ô lọc gì
+function FilterSelect({ label, value, onChange, options }) {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className="h-10 w-auto min-w-36"
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  )
+}
 
 function rangeOf(preset, custom) {
   const today = new Date()
@@ -51,11 +81,29 @@ export function ReportsPage({ role, onNavigate }) {
   const [catalogFloors, setCatalogFloors] = useState([])
   const facilityWide = filterOptions?.facilityWide === true
 
-  useEffect(() => {
-    getMetrics()
-      .then(({ data }) => setMetrics(Object.fromEntries(data.map((m) => [m.code, m]))))
-      .catch(() => {})
+  // Danh mục tên, nhóm chỉ tiêu: tải khi mở màn; lỗi (phiên hết hạn, backend khởi động lại, trình duyệt chặn request)
+  // thì báo rõ kèm nút Thử lại và thử lại sau mỗi lần tải báo cáo tới khi được, không lặng lẽ hiện mã chỉ tiêu
+  const [reportLoads, setReportLoads] = useState(0)
+  const [catalogFailed, setCatalogFailed] = useState(false)
+  const metricsLoaded = useRef(false)
+  const handleFilterOptions = useCallback((options) => {
+    setFilterOptions(options)
+    setReportLoads((n) => n + 1)
   }, [])
+
+  const loadMetricCatalog = useCallback(() => {
+    getMetricCatalog()
+      .then(({ data }) => {
+        metricsLoaded.current = true
+        setMetrics(Object.fromEntries(data.map((m) => [m.code, m])))
+        setCatalogFailed(false)
+      })
+      .catch(() => setCatalogFailed(true))
+  }, [])
+
+  useEffect(() => {
+    if (!metricsLoaded.current) loadMetricCatalog()
+  }, [reportLoads, loadMetricCatalog])
 
   useEffect(() => {
     if (!facilityWide) return
@@ -86,148 +134,115 @@ export function ReportsPage({ role, onNavigate }) {
             </Button>
           )
         }
-      >
-        <ToggleGroup
-          variant="outline"
-          value={[tab]}
-          onValueChange={(next) => {
-            if (next[0]) {
-              setTab(next[0])
-              setFloorAreaId(null)
-              setCareLevel(null)
-            }
-          }}
-          className="flex-wrap self-start"
-        >
-          {groups.map((g) => (
-            <ToggleGroupItem key={g.value} value={g.value} className="h-10 px-4">
-              {g.label}
-            </ToggleGroupItem>
-          ))}
-          <ToggleGroupItem value={EXPORTS} className="h-10 px-4">
-            Lần xuất
-          </ToggleGroupItem>
-        </ToggleGroup>
-        {current && (
-          <div className="flex flex-wrap items-end gap-3">
-            <ToggleGroup
-              variant="outline"
-              aria-label="Khoảng thời gian"
-              value={[preset]}
-              onValueChange={(next) => next[0] && setPreset(next[0])}
-              className="flex-wrap"
-            >
-              <ToggleGroupItem value="TODAY" className="h-10 px-4">
-                Hôm nay
-              </ToggleGroupItem>
-              <ToggleGroupItem value="WEEK" className="h-10 px-4">
-                7 ngày qua
-              </ToggleGroupItem>
-              <ToggleGroupItem value="MONTH" className="h-10 px-4">
-                Tháng này
-              </ToggleGroupItem>
-              <ToggleGroupItem value="CUSTOM" className="h-10 px-4">
-                Tùy chọn
-              </ToggleGroupItem>
-            </ToggleGroup>
-            {floors.length > 1 && (
-              <ToggleGroup
-                variant="outline"
-                aria-label="Tầng"
-                value={[floorAreaId === null ? ALL_FLOORS : String(floorAreaId)]}
-                onValueChange={(next) => next[0] && setFloorAreaId(next[0] === ALL_FLOORS ? null : Number(next[0]))}
-                className="flex-wrap"
-              >
-                <ToggleGroupItem value={ALL_FLOORS} className="h-10 px-4">
-                  Mọi tầng
-                </ToggleGroupItem>
-                {floors.map((f) => (
-                  <ToggleGroupItem key={f.id} value={String(f.id)} className="h-10 px-4">
-                    {f.name}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            )}
-            {current.value === 'RESIDENTS' && (
-              <ToggleGroup
-                variant="outline"
-                aria-label="Mức chăm sóc"
-                value={[careLevel ?? ALL_CARE_LEVELS]}
-                onValueChange={(next) => next[0] && setCareLevel(next[0] === ALL_CARE_LEVELS ? null : next[0])}
-                className="flex-wrap"
-              >
-                <ToggleGroupItem value={ALL_CARE_LEVELS} className="h-10 px-4">
-                  Mọi mức
-                </ToggleGroupItem>
-                {CARE_LEVELS.map((l) => (
-                  <ToggleGroupItem key={l.value} value={l.value} className="h-10 px-4">
-                    {l.label}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-            )}
-            {current.value === 'INCURRED_COSTS' && (
-              <ToggleGroup
-                variant="outline"
-                aria-label="Chế độ chi phí"
-                value={[costMode]}
-                onValueChange={(next) => next[0] && setCostMode(next[0])}
-                className="flex-wrap"
-              >
-                <ToggleGroupItem value="FINALIZED" className="h-10 px-4">
-                  Đã chốt
-                </ToggleGroupItem>
-                <ToggleGroupItem value="PROVISIONAL" className="h-10 px-4">
-                  Tạm tính
-                </ToggleGroupItem>
-              </ToggleGroup>
-            )}
-            {preset === 'CUSTOM' && (
-              <>
-                <Field className="w-auto">
-                  <FieldLabel htmlFor="report-from">Từ ngày</FieldLabel>
-                  <Input
-                    id="report-from"
-                    type="date"
-                    value={custom.from}
-                    onChange={(e) => setCustom({ ...custom, from: e.target.value })}
-                  />
-                </Field>
-                <Field className="w-auto">
-                  <FieldLabel htmlFor="report-to">Đến ngày</FieldLabel>
-                  <Input
-                    id="report-to"
-                    type="date"
-                    value={custom.to}
-                    onChange={(e) => setCustom({ ...custom, to: e.target.value })}
-                  />
-                </Field>
-              </>
-            )}
-          </div>
-        )}
-      </PageHeader>
-      {current && validRange && (
-        <ReportTable
-          key={`${current.value}|${range.from}|${range.to}|${floorAreaId ?? ''}|${costMode}|${careLevel ?? ''}`}
-          group={current.value}
-          from={range.from}
-          to={range.to}
-          floorAreaId={floorAreaId ?? undefined}
-          costMode={current.value === 'INCURRED_COSTS' ? costMode : undefined}
-          careLevel={careLevel ?? undefined}
-          floors={floors}
-          metrics={metrics}
-          onOpen={setOpened}
-          onFilterOptions={setFilterOptions}
-        />
-      )}
-      {current && !validRange && (
-        <section className="rounded-2xl border bg-card p-4 md:p-5">
-          <p className="type-body">Chọn ngày bắt đầu không sau ngày kết thúc.</p>
-        </section>
-      )}
-      {!current && <ExportList version={exports} />}
+      />
+      <div className="grid items-start gap-5 lg:grid-cols-[12rem_minmax(0,1fr)]">
+        {/* DESIGN.md 6.17.0: danh sách nhóm báo cáo dọc từ 1024px, hẹp hơn là tab gạch chân cuộn ngang */}
+        <nav aria-label="Nhóm báo cáo" className="-mx-1 overflow-x-auto lg:mx-0 lg:overflow-visible">
+          <ul className="flex gap-1 border-b px-1 lg:flex-col lg:border-b-0 lg:px-0">
+            {[...groups, { value: EXPORTS, label: 'Lần xuất' }].map((g) => {
+              const selected = g.value === tab
+              return (
+                <li key={g.value} className={g.value === EXPORTS ? 'lg:mt-2 lg:border-t lg:pt-2' : undefined}>
+                  <button
+                    type="button"
+                    aria-current={selected ? 'page' : undefined}
+                    onClick={() => {
+                      setTab(g.value)
+                      setFloorAreaId(null)
+                      setCareLevel(null)
+                    }}
+                    className={`min-h-11 w-full whitespace-nowrap px-3 text-left type-label focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring lg:rounded-lg ${
+                      selected
+                        ? 'border-b-2 border-primary text-foreground lg:border lg:border-border lg:bg-card'
+                        : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground lg:border lg:border-transparent lg:hover:bg-card'
+                    }`}
+                  >
+                    {g.label}
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </nav>
+        <div className="flex min-w-0 flex-col gap-4">
+          {current && (
+            <div className="flex flex-wrap items-end gap-3">
+              <FilterSelect label="Khoảng thời gian" value={preset} onChange={setPreset} options={PRESETS} />
+              {validRange && (
+                <span className="flex h-10 items-center type-body-sm text-muted-foreground">
+                  {`${formatDate(range.from).slice(0, 5)} → ${formatDate(range.to)}`}
+                </span>
+              )}
+              {floors.length > 1 && (
+                <FilterSelect
+                  label="Tầng"
+                  value={floorAreaId === null ? ALL_FLOORS : String(floorAreaId)}
+                  onChange={(next) => setFloorAreaId(next === ALL_FLOORS ? null : Number(next))}
+                  options={[
+                    { value: ALL_FLOORS, label: 'Mọi tầng' },
+                    ...floors.map((f) => ({ value: String(f.id), label: f.name })),
+                  ]}
+                />
+              )}
+              {current.value === 'RESIDENTS' && (
+                <FilterSelect
+                  label="Mức chăm sóc"
+                  value={careLevel ?? ALL_CARE_LEVELS}
+                  onChange={(next) => setCareLevel(next === ALL_CARE_LEVELS ? null : next)}
+                  options={[{ value: ALL_CARE_LEVELS, label: 'Mọi mức chăm sóc' }, ...CARE_LEVELS]}
+                />
+              )}
+              {current.value === 'INCURRED_COSTS' && (
+                <FilterSelect label="Chế độ chi phí" value={costMode} onChange={setCostMode} options={COST_MODES} />
+              )}
+              {preset === 'CUSTOM' && (
+                <>
+                  <Field className="w-auto">
+                    <FieldLabel htmlFor="report-from">Từ ngày</FieldLabel>
+                    <Input
+                      id="report-from"
+                      type="date"
+                      value={custom.from}
+                      onChange={(e) => setCustom({ ...custom, from: e.target.value })}
+                    />
+                  </Field>
+                  <Field className="w-auto">
+                    <FieldLabel htmlFor="report-to">Đến ngày</FieldLabel>
+                    <Input
+                      id="report-to"
+                      type="date"
+                      value={custom.to}
+                      onChange={(e) => setCustom({ ...custom, to: e.target.value })}
+                    />
+                  </Field>
+                </>
+              )}
+            </div>
+          )}
+          {current && catalogFailed && <MetricCatalogNotice onRetry={loadMetricCatalog} />}
+          {current && validRange && (
+            <ReportTable
+              key={`${current.value}|${range.from}|${range.to}|${floorAreaId ?? ''}|${costMode}|${careLevel ?? ''}`}
+              group={current.value}
+              from={range.from}
+              to={range.to}
+              floorAreaId={floorAreaId ?? undefined}
+              costMode={current.value === 'INCURRED_COSTS' ? costMode : undefined}
+              careLevel={careLevel ?? undefined}
+              floors={floors}
+              metrics={metrics}
+              onOpen={setOpened}
+              onFilterOptions={handleFilterOptions}
+            />
+          )}
+          {current && !validRange && (
+            <section className="rounded-2xl border bg-card p-4 md:p-5">
+              <p className="type-body">Chọn ngày bắt đầu không sau ngày kết thúc.</p>
+            </section>
+          )}
+          {!current && <ExportList version={exports} />}
+        </div>
+      </div>
       {current && (
         <ExportDialog
           open={exporting}
