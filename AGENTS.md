@@ -21,6 +21,16 @@ Nếu công cụ của bạn không tự đọc file này, dán câu sau vào đ
 - Dùng Claude Code thì gọi `/ui-redesign <tên màn>`; công cụ khác làm theo ba bước trong [.claude/skills/ui-redesign/SKILL.md](.claude/skills/ui-redesign/SKILL.md) (đánh giá, phương án, làm sau khi duyệt).
 - Đổi quy định giao diện: sửa DESIGN.md, `src/index.css` trong cùng PR với mã, tăng `version`, ghi mục 16 (DESIGN.md mục 13 điều 5).
 
+## Dùng Codex (hoặc công cụ khác không phải Claude Code)
+
+Nhóm dùng Codex cùng Claude Code (chủ dự án báo 2026-11-20). Codex tự đọc file này khi chạy trong kho web; không có lệnh `/ui-redesign`, skill `frontend-design`, trang Artifact hay trình duyệt trong app như Claude Code, nên làm như sau:
+
+- **Chạy ở đâu:** mở Codex trong thư mục `Elder_Care_Frontend` (để Codex nạp file này). Agent phải đọc được kho bên cạnh `../Elder_Care` (spec, hợp đồng, nghiệp vụ, luật chung); nếu chế độ sandbox của Codex chặn đọc ngoài thư mục đang mở thì cho phép thư mục đó (theo tài liệu của bản Codex đang dùng) hoặc dán nội dung cần đọc vào cuộc trò chuyện. Không để agent đoán spec khi không đọc được.
+- **Sửa bố cục:** bảo Codex đọc và làm đúng ba bước trong [.claude/skills/ui-redesign/SKILL.md](.claude/skills/ui-redesign/SKILL.md), hết mỗi bước dừng lại. Bỏ qua câu "nạp `frontend-design`": phương án bám DESIGN.md và mẫu màn ở mục 0.
+- **Trang so sánh thay cho Artifact:** xuất thành một file HTML tự chứa (màu theo token DESIGN.md, không tải gì từ mạng) đặt ngoài kho, ví dụ thư mục tạm của máy; không commit. Mở bằng trình duyệt để xem, gửi file hoặc ảnh chụp cho chủ dự án chọn.
+- **Xem màn thay cho trình duyệt trong app:** người dùng tự mở `http://localhost:8081` (bản Docker) hoặc `npm run dev` (backend chạy trên máy), đăng nhập tài khoản demo, chụp màn và chép lỗi console gửi lại cho Codex. Không báo "đã xem trên trình duyệt" khi chưa ai mở.
+- **Giới hạn như Claude Code:** chỉ sửa trong kho web (sửa `../Elder_Care` chỉ khi người dùng yêu cầu, ví dụ ghi `docs/progress.md`), không commit, push; chạy `npm test`, `npm run lint`, `npm run build` trước khi báo xong.
+
 ## Không được làm
 
 - Không commit, push, merge khi người dùng chưa đồng ý; không push thẳng `develop`.
