@@ -7,7 +7,7 @@ import { request } from './client.js'
 export const getDashboard = (params) => request('GET', '/dashboard', params)
 
 /** Danh mục chỉ tiêu người xem được thấy, kèm định nghĩa hiển thị (FR-003, FR-010) */
-export const getMetrics = (params) => request('GET', '/metrics', params)
+export const getMetricCatalog = (params) => request('GET', '/metric-catalog', params)
 
 /** Báo cáo một nhóm theo khoảng và bộ lọc; khoảng dài hơn CFG-M14-01 bị từ chối (FR-022, FR-023, FR-024, FR-025, FR-030, FR-031, FR-032, FR-033, FR-034, FR-035, FR-036, FR-037, FR-040, FR-041, FR-042, FR-042a, FR-043, FR-044, FR-050, FR-051, FR-052, FR-053, FR-054, FR-055, FR-055a, FR-060, FR-070, FR-071, FR-072, FR-073) */
 export const getReportsByGroup = (params) => request('GET', '/reports/{group}', params)

@@ -32,7 +32,7 @@ beforeEach(() => {
   api = mockRoutes()
   api.on(
     'GET',
-    '/metrics',
+    '/metric-catalog',
     json(200, [
       { code: 'MED.MISSED_RATE', group: 'MEDICATION_DOSES', name: 'Tỷ lệ liều Bỏ lỡ', definition: '', source: '006' },
     ]),
@@ -285,7 +285,7 @@ describe('ReportsPage', () => {
   // Danh mục chỉ tiêu tải lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần tải báo cáo sau, không hiện mã
   it('danhMucChiTieu_loiLanDau_thuLaiKhiTaiBaoCao', async () => {
     let metricCalls = 0
-    api.on('GET', '/metrics', () => {
+    api.on('GET', '/metric-catalog', () => {
       metricCalls += 1
       return metricCalls === 1
         ? problem(403, 'PERMISSION_DENIED')
