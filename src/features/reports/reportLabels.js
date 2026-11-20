@@ -1,3 +1,5 @@
+import { formatDate, formatDateTime } from '@/common/dateTime'
+
 // Nhãn hiển thị của 016 (glossary mục 22): nhóm chỉ tiêu FR-010, nhóm báo cáo 18.1 → 18.6, nhãn giá trị.
 
 export const METRIC_GROUP_LABELS = {
@@ -314,6 +316,157 @@ export function breakdownLabel(metricCode, key, floors = []) {
     return reason.length ? `${label} (${HOLD_REASONS[reason[0]] ?? reason[0]})` : label
   }
   return KEY_LABELS[key] ?? key
+}
+
+// Khung danh sách bản ghi (FR-009; 2026-11-20): trạng thái và kết quả của dòng chi tiết hiện bằng chữ thay vì mã backend
+// trả. Chữ giá trị dùng lại các bảng ở trên để khớp phần chia nhóm của báo cáo; mã chưa biết giữ nguyên.
+const RESIDENT_STATUSES = {
+  ADMISSION_IN_PROGRESS: 'Đang tiếp nhận',
+  RESIDENCY_ENDED: 'Kết thúc lưu trú',
+  DECEASED: 'Qua đời',
+  ADMISSION_CANCELLED: 'Hủy tiếp nhận',
+}
+const CARE_LEVEL_LABELS = Object.fromEntries(CARE_LEVELS.map((l) => [l.value, l.label]))
+const DETAIL_VALUES = {
+  ...COST_TYPES,
+  ...COST_ORIGINS,
+  ...PROCUREMENT_STATUSES,
+  ...REQUEST_STATUSES,
+  ...STATEMENT_STATUSES,
+  ...BALANCE_STATUSES,
+  ...ATTENDANCE_STATUSES,
+  ...BED_STATES,
+  ...CARE_LEVEL_LABELS,
+  ...RESIDENT_STATUSES,
+  ...KEY_LABELS,
+}
+// Tên khóa của `result` trong dòng chi tiết (backend reporting, các chỉ tiêu của 016)
+const RESULT_KEYS = {
+  absentByReason: 'Vắng theo lý do',
+  acknowledgedAt: 'Tiếp nhận lúc',
+  activityId: 'Hoạt động',
+  actualReturnAt: 'Thực tế về lúc',
+  adHocSession: 'Buổi lẻ',
+  administeredLate: 'Dùng thuốc muộn',
+  amount: 'Số tiền',
+  applicationDate: 'Ngày đăng ký',
+  arrivalMinutes: 'Thời gian tới nơi (phút)',
+  arrivalTimeMissing: 'Thiếu mốc tới nơi',
+  arrivedAt: 'Tới nơi lúc',
+  balance: 'Số dư',
+  calculatedAt: 'Tính lúc',
+  careLevel: 'Mức chăm sóc',
+  careTaskId: 'Công việc',
+  checkerRole: 'Vai trò kiểm tra',
+  closedBySystem: 'Hệ thống đóng',
+  closingRule: 'Quy tắc đóng',
+  code: 'Mã',
+  contractId: 'Hợp đồng',
+  costMode: 'Chế độ chi phí',
+  costType: 'Loại chi phí',
+  count: 'Số lượng',
+  credentialType: 'Loại giấy phép',
+  date: 'Ngày',
+  daysCovered: 'Số ngày tính',
+  daysRemaining: 'Số ngày còn lại',
+  deadline: 'Hạn chót',
+  decidedAt: 'Quyết định lúc',
+  deliveredAt: 'Giao lúc',
+  departmentId: 'Bộ phận',
+  dispensedForTrip: 'Cấp thuốc cho chuyến',
+  dueOn: 'Hạn',
+  endedAt: 'Đã kết thúc lúc',
+  endsAt: 'Kết thúc lúc',
+  escalationCount: 'Số lần leo thang',
+  everBelowThreshold: 'Từng không đạt',
+  expectedReturnAt: 'Dự kiến về lúc',
+  expiryDate: 'Ngày hết hạn',
+  failedLayer: 'Lớp không đạt',
+  filters: 'Bộ lọc',
+  floorAreaId: 'Tầng/khu',
+  floorAreaIds: 'Tầng/khu',
+  format: 'Định dạng',
+  from: 'Từ',
+  fromStatus: 'Từ trạng thái',
+  group: 'Nhóm',
+  hasDiscrepancy: 'Có sai lệch',
+  importance: 'Mức quan trọng',
+  includeIdentity: 'Có định danh',
+  indicatorId: 'Chỉ số',
+  itemCode: 'Mã vật phẩm',
+  late: 'Muộn',
+  leftAt: 'Rời đi lúc',
+  level: 'Mức',
+  levelAtAcknowledgement: 'Mức lúc tiếp nhận',
+  maximum: 'Lớn nhất',
+  mealId: 'Bữa',
+  medication: 'Thuốc',
+  minutes: 'Số phút',
+  missingOnReturn: 'Thiếu khi về',
+  name: 'Tên',
+  notRecorded: 'Không ghi nhận',
+  origin: 'Nguồn lập',
+  originalPeriod: 'Kỳ gốc',
+  overdue: 'Quá hạn',
+  overdueSince: 'Quá hạn từ',
+  passed: 'Đạt',
+  performedAt: 'Thực hiện lúc',
+  performerRole: 'Vai trò người thực hiện',
+  present: 'Có mặt',
+  quantity: 'Số lượng',
+  ratio: 'Tỷ lệ',
+  reason: 'Lý do',
+  recordedLate: 'Ghi nhận muộn',
+  registered: 'Đã đăng ký',
+  residenceType: 'Loại lưu trú',
+  residenceTypeAfter: 'Loại lưu trú sau',
+  residenceTypeBefore: 'Loại lưu trú trước',
+  residentIds: 'Người cao tuổi',
+  responseMinutes: 'Thời gian tiếp nhận (phút)',
+  roomId: 'Phòng',
+  roomIds: 'Phòng',
+  rowCount: 'Số dòng',
+  scope: 'Phạm vi',
+  shiftEndsAt: 'Ca kết thúc lúc',
+  shiftId: 'Ca',
+  shiftTemplateId: 'Mẫu ca',
+  source: 'Nguồn',
+  staffCount: 'Số nhân viên',
+  staffName: 'Nhân viên',
+  startsAt: 'Bắt đầu lúc',
+  taskTypeId: 'Loại công việc',
+  threshold: 'Ngưỡng',
+  to: 'Đến',
+  toStatus: 'Sang trạng thái',
+  totalWeight: 'Tổng trọng số',
+  trip: 'Chuyến',
+  type: 'Loại',
+  values: 'Giá trị',
+  waitingDays: 'Số ngày chờ',
+}
+
+export function detailStatusLabel(status) {
+  if (status === null || status === undefined) return ''
+  return DETAIL_VALUES[status] ?? status
+}
+
+function detailValue(value) {
+  if (typeof value === 'boolean') return value ? 'Có' : 'Không'
+  if (typeof value === 'number') return formatValue(value)
+  if (Array.isArray(value)) return value.map(detailValue).join(', ')
+  if (typeof value === 'object') return JSON.stringify(value)
+  const text = String(value)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return formatDate(text)
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) return formatDateTime(text)
+  return DETAIL_VALUES[text] ?? text
+}
+
+// "Tên khóa: giá trị" nối dấu phẩy; bỏ giá trị trống
+export function detailResultText(result) {
+  return Object.entries(result ?? {})
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => `${RESULT_KEYS[k] ?? k}: ${detailValue(v)}`)
+    .join(', ')
 }
 
 // FR-009 câu cuối, Q12 (016 T021; chủ dự án duyệt 2026-11-12): loại bản ghi đã nối với màn có id của feature sở hữu;

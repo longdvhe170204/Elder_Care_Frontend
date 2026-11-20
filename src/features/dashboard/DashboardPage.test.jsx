@@ -264,7 +264,7 @@ describe('DashboardPage', () => {
 
     const card = await screen.findByRole('region', { name: /Cần chú ý/ })
     fireEvent.click(within(card).getByRole('button', { name: /Giấy phép cơ sở sắp hết hạn/ }))
-    expect(await screen.findByText(/name: Giấy phép hoạt động, daysRemaining: 45/)).toBeInTheDocument()
+    expect(await screen.findByText(/Tên: Giấy phép hoạt động, Số ngày còn lại: 45/)).toBeInTheDocument()
     expect(screen.getByText('1 bản ghi')).toBeInTheDocument()
   })
 
