@@ -28,7 +28,7 @@ describe('reconciliationView', () => {
   it('FR_035_kiemDong_thieuDonNguonThieuMoTaThieuLyDoNgungThieuDonMoi', () => {
     const errors = itemErrors([
       { source: 'CURRENT_PRESCRIPTION', decision: 'CONTINUE' },
-      { source: 'ADMISSION_CURRENT_MEDICATION', medicationDescription: ' ', decision: 'CONTINUE' },
+      { source: 'ADMISSION_CURRENT_MEDICATION', medicationDescription: ' ', decision: 'DISCONTINUE', reason: 'Bỏ' },
       {
         source: 'DISCHARGE_PRESCRIPTION',
         medicationDescription: 'Clopidogrel 75mg',
@@ -45,6 +45,22 @@ describe('reconciliationView', () => {
     expect(errors[3]).toEqual({ newPrescription: 'Lập đơn mới cho dòng này' })
     expect(errors[4]).toEqual({ decision: 'Chọn quyết định' })
     expect(errors[5]).toEqual({})
+  })
+
+  it('FR_034a_tiepTucThuocDangDungKhiTiepNhan_phaiGhiKemDonVaGuiDonDi', () => {
+    const line = { source: 'ADMISSION_CURRENT_MEDICATION', medicationDescription: 'Amlodipin 5mg', decision: 'CONTINUE' }
+    expect(itemErrors([line])[0]).toEqual({ newPrescription: 'Lập đơn mới cho dòng này' })
+    expect(itemErrors([{ ...line, source: 'DISCHARGE_PRESCRIPTION' }])[0]).toEqual({
+      newPrescription: 'Lập đơn mới cho dòng này',
+    })
+    expect(itemsBody([{ ...line, newPrescription: { medicationId: 3 } }])).toEqual([
+      {
+        source: 'ADMISSION_CURRENT_MEDICATION',
+        medicationDescription: 'Amlodipin 5mg',
+        decision: 'CONTINUE',
+        newPrescription: { medicationId: 3 },
+      },
+    ])
   })
 
   it('FR_036_thanLuuDong_boTruongChiDocVaDonMoiCuaDongTiepTuc', () => {

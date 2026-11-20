@@ -28,7 +28,7 @@ import {
 } from './reconciliationApi'
 import {
   DECISIONS,
-  NEEDS_PRESCRIPTION,
+  needsPrescription,
   REASONS,
   SOURCES,
   STATUS,
@@ -692,7 +692,7 @@ function LineEditor({ index, item, errors, prescriptions, onChange, onRemove, on
           {errors.reason && <FieldError>{errors.reason}</FieldError>}
         </Field>
       </div>
-      {NEEDS_PRESCRIPTION.includes(item.decision) && (
+      {needsPrescription(item) && (
         <Field data-invalid={!!errors.newPrescription || undefined} className="gap-2">
           {item.newPrescription && (
             <span className="type-body-sm">{`Đơn mới: ${item.newPrescriptionLabel ?? `thuốc mã ${item.newPrescription.medicationId}`}, liều ${item.newPrescription.dosage}, ${item.newPrescription.route}`}</span>
