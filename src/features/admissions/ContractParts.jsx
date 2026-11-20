@@ -35,6 +35,9 @@ import {
   newKey,
 } from './admissionLabels'
 import { getRoomTypes } from '@/api/api003'
+
+// Loại dịch vụ đặt theo lựa chọn mức chăm sóc, loại phòng của hợp đồng (Q-300, 6.4), không có ô tick
+const FIXED_SERVICE_TYPES = ['CARE', 'RESIDENCY_FEE']
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 import { FileInput } from '@/common/FileInput'
 
@@ -361,7 +364,7 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
   const editing = !!contract
   const fixedResident = editing || presetResidentId != null
   const [etag, setEtag] = useState(null)
-  const [catalog, setCatalog] = useState([])
+  const [catalog, setCatalog] = useState(null)
   const [residentId, setResidentId] = useState(
     contract ? String(contract.residentId) : presetResidentId ? String(presetResidentId) : '',
   )
@@ -385,7 +388,7 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
   useEffect(() => {
     getServices({ query: {} })
       .then(({ data }) => setCatalog(data.filter((s) => s.status === 'ACTIVE')))
-      .catch(() => {})
+      .catch(() => setCatalog([]))
     getRoomTypes({ query: {} })
       .then(({ data }) => setRoomTypes(data.filter((t) => t.status === 'ACTIVE')))
       .catch(() => setRoomTypes([]))
@@ -411,9 +414,22 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
   }
   const shown = (key) => (submitted ? errors[key] : null)
 
+  // Q-300, 6.4 (chủ dự án duyệt 2026-11-20): dịch vụ chăm sóc theo mức của hợp đồng và phí lưu trú theo loại phòng là tác
+  // động kèm lựa chọn mức, loại phòng của Hành chính, không tick tay; dòng cũ của mức, loại phòng khác bị thay khi lưu.
+  // Dịch vụ đi kèm vẫn chọn tay.
+  const services = catalog ?? []
+  const careService = services.find((s) => s.type === 'CARE' && s.careLevelCode === level)
+  const feeService = residential
+    ? services.find((s) => s.type === 'RESIDENCY_FEE' && s.roomTypeId === Number(roomTypeId))
+    : undefined
+  const fixedServices = [careService, feeService].filter(Boolean)
+  const isFixed = (id) => FIXED_SERVICE_TYPES.includes(services.find((s) => s.id === id)?.type)
+  const optionalServices = services.filter((s) => !FIXED_SERVICE_TYPES.includes(s.type))
+
   async function save() {
     setSubmitted(true)
-    if (Object.values(errors).some(Boolean)) return
+    // danh mục chưa tải xong thì chưa biết dòng nào là dịch vụ theo mức, theo loại phòng
+    if (Object.values(errors).some(Boolean) || catalog === null) return
     setBusy(true)
     setFailure(null)
     const body = {
@@ -423,7 +439,12 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
       ...(endDate && { endDate }),
       careLevel: level,
       residencyFeeBillingPeriod: period,
-      services: [...picked].map(([serviceId, inPackage]) => ({ serviceId, inPackage })),
+      services: [
+        ...fixedServices.map((s) => ({ serviceId: s.id, inPackage: !!picked.get(s.id) })),
+        ...[...picked]
+          .filter(([serviceId]) => !isFixed(serviceId))
+          .map(([serviceId, inPackage]) => ({ serviceId, inPackage })),
+      ],
       noDepositRequired: noDeposit,
       ...(!noDeposit && deposit !== '' && { depositAmount: Number(deposit) }),
       ...(type === 'DAY_CARE' && { arrivalSchedule: schedule }),
@@ -538,11 +559,29 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
 
           <Field>
             <FieldLabel>Dịch vụ trong hợp đồng</FieldLabel>
-            {catalog.length === 0 ? (
-              <p className="type-body-sm text-muted-foreground">Chưa có dịch vụ hiệu lực trong danh mục.</p>
+            <ul className="flex flex-col gap-1 type-body-sm">
+              <li>
+                {careService
+                  ? `${careService.name}, theo mức chăm sóc`
+                  : level
+                    ? 'Danh mục chưa có dịch vụ chăm sóc hiệu lực cho mức này'
+                    : 'Dịch vụ chăm sóc: chọn mức chăm sóc'}
+              </li>
+              {residential && (
+                <li>
+                  {feeService
+                    ? `${feeService.name}, theo loại phòng`
+                    : roomTypeId
+                      ? 'Danh mục chưa có phí lưu trú hiệu lực cho loại phòng này'
+                      : 'Phí lưu trú: chọn loại phòng'}
+                </li>
+              )}
+            </ul>
+            {catalog !== null && optionalServices.length === 0 ? (
+              <p className="type-body-sm text-muted-foreground">Chưa có dịch vụ đi kèm hiệu lực trong danh mục.</p>
             ) : (
               <ul className="flex flex-col gap-2">
-                {catalog.map((s) => (
+                {optionalServices.map((s) => (
                   <li key={s.id} className="flex flex-wrap items-center gap-3">
                     <label className="flex items-center gap-2 type-body-sm">
                       <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggleService(s.id)} />
