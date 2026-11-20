@@ -34,6 +34,7 @@ import {
   money,
   newKey,
 } from './admissionLabels'
+import { getRoomTypes } from '@/api/api003'
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 import { FileInput } from '@/common/FileInput'
 
@@ -375,6 +376,8 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
   const [noDeposit, setNoDeposit] = useState(!!contract?.noDepositRequired)
   const [deposit, setDeposit] = useState(contract?.depositAmount ?? '')
   const [schedule, setSchedule] = useState(contract?.arrivalSchedule ?? [])
+  const [roomTypes, setRoomTypes] = useState(null)
+  const [roomTypeId, setRoomTypeId] = useState(contract?.roomTypeId ? String(contract.roomTypeId) : '')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
@@ -383,15 +386,24 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
     getServices({ query: {} })
       .then(({ data }) => setCatalog(data.filter((s) => s.status === 'ACTIVE')))
       .catch(() => {})
+    getRoomTypes({ query: {} })
+      .then(({ data }) => setRoomTypes(data.filter((t) => t.status === 'ACTIVE')))
+      .catch(() => setRoomTypes([]))
     if (editing)
       getContractsById({ path: { id: contract.id } })
         .then(({ etag: tag }) => setEtag(tag))
         .catch((e) => setFailure(problemOf(e)))
   }, [editing, contract?.id])
 
+  // 004 FR-019: hợp đồng nội trú ghi loại phòng (giường do phân bổ của 003); chỉ loại phòng phục vụ loại lưu trú đã chọn
+  const residential = type === 'LONG_TERM_RESIDENTIAL' || type === 'SHORT_TERM_RESIDENTIAL'
+  const roomTypeOptions = (roomTypes ?? []).filter((t) =>
+    type === 'SHORT_TERM_RESIDENTIAL' ? t.servesShortTerm : t.servesLongTerm,
+  )
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
     type: !type && 'Chọn loại lưu trú',
+    roomType: residential && !roomTypeId && 'Chọn loại phòng',
     start: !startDate && 'Nhập ngày bắt đầu',
     end: type === 'SHORT_TERM_RESIDENTIAL' && !endDate && 'Nội trú ngắn ngày cần ngày kết thúc',
     level: !level && 'Chọn mức chăm sóc',
@@ -415,6 +427,7 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
       noDepositRequired: noDeposit,
       ...(!noDeposit && deposit !== '' && { depositAmount: Number(deposit) }),
       ...(type === 'DAY_CARE' && { arrivalSchedule: schedule }),
+      ...(residential && { roomTypeId: Number(roomTypeId) }),
     }
     try {
       if (editing) {
@@ -466,6 +479,26 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
             onChange={setType}
             error={shown('type')}
           />
+          {residential && (
+            <Field data-invalid={!!shown('roomType') || undefined}>
+              <FieldLabel htmlFor="contract-room-type">Loại phòng</FieldLabel>
+              <select
+                id="contract-room-type"
+                className={SELECT}
+                value={roomTypeId}
+                aria-invalid={!!shown('roomType') || undefined}
+                onChange={(e) => setRoomTypeId(e.target.value)}
+              >
+                <option value="">{roomTypes === null ? 'Đang tải…' : 'Chọn loại phòng'}</option>
+                {roomTypeOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              {shown('roomType') && <FieldError>{shown('roomType')}</FieldError>}
+            </Field>
+          )}
           <Field data-invalid={!!shown('start') || undefined}>
             <FieldLabel htmlFor="contract-start">Ngày bắt đầu</FieldLabel>
             <Input
