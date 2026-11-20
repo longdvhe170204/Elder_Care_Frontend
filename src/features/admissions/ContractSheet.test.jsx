@@ -30,6 +30,49 @@ describe('ContractSheet', () => {
     expect(await within(dialog).findByText('Chọn loại lưu trú')).toBeInTheDocument()
     expect(within(dialog).queryByText('Chọn người cao tuổi')).toBeNull()
   })
+
+  // 004 FR-019: hợp đồng nội trú có loại phòng (hoặc giường), thiếu thì Gửi ký bị 409 CONTRACT_ROOM_REQUIRED (BF-01 bước 9)
+  it('noiTru_chonLoaiPhongPhucVuLoaiLuuTru_guiRoomTypeId', async () => {
+    api.on(
+      'GET',
+      '/room-types',
+      json(200, [
+        { id: 1, name: 'Phòng đôi', servesLongTerm: true, servesShortTerm: true, status: 'ACTIVE' },
+        { id: 2, name: 'Phòng ngắn ngày', servesLongTerm: false, servesShortTerm: true, status: 'ACTIVE' },
+        { id: 3, name: 'Phòng cũ', servesLongTerm: true, servesShortTerm: true, status: 'INACTIVE' },
+      ]),
+    )
+    api.on('POST', '/contracts', json(201, { id: 9 }))
+    render(<ContractSheet residentId={5} residentName="Nguyễn Thị Lan" onClose={() => {}} onDone={() => {}} />)
+    const dialog = await screen.findByRole('dialog')
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nội trú dài hạn' }))
+    fireEvent.change(within(dialog).getByLabelText('Ngày bắt đầu'), { target: { value: '2026-11-20' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Thường xuyên' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Theo tháng' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
+    const select = within(dialog).getByRole('combobox', { name: 'Loại phòng' })
+    await vi.waitFor(() => expect(select).toHaveAttribute('aria-invalid', 'true'))
+    expect(within(dialog).getAllByText('Chọn loại phòng')).toHaveLength(2)
+    expect(api.calls('POST', '/contracts')).toHaveLength(0)
+
+    expect(await within(select).findByRole('option', { name: 'Phòng đôi' })).toBeInTheDocument()
+    expect(within(select).queryByRole('option', { name: 'Phòng ngắn ngày' })).toBeNull()
+    expect(within(select).queryByRole('option', { name: 'Phòng cũ' })).toBeNull()
+    fireEvent.change(select, { target: { value: '1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
+
+    await vi.waitFor(() => expect(api.calls('POST', '/contracts')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/contracts')[0][1].body)).toMatchObject({ residenceType: 'LONG_TERM_RESIDENTIAL', roomTypeId: 1 })
+  })
+
+  it('banTru_khongCoOLoaiPhong', async () => {
+    api.on('GET', '/room-types', json(200, []))
+    render(<ContractSheet residentId={5} residentName="Nguyễn Thị Lan" onClose={() => {}} onDone={() => {}} />)
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Bán trú' }))
+    expect(within(dialog).queryByRole('combobox', { name: 'Loại phòng' })).toBeNull()
+  })
 })
 
 describe('ContractDetail', () => {
