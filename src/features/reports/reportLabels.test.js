@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { breakdownLabel, labelNotes, recordLink } from './reportLabels'
+import { breakdownLabel, detailResultText, detailStatusLabel, labelNotes, recordLink } from './reportLabels'
 
 const floors = [
   { id: 101, name: 'Tầng 1' },
@@ -109,5 +109,33 @@ describe('recordLink', () => {
   it('FR_009_Q12_khongMoDuocHoacChuaNoi_null', () => {
     expect(recordLink({ sourceKey: 'M05.INCIDENT:9', canOpenRecord: false })).toBeNull()
     expect(recordLink({ sourceKey: 'M07.DOSE:x', canOpenRecord: true })).toBeNull()
+  })
+})
+
+// Khung danh sách bản ghi (FR-009): trạng thái, kết quả hiện bằng chữ thay vì mã backend trả (2026-11-20)
+describe('detailStatusLabel', () => {
+  it('đổi mã trạng thái sang chữ, mã chưa biết giữ nguyên', () => {
+    expect(detailStatusLabel('ADMISSION_IN_PROGRESS')).toBe('Đang tiếp nhận')
+    expect(detailStatusLabel('OCCUPIED')).toBe('Đang sử dụng')
+    expect(detailStatusLabel('OVERDUE')).toBe('Quá hạn')
+    expect(detailStatusLabel('SOMETHING_NEW')).toBe('SOMETHING_NEW')
+    expect(detailStatusLabel(null)).toBe('')
+  })
+})
+
+describe('detailResultText', () => {
+  it('tên khóa, giá trị bằng chữ; ngày dd/MM/yyyy; bỏ giá trị trống', () => {
+    expect(
+      detailResultText({ date: '2026-11-20', residenceType: 'LONG_TERM_RESIDENTIAL', careLevel: 'BASIC', note: null }),
+    ).toBe('Ngày: 20/11/2026, Loại lưu trú: Nội trú dài hạn, Mức chăm sóc: Cơ bản')
+    expect(detailResultText({ residenceType: 'UNDETERMINED', careLevel: null })).toBe('Loại lưu trú: Chưa xác định')
+  })
+
+  it('thời điểm theo giờ Việt Nam, đúng/sai thành Có/Không, số theo vi-VN, khóa lạ giữ nguyên', () => {
+    expect(
+      detailResultText({ acknowledgedAt: '2026-11-20T01:05:00Z', late: true, overdue: false, amount: 1500000, foo: 'x' }),
+    ).toBe('Tiếp nhận lúc: 20/11/2026 08:05, Muộn: Có, Quá hạn: Không, Số tiền: 1.500.000, foo: x')
+    expect(detailResultText({ name: 'Giấy phép hoạt động', daysRemaining: 45 })).toBe('Tên: Giấy phép hoạt động, Số ngày còn lại: 45')
+    expect(detailResultText(null)).toBe('')
   })
 })
