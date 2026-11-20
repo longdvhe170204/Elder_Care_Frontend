@@ -16,6 +16,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { formatDate, formatDateTime } from '@/common/dateTime'
+import { ChangeContent } from '@/features/admissions/ChangeParts'
 import { ACTION_LABELS, actorLabel, statusLabel, typeLabel } from './approvalStatus'
 
 // Chi tiết một yêu cầu phê duyệt (000 T097; US5; FR-031 → FR-040). Nút theo `allowedCommands` backend trả;
@@ -215,17 +216,24 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
         )}
       </dl>
 
-      {content.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h3 className="type-caption text-muted-foreground">Nội dung</h3>
-          <ul className="flex flex-col gap-1">
-            {content.map(([field, value]) => (
-              <li key={field} className="break-words">
-                <span className="text-muted-foreground">{field}:</span> <span>{valueText(value)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {request.type === 'M02.RESIDENCY_CHANGE' ? (
+        <>
+          <p>{`Hợp đồng mã ${request.content?.contractId}`}</p>
+          <ChangeContent content={request.content ?? {}} headingClassName="type-caption text-muted-foreground" />
+        </>
+      ) : (
+        content.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <h3 className="type-caption text-muted-foreground">Nội dung</h3>
+            <ul className="flex flex-col gap-1">
+              {content.map(([field, value]) => (
+                <li key={field} className="break-words">
+                  <span className="text-muted-foreground">{field}:</span> <span>{valueText(value)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
       )}
 
       <ProblemAlert problem={failure} />

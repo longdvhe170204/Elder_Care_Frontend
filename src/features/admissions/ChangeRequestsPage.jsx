@@ -16,8 +16,8 @@ import { CHANGE_TYPES, REQUEST_STATUS, labelOf } from './admissionLabels'
 import { ChangeRequestSheet, ChangeRequestView } from './ChangeParts'
 
 // Yêu cầu thay đổi lưu trú (004 T047; US5, FR-037 → FR-047): bảng yêu cầu lọc theo trạng thái (GET
-// /residency-change-requests, "Đổi api" 004 A duyệt 2026-11-07), chọn dòng để xem, sửa ở Nháp; gửi duyệt, duyệt dùng màn Yêu
-// cầu phê duyệt (api-000). Mã yêu cầu là approvalRequestId.
+// /residency-change-requests, "Đổi api" 004 A duyệt 2026-11-07), chọn dòng để xem, sửa ở Nháp, Hành chính xác nhận với người
+// đại diện rồi gửi duyệt ngay ở đây (api-000 submit); duyệt dùng màn Yêu cầu phê duyệt. Mã yêu cầu là approvalRequestId.
 
 const FILTERS = [
   ['DRAFT', 'Nháp', ['DRAFT']],
@@ -154,6 +154,9 @@ export function ChangeRequestsPage() {
                   <TableCell className="tabular-nums">{formatDate(r.requestedEffectiveDate)}</TableCell>
                   <TableCell className="pr-4">
                     <StatusBadge status={REQUEST_STATUS[r.status] ?? r.status} />
+                    {r.status === 'DRAFT' && r.representativeConfirmationRequired && !r.representativeConfirmation && (
+                      <span className="block type-caption text-muted-foreground">Chờ xác nhận với người đại diện</span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -163,11 +166,14 @@ export function ChangeRequestsPage() {
       )}
       {shown && (
         <ChangeRequestView
-          key={shown.request.approvalRequestId}
+          key={`${shown.request.approvalRequestId}-${shown.etag}`}
           request={shown.request}
+          etag={shown.etag}
           canUpdate={can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
+          canConfirm={can('ADMISSION_CONTRACT_DEPOSIT', 'VIEW')}
           onEdit={(request) => setSheet({ request, etag: shown.etag })}
           onReload={() => open(shown.request.approvalRequestId)}
+          onSubmitted={changed}
         />
       )}
     </div>

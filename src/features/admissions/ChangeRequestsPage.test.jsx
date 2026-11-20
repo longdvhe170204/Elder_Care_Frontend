@@ -5,8 +5,9 @@ import { PermissionsProvider } from '@/common/permissions/permissions'
 import { ChangeRequestsPage } from './ChangeRequestsPage'
 
 // 004 T047 (US5; FR-037 → FR-047): lập yêu cầu thay đổi lưu trú ở Nháp (loại thay đổi, giá trị mới, ngày hiệu lực mong muốn,
-// lý do), xem giá trị trước và ảnh hưởng chi phí, sửa Nháp kèm If-Match. Gửi duyệt, duyệt, từ chối dùng màn Yêu cầu phê duyệt
-// (api-000). Bảng yêu cầu lọc theo trạng thái (GET /residency-change-requests), chọn dòng để mở; mã yêu cầu là approvalRequestId.
+// lý do), xem giá trị trước và ảnh hưởng chi phí, sửa Nháp kèm If-Match. Hành chính xác nhận với người đại diện kèm bằng chứng
+// rồi mới gửi duyệt (2026-11-20; api-000 submit); duyệt, từ chối dùng màn Yêu cầu phê duyệt. Bảng yêu cầu lọc theo trạng thái
+// (GET /residency-change-requests), chọn dòng để mở; mã yêu cầu là approvalRequestId.
 
 let api
 
@@ -22,6 +23,16 @@ const REQUEST = {
   approvalRequestId: 12,
   status: 'DRAFT',
   requestedBy: 'Hoàng Thu Hà',
+  representativeConfirmationRequired: true,
+}
+
+const CONFIRMATION = {
+  method: 'PHONE',
+  confirmedOn: '2026-11-19',
+  evidenceFileId: 70,
+  note: 'Người đại diện đồng ý qua điện thoại',
+  recordedBy: 'Lê Hành Chính',
+  recordedAt: '2026-11-19T03:00:00Z',
 }
 
 function renderPage() {
@@ -42,10 +53,10 @@ beforeEach(() => {
   api.on(
     'GET',
     '/me/permissions',
-    json(
-      200,
-      ['VIEW', 'CREATE', 'UPDATE'].map((operation) => ({ function: 'RESIDENCY_CHANGE_REQUEST', operation })),
-    ),
+    json(200, [
+      ...['VIEW', 'CREATE', 'UPDATE'].map((operation) => ({ function: 'RESIDENCY_CHANGE_REQUEST', operation })),
+      { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'VIEW' },
+    ]),
   )
   api.on('GET', '/residency-change-requests', json(200, [REQUEST]))
   api.on('GET', '/residency-change-requests/12', json(200, REQUEST, { ETag: '"2"' }))
@@ -78,16 +89,19 @@ describe('ChangeRequestsPage', () => {
     expect(screen.getByText(/Đặc biệt/)).toBeInTheDocument()
     expect(screen.getByText(/5\.000\.000/)).toBeInTheDocument()
     expect(screen.getByText(/8\.000\.000/)).toBeInTheDocument()
-    expect(screen.getByText(/Gửi duyệt ở màn Yêu cầu phê duyệt/)).toBeInTheDocument()
+    expect(screen.getByText(/Chưa xác nhận với người đại diện/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Gửi duyệt' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Xác nhận với người đại diện' })).toBeInTheDocument()
   })
 
   it('FR_039_suaNhap_guiIfMatchTheoETag', async () => {
     api.on('PUT', '/residency-change-requests/12', json(200, {}))
     renderPage()
     await openRequest()
-    fireEvent.click(screen.getByRole('button', { name: 'Sửa yêu cầu nháp' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận với người đại diện' }))
 
     const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Lý do'), { target: { value: 'Bổ sung căn cứ' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
 
@@ -112,6 +126,145 @@ describe('ChangeRequestsPage', () => {
     expect(within(dialog).getByText('Chọn ít nhất một loại thay đổi')).toBeInTheDocument()
     expect(within(dialog).getByText('Nhập ngày hiệu lực mong muốn')).toBeInTheDocument()
     expect(api.calls('POST', '/residency-change-requests')).toHaveLength(0)
+  })
+
+  it('FR_039_bacSi_chonNguoiCaoTuoi_chiMucChamSoc_khongCoXacNhan', async () => {
+    // Bác sĩ: lập được yêu cầu, không có quyền xem hợp đồng (Phụ lục 27)
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(
+        200,
+        ['VIEW', 'CREATE', 'UPDATE'].map((operation) => ({ function: 'RESIDENCY_CHANGE_REQUEST', operation })),
+      ),
+    )
+    api.on(
+      'GET',
+      '/residents',
+      json(200, { items: [{ id: 9004, status: 'IN_RESIDENCE', personalInfo: { fullName: 'Phạm Văn Hùng' } }] }),
+    )
+    api.on('POST', '/residency-change-requests', json(201, REQUEST))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: 'Phạm Văn Hùng' })
+
+    expect(within(dialog).queryByLabelText('Hợp đồng')).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('checkbox', { name: 'Dịch vụ' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('Xác nhận với người đại diện')).not.toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '9004' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Đặc biệt' }))
+    fireEvent.change(within(dialog).getByLabelText('Ngày hiệu lực mong muốn'), { target: { value: '2026-11-20' } })
+    fireEvent.change(within(dialog).getByLabelText('Lý do'), { target: { value: 'Đánh giá lại' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residency-change-requests')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residency-change-requests')[0][1].body)).toEqual({
+      residentId: 9004,
+      changeTypes: ['CARE_LEVEL'],
+      newValue: { careLevel: 'SPECIAL' },
+      requestedEffectiveDate: '2026-11-20',
+      reason: 'Đánh giá lại',
+    })
+  })
+
+  it('xacNhanNguoiDaiDien_taiBangChung_guiKemCachXacNhanNgayVaMaTep', async () => {
+    api.on('POST', '/files', json(201, { fileId: 77 }))
+    api.on('POST', '/residency-change-requests', json(201, REQUEST))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: /HD-031/ })
+    fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Mức chăm sóc' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Đặc biệt' }))
+    fireEvent.change(within(dialog).getByLabelText('Ngày hiệu lực mong muốn'), { target: { value: '2026-11-20' } })
+    fireEvent.change(within(dialog).getByLabelText('Lý do'), { target: { value: 'Gia đình đã ký phụ lục' } })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Đã xác nhận nội dung thay đổi với người đại diện' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Gọi điện' }))
+    fireEvent.change(within(dialog).getByLabelText('Ngày xác nhận'), { target: { value: '2026-11-19' } })
+
+    // thiếu bằng chứng thì báo tại ô, chưa gửi
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
+    expect(await within(dialog).findByText('Đính kèm bằng chứng xác nhận')).toBeInTheDocument()
+    expect(api.calls('POST', '/residency-change-requests')).toHaveLength(0)
+
+    fireEvent.change(within(dialog).getByLabelText('Bằng chứng xác nhận'), {
+      target: { files: [new File(['x'], 'cuoc-goi.png', { type: 'image/png' })] },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Dùng ghi chú gợi ý' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residency-change-requests')).toHaveLength(1))
+    const body = JSON.parse(api.calls('POST', '/residency-change-requests')[0][1].body)
+    expect(body.representativeConfirmation).toMatchObject({
+      method: 'PHONE',
+      confirmedOn: '2026-11-19',
+      evidenceFileId: 77,
+    })
+    expect(body.representativeConfirmation.note).toMatch(/Đã gọi điện cho người đại diện/)
+  })
+
+  it('xacNhan_tepSaiKieu_ngayTuongLai_baoTaiO', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    const dialog = screen.getByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Đã xác nhận nội dung thay đổi với người đại diện' }))
+    fireEvent.change(within(dialog).getByLabelText('Ngày xác nhận'), { target: { value: '2999-01-01' } })
+    fireEvent.change(within(dialog).getByLabelText('Bằng chứng xác nhận'), {
+      target: { files: [new File(['x'], 'ghi-am.mp3', { type: 'audio/mpeg' })] },
+    })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
+    expect(await within(dialog).findByText('Ngày xác nhận không được sau hôm nay')).toBeInTheDocument()
+    expect(within(dialog).getByText('Bằng chứng phải là tệp PDF, JPG hoặc PNG')).toBeInTheDocument()
+    expect(api.calls('POST', '/files')).toHaveLength(0)
+  })
+
+  it('daXacNhan_hienXacNhan_guiDuyetKemIfMatch', async () => {
+    api.on(
+      'GET',
+      '/residency-change-requests/12',
+      json(200, { ...REQUEST, representativeConfirmation: CONFIRMATION }, { ETag: '"4"' }),
+    )
+    api.on('POST', '/approval-requests/12/submit', json(200, {}))
+    renderPage()
+    await openRequest()
+
+    expect(screen.getByText(/Gọi điện, ngày 19\/11\/2026, ghi bởi Lê Hành Chính/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Xem bằng chứng' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
+
+    await waitFor(() => expect(api.calls('POST', '/approval-requests/12/submit')).toHaveLength(1))
+    expect(api.calls('POST', '/approval-requests/12/submit')[0][1].headers['If-Match']).toBe('"4"')
+  })
+
+  it('bacSi_xemNhapChuaXacNhan_baoDaChuyenHanhChinh_khongGuiDuyet', async () => {
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(
+        200,
+        ['VIEW', 'CREATE', 'UPDATE'].map((operation) => ({ function: 'RESIDENCY_CHANGE_REQUEST', operation })),
+      ),
+    )
+    renderPage()
+    await openRequest()
+    expect(screen.getByText(/Yêu cầu đã chuyển Hành chính/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Gửi duyệt' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Xác nhận với người đại diện' })).not.toBeInTheDocument()
+  })
+
+  it('FR_041_doiMucTrungMucHienTai_baoTaiO', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: /HD-031/ })
+    fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Mức chăm sóc' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Thường xuyên' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
+    expect(await within(dialog).findByText('Mức chăm sóc mới trùng mức hiện tại của hợp đồng')).toBeInTheDocument()
   })
 
   it('FR_037_lapYeuCauDoiMuc_guiGiaTriMoi', async () => {

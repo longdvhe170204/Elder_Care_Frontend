@@ -240,4 +240,32 @@ describe('ApprovalInbox', () => {
     await within(panel).findByText('Ghi nhầm giờ')
     expect(within(panel).queryByText('Diễn biến')).not.toBeInTheDocument()
   })
+
+  it('thayDoiLuuTru_noiDungTheoNhan_khongInJson', async () => {
+    const change = request({
+      type: 'M02.RESIDENCY_CHANGE',
+      status: 'APPLIED',
+      content: {
+        contractId: 3,
+        changeTypes: ['CARE_LEVEL'],
+        previousValue: { careLevel: 'BASIC' },
+        newValue: { careLevel: 'SPECIAL' },
+        costImpact: [{ item: 'CARE_SERVICE', previousUnitPrice: 3000000, newUnitPrice: 9000000 }],
+      },
+    })
+    api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, { items: [change], nextCursor: null }))
+    render(<ApprovalInbox />)
+    expect((await screen.findAllByRole('row'))[1]).toHaveTextContent('Thay đổi lưu trú')
+
+    api.on('GET', '/approval-requests/7', json(200, change, { ETag: '"1"' }))
+    fireEvent.click(screen.getByRole('button', { name: 'YC-2026-000007' }))
+    const panel = await screen.findByRole('dialog')
+
+    expect(await within(panel).findByText('Trước: Cơ bản; sau: Đặc biệt')).toBeInTheDocument()
+    expect(within(panel).getByText('Mức chăm sóc')).toBeInTheDocument()
+    expect(within(panel).getByText(/Dịch vụ chăm sóc: 3\.000\.000 đ → 9\.000\.000 đ/)).toBeInTheDocument()
+    expect(panel).toHaveTextContent('Hợp đồng mã 3')
+    expect(panel).not.toHaveTextContent('{"careLevel"')
+    expect(panel).not.toHaveTextContent('CARE_SERVICE')
+  })
 })
