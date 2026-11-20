@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getFloors, getMetrics } from '@/api'
+import { getFloors, getMetricCatalog } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -7,6 +7,7 @@ import { PageHeader } from '@/common/PageHeader'
 import { formatDate } from '@/common/dateTime'
 import { ExportDialog } from './ExportDialog'
 import { ExportList } from './ExportList'
+import { MetricCatalogNotice } from './MetricCatalogNotice'
 import { MetricDetailSheet } from './MetricDetailSheet'
 import { ReportTable } from './ReportTable'
 import { CARE_LEVELS, REPORT_GROUPS, isoDate } from './reportLabels'
@@ -80,24 +81,29 @@ export function ReportsPage({ role, onNavigate }) {
   const [catalogFloors, setCatalogFloors] = useState([])
   const facilityWide = filterOptions?.facilityWide === true
 
-  // Danh mục tên, nhóm chỉ tiêu: tải khi mở màn; lỗi (phiên hết hạn, backend khởi động lại) thì thử lại sau mỗi lần
-  // tải báo cáo tới khi được, không để bảng hiện mã chỉ tiêu và thiếu dòng tiêu đề nhóm
+  // Danh mục tên, nhóm chỉ tiêu: tải khi mở màn; lỗi (phiên hết hạn, backend khởi động lại, trình duyệt chặn request)
+  // thì báo rõ kèm nút Thử lại và thử lại sau mỗi lần tải báo cáo tới khi được, không lặng lẽ hiện mã chỉ tiêu
   const [reportLoads, setReportLoads] = useState(0)
+  const [catalogFailed, setCatalogFailed] = useState(false)
   const metricsLoaded = useRef(false)
   const handleFilterOptions = useCallback((options) => {
     setFilterOptions(options)
     setReportLoads((n) => n + 1)
   }, [])
 
-  useEffect(() => {
-    if (metricsLoaded.current) return
-    getMetrics()
+  const loadMetricCatalog = useCallback(() => {
+    getMetricCatalog()
       .then(({ data }) => {
         metricsLoaded.current = true
         setMetrics(Object.fromEntries(data.map((m) => [m.code, m])))
+        setCatalogFailed(false)
       })
-      .catch(() => {})
-  }, [reportLoads])
+      .catch(() => setCatalogFailed(true))
+  }, [])
+
+  useEffect(() => {
+    if (!metricsLoaded.current) loadMetricCatalog()
+  }, [reportLoads, loadMetricCatalog])
 
   useEffect(() => {
     if (!facilityWide) return
@@ -213,6 +219,7 @@ export function ReportsPage({ role, onNavigate }) {
               )}
             </div>
           )}
+          {current && catalogFailed && <MetricCatalogNotice onRetry={loadMetricCatalog} />}
           {current && validRange && (
             <ReportTable
               key={`${current.value}|${range.from}|${range.to}|${floorAreaId ?? ''}|${costMode}|${careLevel ?? ''}`}

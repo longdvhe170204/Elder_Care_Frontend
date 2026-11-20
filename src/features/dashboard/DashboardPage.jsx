@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronRight, Pause, Play, RefreshCw } from 'lucide-react'
-import { ApiError, getAlerts, getDashboard, getFloors, getMetrics } from '@/api'
+import { ApiError, getAlerts, getDashboard, getFloors, getMetricCatalog } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -11,6 +11,7 @@ import { BreakdownChart } from '@/common/charts/BreakdownChart'
 import { chartKind } from '@/common/charts/chartRules'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
+import { MetricCatalogNotice } from '@/features/reports/MetricCatalogNotice'
 import { MetricDetailSheet } from '@/features/reports/MetricDetailSheet'
 import { METRIC_GROUP_LABELS, breakdownLabel, formatValue, labelNotes } from '@/features/reports/reportLabels'
 
@@ -221,50 +222,58 @@ export function DashboardPage({ role, onNavigate }) {
   const [opened, setOpened] = useState(null)
   const [paused, setPaused] = useState(false)
   const [openGroups, setOpenGroups] = useState(readOpenGroups)
+  const [catalogFailed, setCatalogFailed] = useState(false)
   const etag = useRef(null)
   const catalogs = useRef({ metrics: false, floors: false })
 
-  const load = useCallback(async (background = false) => {
-    // Danh mục tên chỉ tiêu, tên tầng: tải tới khi được; lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần
-    // làm mới sau, không để màn hiện mã chỉ tiêu mãi. Không xem được danh mục tầng thì giữ "Tầng/khu <mã>".
-    if (!catalogs.current.metrics) {
-      getMetrics()
-        .then(({ data }) => {
-          catalogs.current.metrics = true
-          setMetrics(Object.fromEntries(data.map((m) => [m.code, m])))
-        })
-        .catch(() => {})
-    }
-    if (!catalogs.current.floors) {
-      getFloors()
-        .then(({ data }) => {
-          catalogs.current.floors = true
-          setFloors(data)
-        })
-        .catch(() => {})
-    }
-    // 007 FR-034: cảnh báo đã leo thang tối đa chưa tiếp nhận; vai trò không xem được cảnh báo thì không có dòng này
-    getAlerts({
-      query: { maxEscalationReached: true, status: ['NEW', 'ESCALATED'] },
-      ...(background && { headers: { 'X-Background-Refresh': 'true' } }),
-    })
-      .then(({ data }) => setEscalated(data.length))
-      .catch(() => setEscalated(null))
-    try {
-      const { data, etag: next } = await getDashboard({
-        headers: {
-          ...(etag.current && { 'If-None-Match': etag.current }),
-          ...(background && { 'X-Background-Refresh': 'true' }),
-        },
+  // Danh mục tên chỉ tiêu: tải tới khi được; lỗi (phiên hết hạn, backend khởi động lại, trình duyệt chặn request) thì
+  // báo rõ kèm nút Thử lại và thử lại ở lần làm mới sau, không lặng lẽ hiện mã chỉ tiêu.
+  const loadMetricCatalog = useCallback(() => {
+    getMetricCatalog()
+      .then(({ data }) => {
+        catalogs.current.metrics = true
+        setMetrics(Object.fromEntries(data.map((m) => [m.code, m])))
+        setCatalogFailed(false)
       })
-      etag.current = next
-      setState({ status: 'ready', dashboard: data })
-    } catch (error) {
-      // 304: số liệu không đổi, giữ khối đang hiện
-      if (error instanceof ApiError && error.status === 304) return
-      setState((s) => (s.status === 'ready' ? s : { status: 'error', problem: problemOf(error) }))
-    }
+      .catch(() => setCatalogFailed(true))
   }, [])
+
+  const load = useCallback(
+    async (background = false) => {
+      // Không xem được danh mục tầng thì giữ "Tầng/khu <mã>".
+      if (!catalogs.current.metrics) loadMetricCatalog()
+      if (!catalogs.current.floors) {
+        getFloors()
+          .then(({ data }) => {
+            catalogs.current.floors = true
+            setFloors(data)
+          })
+          .catch(() => {})
+      }
+      // 007 FR-034: cảnh báo đã leo thang tối đa chưa tiếp nhận; vai trò không xem được cảnh báo thì không có dòng này
+      getAlerts({
+        query: { maxEscalationReached: true, status: ['NEW', 'ESCALATED'] },
+        ...(background && { headers: { 'X-Background-Refresh': 'true' } }),
+      })
+        .then(({ data }) => setEscalated(data.length))
+        .catch(() => setEscalated(null))
+      try {
+        const { data, etag: next } = await getDashboard({
+          headers: {
+            ...(etag.current && { 'If-None-Match': etag.current }),
+            ...(background && { 'X-Background-Refresh': 'true' }),
+          },
+        })
+        etag.current = next
+        setState({ status: 'ready', dashboard: data })
+      } catch (error) {
+        // 304: số liệu không đổi, giữ khối đang hiện
+        if (error instanceof ApiError && error.status === 304) return
+        setState((s) => (s.status === 'ready' ? s : { status: 'error', problem: problemOf(error) }))
+      }
+    },
+    [loadMetricCatalog],
+  )
 
   useEffect(() => {
     // tải khi mở màn
@@ -371,6 +380,7 @@ export function DashboardPage({ role, onNavigate }) {
       )}
       {state.status === 'ready' && dashboard.blocks.length > 0 && (
         <>
+          {catalogFailed && <MetricCatalogNotice onRetry={loadMetricCatalog} />}
           <div
             className={`grid items-start gap-5 ${hasSituation ? 'lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]' : ''}`}
           >

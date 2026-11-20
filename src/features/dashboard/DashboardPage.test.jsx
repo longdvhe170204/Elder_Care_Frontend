@@ -27,7 +27,7 @@ beforeEach(() => {
   api = mockRoutes()
   api.on(
     'GET',
-    '/metrics',
+    '/metric-catalog',
     json(200, [
       {
         code: 'LICENSE.FACILITY',
@@ -125,7 +125,7 @@ describe('DashboardPage', () => {
   // Danh mục chỉ tiêu tải lỗi (phiên hết hạn, backend khởi động lại) thì thử lại ở lần làm mới, không hiện mã
   it('danhMucChiTieu_loiLanDau_thuLaiKhiLamMoi', async () => {
     let metricCalls = 0
-    api.on('GET', '/metrics', () => {
+    api.on('GET', '/metric-catalog', () => {
       metricCalls += 1
       return metricCalls === 1
         ? problem(403, 'PERMISSION_DENIED')
@@ -137,9 +137,12 @@ describe('DashboardPage', () => {
     render(<DashboardPage role="NURSING_HOME_MANAGER" />)
     const card = await screen.findByRole('region', { name: 'Tình hình' })
     await within(card).findByText('TASK.TODAY')
+    // không lặng lẽ hiện mã: báo rõ và cho thử lại ngay (trình duyệt có thể chặn request, 2026-11-20)
+    expect(await screen.findByText(/Không tải được tên chỉ tiêu/)).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Làm mới' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }))
     expect(await within(card).findByText('Công việc hôm nay')).toBeInTheDocument()
+    expect(screen.queryByText(/Không tải được tên chỉ tiêu/)).toBeNull()
   })
 
   // Tình hình: số chính của Người cao tuổi, Phòng giường, Công việc; chia theo tầng hiện tên tầng của 003
