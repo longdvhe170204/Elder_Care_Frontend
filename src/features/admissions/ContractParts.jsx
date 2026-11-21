@@ -35,6 +35,7 @@ import {
   newKey,
 } from './admissionLabels'
 import { getRoomTypes } from '@/api/api003'
+import { CONTRACT_REASONS } from '@/common/quickChoices'
 
 // Loại dịch vụ đặt theo lựa chọn mức chăm sóc, loại phòng của hợp đồng (Q-300, 6.4), không có ô tick
 const FIXED_SERVICE_TYPES = ['CARE', 'RESIDENCY_FEE']
@@ -364,6 +365,7 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
           <h3 className="type-card-title">{REASON_COMMANDS[mode][1]}</h3>
           <ReasonField
             id="contract-reason"
+            options={CONTRACT_REASONS[mode]}
             value={reason}
             onChange={setReason}
             error={submitted && !reason.trim() ? 'Nhập lý do' : null}

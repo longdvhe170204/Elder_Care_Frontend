@@ -1,0 +1,57 @@
+// Danh sách lựa chọn của ô chọn nhanh `ChoiceTray` ở các form BF-01 (chủ dự án chọn 2026-11-21: danh sách cố định trong
+// web, kèm "Khác" để gõ tự do). Câu chữ là bản nháp, sửa ở đây là đổi ở mọi màn dùng. Giá trị vẫn lưu thành chữ.
+
+export const APPLICATION_NEEDS = [
+  'Hỗ trợ ăn uống',
+  'Hỗ trợ vệ sinh cá nhân',
+  'Hỗ trợ đi lại',
+  'Theo dõi dùng thuốc',
+  'Theo dõi bệnh mạn tính',
+  'Chăm sóc sa sút trí tuệ',
+  'Phục hồi chức năng',
+  'Chăm sóc giảm nhẹ',
+]
+
+export const BED_ALLOCATION_REASONS = [
+  'Phân bổ khi tiếp nhận',
+  'Đặt trước giường cho ngày vào',
+  'Theo yêu cầu của gia đình',
+]
+
+export const CONTRACT_REASONS = {
+  'submit-terms-for-approval': ['Giảm giá theo thỏa thuận', 'Hoàn cảnh khó khăn'],
+  'return-to-draft': [
+    'Gia đình đổi dịch vụ',
+    'Đổi mức chăm sóc theo đánh giá',
+    'Đổi ngày bắt đầu',
+    'Sai thông tin hợp đồng',
+  ],
+  cancel: ['Gia đình không tiếp tục', 'Lập lại hợp đồng mới'],
+}
+
+export const STATUS_COMMAND_REASONS = {
+  COMPLETE_ADMISSION: ['Đủ điều kiện, người cao tuổi vào ở'],
+  CANCEL_ADMISSION: ['Gia đình không tiếp tục', 'Chọn cơ sở khác', 'Không có giường phù hợp'],
+}
+
+export const ASSESSMENT_BASIS = ['Đánh giá đầu vào khi tiếp nhận']
+
+export const ASSESSMENT_DISCARD_REASONS = ['Lập nhầm người', 'Thông tin chưa đủ, lập lại']
+
+export const CARE_NOTES = [
+  'Nguy cơ ngã',
+  'Ăn mềm, dễ nuốt',
+  'Cần nhắc uống thuốc',
+  'Nghe kém, nói to rõ',
+  'Nhìn kém',
+  'Hay quên, cần nhắc',
+]
+
+// Theo chủ đề của phần "Gia đình khai" (FAMILY_DECLARED_TOPIC_LABELS)
+export const FAMILY_DECLARED_CHOICES = {
+  GENERAL_CONDITION: ['Ăn uống kém', 'Ngủ kém', 'Sụt cân gần đây', 'Hay mệt'],
+  MOBILITY: ['Đi lại tự lập', 'Đi cần gậy hoặc khung', 'Dùng xe lăn', 'Nằm tại giường', 'Từng ngã'],
+  SELF_CARE: ['Tự ăn được', 'Cần hỗ trợ tắm rửa', 'Cần hỗ trợ vệ sinh', 'Cần hỗ trợ mặc quần áo'],
+  COGNITION: ['Tỉnh táo', 'Hay quên', 'Lú lẫn về đêm', 'Đi lang thang'],
+  KNOWN_RISKS: ['Nguy cơ ngã', 'Nghẹn, sặc khi ăn', 'Loét tì đè', 'Hay đi ra ngoài một mình'],
+}

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { typeChoice } from '@/test/choiceTray'
 import { BedAllocationForm } from './BedAllocationForm'
 
 let api
@@ -42,7 +43,7 @@ it('FR_023_createSendsExplicitBedAndReasonWithIdempotencyKey', async () => {
   open(saved)
   await screen.findByText('Khu A – P201 – G2')
   fireEvent.change(screen.getByLabelText('Giường phù hợp'), { target: { value: '6' } })
-  fireEvent.change(screen.getByLabelText('Lý do phân bổ'), { target: { value: 'Bố trí giường' } })
+  typeChoice('Lý do phân bổ', 'Bố trí giường')
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận phân bổ' }))
   await waitFor(() => expect(saved).toHaveBeenCalledWith({ id: 41, status: 'FUTURE' }))
   const request = api.calls('POST', '/bed-allocations')[0][1]
@@ -64,7 +65,7 @@ it('FR_018_conflictShowsAllConditionsAndReloadClearsChoice', async () => {
   open()
   await screen.findByText('Khu A – P201 – G2')
   fireEvent.change(screen.getByLabelText('Giường phù hợp'), { target: { value: '6' } })
-  fireEvent.change(screen.getByLabelText('Lý do phân bổ'), { target: { value: 'Bố trí giường' } })
+  typeChoice('Lý do phân bổ', 'Bố trí giường')
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận phân bổ' }))
   expect(await screen.findByText('Giới tính không phù hợp')).toBeInTheDocument()
   expect(screen.getByText('Phòng đang cách ly')).toBeInTheDocument()
