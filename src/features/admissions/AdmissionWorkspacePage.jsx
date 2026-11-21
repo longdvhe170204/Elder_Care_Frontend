@@ -154,7 +154,7 @@ function useWorkspace(id) {
     async function load() {
       try {
         const { data: application } = await getAdmissionApplicationsById({ path: { id } })
-        // Lượt đã đóng (Đã vào, Đã hủy) không còn danh sách điều kiện: backend trả 409 APPLICATION_CLOSED (004 FR-004)
+        // Lượt đã đóng (Đã tiếp nhận, Đã hủy) không còn danh sách điều kiện: backend trả 409 APPLICATION_CLOSED (004 FR-004)
         const open = OPEN_STATUSES.includes(application.status)
         const [conditions, resident, contracts] = await Promise.all([
           open ? getAdmissionApplicationsByIdAdmissionConditions({ path: { id } }) : { data: null },
@@ -187,7 +187,9 @@ function useWorkspace(id) {
   return [state, useCallback(() => setReload((n) => n + 1), [])]
 }
 
-function StepStatus({ step, conditionOf, opinion }) {
+// Lượt đã đóng không còn danh sách điều kiện: dòng điều kiện ghi "Không còn kiểm", không ghi "Chưa có dữ liệu" (F10)
+function StepStatus({ step, conditionOf, opinion, closed }) {
+  if (step.condition && closed) return <span className="type-caption text-muted-foreground">Không còn kiểm</span>
   if (step.condition) {
     const line = conditionOf(step.condition)
     const extra = step.extra && conditionOf(step.extra)
@@ -239,7 +241,9 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
     lines.find((c) => c.code === code) ??
     lines.find((c) => c.status === 'NOT_MET' && CONDITION_MODULE[code] && c.module === CONDITION_MODULE[code])
   const unmet = lines.filter((c) => c.status === 'NOT_MET').length
-  const opinion = conditions?.admissionOpinion ?? null
+  // Lượt đã đóng: ý kiến hiện hành lấy từ lượt đăng ký (api-004 AdmissionApplication.admissionOpinion, hiện hành trước)
+  const closed = !OPEN_STATUSES.includes(application.status)
+  const opinion = closed ? (application.admissionOpinion?.[0] ?? null) : (conditions?.admissionOpinion ?? null)
   const canComplete = resident.allowedCommands?.includes('COMPLETE_ADMISSION')
 
   function changed(message) {
@@ -268,7 +272,8 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           {step.part ? `Mở ${PART_LABELS[step.part]}` : 'Mở hồ sơ'}
         </Button>
       )
-    if (step.action === 'opinion' && can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE'))
+    // Ý kiến chỉ ghi được khi lượt Đang xử lý hoặc Đang chờ (api-004 admission-opinion)
+    if (step.action === 'opinion' && !closed && can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE'))
       return (
         <Button variant="outline" className="h-11" onClick={() => setSheet({ kind: 'opinion' })}>
           Ghi ý kiến
@@ -350,7 +355,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                     className="grid grid-cols-1 gap-2 px-4 py-2 sm:grid-cols-[minmax(0,1fr)_150px_auto] sm:items-center"
                   >
                     <span className="type-body-sm">{step.label}</span>
-                    <StepStatus step={step} conditionOf={conditionOf} opinion={opinion} />
+                    <StepStatus step={step} conditionOf={conditionOf} opinion={opinion} closed={closed} />
                     <span className="sm:justify-self-end">{actionOf(step)}</span>
                   </li>
                 ))}

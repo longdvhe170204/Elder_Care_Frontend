@@ -232,12 +232,30 @@ describe('AdmissionWorkspacePage', () => {
     expect(onNavigate).toHaveBeenCalledWith('balance', { residentId: 5 })
   })
 
-  it('lượt đã đóng (Đã vào): không hỏi điều kiện (backend trả 409), màn vẫn mở và ghi lượt đã đóng', async () => {
-    api.on('GET', '/admission-applications/7', json(200, { ...APPLICATION, status: 'ADMITTED' }, { ETag: '"3"' }))
+  it('F10_F11_luotDaDong_ghiDaTiepNhan_yKienTuLuotDangKy_dongDieuKienKhongConKiem', async () => {
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'VIEW' },
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'UPDATE' },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/admission-applications/7',
+      json(200, { ...APPLICATION, status: 'ADMITTED', admissionOpinion: [CONDITIONS.admissionOpinion] }, { ETag: '"3"' }),
+    )
     renderPage()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Tiếp nhận Lê Thị Cúc' })).toBeTruthy()
-    expect(screen.getByText('Lượt đăng ký đã đóng (Đã vào), không còn danh sách điều kiện.')).toBeTruthy()
+    expect(screen.getByText('Lượt đăng ký đã đóng (Đã tiếp nhận), không còn danh sách điều kiện.')).toBeTruthy()
+    expect(within(screen.getByRole('listitem', { name: 'Ý kiến của người cao tuổi về việc vào ở' })).getByText('Đã ghi')).toBeTruthy()
+    expect(screen.queryByText('Chưa có dữ liệu')).toBeNull()
+    expect(screen.queryByText('Chưa ghi ý kiến về việc vào ở.')).toBeNull()
+    expect(within(screen.getByRole('listitem', { name: 'Hợp đồng' })).getByText('Không còn kiểm')).toBeTruthy()
+    // Ý kiến chỉ ghi được khi lượt đang mở (api-004 admission-opinion)
+    expect(screen.queryByRole('button', { name: 'Ghi ý kiến' })).toBeNull()
     expect(api.calls('GET', '/admission-applications/7/admission-conditions')).toHaveLength(0)
     expect(screen.queryByText(/điều kiện chưa đạt/)).toBeNull()
   })

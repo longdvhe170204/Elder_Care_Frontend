@@ -24,7 +24,7 @@ import { NewAdmissionSheet } from './NewAdmissionSheet'
 const FILTERS = [
   ['IN_PROGRESS', 'Đang tiếp nhận'],
   ['WAITING', 'Chờ giường'],
-  ['ADMITTED', 'Đã vào'],
+  ['ADMITTED', 'Đã tiếp nhận'],
   ['CANCELLED', 'Đã hủy'],
 ]
 
