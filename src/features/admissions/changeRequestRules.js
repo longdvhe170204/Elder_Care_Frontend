@@ -225,3 +225,30 @@ export function withCompanions(types, currentType, previousNewType, nextNewType)
   const kept = types.filter((t) => !before.has(t) || after.includes(t))
   return [...kept, ...after.filter((t) => !kept.includes(t))]
 }
+
+// Loại dịch vụ thêm được qua loại thay đổi Dịch vụ (FR-043k, Q-425, R21), theo thứ tự hiện trên form
+export const REGISTRABLE_SERVICE_GROUPS = [
+  ['REHABILITATION', 'Phục hồi chức năng'],
+  ['ACTIVITY', 'Hoạt động'],
+  ['MEDICAL_ESCORT', 'Đưa đi khám'],
+  ['INJECTION', 'Tiêm'],
+]
+
+export const SERVICE_CHOICE_HINT =
+  'Chỉ đăng ký phục hồi chức năng, hoạt động dài hạn, đưa đi khám, tiêm. Mức chăm sóc đổi ở loại Mức chăm sóc; phí lưu trú đổi ở loại Giường; tã, bỉm, thuốc, suất ăn không đăng ký ở đây.'
+
+// Dịch vụ trên form: dòng đang có trong hợp đồng (mọi loại) để bớt; dịch vụ Hiệu lực chưa có, thuộc 4 loại, để thêm,
+// nhóm theo loại. Dòng hợp đồng không còn trong danh mục thì hiện mã.
+export function serviceChoices(catalog, contractLines) {
+  const byId = new Map((catalog ?? []).map((s) => [s.id, s]))
+  const inContract = new Set((contractLines ?? []).map((l) => l.serviceId))
+  const removable = (contractLines ?? []).map(
+    (l) => byId.get(l.serviceId) ?? { id: l.serviceId, name: `Dịch vụ mã ${l.serviceId}` },
+  )
+  const addGroups = REGISTRABLE_SERVICE_GROUPS.map(([type, label]) => ({
+    type,
+    label,
+    items: (catalog ?? []).filter((s) => s.type === type && s.status === 'ACTIVE' && !inContract.has(s.id)),
+  })).filter((g) => g.items.length > 0)
+  return { removable, addGroups }
+}

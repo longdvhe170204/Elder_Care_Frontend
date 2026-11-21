@@ -168,6 +168,9 @@ describe('BF-08 sửa đổi', () => {
     expect(await screen.findByText('Xác nhận với người đại diện')).toBeInTheDocument()
     await waitFor(() => expect(api.calls('GET', '/approval-requests/12')).toHaveLength(1))
     expect(screen.queryByRole('button', { name: 'Trả về nháp' })).not.toBeInTheDocument()
+    // FR-043h: Quản lý viện xem ý kiến người cao tuổi, không ghi
+    expect(screen.getByText('Ý kiến người cao tuổi')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ghi ý kiến người cao tuổi' })).not.toBeInTheDocument()
   })
 
   it('FR043a_chiTietXacNhan_hienTenNguoiDaiDienDaXacNhan', async () => {
@@ -273,8 +276,8 @@ describe('BF-08 sửa đổi', () => {
       'GET',
       '/services',
       json(200, [
-        { id: 8, name: 'Suất ăn', status: 'ACTIVE' },
-        { id: 9, name: 'Giặt là', status: 'ACTIVE' },
+        { id: 8, name: 'Suất ăn', type: 'MEAL', status: 'ACTIVE' },
+        { id: 9, name: 'Phục hồi chức năng', type: 'REHABILITATION', status: 'ACTIVE' },
       ]),
     )
     api.on('POST', '/residency-change-requests', json(201, { ...BASE, status: 'DRAFT' }))
@@ -285,7 +288,7 @@ describe('BF-08 sửa đổi', () => {
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
     fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Dịch vụ' }))
     fireEvent.click(await within(dialog).findByRole('checkbox', { name: 'Bớt Suất ăn' }))
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Thêm Giặt là' }))
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Thêm Phục hồi chức năng' }))
     expect(within(dialog).getByText('Thuộc gói')).toBeInTheDocument()
     expect(within(dialog).getByText('Ngoài gói')).toBeInTheDocument()
     expect(within(dialog).queryByRole('checkbox', { name: 'Thuộc gói' })).not.toBeInTheDocument()
@@ -298,6 +301,53 @@ describe('BF-08 sửa đổi', () => {
       { serviceId: 8, action: 'REMOVE' },
       { serviceId: 9, action: 'ADD' },
     ])
+  })
+
+  it('W15_dichVu_chiThem4Loai_dongDangCoVanBotDuoc', async () => {
+    api.on('GET', '/residency-change-requests', json(200, []))
+    api.on(
+      'GET',
+      '/contracts',
+      json(200, [
+        {
+          id: 31,
+          residentId: 5,
+          contractNumber: 'HD-031',
+          status: 'ACTIVE',
+          careLevel: 'REGULAR',
+          services: [{ serviceId: 20, inPackage: false }],
+        },
+      ]),
+    )
+    api.on('GET', '/residents/5', json(200, { id: 5, personalInfo: { fullName: 'Nguyễn Thị Lan' } }))
+    api.on(
+      'GET',
+      '/services',
+      json(200, [
+        { id: 20, name: 'Tã người lớn', type: 'CONSUMABLE', status: 'ACTIVE' },
+        { id: 21, name: 'Sữa bổ sung', type: 'CONSUMABLE', status: 'ACTIVE' },
+        { id: 22, name: 'Suất ăn thêm', type: 'MEAL', status: 'ACTIVE' },
+        { id: 23, name: 'Chăm sóc đặc biệt', type: 'CARE', status: 'ACTIVE' },
+        { id: 24, name: 'Vật lý trị liệu', type: 'REHABILITATION', status: 'ACTIVE' },
+        { id: 25, name: 'Đưa đi khám', type: 'MEDICAL_ESCORT', status: 'ACTIVE' },
+        { id: 26, name: 'Tiêm theo y lệnh', type: 'INJECTION', status: 'INACTIVE' },
+      ]),
+    )
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: /HD-031/ })
+    fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Dịch vụ' }))
+
+    expect(await within(dialog).findByRole('checkbox', { name: 'Bớt Tã người lớn' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('checkbox', { name: 'Thêm Vật lý trị liệu' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('checkbox', { name: 'Thêm Đưa đi khám' })).toBeInTheDocument()
+    for (const name of ['Thêm Sữa bổ sung', 'Thêm Suất ăn thêm', 'Thêm Chăm sóc đặc biệt', 'Thêm Tiêm theo y lệnh']) {
+      expect(within(dialog).queryByRole('checkbox', { name })).not.toBeInTheDocument()
+    }
+    expect(within(dialog).getByText('Phục hồi chức năng')).toBeInTheDocument()
+    expect(within(dialog).getByText(/tã, bỉm, thuốc, suất ăn không đăng ký ở đây/)).toBeInTheDocument()
   })
 
   it('W9_khongDocDuocDanhGia_chonMucTay_backendKiemKhiLuu', async () => {

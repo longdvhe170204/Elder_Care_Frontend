@@ -74,7 +74,7 @@ function effectOf({ type, residentStatus, currentLevel, level }) {
     return `${chosen} sẽ trở thành mức chăm sóc hiện hành ngay khi xác nhận.`
   }
   if (currentLevel !== level) {
-    return `Mức hiện hành (${CARE_LEVEL_LABELS[currentLevel] ?? 'chưa có'}) giữ nguyên. Hành chính được báo lập yêu cầu thay đổi lưu trú loại đổi mức sang ${chosen}; yêu cầu đổi mức chưa kết thúc của người này chuyển sang Được thay thế.`
+    return `Mức hiện hành (${CARE_LEVEL_LABELS[currentLevel] ?? 'chưa có'}) giữ nguyên. Hành chính được báo lập yêu cầu điều chỉnh hợp đồng loại đổi mức sang ${chosen}; yêu cầu đổi mức chưa kết thúc của người này chuyển sang Được thay thế.`
   }
   return 'Mức chăm sóc không đổi. Yêu cầu đổi mức chưa kết thúc của người này (nếu có) chuyển sang Được thay thế.'
 }
@@ -383,7 +383,7 @@ export function AssessmentForm({
               <FieldDescription>
                 Mức này chưa áp dụng cho tới khi Bác sĩ xác nhận.
                 {!isInitial && residentStatus !== 'ADMISSION_IN_PROGRESS'
-                  ? ' Người cao tuổi đã lưu trú: mức hiện hành chỉ đổi theo yêu cầu thay đổi lưu trú.'
+                  ? ' Người cao tuổi đã lưu trú: mức hiện hành chỉ đổi theo yêu cầu điều chỉnh hợp đồng.'
                   : ''}
               </FieldDescription>
               {fieldErrors.careLevel && <FieldError>{fieldErrors.careLevel}</FieldError>}

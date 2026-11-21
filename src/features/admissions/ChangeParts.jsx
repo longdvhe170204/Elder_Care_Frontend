@@ -53,6 +53,8 @@ import {
   addendumNoText,
   assessedLevelFor,
   withCompanions,
+  SERVICE_CHOICE_HINT,
+  serviceChoices,
 } from './changeRequestRules'
 import { Choices, Info, ReasonField } from './FormParts'
 import {
@@ -429,7 +431,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
       })
       .catch((e) => setFailure(problemOf(e)))
     getServices({ query: {} })
-      .then(({ data }) => setCatalog(data.filter((s) => s.status === 'ACTIVE')))
+      .then(({ data }) => setCatalog(data ?? []))
       .catch(() => {})
   }, [permissionStatus, seesContracts])
 
@@ -548,7 +550,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         onDone('Đã sửa yêu cầu nháp', request.approvalRequestId)
       } else {
         const { data } = await postResidencyChangeRequests({ headers: newKey(), body })
-        onDone('Đã lập yêu cầu thay đổi lưu trú ở Nháp', data.approvalRequestId)
+        onDone('Đã lập yêu cầu điều chỉnh hợp đồng ở Nháp', data.approvalRequestId)
       }
     } catch (e) {
       setFailure(problemOf(e))
@@ -560,7 +562,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
-        <SheetTitle>{editing ? 'Sửa yêu cầu thay đổi lưu trú' : 'Lập yêu cầu thay đổi lưu trú'}</SheetTitle>
+        <SheetTitle>{editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}</SheetTitle>
         <SheetDescription>
           {seesContracts
             ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
@@ -738,26 +740,46 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <Field data-invalid={!!shown('services') || undefined}>
               <FieldLabel>Dịch vụ thêm hoặc bớt</FieldLabel>
               <FieldDescription>
-                Dịch vụ đang có trong hợp đồng thì chọn để bớt; dịch vụ khác thì chọn để thêm. Thuộc gói hay ngoài gói
-                theo hợp đồng hiện hành; chỉ thêm, bớt dịch vụ thuộc gói là thay đổi nhỏ.
+                {SERVICE_CHOICE_HINT} Thuộc gói hay ngoài gói theo hợp đồng hiện hành; chỉ thêm, bớt dịch vụ thuộc gói
+                là thay đổi nhỏ.
               </FieldDescription>
-              {catalog.map((s) => {
-                const line = lineOf(s.id)
-                const inContract = contractServiceIds.has(s.id)
+              {(() => {
+                // FR-043k (Q-425): dòng đang có (mọi loại) để bớt; chỉ 4 loại để thêm, nhóm theo loại
+                const { removable, addGroups } = serviceChoices(catalog, contract?.services)
+                const row = (s) => {
+                  const line = lineOf(s.id)
+                  const inContract = contractServiceIds.has(s.id)
+                  return (
+                    <div key={s.id} className="flex flex-wrap items-center gap-3">
+                      <label className="flex items-center gap-2 type-body-sm">
+                        <input type="checkbox" checked={!!line} onChange={() => toggleService(s.id)} />
+                        {`${inContract ? 'Bớt' : 'Thêm'} ${s.name}`}
+                      </label>
+                      {line && (
+                        <span className="type-caption text-muted-foreground">
+                          {inPackageIds.has(s.id) ? 'Thuộc gói' : 'Ngoài gói'}
+                        </span>
+                      )}
+                    </div>
+                  )
+                }
                 return (
-                  <div key={s.id} className="flex flex-wrap items-center gap-3">
-                    <label className="flex items-center gap-2 type-body-sm">
-                      <input type="checkbox" checked={!!line} onChange={() => toggleService(s.id)} />
-                      {`${inContract ? 'Bớt' : 'Thêm'} ${s.name}`}
-                    </label>
-                    {line && (
-                      <span className="type-caption text-muted-foreground">
-                        {inPackageIds.has(s.id) ? 'Thuộc gói' : 'Ngoài gói'}
-                      </span>
+                  <>
+                    {removable.length > 0 && (
+                      <div className="flex flex-col gap-1">
+                        <span className="type-caption text-muted-foreground">Đang có trong hợp đồng</span>
+                        {removable.map(row)}
+                      </div>
                     )}
-                  </div>
+                    {addGroups.map((g) => (
+                      <div key={g.type} className="flex flex-col gap-1">
+                        <span className="type-caption text-muted-foreground">{g.label}</span>
+                        {g.items.map(row)}
+                      </div>
+                    ))}
+                  </>
                 )
-              })}
+              })()}
               {shown('services') && <FieldError>{shown('services')}</FieldError>}
             </Field>
           )}

@@ -84,7 +84,7 @@ export function CareLevelDecision({ residentId, currentCareLevel, residentStatus
       ) : (
         <>
           <p className="type-caption text-muted-foreground">
-            Hành chính lập yêu cầu đổi mức ở màn Thay đổi lưu trú; gia đình không đồng ý thì ghi quyết định để dừng
+            Hành chính lập yêu cầu đổi mức ở màn Điều chỉnh hợp đồng; gia đình không đồng ý thì ghi quyết định để dừng
             nhắc.
           </p>
           {canDecide && (

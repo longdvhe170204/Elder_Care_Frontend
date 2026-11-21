@@ -41,7 +41,7 @@ export function AddendumPrint({ id, onNavigate = () => {} }) {
     <div className="mx-auto flex max-w-3xl flex-col gap-5 print:max-w-none">
       <div className="flex flex-wrap justify-end gap-2 print:hidden">
         <Button variant="ghost" className="h-11" onClick={() => onNavigate('residency-changes', { id })}>
-          Về yêu cầu thay đổi lưu trú
+          Về yêu cầu điều chỉnh hợp đồng
         </Button>
         <Button className="h-11" onClick={() => window.print()}>
           In phụ lục

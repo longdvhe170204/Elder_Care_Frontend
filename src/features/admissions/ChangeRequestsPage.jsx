@@ -79,7 +79,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
     if (id) open(id)
   }
 
-  if (failure?.status === 403) return <PermissionDeniedState label="Yêu cầu thay đổi lưu trú" />
+  if (failure?.status === 403) return <PermissionDeniedState label="Yêu cầu điều chỉnh hợp đồng" />
 
   const matcherOf = (key) => FILTERS.find(([k]) => k === key)[2]
   const rows = (requests ?? []).filter(matcherOf(filter))
@@ -89,7 +89,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
       <PageHeader
-        title="Yêu cầu thay đổi lưu trú"
+        title="Yêu cầu điều chỉnh hợp đồng"
         subtitle="Đổi loại lưu trú, mức chăm sóc, dịch vụ, thời hạn, giường hoặc lịch đến của hợp đồng đang hiệu lực."
         aside={
           can('RESIDENCY_CHANGE_REQUEST', 'CREATE') && (
@@ -144,7 +144,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
         !failure && <p className="type-body-sm text-muted-foreground">Không có yêu cầu nào trong nhóm này.</p>
       ) : (
         <Card className="py-0">
-          <Table aria-label="Yêu cầu thay đổi lưu trú">
+          <Table aria-label="Yêu cầu điều chỉnh hợp đồng">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead className="pl-4">Yêu cầu</TableHead>
@@ -211,7 +211,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
           canUpdate={can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
           canConfirm={can('ADMISSION_CONTRACT_DEPOSIT', 'VIEW')}
           canApprove={can('RESIDENCY_CHANGE_REQUEST', 'APPROVE')}
-          canRecordOpinion={can('RESIDENCY_CHANGE_REQUEST', 'VIEW') || can('RESIDENCY_CHANGE_REQUEST', 'CREATE')}
+          canRecordOpinion={can('RESIDENCY_CHANGE_REQUEST', 'CREATE') || can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
           onPrint={(r) => onNavigate('addendum-print', { id: r.approvalRequestId })}
           onEdit={(request) => setSheet({ request, etag: shown.etag })}
           onConfirm={(request) => setConfirming({ request, etag: shown.etag })}
