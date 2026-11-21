@@ -54,12 +54,31 @@ function inboxCalls() {
 }
 
 describe('NotificationInbox', () => {
+  // D9 (DESIGN.md mục 8): không hiện mã sự kiện, mã bản ghi nguồn; bộ lọc Loại sự kiện ghi bằng tiêu đề thông báo
+  it('D9_khongHienMaSuKien_maBanGhiNguon_boLocTheoTieuDe', async () => {
+    api.on('GET', '/me/notifications', json(200, PAGE))
+    api.on('GET', '/me/notifications/11', json(200, notification({ status: 'VIEWED' })))
+    render(<DetailHost>{(host) => <NotificationInbox {...host} />}</DetailHost>)
+    await screen.findByRole('button', { name: 'Ngã trong phòng' })
+
+    expect(screen.queryByText('TASK_OVERDUE')).toBeNull()
+    expect(screen.queryByText('INCIDENT_URGENT')).toBeNull()
+    expect(
+      within(screen.getByLabelText('Loại sự kiện')).getByRole('option', { name: 'Công việc quá hạn 30 phút' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Công việc quá hạn 30 phút' }))
+    expect(await screen.findByText('Đo huyết áp lúc 08:00 chưa ghi nhận')).toBeInTheDocument()
+    expect(screen.queryByText('TASK_OVERDUE')).toBeNull()
+    expect(screen.queryByText('M05.CARE_TASK 88')).toBeNull()
+  })
+
   // DESIGN.md 9.3 (2.2.2) và 002 T047a: không có SSE (jsdom) thì hỏi lại định kỳ bằng yêu cầu nền; tạm dừng được
   it('tuLamMoi_yeuCauNen_tamDungThiNgung', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
     api.on('GET', '/me/notifications', json(200, PAGE))
     render(<DetailHost>{(host) => <NotificationInbox {...host} />}</DetailHost>)
-    await screen.findByText('Ngã trong phòng')
+    await screen.findByRole('button', { name: 'Ngã trong phòng' })
 
     act(() => vi.advanceTimersByTime(60_000))
     await vi.waitFor(() => expect(inboxCalls()).toHaveLength(2))
@@ -153,7 +172,8 @@ describe('NotificationInbox', () => {
     expect(dialog).toHaveTextContent('Đo huyết áp lúc 08:00 chưa ghi nhận')
     expect(dialog).toHaveTextContent('Phần sức khỏe')
     expect(dialog).toHaveTextContent('Bạn không còn quyền xem phần này')
-    expect(dialog).toHaveTextContent('M05.CARE_TASK 88')
+    // D9: không hiện mã bản ghi nguồn
+    expect(dialog).not.toHaveTextContent('M05.CARE_TASK 88')
   })
 
   it('FR_036_anSauKhiXem_boKhoiDanhSach_coIdempotencyKey', async () => {
