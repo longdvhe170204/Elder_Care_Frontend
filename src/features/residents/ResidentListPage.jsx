@@ -124,7 +124,12 @@ export function ResidentListPage({ role, onNavigate = () => {} }) {
       onClose={() => setSelectedId(null)}
       label="Hồ sơ người cao tuổi"
       renderDetail={(titles) => (
-        <ResidentDetail key={selectedId} residentId={selectedId} {...titles} onChanged={() => setReloadKey((k) => k + 1)} />
+        <ResidentDetail
+          key={selectedId}
+          residentId={selectedId}
+          {...titles}
+          onChanged={() => setReloadKey((k) => k + 1)}
+        />
       )}
     >
       <PageHeader
@@ -274,6 +279,7 @@ export function ResidentListPage({ role, onNavigate = () => {} }) {
       {/* Hồ sơ mới luôn ở Đang tiếp nhận: tạo xong sang ngay lập đăng ký, rồi mở Hồ sơ tiếp nhận (chủ dự án yêu cầu 2026-11-18) */}
       {creating && (
         <NewAdmissionSheet
+          startStage="create"
           onClose={() => setCreating(false)}
           onResidentCreated={() => setReloadKey((k) => k + 1)}
           onDone={(_, application) => {
