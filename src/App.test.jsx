@@ -48,6 +48,7 @@ describe('App', () => {
   })
 
   it('chuaDangNhap_chuyenSangManDangNhap', async () => {
+    window.history.replaceState(null, '', '/')
     const assign = vi.fn()
     vi.stubGlobal('location', { ...window.location, assign })
     api.on('GET', '/me', problem(401, 'UNAUTHORIZED'))
@@ -55,6 +56,30 @@ describe('App', () => {
 
     await waitFor(() => expect(assign).toHaveBeenCalledWith('/login'))
     expect(screen.queryByLabelText('Xem với vai trò')).toBeNull()
+  })
+
+  it('chuaDangNhap_moDuongDanCoHash_mangHashSangManDangNhap', async () => {
+    window.history.replaceState(null, '', '/#residents')
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign })
+    api.on('GET', '/me', problem(401, 'UNAUTHORIZED'))
+    render(<App />)
+
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('/login#residents'))
+    window.history.replaceState(null, '', '/')
+  })
+
+  it('dangMoApp_doiHashTrenThanhDiaChi_moManDich', async () => {
+    api.on('GET', '/me', new Response(null, { status: 500 }))
+    api.on('GET', '/residents', json(200, { items: [], nextCursor: null }))
+    window.history.replaceState(null, '', '/')
+    render(<App />)
+    await screen.findByRole('button', { name: 'Người cao tuổi, lưu trú' })
+
+    // Dán đường dẫn #… vào thanh địa chỉ khi app đang mở: trình duyệt chỉ đổi hash, không tải lại trang
+    window.location.hash = '#residents'
+    expect(await screen.findByRole('heading', { name: 'Người cao tuổi' })).toBeInTheDocument()
+    window.history.replaceState(null, '', '/')
   })
 
   it('BUG-UI-002: tải lại trang giữ màn đang mở theo hash', async () => {

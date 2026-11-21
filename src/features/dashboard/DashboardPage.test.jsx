@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { PermissionsProvider } from '@/common/permissions/permissions'
 import { DashboardPage, REFRESH_MS } from './DashboardPage'
 
 // 016 T010: khối theo nhóm backend trả, "—" khi mẫu số 0, số mở danh sách bản ghi, 304 giữ số đang hiện,
@@ -129,7 +130,9 @@ describe('DashboardPage', () => {
       metricCalls += 1
       return metricCalls === 1
         ? problem(403, 'PERMISSION_DENIED')
-        : json(200, [{ code: 'TASK.TODAY', group: 'CARE_TASKS', name: 'Công việc hôm nay', definition: '', source: '005' }])
+        : json(200, [
+            { code: 'TASK.TODAY', group: 'CARE_TASKS', name: 'Công việc hôm nay', definition: '', source: '005' },
+          ])
     })
     api.on('GET', '/dashboard', () =>
       dashboard([{ group: 'CARE_TASKS', status: 'COMPLETE', values: [value('TASK.TODAY', 40)] }]),
@@ -172,13 +175,36 @@ describe('DashboardPage', () => {
         { id: 9002, name: 'Tầng 2' },
       ]),
     )
-    render(<DashboardPage role="NURSING_HOME_MANAGER" />)
+    api.on('GET', '/me/permissions', json(200, [{ function: 'ROOM_BED_CONFIGURATION', operation: 'VIEW' }]))
+    render(
+      <PermissionsProvider>
+        <DashboardPage role="NURSING_HOME_MANAGER" />
+      </PermissionsProvider>,
+    )
 
     const card = await screen.findByRole('region', { name: 'Tình hình' })
     expect(within(card).getByRole('button', { name: /TASK.TODAY/ })).toHaveTextContent('40')
     openGroup('Phòng, giường')
     expect(await screen.findAllByText(/Tầng 1/)).not.toHaveLength(0)
     expect(screen.queryByText(/Tầng\/khu 9001/)).not.toBeInTheDocument()
+  })
+
+  // Bác sĩ, Điều dưỡng không có ROOM_BED_CONFIGURATION:VIEW: không gọi /floors (backend trả 403), giữ Tầng/khu <mã>
+  it('khongCoQuyenXemTang_khongGoiFloors', async () => {
+    api.on(
+      'GET',
+      '/dashboard',
+      dashboard([{ group: 'CARE_TASKS', status: 'COMPLETE', values: [value('TASK.TODAY', 4)] }]),
+    )
+    api.on('GET', '/me/permissions', json(200, [{ function: 'TASK_CHECKLIST', operation: 'VIEW' }]))
+    render(
+      <PermissionsProvider>
+        <DashboardPage role="NURSING_STAFF" />
+      </PermissionsProvider>,
+    )
+    await screen.findByRole('region', { name: 'Tình hình' })
+    expect(api.calls('GET', '/me/permissions')).toHaveLength(1)
+    expect(api.calls('GET', '/floors')).toHaveLength(0)
   })
 
   // Đề xuất B (chủ dự án duyệt 2026-11-17): breakdown cộng đúng bằng tổng thì vẽ thanh chồng kèm chú thích tên và số

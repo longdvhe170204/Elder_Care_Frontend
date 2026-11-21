@@ -78,6 +78,36 @@ describe('Gia đình khai', () => {
     expect(within(section).getByText('Nhập nội dung')).toBeInTheDocument()
   })
 
+  // F7: nguồn Người thân chưa nhập mã thì "Thêm mục" báo tại ô; "Lưu" không gửi và không báo "Đã lưu" khi nội dung
+  // đang nhập chưa được thêm hoặc danh sách không đổi
+  it('F7_nguonNguoiThanChuaNhapMa_luuKhongBaoDaLuu', async () => {
+    api.on('GET', '/residents/5/initial-assessment/family-declared', problem(404, 'NO_DRAFT'))
+    render(
+      <AssessmentTab
+        residentId={5}
+        residentStatus="ADMISSION_IN_PROGRESS"
+        allowedCommands={['RECORD_FAMILY_DECLARED']}
+      />,
+    )
+    const section = await screen.findByRole('region', { name: 'Gia đình khai' })
+    fireEvent.change(within(section).getByLabelText('Nội dung'), { target: { value: 'Hay quên uống thuốc' } })
+    fireEvent.click(within(section).getByRole('radio', { name: 'Người thân' }))
+    fireEvent.click(within(section).getByRole('button', { name: 'Thêm mục' }))
+    expect(within(section).getByText('Nhập mã người thân')).toBeInTheDocument()
+
+    fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
+    expect(
+      await within(section).findByText('Nội dung đang nhập chưa được thêm. Bấm Thêm mục hoặc xóa nội dung.'),
+    ).toBeInTheDocument()
+    expect(within(section).queryByText(/Đã lưu/)).toBeNull()
+
+    fireEvent.change(within(section).getByLabelText('Nội dung'), { target: { value: '' } })
+    fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
+    expect(await within(section).findByText('Chưa có thay đổi để lưu.')).toBeInTheDocument()
+    expect(within(section).queryByText(/Đã lưu/)).toBeNull()
+    expect(api.calls('PUT', '/residents/5/initial-assessment/family-declared')).toHaveLength(0)
+  })
+
   it('danh sách chỉ đọc cho Bác sĩ: chủ đề, nội dung, nguồn, nhãn tự khai', () => {
     render(<FamilyDeclaredList entries={[ENTRY]} />)
     const list = screen.getByRole('region', { name: 'Gia đình khai' })
