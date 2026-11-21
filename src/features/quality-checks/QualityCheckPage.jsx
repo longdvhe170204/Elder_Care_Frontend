@@ -18,7 +18,7 @@ import { formatDateTime } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { ActivityField } from '@/features/activities/ActivityField'
-import { todayInVietnam, toOffsetIso } from '@/features/activities/sessionView'
+import { addDays, todayInVietnam, toOffsetIso } from '@/features/activities/sessionView'
 
 const ITEM_STATUS = {
   PENDING: 'Chờ kiểm tra',
@@ -55,7 +55,7 @@ export function QualityCheckPage({ initialDate }) {
   useEffect(() => {
     if (status !== 'ready' || !permitted) return
     let active = true
-    getMeShifts({ query: { from: date, to: date } })
+    getMeShifts({ query: { from: date, to: addDays(date, 1) } })
       .then(({ data }) => active && setShifts(data.filter((s) => !['DRAFT', 'CANCELLED'].includes(s.status))))
       .catch((error) => active && setFailure(problemOf(error)))
     return () => {

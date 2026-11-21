@@ -67,6 +67,7 @@ export function AssignmentPanel({ shift, staff = [], scope, places = {}, shifts 
   const [preview, setPreview] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
   const [action, setAction] = useState(null)
+  const nameOf = (id) => staff.find((s) => s.id === id)?.fullName ?? `Nhân viên #${id}`
   const [reason, setReason] = useState('')
   const [source, setSource] = useState('')
   const [copyResult, setCopyResult] = useState(null)
@@ -247,9 +248,7 @@ export function AssignmentPanel({ shift, staff = [], scope, places = {}, shifts 
             {rows.map((row) => (
               <TableRow key={row.id}>
                 <TableCell>
-                  <p className="font-medium">
-                    {staff.find((s) => s.id === row.staffId)?.fullName ?? `Nhân viên #${row.staffId}`}
-                  </p>
+                  <p className="font-medium">{nameOf(row.staffId)}</p>
                   <p>
                     {TARGETS[row.targetType]} {targetName(row.targetType, row.targetId)}
                     {row.taskTypeId ? `, công việc ${taskTypes[row.taskTypeId] ?? `mã ${row.taskTypeId}`}` : ''}
@@ -262,11 +261,11 @@ export function AssignmentPanel({ shift, staff = [], scope, places = {}, shifts 
                 </TableCell>
                 <TableCell>
                   <p>
-                    {ROLES[row.role]} · {row.assignmentKind === 'PRIMARY' ? 'Chính' : 'Hỗ trợ'}
+                    {ROLES[row.role]}, {row.assignmentKind === 'PRIMARY' ? 'chính' : 'hỗ trợ'}
                   </p>
                   <p>
                     {STATES[row.status]}
-                    {row.assignedNurse ? ' · Điều dưỡng phụ trách' : ''}
+                    {row.assignedNurse ? ', Điều dưỡng phụ trách' : ''}
                   </p>
                 </TableCell>
                 <TableCell>
@@ -284,12 +283,13 @@ export function AssignmentPanel({ shift, staff = [], scope, places = {}, shifts 
                             size="sm"
                             variant="outline"
                             disabled={busy}
+                            aria-label={`${label} phân công của ${nameOf(row.staffId)}`}
                             onClick={() => {
                               setAction({ row, kind })
                               setReason('')
                             }}
                           >
-                            {label} #{row.id}
+                            {label}
                           </Button>
                         ),
                     )}
@@ -308,7 +308,7 @@ export function AssignmentPanel({ shift, staff = [], scope, places = {}, shifts 
               : action.kind === 'end'
                 ? 'Kết thúc phân công'
                 : 'Hủy phân công'}{' '}
-            #{action.row.id}
+            của {nameOf(action.row.staffId)}
           </h3>
           {action.kind !== 'delete' && (
             <Field>

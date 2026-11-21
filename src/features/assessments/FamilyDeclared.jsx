@@ -25,6 +25,8 @@ function sourceText(source) {
   return source.type === 'FAMILY_MEMBER' ? `Người thân (mã ${source.familyMemberId})` : 'Người cao tuổi'
 }
 
+const entryKey = (e) => [e.topic, e.content, e.source.type, e.source.familyMemberId ?? null]
+
 function EntryItems({ entries, onRemove }) {
   return (
     <ul aria-label="Các mục gia đình khai" className="flex flex-col gap-2">
@@ -115,6 +117,19 @@ export function FamilyDeclaredEditor({ residentId }) {
 
   async function save() {
     setFailure(null)
+    // Nội dung đang nhập chưa thêm vào danh sách thì không lưu, tránh báo "Đã lưu" mà mục chưa có (F7)
+    if (content.trim()) {
+      setErrors((current) => ({
+        ...current,
+        content: 'Nội dung đang nhập chưa được thêm. Bấm Thêm mục hoặc xóa nội dung.',
+      }))
+      setDone(null)
+      return
+    }
+    if (JSON.stringify(items.map(entryKey)) === JSON.stringify(saved.map(entryKey))) {
+      setDone('Chưa có thay đổi để lưu.')
+      return
+    }
     setBusy(true)
     try {
       const { data } = await putResidentsByIdInitialAssessmentFamilyDeclared({

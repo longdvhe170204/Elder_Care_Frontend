@@ -1,4 +1,5 @@
 import { getMeShifts } from '@/api/api008'
+import { addDays } from '@/features/activities/sessionView'
 import { getResidentsById } from '@/api/api001'
 import { getResidentsByResidentIdLocation } from '@/api/api003'
 import {
@@ -20,7 +21,7 @@ export const todayVN = (now = new Date()) => TODAY.format(now)
 async function currentShift(now) {
   try {
     const day = todayVN(now)
-    const { data } = await getMeShifts({ query: { from: day, to: day } })
+    const { data } = await getMeShifts({ query: { from: day, to: addDays(day, 1) } })
     const shift = (data ?? []).find((s) => new Date(s.startsAt) <= now && now <= new Date(s.endsAt))
     return shift ? { start: hhmm(shift.startsAt), end: hhmm(shift.endsAt) } : null
   } catch {

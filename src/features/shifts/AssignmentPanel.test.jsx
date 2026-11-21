@@ -124,8 +124,16 @@ it('FR_027_ketThucBatBuocLyDo_vaGuiDungLenh', async () => {
     body = JSON.parse(options.body)
     return json(200, {})
   })
-  render(<AssignmentPanel shift={{ ...shift, status: 'IN_PROGRESS', allowedCommands: ['endAssignment'] }} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc #8' }))
+  render(
+    <AssignmentPanel
+      shift={{ ...shift, status: 'IN_PROGRESS', allowedCommands: ['endAssignment'] }}
+      staff={[{ id: 10, fullName: '[Nhân viên kiểm thử]' }]}
+    />,
+  )
+  // DESIGN.md mục 8: câu ngắn có dấu phẩy, không dấu "·", nút không ghi #mã
+  expect(await screen.findByText('Nhân viên chăm sóc, chính')).toBeVisible()
+  expect(screen.queryByText(/·|#8/)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Kết thúc phân công của [Nhân viên kiểm thử]' }))
   expect(screen.getByRole('button', { name: 'Xác nhận kết thúc' })).toBeDisabled()
   fireEvent.change(screen.getByLabelText('Lý do kết thúc'), { target: { value: 'Chuyển người phụ trách' } })
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết thúc' }))

@@ -214,12 +214,23 @@ function App() {
       .catch((error) => {
         if (cancelled) return
         // Backend trả 401 (chưa đăng nhập) thì vào màn đăng nhập; không gọi được backend thì giữ bản mẫu
-        if (error instanceof ApiError && error.status === 401) window.location.assign('/login')
+        // Giữ hash của màn đích để đăng nhập xong về đúng màn
+        if (error instanceof ApiError && error.status === 401) window.location.assign(`/login${window.location.hash}`)
         else setChecking(false)
       })
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // Dán đường dẫn #… khi app đang mở thì trình duyệt chỉ đổi hash, không tải lại: mở màn theo hash mới
+  useEffect(() => {
+    const open = () => {
+      setPage(pageFromUrl())
+      setParams(paramsFromUrl())
+    }
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
   }, [])
 
   async function logout() {

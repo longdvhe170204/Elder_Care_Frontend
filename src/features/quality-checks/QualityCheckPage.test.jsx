@@ -119,3 +119,10 @@ it('FR_066_khongPhaiNguoiKiemTraThiBaoKhongCoQuyen', async () => {
   expect(await screen.findByText('Chỉ người kiểm tra của ca')).toBeInTheDocument()
   expect(screen.queryByRole('table', { name: 'Công việc đủ điều kiện' })).not.toBeInTheDocument()
 })
+
+it('API_008_caCuaMinhGuiToLaNgaySauVi_toLaMocLoaiTru', async () => {
+  await page()
+  const url = new URL(api.calls('GET', '/me/shifts')[0][0], 'http://x')
+  expect(url.searchParams.get('from')).toBe('2026-11-07')
+  expect(url.searchParams.get('to')).toBe('2026-11-08')
+})
