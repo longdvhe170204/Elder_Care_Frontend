@@ -1,6 +1,6 @@
 ---
 name: Elder_Care
-version: 6.18.0
+version: 6.19.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
 updated: 2026-11-20
@@ -723,7 +723,10 @@ Mục này nói cách áp các mục chung vào `mobile/`. Màu, chữ, trạng 
 
 ### 15.4 Bố cục
 
-- Điều hướng: thanh dưới (`NavigationBar`), tối đa 5 mục, lấy theo loại tài khoản và quyền backend trả; mục thứ 6 trở đi gom vào mục "Thêm".
+- Điều hướng: thanh dưới (`NavigationBar`), tối đa 5 mục; mục thứ 6 trở đi gom vào mục "Thêm" (từ 6.19.0, chủ dự án duyệt 2026-11-20; chi tiết theo vai trò ở `mobile/docs/superpowers/specs/2026-11-20-role-based-navigation-design.md`):
+  - Nhân viên: khung theo Figma "03 · App nhân viên": **Ca của tôi · [việc chính của vai trò] · Tra cứu · Thông báo · Thêm**. Việc chính: Checklist (Điều dưỡng, Nhân viên chăm sóc), Tầng hôm nay (Trưởng tầng), Người cao tuổi (Bác sĩ, thay luôn Tra cứu), Phiếu bữa ăn (Nhân viên bếp). Vai trò (`GET /me` `roles`) chọn mục; quyền backend (`/me/permissions`) lọc, vai trò chỉ thu hẹp, không mở rộng. Nút Khẩn cấp trên đầu mọi màn có thanh dưới; Đăng xuất ở cuối "Thêm". Quản lý viện, Hành chính, Kế toán chỉ dùng web: app báo "Vai trò của bạn dùng trên web quản trị".
+  - Người thân: 5 tab cố định **Hôm nay · Lịch thăm · Chi phí · Thông báo · Thêm** cho mọi người thân; tab thiếu quyền vẫn hiện, mở ra là câu nói rõ quyền còn thiếu và cách được cấp. Người thân của nhiều người cao tuổi chọn người ở đầu màn.
+  - Người cao tuổi: không có thanh dưới (15.6).
 - Mỗi màn có thanh tiêu đề nói phạm vi bằng câu bình thường (như page-header, mục 5), một việc chính và một nút chính.
 - Nền màn trơn `#EEF2F6` (mục 3.1). Đầu màn là khối xanh đêm đậm `#142B45` liền với thanh trạng thái, chứa tiêu đề và một trong: giờ hiện tại kèm "còn x giờ" và thanh tiến độ ca (màn trong ca), ô tìm nền trắng (màn danh sách), ảnh, họ tên, mã, phòng (hồ sơ). Chữ trên khối này theo mục 3.2 (CĐA 2026-10-28).
 - Dưới đầu màn: chip lọc cuộn ngang một hàng, rồi nhóm "Quá hạn" (Checklist ca) hoặc "Cần làm ngay" (Phát thuốc) có nhãn đỏ, rồi các nhóm còn lại ("Bây giờ", "Sau đó"; nhãn chữ phụ). Danh sách người cao tuổi là một danh sách theo bộ lọc trạng thái, không có nhóm nhãn đỏ. Dòng việc ở Checklist ca hiện đủ trường của `task-block` (spec 005 FR-030), cao theo nội dung.
@@ -808,6 +811,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.19.0 | 2026-11-20 | Chủ dự án duyệt điều hướng app theo vai trò: mục 15.4 thay câu "lấy theo loại tài khoản và quyền" bằng khung nhân viên theo Figma (Ca của tôi · việc chính · Tra cứu · Thông báo · Thêm; vai trò chọn, quyền lọc; nút Khẩn cấp; ba vai trò chỉ dùng web), người thân 5 tab cố định có câu thiếu quyền. Không thêm màu. |
 | 6.18.0 | 2026-11-20 | Chủ dự án yêu cầu giữ bố cục đồng nhất khi nhiều người dùng AI sửa màn: thêm mục 0 "Mẫu màn" (năm mẫu, màn tham chiếu, luật thêm mẫu mới); mục 12 thêm skill dự án `ui-redesign` và cách dùng `frontend-design` trong một mẫu; mục 13 điều 2 chọn mẫu trước khi đề xuất, đổi bố cục thì đưa 2–3 phương án để chủ dự án chọn một. Chủ dự án quyết chuyển file này và các skill giao diện (`frontend-design`, `shadcn`, `ui-redesign`) từ kho Elder_Care sang gốc kho Elder_Care_Frontend; kho Elder_Care giữ file trỏ sang đây (đầu file, "Vị trí"). Không thêm màu, không đổi màn nào. |
 | 6.17.0 | 2026-11-19 | Chủ dự án chọn phương án B "Cột chú ý" cho Tổng quan, Báo cáo (016) sau khi xem bản demo: Tổng quan hai cột "Cần chú ý", "Tình hình" rồi các nhóm chỉ tiêu mở tại chỗ (mục 5.1); `dashboard-attention` thay `dashboard-urgent`, kèm bảng mã chỉ tiêu theo tông (mục 7.2); `report-table` ba cột, dòng tiêu đề nhóm, thanh trong ô, danh sách nhóm báo cáo dọc (mục 5.2, 7.2). Không thêm màu, không đổi api-016. Kho web nhánh `impl/ui-016-dashboard-attention`. |
 | 6.16.0 | 2026-11-19 | Phiếu đối chiếu thuốc (006 T077, T078, chủ dự án duyệt 2026-11-19): chế độ "Đối chiếu thuốc" của Phát thuốc có dải `now-strip` "Cần đối chiếu (n)" (người trong phạm vi có phiếu Mở, Chờ xác nhận hoặc đơn chờ đối chiếu, quá hạn trước; mỗi mục "<họ tên>, <quá hạn / mở / chờ xác nhận / chưa lập phiếu>", bấm là mở phiếu người đó); phiếu có khối "Đề nghị đính chính" (nội dung đúng, lý do, người lập, trạng thái, lý do trả lại; nút "Xác nhận đính chính", "Trả lại" theo `allowedCommands`). Màn Cảnh báo: thẻ "Thuốc chưa đối chiếu" đang mở có nút "Mở đối chiếu thuốc của <họ tên>" chuyển sang Phát thuốc đúng người; chỉ mã người cao tuổi đi vào URL, không có họ tên. Không thêm màu. Kho web nhánh `impl/006-reconciliation-corrections-worklist`. |
