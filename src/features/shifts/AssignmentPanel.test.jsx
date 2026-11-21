@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { json, mockRoutes } from '@/test/fetchRoutes'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { AssignmentPanel } from './AssignmentPanel'
 
 let api
@@ -51,6 +51,20 @@ it('FR_031_xemCanhBaoTruocLuu_vaDoiDuLieuThiPhaiXemLai', async () => {
   fireEvent.click(screen.getByLabelText('Đã xem các công việc không đủ điều kiện'))
   fireEvent.click(screen.getByRole('button', { name: 'Lưu phân công' }))
   await waitFor(() => expect(saved?.targetId).toBe(6))
+})
+
+it('F15_kiemTraPhanCong409_hienLoiNgayTrongFormLapPhanCong', async () => {
+  api.on(
+    'POST',
+    '/shifts/20/assignments/preview',
+    problem(409, 'INVALID_ASSIGNMENT_TARGET', { detail: 'Đối tượng nằm ngoài phạm vi ca' }),
+  )
+  render(<AssignmentPanel shift={shift} staff={[{ id: 10, fullName: '[Nhân viên kiểm thử]' }]} />)
+  fireEvent.change(screen.getByLabelText('Mã đối tượng'), { target: { value: '9004' } })
+  const check = screen.getByRole('button', { name: 'Kiểm tra phân công' })
+  fireEvent.click(check)
+  const form = check.closest('form')
+  expect(await within(form).findByText('Đối tượng nằm ngoài phạm vi ca')).toBeVisible()
 })
 
 it('FR_027_ketThucBatBuocLyDo_vaGuiDungLenh', async () => {
