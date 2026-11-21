@@ -36,6 +36,8 @@ export function AssignmentPanel({ shift, staff = [] }) {
   const [rows, setRows] = useState([])
   const [revision, setRevision] = useState(0)
   const [failure, setFailure] = useState(null)
+  // Lỗi của Kiểm tra, Lưu phân công hiện ngay trong form Lập phân công (DESIGN.md 7.4: Alert trong khung đang thao tác)
+  const [formFailure, setFormFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
@@ -101,12 +103,13 @@ export function AssignmentPanel({ shift, staff = [] }) {
     e.preventDefault()
     setBusy(true)
     setFailure(null)
+    setFormFailure(null)
     try {
       const { data } = await postShiftsByIdAssignmentsPreview({ path: { id: shift.id }, body: body() })
       setPreview(data)
       setConfirmed(false)
     } catch (error) {
-      setFailure(problemOf(error))
+      setFormFailure(problemOf(error))
       setPreview(null)
     } finally {
       setBusy(false)
@@ -115,6 +118,7 @@ export function AssignmentPanel({ shift, staff = [] }) {
   async function save() {
     setBusy(true)
     setFailure(null)
+    setFormFailure(null)
     try {
       const value = body()
       await postShiftsByIdAssignments({
@@ -127,7 +131,7 @@ export function AssignmentPanel({ shift, staff = [] }) {
       setNotice('Đã lưu phân công.')
       setRevision((n) => n + 1)
     } catch (error) {
-      setFailure(problemOf(error))
+      setFormFailure(problemOf(error))
       setPreview(null)
     } finally {
       setBusy(false)
@@ -406,6 +410,7 @@ export function AssignmentPanel({ shift, staff = [] }) {
               )}
             </div>
           )}
+          <ProblemAlert problem={formFailure} />
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="outline" disabled={busy}>
               Kiểm tra phân công

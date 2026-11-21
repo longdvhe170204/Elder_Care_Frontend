@@ -50,7 +50,7 @@ function ResidentChoice({ value, onChange }) {
       setFailure(problemOf(error))
     }
   }
-  const options = Object.fromEntries(residents.map((resident) => [resident.id, resident.fullName]))
+  const options = Object.fromEntries(residents.map((resident) => [resident.id, resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`]))
   if (value && !options[value]) options[value] = 'Người cao tuổi đã chọn'
   return (
     <section className="flex flex-col gap-4 rounded-xl border bg-card p-5">

@@ -7,7 +7,12 @@ import { CarePlanPage } from './CarePlanPage'
 let api
 beforeEach(() => {
   api = mockRoutes()
-  api.on('GET', '/residents', json(200, { items: [{ id: 77, fullName: '[Họ tên kiểm thử]' }], nextCursor: null }))
+  // GET /residents trả Profile (api-001): họ tên ở personalInfo.fullName
+  api.on(
+    'GET',
+    '/residents',
+    json(200, { items: [{ id: 77, personalInfo: { fullName: '[Họ tên kiểm thử]' } }], nextCursor: null }),
+  )
   api.on(
     'GET',
     '/residents/77/care-plans',
@@ -62,6 +67,15 @@ it('FR_008_soSanhDungHaiPhienBanDaChon', async () => {
   expect(await screen.findByText('Mục thêm kiểm thử')).toBeInTheDocument()
   const [url] = api.calls('GET', '/care-plans/compare')[0]
   expect(new URL(url, 'http://localhost').searchParams.get('from')).toBe('10')
+})
+
+it('F5_chonNguoiCaoTuoi_hienHoTenTuPersonalInfo', async () => {
+  render(
+    <PermissionsProvider>
+      <CarePlanPage />
+    </PermissionsProvider>,
+  )
+  expect(await screen.findByRole('option', { name: '[Họ tên kiểm thử]' })).toBeInTheDocument()
 })
 
 it('FR_007_khongCoQuyenXemThiKhongHienDuLieuHayLenhLap', async () => {
