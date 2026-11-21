@@ -384,6 +384,65 @@ describe('AdmissionWorkspacePage', () => {
     expect(onNavigate).not.toHaveBeenCalledWith('contracts')
   })
 
+  // Phương án C "liền sau hợp đồng" (chủ dự án chọn 2026-11-21): lưu hợp đồng nháp nội trú xong mở ngay khung chọn giường,
+  // ngày vào lấy từ hợp đồng (chủ dự án xác nhận không vi phạm Q-307), bỏ qua được bằng "Để sau"
+  it('C_luuHopDongNoiTru_moNgayChonGiuong_ngayVaoTuHopDong', async () => {
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'CREATE' },
+        { function: 'BED_ALLOCATION', operation: 'CREATE' },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/admission-applications/7/admission-conditions',
+      json(200, {
+        ...CONDITIONS,
+        conditions: CONDITIONS.conditions.map((c) =>
+          c.code === 'ADM_D_BED'
+            ? { code: 'RESERVED_BED_NOT_READY', name: 'Chưa phân bổ giường', status: 'NOT_MET', module: 'M03' }
+            : c,
+        ),
+      }),
+    )
+    api.on('GET', '/services', json(200, []))
+    api.on('GET', '/room-types', json(200, [{ id: 1, name: 'Phòng đôi', servesLongTerm: true, status: 'ACTIVE' }]))
+    api.on('GET', '/bed-allocations/suitable-beds', json(200, []))
+    api.on(
+      'POST',
+      '/contracts',
+      json(201, {
+        contract: {
+          id: 9,
+          residentId: 5,
+          residenceType: 'LONG_TERM_RESIDENTIAL',
+          startDate: '2026-11-25',
+          roomTypeId: 1,
+        },
+      }),
+    )
+    renderPage()
+    await openSteps()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Lập hợp đồng' })[0])
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nội trú dài hạn' }))
+    fireEvent.change(within(dialog).getByLabelText('Ngày bắt đầu'), { target: { value: '2026-11-25' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tiếp' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Thường xuyên' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Theo tháng' }))
+    const select = within(dialog).getByRole('combobox', { name: 'Loại phòng' })
+    await within(select).findByRole('option', { name: 'Phòng đôi' })
+    fireEvent.change(select, { target: { value: '1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tiếp' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
+
+    expect(await screen.findByRole('heading', { name: 'Chọn giường cho hợp đồng vừa lập' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Ngày bắt đầu dự kiến')).toHaveValue('25/11/2026')
+    expect(screen.getByRole('button', { name: 'Để sau' })).toBeInTheDocument()
+  })
+
   // Không tải được hợp đồng thì báo, không hiện nút Lập hợp đồng như khi chưa có hợp đồng
   it('audit_taiHopDongLoi_khongHienLapHopDong', async () => {
     api.on('GET', '/contracts', problem(500, 'INTERNAL'))

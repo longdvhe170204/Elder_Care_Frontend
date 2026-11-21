@@ -438,10 +438,13 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           {sheet?.kind === 'bed' && (
             <>
               <SheetHeader className="p-0">
-                <SheetTitle>Phân bổ giường</SheetTitle>
-                <SheetDescription>{name}</SheetDescription>
+                <SheetTitle>{sheet.afterContract ? 'Chọn giường cho hợp đồng vừa lập' : 'Phân bổ giường'}</SheetTitle>
+                <SheetDescription>
+                  {sheet.afterContract ? `${name}. Hợp đồng nháp đã lưu; ngày vào lấy từ hợp đồng, sửa được.` : name}
+                </SheetDescription>
               </SheetHeader>
               <BedAllocationForm
+                defaultDate={sheet.defaultDate}
                 resident={{
                   id: resident.id,
                   fullName: name,
@@ -450,6 +453,11 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                 }}
                 onSaved={() => changed('Đã phân bổ giường')}
               />
+              {sheet.afterContract && (
+                <Button variant="ghost" className="h-11 self-end" onClick={() => changed()}>
+                  Để sau
+                </Button>
+              )}
             </>
           )}
           {sheet?.kind === 'contract' && contract && (
@@ -470,7 +478,23 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       </Sheet>
 
       {sheet?.kind === 'new-contract' && (
-        <ContractSheet residentId={resident.id} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+        <ContractSheet
+          residentId={resident.id}
+          residentName={name}
+          onClose={() => setSheet(null)}
+          onDone={(message, saved) => {
+            changed(message)
+            // Phương án C (chủ dự án chọn 2026-11-21): hợp đồng nội trú vừa lưu mà chưa có giường thì hỏi tiếp chọn giường;
+            // hai lệnh vẫn tách, ngày vào lấy từ hợp đồng (chủ dự án xác nhận không vi phạm Q-307)
+            if (
+              saved &&
+              saved.residenceType !== 'DAY_CARE' &&
+              progress.steps.bed?.state === 'todo' &&
+              can('BED_ALLOCATION', 'CREATE')
+            )
+              setSheet({ kind: 'bed', afterContract: true, defaultDate: saved.startDate })
+          }}
+        />
       )}
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
       {sheet?.kind === 'edit-contract' && (
