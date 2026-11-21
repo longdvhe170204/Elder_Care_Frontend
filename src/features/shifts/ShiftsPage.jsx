@@ -7,6 +7,8 @@ import {
   getShiftSchedulesByIdPublicationPreview,
   getShiftTemplates,
   getShiftsById,
+  getAreas,
+  getFloors,
   getStaff,
 } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -46,6 +48,7 @@ function ShiftWorkspace({ initialMonth }) {
   const [mine, setMine] = useState([])
   const [templates, setTemplates] = useState([])
   const [staff, setStaff] = useState([])
+  const [places, setPlaces] = useState({})
   const [selected, setSelected] = useState(null)
   const [panel, setPanel] = useState(null)
   const [failure, setFailure] = useState(null)
@@ -80,6 +83,26 @@ function ShiftWorkspace({ initialMonth }) {
       cancelled = true
     }
   }, [status, view, manage, month, revision])
+  // Tên tầng, khu cho phạm vi lịch và hộp phân công; không xem được danh mục (403) thì ghi mã (D13)
+  useEffect(() => {
+    if (status !== 'ready' || !manage) return
+    let cancelled = false
+    const named = (result) =>
+      Object.fromEntries(
+        (result.status === 'fulfilled'
+          ? Array.isArray(result.value.data)
+            ? result.value.data
+            : (result.value.data?.items ?? [])
+          : []
+        ).map((p) => [p.id, p.name || p.code]),
+      )
+    Promise.allSettled([getFloors(), getAreas()]).then(([floors, areas]) => {
+      if (!cancelled) setPlaces({ FLOOR: named(floors), AREA: named(areas) })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [status, manage])
   const schedule = schedules.find((s) => String(s.id) === String(selected)) ?? schedules[0]
   const shifts = manage ? (schedule?.shifts ?? []) : mine
   const done = () => {
@@ -190,7 +213,7 @@ function ShiftWorkspace({ initialMonth }) {
                 {schedules.length === 0 && <option value="">Chưa có lịch</option>}
                 {schedules.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {scopeLabel(s)} · {STATUSES[s.status]}
+                    {`${scopeLabel(s, places)}, ${STATUSES[s.status]}`}
                   </option>
                 ))}
               </Choice>
@@ -244,7 +267,11 @@ function ShiftWorkspace({ initialMonth }) {
                   </TableCell>
                   <TableCell>
                     {shift.staff?.length ?? 0} người
-                    {shift.leadStaffId ? ` · #${shift.leadStaffId}` : shift.missingLead ? ' · Chưa có phụ trách' : ''}
+                    {shift.leadStaffId
+                      ? `, phụ trách ${staff.find((p) => p.id === shift.leadStaffId)?.fullName ?? `mã ${shift.leadStaffId}`}`
+                      : shift.missingLead
+                        ? ', chưa có phụ trách'
+                        : ''}
                     {shift.staffingRatio && !shift.staffingRatio.meetsThreshold && (
                       <p className="type-caption font-medium text-warning-foreground">Dưới ngưỡng phục vụ</p>
                     )}
@@ -295,7 +322,7 @@ function ShiftWorkspace({ initialMonth }) {
           <SheetHeader>
             <SheetTitle>{titles[panel?.kind]}</SheetTitle>
             <SheetDescription>
-              {schedule ? `${month} · ${scopeLabel(schedule)}` : 'Mẫu ca và lịch làm việc'}
+              {schedule ? `${month}, ${scopeLabel(schedule, places)}` : 'Mẫu ca và lịch làm việc'}
             </SheetDescription>
           </SheetHeader>
           <div className="px-4 pb-6">
@@ -312,7 +339,14 @@ function ShiftWorkspace({ initialMonth }) {
             )}
             {panel?.kind === 'schedule' && <ScheduleForm month={month} onDone={done} />}
             {panel?.kind === 'assignments' && (
-              <AssignmentPanel key={panel.shift.id} shift={panel.shift} staff={staff} />
+              <AssignmentPanel
+                key={panel.shift.id}
+                shift={panel.shift}
+                staff={staff}
+                scope={schedule && { scopeType: schedule.scopeType, scopeId: schedule.scopeId }}
+                places={places}
+                shifts={schedule?.shifts ?? []}
+              />
             )}
             {panel?.kind === 'floorManagers' && (
               <FloorManagerPanel

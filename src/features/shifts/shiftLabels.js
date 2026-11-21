@@ -9,8 +9,11 @@ export const STATUSES = {
   CLOSED: 'Đã đóng',
   CANCELLED: 'Đã hủy',
 }
-export const scopeLabel = (schedule) =>
-  `${SCOPES[schedule.scopeType]}${schedule.scopeId ? ` #${schedule.scopeId}` : ''}`
+// places: tên tầng, khu ({ FLOOR: { id: tên }, AREA: {...} }); không có tên thì ghi mã (D13, DESIGN.md mục 8)
+export const scopeLabel = (schedule, places = {}) => {
+  if (!schedule.scopeId) return SCOPES[schedule.scopeType]
+  return places[schedule.scopeType]?.[schedule.scopeId] ?? `${SCOPES[schedule.scopeType]} mã ${schedule.scopeId}`
+}
 export const versionHeader = (version) => `"${version}"`
 // Ô nhập giờ địa phương dùng cùng múi giờ với tiện ích hiển thị chung.
 export function localInput(iso) {

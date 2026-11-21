@@ -95,7 +95,7 @@ describe('LiveNotificationsPage', () => {
     render(<LiveNotificationsPage viewer={viewer} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Bảng chi phí tháng 10 đã chốt' }))
-    expect(await screen.findByText('Bản ghi nguồn')).toBeInTheDocument()
+    expect(await screen.findByText('Nội dung hiện theo quyền hiện hành của bạn.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Xem yêu cầu xác nhận' })).toBeNull()
   })
 })
