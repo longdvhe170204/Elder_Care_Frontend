@@ -1,9 +1,9 @@
 ---
 name: Elder_Care
-version: 6.18.0
+version: 6.18.2
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
-updated: 2026-11-20
+updated: 2026-11-21
 direction: Dòng thời gian ca (hướng 3): nền trơn, menu xanh đêm đậm, trạng thái là chữ màu
 colors:
   light:
@@ -395,7 +395,7 @@ Bốn cặp màu: xanh trời nhạt, xanh chàm nhạt, xanh lá nhạt, xám (
 ## 5. Bố cục
 
 - **Khung chung** (`AppShell`): lưới hai cột, menu trái rộng 240px màu xanh đêm đậm (mục 3.2), nội dung bên phải (lề 16px, từ 768px là 32px; trên dưới 24px). Không có thanh trên trên máy tính. Căn trái toàn bộ.
-- **Menu:** logo, các nhóm mục theo vai trò, cuối là khối người dùng: ảnh đại diện vai trò, tên vai trò, tầng và ca, nút sáng/tối. Mục menu bo 8px, cao tối thiểu 40px, biểu tượng 16px.
+- **Menu:** logo, các nhóm mục theo vai trò, cuối là khối người dùng: ảnh đại diện vai trò, tên vai trò, tầng và ca, nút sáng/tối. Mục menu bo 8px, cao tối thiểu 40px, biểu tượng 16px. Từ 6.18.1 mục "Thông báo" có số thông báo chưa xem ở cuối dòng (`unreadCount` của `GET /me/notifications`, tải lại mỗi phút, khi quay lại cửa sổ và khi đổi màn): viên tròn nền `--sidebar-primary`, chữ `caption` `tabular-nums` màu `--sidebar-primary-foreground`, quá 99 ghi "99+", 0 thì ẩn; trình đọc màn hình nghe "Thông báo, n chưa xem". Bản mẫu không backend không có số.
 - **Nhóm menu** (CĐA 2026-11-09): khối đầu không tên luôn hiện (Tổng quan, Báo cáo, Yêu cầu phê duyệt, Thông báo, Chờ xem lại); các nhóm theo vùng nghiệp vụ đóng mở được: Chăm sóc hằng ngày; Thuốc và sức khỏe; Dinh dưỡng, bữa ăn; Người cao tuổi, lưu trú; Người thân, khách thăm (không gọi "Người thân" vì trùng tên mục con); Nhân sự, ca trực; Chi phí, dịch vụ; Quản trị (`src/common/layout/navigation.js`). Tên nhóm là nút `Collapsible` cao 44px (9.1), chữ `label` màu `--sidebar-muted-foreground`, mũi tên chỉ phải khi đóng, chỉ xuống khi mở, có `aria-expanded`. Mặc định chỉ mở nhóm chứa trang đang xem (kể cả khi chuyển trang, tải lại); nhóm người xem mở, đóng được nhớ trong `localStorage` (khóa `elder-care-nav-groups`). Nhóm không còn mục sau khi lọc theo quyền thì ẩn cả nhóm. Từ 6.14.0 (chủ dự án duyệt 2026-11-17) trên cùng có nhóm ghim **Việc chính** của vai trò chính: 3–6 mục làm hằng ngày theo luồng BF, đúng thứ tự ở `PRIMARY_BY_ROLE` (`navigation.js`); luôn mở, không có nút thu gọn, tên nhóm là chữ `caption` màu `--sidebar-muted-foreground`; mục đã ghim không lặp lại ở nhóm gốc; mục vẫn lọc theo quyền như mọi mục khác, vai trò không còn mục nào thì không có nhóm.
 - **Nút Quay lại** (6.15.0, chủ dự án yêu cầu 2026-11-17): App ghi lối các màn đã mở trong phiên (tối đa 20); có màn trước thì trên đầu nội dung, trước `page-header`, có nút `outline` cao 44px "Quay lại <tên màn trước>" (tên mục menu, màn con lấy tên riêng như "Hồ sơ tiếp nhận"), không có mũi tên (mục 8). Bấm về đúng màn và tham số trước đó. Chuyển màn do hệ thống (màn không được phép, đổi vai trò) không thêm vào lối. Màn đầu tiên của phiên không có nút.
 - **Đầu mỗi màn** (`page-header`): đặt thẳng trên nền trang, không bọc thẻ. Bên trái tiêu đề nói phạm vi bằng câu bình thường và dòng phụ; bên phải giờ hiện tại (màn trong ca) hoặc ô tìm. Mỗi màn một ô tìm duy nhất (NN/g heuristic 4, 8). Không đặt dãy thẻ số liệu lớn ở đầu trang; số đếm nằm trên tab lọc.
@@ -808,6 +808,8 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.18.2 | 2026-11-21 | Đổi tên hiển thị chức năng "Thay đổi lưu trú" thành "Điều chỉnh hợp đồng" (Q-424 của nghiep-vu.md): mục menu, tiêu đề màn, nhãn loại yêu cầu ở Yêu cầu phê duyệt, nhãn quyền; tên trong mã, đường dẫn màn (`residency-changes`) giữ nguyên. Không đổi bố cục, không thêm màu. |
+| 6.18.1 | 2026-11-21 | Chủ dự án yêu cầu khi test tay luồng thay đổi lưu trú: số thông báo chưa xem cạnh mục menu "Thông báo" (mục 5 "Menu"). Không thêm màu (dùng cặp `--sidebar-primary`, `--sidebar-primary-foreground` đã có), không đổi màn nào. |
 | 6.18.0 | 2026-11-20 | Chủ dự án yêu cầu giữ bố cục đồng nhất khi nhiều người dùng AI sửa màn: thêm mục 0 "Mẫu màn" (năm mẫu, màn tham chiếu, luật thêm mẫu mới); mục 12 thêm skill dự án `ui-redesign` và cách dùng `frontend-design` trong một mẫu; mục 13 điều 2 chọn mẫu trước khi đề xuất, đổi bố cục thì đưa 2–3 phương án để chủ dự án chọn một. Chủ dự án quyết chuyển file này và các skill giao diện (`frontend-design`, `shadcn`, `ui-redesign`) từ kho Elder_Care sang gốc kho Elder_Care_Frontend; kho Elder_Care giữ file trỏ sang đây (đầu file, "Vị trí"). Không thêm màu, không đổi màn nào. |
 | 6.17.0 | 2026-11-19 | Chủ dự án chọn phương án B "Cột chú ý" cho Tổng quan, Báo cáo (016) sau khi xem bản demo: Tổng quan hai cột "Cần chú ý", "Tình hình" rồi các nhóm chỉ tiêu mở tại chỗ (mục 5.1); `dashboard-attention` thay `dashboard-urgent`, kèm bảng mã chỉ tiêu theo tông (mục 7.2); `report-table` ba cột, dòng tiêu đề nhóm, thanh trong ô, danh sách nhóm báo cáo dọc (mục 5.2, 7.2). Không thêm màu, không đổi api-016. Kho web nhánh `impl/ui-016-dashboard-attention`. |
 | 6.16.0 | 2026-11-19 | Phiếu đối chiếu thuốc (006 T077, T078, chủ dự án duyệt 2026-11-19): chế độ "Đối chiếu thuốc" của Phát thuốc có dải `now-strip` "Cần đối chiếu (n)" (người trong phạm vi có phiếu Mở, Chờ xác nhận hoặc đơn chờ đối chiếu, quá hạn trước; mỗi mục "<họ tên>, <quá hạn / mở / chờ xác nhận / chưa lập phiếu>", bấm là mở phiếu người đó); phiếu có khối "Đề nghị đính chính" (nội dung đúng, lý do, người lập, trạng thái, lý do trả lại; nút "Xác nhận đính chính", "Trả lại" theo `allowedCommands`). Màn Cảnh báo: thẻ "Thuốc chưa đối chiếu" đang mở có nút "Mở đối chiếu thuốc của <họ tên>" chuyển sang Phát thuốc đúng người; chỉ mã người cao tuổi đi vào URL, không có họ tên. Không thêm màu. Kho web nhánh `impl/006-reconciliation-corrections-worklist`. |

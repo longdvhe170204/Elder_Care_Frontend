@@ -19,7 +19,7 @@ const PART_ORDER = ['GENERAL', 'HEALTH', 'COSTS', 'VISITS', 'CONTRACT']
 // Nguồn mở thẳng được trên màn nhân viên khi nơi dùng truyền onNavigate (004 BF-08 sửa đổi, W12): yêu cầu thay đổi lưu trú
 // (nhắc ký phụ lục, quá hạn ký, trả về nháp) và hồ sơ người cao tuổi (quyết định giữ mức, rời viện của 001)
 const SOURCE_PAGES = {
-  'M02.RESIDENCY_CHANGE': ['residency-changes', 'id', 'Mở yêu cầu thay đổi lưu trú'],
+  'M02.RESIDENCY_CHANGE': ['residency-changes', 'id', 'Mở yêu cầu điều chỉnh hợp đồng'],
   'M01.RESIDENT': ['residents', 'residentId', 'Mở hồ sơ người cao tuổi'],
 }
 

@@ -13,7 +13,7 @@ export const STATUS_LABELS = {
 // Loại yêu cầu do module sở hữu đăng ký; module sau thêm nhãn ở đây khi có loại mới
 export const TYPE_LABELS = {
   'M15.CORRECTION': 'Đính chính',
-  'M02.RESIDENCY_CHANGE': 'Thay đổi lưu trú',
+  'M02.RESIDENCY_CHANGE': 'Điều chỉnh hợp đồng',
 }
 
 export const ACTION_LABELS = {

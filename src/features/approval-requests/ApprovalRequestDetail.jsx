@@ -19,6 +19,7 @@ import { problemOf } from '@/common/problem'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { ChangeContent } from '@/features/admissions/ChangeParts'
 import { ACTION_LABELS, actorLabel, statusLabel, typeLabel } from './approvalStatus'
+import { useRequestSubject } from './requestSubject'
 
 // Chi tiết một yêu cầu phê duyệt (000 T097; US5; FR-031 → FR-040). Nút theo `allowedCommands` backend trả;
 // backend vẫn kiểm mọi lệnh. Ý kiến bắt buộc khi từ chối; tự duyệt thiếu ý kiến thì backend trả 422, báo tại ô.
@@ -89,6 +90,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
+  const subject = useRequestSubject(state.request?.content)
 
   // Tải lại sau 409/412 giữ nguyên khung, không hiện trạng thái đang tải
   const load = useCallback(
@@ -201,6 +203,18 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
       </div>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+        {subject?.residentName && (
+          <>
+            <dt className="text-muted-foreground">Người cao tuổi</dt>
+            <dd>{subject.residentName}</dd>
+          </>
+        )}
+        {subject?.contractNumber && (
+          <>
+            <dt className="text-muted-foreground">Hợp đồng</dt>
+            <dd className="tabular-nums">{subject.contractNumber}</dd>
+          </>
+        )}
         <dt className="text-muted-foreground">Người yêu cầu</dt>
         <dd>{actorLabel(request.requester)}</dd>
         <dt className="text-muted-foreground">Lập lúc</dt>
@@ -228,8 +242,10 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
 
       {request.type === 'M02.RESIDENCY_CHANGE' ? (
         <>
-          <p>{`Hợp đồng mã ${request.content?.contractId}`}</p>
-          <ChangeContent content={request.content ?? {}} headingClassName="type-caption text-muted-foreground" />
+          <ChangeContent
+            content={{ ...request.content, residentId: subject?.residentId ?? request.content?.residentId }}
+            headingClassName="type-caption text-muted-foreground"
+          />
         </>
       ) : (
         content.length > 0 && (

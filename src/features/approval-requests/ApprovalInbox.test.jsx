@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { ApprovalInbox } from './ApprovalInbox'
+import { resetRequestSubjects } from './requestSubject'
 
 // 000 T097: hộp duyệt (US5 #1 → #9; FR-031 → FR-040; hợp đồng /approval-requests).
 
@@ -38,6 +39,7 @@ const isList = (inbox) => (u) => u.pathname === '/api/v1/approval-requests' && u
 let api
 
 beforeEach(() => {
+  resetRequestSubjects()
   api = mockRoutes()
 })
 
@@ -254,8 +256,11 @@ describe('ApprovalInbox', () => {
       },
     })
     api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, { items: [change], nextCursor: null }))
+    api.on('GET', '/contracts/3', json(200, { id: 3, residentId: 5, contractNumber: 'HD-2026-000003' }))
+    api.on('GET', '/residents/5', json(200, { id: 5, personalInfo: { fullName: 'Đặng Văn Long' } }))
     render(<ApprovalInbox />)
-    expect((await screen.findAllByRole('row'))[1]).toHaveTextContent('Thay đổi lưu trú')
+    expect((await screen.findAllByRole('row'))[1]).toHaveTextContent('Điều chỉnh hợp đồng')
+    await waitFor(() => expect(screen.getAllByRole('row')[1]).toHaveTextContent('Đặng Văn Long · HĐ HD-2026-000003'))
 
     api.on('GET', '/approval-requests/7', json(200, change, { ETag: '"1"' }))
     fireEvent.click(screen.getByRole('button', { name: 'YC-2026-000007' }))
@@ -264,7 +269,8 @@ describe('ApprovalInbox', () => {
     expect(await within(panel).findByText('Trước: Cơ bản; sau: Đặc biệt')).toBeInTheDocument()
     expect(within(panel).getByText('Mức chăm sóc')).toBeInTheDocument()
     expect(within(panel).getByText(/Dịch vụ chăm sóc: 3\.000\.000 đ → 9\.000\.000 đ/)).toBeInTheDocument()
-    expect(panel).toHaveTextContent('Hợp đồng mã 3')
+    expect(await within(panel).findByText('Đặng Văn Long')).toBeInTheDocument()
+    expect(within(panel).getByText('HD-2026-000003')).toBeInTheDocument()
     expect(panel).not.toHaveTextContent('{"careLevel"')
     expect(panel).not.toHaveTextContent('CARE_SERVICE')
   })

@@ -13,6 +13,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate } from '@/common/dateTime'
 import { ApprovalRequestDetail } from './ApprovalRequestDetail'
 import { STATUS_LABELS, TYPE_LABELS, actorLabel, statusLabel, typeLabel } from './approvalStatus'
+import { subjectText, useRequestSubject } from './requestSubject'
 
 // Hộp duyệt (000 T097; US5; FR-031 → FR-040; hợp đồng GET /approval-requests). Ba hộp theo `inbox`; danh sách
 // chỉ gồm yêu cầu trong phạm vi người xem (backend lọc). Mục menu "Yêu cầu phê duyệt" cho mọi vai trò nhân viên.
@@ -24,6 +25,12 @@ const INBOXES = [
 ]
 
 const SELECT_CLASS = 'h-10 w-full rounded-md border border-input bg-transparent px-3'
+
+// Người cao tuổi, hợp đồng của yêu cầu (tra theo nội dung); không tra được thì để trống
+function SubjectCell({ content }) {
+  const subject = useRequestSubject(content)
+  return <TableCell className="whitespace-normal">{subjectText(subject)}</TableCell>
+}
 
 function toQuery({ inbox, status, type }, cursor) {
   return { inbox, status: status || undefined, type: type || undefined, cursor }
@@ -161,6 +168,7 @@ export function ApprovalInbox() {
                 <TableRow>
                   <TableHead>Mã</TableHead>
                   <TableHead>Loại</TableHead>
+                  <TableHead className="min-w-40">Người cao tuổi</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead>Người yêu cầu</TableHead>
                   <TableHead>Hiệu lực đề nghị</TableHead>
@@ -185,6 +193,7 @@ export function ApprovalInbox() {
                       </Button>
                     </TableCell>
                     <TableCell>{typeLabel(r.type)}</TableCell>
+                    <SubjectCell content={r.content} />
                     <TableCell>
                       <StatusBadge status={statusLabel(r.status)} />
                     </TableCell>

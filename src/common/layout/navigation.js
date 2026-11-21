@@ -293,7 +293,7 @@ export const NAV_GROUPS = [
       // Dòng "Yêu cầu thay đổi lưu trú" (004 T047)
       {
         key: 'residency-changes',
-        label: 'Thay đổi lưu trú',
+        label: 'Điều chỉnh hợp đồng',
         icon: 'ArrowLeftRight',
         functions: ['RESIDENCY_CHANGE_REQUEST'],
         roles: [QL, BS, HC],
