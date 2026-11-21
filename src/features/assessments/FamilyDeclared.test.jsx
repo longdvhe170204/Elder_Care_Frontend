@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { clearChoice, typeChoice } from '@/test/choiceTray'
 import { AssessmentTab } from './AssessmentTab'
 import { FamilyDeclaredList } from './FamilyDeclared'
 
@@ -44,7 +45,7 @@ describe('Gia đình khai', () => {
     const section = await screen.findByRole('region', { name: 'Gia đình khai' })
     expect(within(section).getByText('Chưa có thông tin gia đình khai.')).toBeInTheDocument()
     fireEvent.change(within(section).getByLabelText('Chủ đề'), { target: { value: 'KNOWN_RISKS' } })
-    fireEvent.change(within(section).getByLabelText('Nội dung'), { target: { value: 'Từng ngã hai lần năm nay' } })
+    typeChoice('Nội dung', 'Từng ngã hai lần năm nay', section)
     fireEvent.click(within(section).getByRole('radio', { name: 'Người thân' }))
     fireEvent.change(within(section).getByLabelText('Mã người thân'), { target: { value: '31' } })
     fireEvent.click(within(section).getByRole('button', { name: 'Thêm mục' }))
@@ -90,7 +91,7 @@ describe('Gia đình khai', () => {
       />,
     )
     const section = await screen.findByRole('region', { name: 'Gia đình khai' })
-    fireEvent.change(within(section).getByLabelText('Nội dung'), { target: { value: 'Hay quên uống thuốc' } })
+    typeChoice('Nội dung', 'Hay quên uống thuốc', section)
     fireEvent.click(within(section).getByRole('radio', { name: 'Người thân' }))
     fireEvent.click(within(section).getByRole('button', { name: 'Thêm mục' }))
     expect(within(section).getByText('Nhập mã người thân')).toBeInTheDocument()
@@ -101,7 +102,7 @@ describe('Gia đình khai', () => {
     ).toBeInTheDocument()
     expect(within(section).queryByText(/Đã lưu/)).toBeNull()
 
-    fireEvent.change(within(section).getByLabelText('Nội dung'), { target: { value: '' } })
+    clearChoice(section)
     fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
     expect(await within(section).findByText('Chưa có thay đổi để lưu.')).toBeInTheDocument()
     expect(within(section).queryByText(/Đã lưu/)).toBeNull()

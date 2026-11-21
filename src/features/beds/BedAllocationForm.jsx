@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import { getBedAllocationsSuitableBeds, getContracts, getRoomTypes, getRooms, postBedAllocations } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { ChoiceTray } from '@/common/ChoiceTray'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { BED_ALLOCATION_REASONS } from '@/common/quickChoices'
 import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
 
@@ -152,10 +154,13 @@ export function BedAllocationForm({ resident, onSaved }) {
         .map((bed) => (
           <p key={bed.location.bedId}>Hạn giường sẵn sàng: {formatDateTime(bed.earliestStartAt)}</p>
         ))}
-      <label className="flex flex-col gap-2">
-        Lý do phân bổ
-        <Input value={reason} disabled={busy} onChange={(event) => setReason(event.target.value)} required />
-      </label>
+      <ChoiceTray
+        id="bed-allocation-reason"
+        label="Lý do phân bổ"
+        options={BED_ALLOCATION_REASONS}
+        value={reason}
+        onChange={setReason}
+      />
       {error && <ProblemAlert problem={error} />}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" disabled={busy || options.loading || !bedId || !reason.trim()}>
