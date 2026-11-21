@@ -1,9 +1,9 @@
 ---
 name: Elder_Care
-version: 6.18.0
+version: 6.19.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
-updated: 2026-11-20
+updated: 2026-11-21
 direction: Dòng thời gian ca (hướng 3): nền trơn, menu xanh đêm đậm, trạng thái là chữ màu
 colors:
   light:
@@ -518,6 +518,7 @@ Chỉ tiêu của `dashboard-attention` (mã api-016; tông theo mục 3.5, đ�
 | Trống | `EmptyState` (`src/common/PageState.jsx`, bọc `Empty`) | Nói rõ vì sao trống và làm gì tiếp; một kiểu cho mọi màn: biểu tượng, tiêu đề `EmptyTitle`, dòng phụ; mặc định là thẻ trắng, `bare` khi đã nằm trong thẻ (2026-11-13) |
 | Điều hướng phụ trong màn | `SectionTabs` (`src/common/SectionTabs.jsx`) | Chuyển giữa các phần của một màn (Phòng, giường; Nhân sự; Đổi ca, nghỉ; Danh mục chăm sóc): cùng kiểu `filter-bar`, không dùng dãy `Button` đổi biến thể (2026-11-13) |
 | Hàng ô lọc | `FilterBar` (`src/common/FilterBar.jsx`) | Ô tìm, ô chọn kỳ, ô chọn ca đặt trên danh sách: mỗi ô rộng 224–320px, không kéo dài hết màn; ô chọn gốc `select` lấy kiểu chung ở lớp base của `index.css` (2026-11-13) |
+| `choice-tray` | `ChoiceTray` (`src/common/ChoiceTray.jsx`), danh sách ở `src/common/quickChoices.js` | 6.19.0 (chủ dự án chọn phương án B, 2026-11-21): ô nhập có danh sách lựa chọn cố định. Ô bo 10px viền `--input`, mục đã chọn là thẻ `accent` bo tròn có nút "Bỏ …"; bấm vào ô thì khay nền phụ mở ngay dưới ô (không lớp nổi), nút `ToggleGroup` `outline` cao 44px, cuối cùng là "Khác" mở ô gõ tự do; "Xong", Esc hoặc rời ô thì gập. Một lựa chọn: chọn xong tự gập. Giá trị lưu thành chữ ghép bằng "; " ở trường hiện có. Danh sách giống nhau cho mọi người cao tuổi, không chọn sẵn, không xếp hạng (Q-307, chủ dự án xác nhận). Dùng ở BF-01: nhu cầu khi đăng ký, lý do phân bổ giường, lý do lệnh hợp đồng, Hoàn tất và Hủy tiếp nhận, căn cứ, lưu ý chăm sóc, lý do hủy nháp đánh giá, nội dung Gia đình khai. Không dùng cho nhận xét đánh giá của Bác sĩ, ghi chú |
 | Đang tải | `Skeleton` | Không tự viết hiệu ứng nhấp nháy |
 
 ### 7.3 Trạng thái màn
@@ -808,6 +809,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.19.0 | 2026-11-21 | Chủ dự án yêu cầu một số ô nhập ở BF-01 có danh sách chọn sẵn kèm "Khác", ẩn tới khi bấm vào ô; chọn phương án B "Mở tại chỗ" trên trang so sánh ba phương án (A thả nổi, B mở tại chỗ, C chèn vào câu): thêm công thức `choice-tray` (mục 7.2) |
 | 6.18.0 | 2026-11-20 | Chủ dự án yêu cầu giữ bố cục đồng nhất khi nhiều người dùng AI sửa màn: thêm mục 0 "Mẫu màn" (năm mẫu, màn tham chiếu, luật thêm mẫu mới); mục 12 thêm skill dự án `ui-redesign` và cách dùng `frontend-design` trong một mẫu; mục 13 điều 2 chọn mẫu trước khi đề xuất, đổi bố cục thì đưa 2–3 phương án để chủ dự án chọn một. Chủ dự án quyết chuyển file này và các skill giao diện (`frontend-design`, `shadcn`, `ui-redesign`) từ kho Elder_Care sang gốc kho Elder_Care_Frontend; kho Elder_Care giữ file trỏ sang đây (đầu file, "Vị trí"). Không thêm màu, không đổi màn nào. |
 | 6.17.0 | 2026-11-19 | Chủ dự án chọn phương án B "Cột chú ý" cho Tổng quan, Báo cáo (016) sau khi xem bản demo: Tổng quan hai cột "Cần chú ý", "Tình hình" rồi các nhóm chỉ tiêu mở tại chỗ (mục 5.1); `dashboard-attention` thay `dashboard-urgent`, kèm bảng mã chỉ tiêu theo tông (mục 7.2); `report-table` ba cột, dòng tiêu đề nhóm, thanh trong ô, danh sách nhóm báo cáo dọc (mục 5.2, 7.2). Không thêm màu, không đổi api-016. Kho web nhánh `impl/ui-016-dashboard-attention`. |
 | 6.16.0 | 2026-11-19 | Phiếu đối chiếu thuốc (006 T077, T078, chủ dự án duyệt 2026-11-19): chế độ "Đối chiếu thuốc" của Phát thuốc có dải `now-strip` "Cần đối chiếu (n)" (người trong phạm vi có phiếu Mở, Chờ xác nhận hoặc đơn chờ đối chiếu, quá hạn trước; mỗi mục "<họ tên>, <quá hạn / mở / chờ xác nhận / chưa lập phiếu>", bấm là mở phiếu người đó); phiếu có khối "Đề nghị đính chính" (nội dung đúng, lý do, người lập, trạng thái, lý do trả lại; nút "Xác nhận đính chính", "Trả lại" theo `allowedCommands`). Màn Cảnh báo: thẻ "Thuốc chưa đối chiếu" đang mở có nút "Mở đối chiếu thuốc của <họ tên>" chuyển sang Phát thuốc đúng người; chỉ mã người cao tuổi đi vào URL, không có họ tên. Không thêm màu. Kho web nhánh `impl/006-reconciliation-corrections-worklist`. |

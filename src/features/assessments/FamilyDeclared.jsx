@@ -9,8 +9,9 @@ import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
+import { ChoiceTray } from '@/common/ChoiceTray'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { FAMILY_DECLARED_CHOICES } from '@/common/quickChoices'
 import { problemOf } from '@/common/problem'
 import { FAMILY_DECLARED_TOPIC_LABELS } from './assessmentLabels'
 
@@ -202,13 +203,14 @@ export function FamilyDeclaredEditor({ residentId }) {
               </select>
             </Field>
             <Field data-invalid={!!errors.content || undefined}>
-              <FieldLabel htmlFor="family-declared-content">Nội dung</FieldLabel>
-              <Textarea
+              <ChoiceTray
                 id="family-declared-content"
-                rows={2}
+                label="Nội dung"
+                options={FAMILY_DECLARED_CHOICES[topic]}
+                multiple
                 value={content}
-                onChange={(e) => setContent(e.target.value)}
-                aria-invalid={!!errors.content || undefined}
+                onChange={setContent}
+                invalid={!!errors.content}
               />
               {errors.content && <FieldError>{errors.content}</FieldError>}
             </Field>
