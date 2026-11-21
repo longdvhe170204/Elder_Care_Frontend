@@ -13,26 +13,31 @@ import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { CHANGE_TYPES, REQUEST_STATUS, labelOf } from './admissionLabels'
-import { ChangeRequestSheet, ChangeRequestView } from './ChangeParts'
+import { ChangeRequestSheet, ChangeRequestView, ConfirmationSheet } from './ChangeParts'
+import { confirmationState, displayStatus } from './changeRequestRules'
 
 // Yêu cầu thay đổi lưu trú (004 T047; US5, FR-037 → FR-047): bảng yêu cầu lọc theo trạng thái (GET
 // /residency-change-requests, "Đổi api" 004 A duyệt 2026-11-07), chọn dòng để xem, sửa ở Nháp, Hành chính xác nhận với người
 // đại diện rồi gửi duyệt ngay ở đây (api-000 submit); duyệt dùng màn Yêu cầu phê duyệt. Mã yêu cầu là approvalRequestId.
 
+// Bộ lọc "Chờ ký": yêu cầu Đã duyệt mà phụ lục chưa có bản ký (FR-043d), để Hành chính làm theo danh sách (W10)
+const awaitingSignature = (r) => r.status === 'APPROVED' && r.addendum?.status === 'PENDING_SIGNATURE'
 const FILTERS = [
-  ['DRAFT', 'Nháp', ['DRAFT']],
-  ['PENDING_APPROVAL', 'Chờ duyệt', ['PENDING_APPROVAL']],
-  ['APPROVED', 'Đã duyệt', ['APPROVED']],
-  ['DONE', 'Đã xong', ['APPLIED', 'APPLY_FAILED', 'REJECTED', 'CANCELLED']],
+  ['DRAFT', 'Nháp', (r) => r.status === 'DRAFT'],
+  ['PENDING_APPROVAL', 'Chờ duyệt', (r) => r.status === 'PENDING_APPROVAL'],
+  ['PENDING_SIGNATURE', 'Chờ ký', awaitingSignature],
+  ['APPROVED', 'Đã duyệt', (r) => r.status === 'APPROVED' && !awaitingSignature(r)],
+  ['DONE', 'Đã xong', (r) => ['APPLIED', 'APPLY_FAILED', 'REJECTED', 'CANCELLED', 'SUPERSEDED'].includes(r.status)],
 ]
 
-export function ChangeRequestsPage() {
+export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}) {
   const { can } = usePermissions()
   const [filter, setFilter] = useState('DRAFT')
   const [requests, setRequests] = useState(null)
   const [shown, setShown] = useState(null)
   const [failure, setFailure] = useState(null)
   const [sheet, setSheet] = useState(null)
+  const [confirming, setConfirming] = useState(null)
   const [announcement, setAnnouncement] = useState('')
 
   const load = useCallback(
@@ -53,6 +58,11 @@ export function ChangeRequestsPage() {
     load()
   }, [load])
 
+  // Mở thẳng yêu cầu từ thông báo (#residency-changes?id=…, W12)
+  useEffect(() => {
+    if (initialId) open(initialId)
+  }, [initialId])
+
   function open(id) {
     setFailure(null)
     return getResidencyChangeRequestsById({ path: { id } })
@@ -71,8 +81,9 @@ export function ChangeRequestsPage() {
 
   if (failure?.status === 403) return <PermissionDeniedState label="Yêu cầu thay đổi lưu trú" />
 
-  const statusesOf = (key) => FILTERS.find(([k]) => k === key)[2]
-  const rows = (requests ?? []).filter((r) => statusesOf(filter).includes(r.status))
+  const matcherOf = (key) => FILTERS.find(([k]) => k === key)[2]
+  const rows = (requests ?? []).filter(matcherOf(filter))
+  const showsAddendumNo = rows.some((r) => r.addendum?.addendumNo)
   const openedId = shown?.request.approvalRequestId
 
   return (
@@ -99,6 +110,17 @@ export function ChangeRequestsPage() {
           }}
         />
       )}
+      {confirming && (
+        <ConfirmationSheet
+          request={confirming.request}
+          etag={confirming.etag}
+          onClose={() => setConfirming(null)}
+          onDone={(message, id) => {
+            setConfirming(null)
+            changed(message, id)
+          }}
+        />
+      )}
       <ToggleGroup
         variant="filter"
         size="lg"
@@ -106,9 +128,9 @@ export function ChangeRequestsPage() {
         onValueChange={(n) => n[0] && setFilter(n[0])}
         aria-label="Lọc yêu cầu theo trạng thái"
       >
-        {FILTERS.map(([key, label, statuses]) => (
+        {FILTERS.map(([key, label, matches]) => (
           <ToggleGroupItem key={key} value={key} className="h-11 px-4">
-            {`${label} ${(requests ?? []).filter((r) => statuses.includes(r.status)).length}`}
+            {`${label} ${(requests ?? []).filter(matches).length}`}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
@@ -128,6 +150,7 @@ export function ChangeRequestsPage() {
                 <TableHead className="pl-4">Yêu cầu</TableHead>
                 <TableHead>Thay đổi</TableHead>
                 <TableHead>Ngày hiệu lực mong muốn</TableHead>
+                {showsAddendumNo && <TableHead>Số phụ lục</TableHead>}
                 <TableHead className="pr-4">Trạng thái</TableHead>
               </TableRow>
             </TableHeader>
@@ -152,10 +175,26 @@ export function ChangeRequestsPage() {
                     {r.changeTypes.map((t) => labelOf(CHANGE_TYPES, t)).join(', ')}
                   </TableCell>
                   <TableCell className="tabular-nums">{formatDate(r.requestedEffectiveDate)}</TableCell>
+                  {showsAddendumNo && (
+                    <TableCell className="tabular-nums">
+                      {r.addendum?.addendumNo ? String(r.addendum.addendumNo).padStart(2, '0') : '—'}
+                    </TableCell>
+                  )}
                   <TableCell className="pr-4">
-                    <StatusBadge status={REQUEST_STATUS[r.status] ?? r.status} />
-                    {r.status === 'DRAFT' && r.representativeConfirmationRequired && !r.representativeConfirmation && (
-                      <span className="block type-caption text-muted-foreground">Chờ xác nhận với người đại diện</span>
+                    <StatusBadge status={displayStatus(r, REQUEST_STATUS).text} />
+                    {displayStatus(r, REQUEST_STATUS).days !== null && (
+                      <span
+                        className={`block type-caption ${displayStatus(r, REQUEST_STATUS).overdue ? 'text-destructive' : 'text-muted-foreground'}`}
+                      >
+                        {`${displayStatus(r, REQUEST_STATUS).days} ngày từ lúc duyệt`}
+                      </span>
+                    )}
+                    {r.status === 'DRAFT' && confirmationState(r) && (
+                      <span
+                        className={`block type-caption ${confirmationState(r).attention ? 'text-destructive' : 'text-muted-foreground'}`}
+                      >
+                        {confirmationState(r).text}
+                      </span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -171,7 +210,11 @@ export function ChangeRequestsPage() {
           etag={shown.etag}
           canUpdate={can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
           canConfirm={can('ADMISSION_CONTRACT_DEPOSIT', 'VIEW')}
+          canApprove={can('RESIDENCY_CHANGE_REQUEST', 'APPROVE')}
+          canRecordOpinion={can('RESIDENCY_CHANGE_REQUEST', 'VIEW') || can('RESIDENCY_CHANGE_REQUEST', 'CREATE')}
+          onPrint={(r) => onNavigate('addendum-print', { id: r.approvalRequestId })}
           onEdit={(request) => setSheet({ request, etag: shown.etag })}
+          onConfirm={(request) => setConfirming({ request, etag: shown.etag })}
           onReload={() => open(shown.request.approvalRequestId)}
           onSubmitted={changed}
         />

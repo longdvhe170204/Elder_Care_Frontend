@@ -5,32 +5,22 @@ import { formatDate } from '@/common/dateTime'
 // ResidencyChangeRepresentativeConfirmation). Hàm thuần, không gọi API; backend vẫn kiểm lại khi lưu, gửi duyệt và duyệt.
 
 export const CONFIRMATION_METHODS = [
-  ['IN_PERSON', 'Gặp trực tiếp, ký phụ lục'],
+  ['IN_PERSON', 'Gặp trực tiếp'],
   ['PHONE', 'Gọi điện'],
   ['MESSAGE', 'Tin nhắn'],
 ]
 
 // Bằng chứng phù hợp với từng cách xác nhận (backend nhận PDF, JPG, PNG đến 10 MB)
 export const EVIDENCE_HINTS = {
-  IN_PERSON: 'Bản scan hoặc ảnh chụp phụ lục có chữ ký người đại diện.',
+  IN_PERSON: 'Bản scan hoặc ảnh chụp giấy xác nhận nội dung thay đổi có chữ ký người đại diện.',
   PHONE: 'Ảnh chụp nhật ký cuộc gọi hoặc biên bản ghi nhận cuộc gọi có chữ ký người gọi.',
   MESSAGE: 'Ảnh chụp tin nhắn (Zalo, SMS, email) người đại diện đồng ý nội dung thay đổi.',
 }
 
 export const NOTE_SUGGESTIONS = {
-  IN_PERSON: 'Người đại diện đã đọc nội dung thay đổi, ngày hiệu lực và ký phụ lục tại viện.',
+  IN_PERSON: 'Người đại diện đã đọc nội dung thay đổi, ngày hiệu lực và đồng ý tại viện.',
   PHONE: 'Đã gọi điện cho người đại diện; người đại diện đồng ý nội dung thay đổi và ngày hiệu lực.',
   MESSAGE: 'Người đại diện trả lời đồng ý nội dung thay đổi và ngày hiệu lực qua tin nhắn.',
-}
-
-// Gợi ý lý do theo loại thay đổi đầu tiên được chọn
-export const REASON_SUGGESTIONS = {
-  CARE_LEVEL: 'Theo kết quả đánh giá lại của Bác sĩ',
-  RESIDENCE_TYPE: 'Gia đình đề nghị đổi loại lưu trú',
-  SERVICE: 'Gia đình đề nghị thay đổi dịch vụ đăng ký',
-  DURATION: 'Gia đình đề nghị thay đổi thời hạn lưu trú',
-  BED: 'Chuyển giường theo đề nghị của gia đình',
-  ARRIVAL_SCHEDULE: 'Gia đình đề nghị đổi lịch đến bán trú',
 }
 
 // dayOfWeek của backend: 1 là thứ Hai, 7 là Chủ nhật
@@ -44,7 +34,7 @@ export const WEEKDAYS = [
   [7, 'Chủ nhật'],
 ]
 
-export const EVIDENCE_TYPES =['application/pdf', 'image/jpeg', 'image/png']
+export const EVIDENCE_TYPES = ['application/pdf', 'image/jpeg', 'image/png']
 export const EVIDENCE_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png'
 export const NOTE_MAX = 500
 const MAX_FILE_BYTES = 10 * 1024 * 1024
@@ -97,7 +87,7 @@ export function validateChange({ types, value, date, contract }) {
     }
   }
   if (types.includes('CARE_LEVEL')) {
-    if (!value.careLevel) errors.careLevel = 'Chọn mức chăm sóc mới'
+    if (!value.careLevel) errors.careLevel = 'Chưa có mức theo lần đánh giá lại đã xác nhận'
     else if (contract?.careLevel && value.careLevel === contract.careLevel)
       errors.careLevel = 'Mức chăm sóc mới trùng mức hiện tại của hợp đồng'
   }
@@ -108,12 +98,13 @@ export function validateChange({ types, value, date, contract }) {
       errors.endDate = 'Ngày kết thúc mới phải sau ngày bắt đầu hợp đồng'
   }
   if (types.includes('BED')) {
-    if (!Number.isInteger(value.newBedId) || value.newBedId <= 0) errors.newBedId = 'Nhập mã giường mới (số nguyên dương)'
+    if (!Number.isInteger(value.newBedId) || value.newBedId <= 0) errors.newBedId = 'Chọn giường mới'
   }
   if (types.includes('SERVICE')) {
     const lines = value.services ?? []
     if (lines.length === 0) errors.services = 'Chọn ít nhất một dịch vụ để thêm hoặc bớt'
-    else if (lines.some((s) => !['ADD', 'REMOVE'].includes(s.action))) errors.services = 'Chọn Thêm hoặc Bớt cho mỗi dịch vụ'
+    else if (lines.some((s) => !['ADD', 'REMOVE'].includes(s.action)))
+      errors.services = 'Chọn Thêm hoặc Bớt cho mỗi dịch vụ'
   }
   if (types.includes('ARRIVAL_SCHEDULE')) {
     const rows = value.arrivalSchedule ?? []
@@ -128,8 +119,7 @@ export function validateChange({ types, value, date, contract }) {
           !r.departureTime ||
           r.departureTime <= r.arrivalTime,
       )
-      if (bad >= 0)
-        errors.arrivalSchedule = `Dòng ${bad + 1}: chọn thứ, giờ đến và giờ về; giờ về phải sau giờ đến`
+      if (bad >= 0) errors.arrivalSchedule = `Dòng ${bad + 1}: chọn thứ, giờ đến và giờ về; giờ về phải sau giờ đến`
     }
   }
   return errors
@@ -147,4 +137,91 @@ export function validateConfirmation({ method, confirmedOn, file, existingFileId
   } else if (!existingFileId) errors.evidence = 'Đính kèm bằng chứng xác nhận'
   if ((note ?? '').length > NOTE_MAX) errors.note = `Ghi chú tối đa ${NOTE_MAX} ký tự`
   return errors
+}
+
+// Trạng thái xác nhận với người đại diện của yêu cầu cần xác nhận (FR-043a, FR-043c); null khi không cần xác nhận. done:
+// đã đủ để gửi duyệt; attention: cần Hành chính làm tiếp.
+export function confirmationState(r) {
+  if (!r.representativeConfirmationRequired) return null
+  if (r.representativeConfirmation) return { text: 'Đã ghi xác nhận trực tiếp', done: true }
+  switch (r.confirmationRequest?.status) {
+    case 'ACCEPTED':
+      return { text: 'Người đại diện đã đồng ý', done: true }
+    case 'AWAITING':
+      return { text: 'Chờ người đại diện trả lời', done: false }
+    case 'DECLINED':
+      return { text: 'Người đại diện không đồng ý', done: false, attention: true }
+    default:
+      return { text: 'Chưa xác nhận với người đại diện', done: false, attention: true }
+  }
+}
+
+// Trạng thái phụ lục (004 FR-043d, FR-043f; api-004 Addendum.status)
+export const ADDENDUM_STATUS = {
+  PENDING_SIGNATURE: 'Chờ ký',
+  PENDING_EFFECTIVE: 'Chờ hiệu lực',
+  APPLIED: 'Đã áp dụng',
+  NOT_APPLICABLE: 'Không áp dụng',
+  CANCELLED: 'Đã hủy',
+}
+
+// Cảnh báo không chặn của yêu cầu (FR-043h; api-004 ResidencyChangeRequest.warnings). Lỗi 409 dùng mô tả của backend.
+export const WARNING_LABELS = {
+  RESIDENT_OPINION_MISSING: 'Chưa ghi ý kiến người cao tuổi',
+  RESIDENT_OPINION_OUTDATED: 'Ý kiến người cao tuổi ghi trước khi nội dung thay đổi',
+}
+
+export const OPINIONS = [
+  ['AGREE', 'Đồng ý'],
+  ['DISAGREE', 'Không đồng ý'],
+  ['UNABLE_TO_EXPRESS', 'Chưa nói được'],
+]
+
+export const OPINION_SOURCES = [
+  ['RESIDENT', 'Người cao tuổi tự nói'],
+  ['STAFF_OBSERVATION', 'Nhân viên ghi nhận'],
+]
+
+// Số ngày báo Quản lý viện khi phụ lục chưa ký (CFG-M02-18, mặc định 7 ngày); web chỉ dùng để tô cảnh báo
+export const SIGNATURE_OVERDUE_DAYS = 7
+
+// Số phụ lục hai chữ số ("Phụ lục số 02")
+export function addendumNoText(no) {
+  return no ? `Phụ lục số ${String(no).padStart(2, '0')}` : 'Phụ lục'
+}
+
+const DAY = 24 * 60 * 60 * 1000
+
+// Số ngày từ ngày duyệt (yyyy-mm-dd hoặc ISO) tới hôm nay
+export function daysSince(dateText, now = new Date()) {
+  if (!dateText) return 0
+  const start = new Date(`${String(dateText).slice(0, 10)}T00:00:00`)
+  const today = new Date(`${isoDate(now)}T00:00:00`)
+  return Math.max(0, Math.round((today - start) / DAY))
+}
+
+// Trạng thái hiển thị gộp yêu cầu và phụ lục (W10): Đã duyệt mà phụ lục Chờ ký thì "Đã duyệt · Chờ ký" kèm số ngày;
+// overdue khi quá CFG-M02-18 ngày
+export function displayStatus(r, requestLabels, now = new Date()) {
+  const base = requestLabels[r.status] ?? r.status
+  if (r.status === 'APPROVED' && r.addendum?.status === 'PENDING_SIGNATURE') {
+    const days = daysSince(r.addendum.createdAt, now)
+    return { text: `${base} · Chờ ký`, days, overdue: days >= SIGNATURE_OVERDUE_DAYS }
+  }
+  return { text: base, days: null, overdue: false }
+}
+
+// Mức của lần đánh giá gần nhất đã xác nhận dùng làm mức mới khi đổi mức chăm sóc (FR-043j); null khi không dùng được
+export function assessedLevelFor(assessment, contract) {
+  if (!assessment?.careLevel) return null
+  if (contract?.careLevel && assessment.careLevel === contract.careLevel) return null
+  return assessment.careLevel
+}
+
+// Loại thay đổi sau khi chọn loại lưu trú mới (W9): tự tick loại kèm bắt buộc, bỏ loại kèm của lựa chọn trước
+export function withCompanions(types, currentType, previousNewType, nextNewType) {
+  const before = new Set(requiredCompanions(currentType, previousNewType))
+  const after = requiredCompanions(currentType, nextNewType)
+  const kept = types.filter((t) => !before.has(t) || after.includes(t))
+  return [...kept, ...after.filter((t) => !kept.includes(t))]
 }

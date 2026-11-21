@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
 import {
+  getApprovalRequestsById,
+  getBeds,
   getContracts,
   getResidents,
   getResidentsById,
+  getResidentsByIdAssessments,
+  getResidentsByResidentIdRelationships,
   getServices,
-  postApprovalRequestsByIdSubmit,
   postResidencyChangeRequests,
+  postResidencyChangeRequestsByIdSendForConfirmation,
   putResidencyChangeRequestsById,
 } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -37,24 +41,59 @@ import {
   EVIDENCE_HINTS,
   NOTE_MAX,
   NOTE_SUGGESTIONS,
-  REASON_SUGGESTIONS,
   WEEKDAYS,
   isoDate,
   requiredCompanions,
   tomorrowIso,
   validateChange,
   validateConfirmation,
+  confirmationState,
+  ADDENDUM_STATUS,
+  WARNING_LABELS,
+  addendumNoText,
+  assessedLevelFor,
+  withCompanions,
 } from './changeRequestRules'
 import { Choices, Info, ReasonField } from './FormParts'
+import {
+  ReasonCommandSheet,
+  RepresentativeSelect,
+  ResidentOpinions,
+  SignatureSheet,
+  SubmitSheet,
+} from './ChangeActions'
 
 // Yêu cầu thay đổi lưu trú (004 T047; US5, FR-037 → FR-047). Lập, sửa ở Nháp; gửi duyệt ở màn này hoặc màn Yêu cầu phê
 // duyệt (api-000). Giá trị trước và ảnh hưởng chi phí do hệ thống điền (FR-038). Yêu cầu do Hành chính hoặc Bác sĩ lập chỉ
 // gửi Quản lý viện duyệt được khi Hành chính đã xác nhận với người đại diện, kèm bằng chứng (chủ dự án yêu cầu 2026-11-20).
 
-// Tóm tắt xác nhận với người đại diện; recordedBy là tên ở api-004, là mã tài khoản trong nội dung thô của api-000
-function confirmationText(c) {
+// Họ tên người thân theo quan hệ của người cao tuổi (kể cả quan hệ đã kết thúc); null khi chưa tải hoặc không xem được
+function useFamilyMemberName(residentId, familyMemberId) {
+  const [name, setName] = useState(null)
+  useEffect(() => {
+    let live = true
+    if (!residentId || !familyMemberId) return
+    getResidentsByResidentIdRelationships({ path: { residentId } })
+      .then(({ data }) => {
+        const found = (data ?? []).find((r) => r.familyMember?.id === familyMemberId)
+        if (live) setName(found?.familyMember?.fullName ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [residentId, familyMemberId])
+  return name
+}
+
+// Tóm tắt xác nhận với người đại diện; recordedBy là tên ở api-004, là mã tài khoản trong nội dung thô của api-000.
+// Người đã xác nhận (R16) lấy tên theo quan hệ của người cao tuổi; không xem được tên thì hiện mã.
+function confirmationText(c, confirmerName) {
   const by = typeof c.recordedBy === 'string' ? `, ghi bởi ${c.recordedBy}` : ''
-  return `${labelOf(CONFIRMATION_METHODS, c.method)}, ngày ${formatDate(c.confirmedOn)}${by}`
+  const confirmer = c.representativeFamilyMemberId
+    ? `; người đại diện xác nhận: ${confirmerName ?? `người thân mã ${c.representativeFamilyMemberId}`}`
+    : ''
+  return `${labelOf(CONFIRMATION_METHODS, c.method)}, ngày ${formatDate(c.confirmedOn)}${by}${confirmer}`
 }
 
 // Nội dung thay đổi (trước, sau theo loại) và ảnh hưởng chi phí; dùng ở màn này và màn Yêu cầu phê duyệt (nội dung yêu cầu
@@ -62,6 +101,7 @@ function confirmationText(c) {
 export function ChangeContent({ content, headingClassName = 'type-card-title' }) {
   const types = content.changeTypes ?? []
   const confirmation = content.representativeConfirmation
+  const confirmerName = useFamilyMemberName(content.residentId, confirmation?.representativeFamilyMemberId)
   return (
     <>
       <section className="flex flex-col gap-2">
@@ -92,7 +132,7 @@ export function ChangeContent({ content, headingClassName = 'type-card-title' })
       {confirmation && (
         <section className="flex flex-col gap-1">
           <h3 className={headingClassName}>Xác nhận với người đại diện</h3>
-          <p className="type-body-sm">{confirmationText(confirmation)}</p>
+          <p className="type-body-sm">{confirmationText(confirmation, confirmerName)}</p>
           {confirmation.note && <p className="type-caption text-muted-foreground">{confirmation.note}</p>}
           {confirmation.evidenceFileId && (
             <Button
@@ -109,10 +149,40 @@ export function ChangeContent({ content, headingClassName = 'type-card-title' })
   )
 }
 
-export function ChangeRequestView({ request, etag, canUpdate, canConfirm, onEdit, onReload, onSubmitted }) {
+// Lần gửi người đại diện xác nhận trên ứng dụng mới nhất (FR-043c) thành một câu
+function confirmationRequestText(r) {
+  switch (r.status) {
+    case 'AWAITING':
+      return `Đã gửi người đại diện xác nhận trên ứng dụng lúc ${formatDateTime(r.sentAt)}, đang chờ trả lời.`
+    case 'ACCEPTED':
+      return `Người đại diện đã đồng ý trên ứng dụng lúc ${formatDateTime(r.respondedAt)}.`
+    case 'DECLINED':
+      return `Người đại diện không đồng ý lúc ${formatDateTime(r.respondedAt)}. Lý do: ${r.declineReason ?? '—'}`
+    case 'SUPERSEDED':
+      return 'Nội dung đã sửa sau lần gửi người đại diện: cần gửi lại để người đại diện xác nhận.'
+    default:
+      return null
+  }
+}
+
+export function ChangeRequestView({
+  request,
+  etag,
+  canUpdate,
+  canConfirm,
+  canApprove = false,
+  canRecordOpinion = false,
+  onEdit,
+  onConfirm,
+  onReload,
+  onSubmitted,
+  onPrint,
+}) {
   const [contractName, setContractName] = useState('')
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  // Khung lệnh đang mở: sign, submit, return-to-draft, cancel (BF-08 sửa đổi)
+  const [action, setAction] = useState(null)
 
   useEffect(() => {
     let cancelled = false
@@ -131,24 +201,52 @@ export function ChangeRequestView({ request, etag, canUpdate, canConfirm, onEdit
     }
   }, [request.contractId, canConfirm])
 
-  const draft = request.status === 'DRAFT'
-  const needsConfirmation = request.representativeConfirmationRequired && !request.representativeConfirmation
+  // Lệnh duyệt viên được làm theo backend (api-000 allowedCommands): trả về nháp chỉ người duyệt được loại yêu cầu này,
+  // hủy yêu cầu Đã duyệt chỉ người duyệt; quyền APPROVE của chức năng chưa đủ (Hành chính duyệt thay đổi nhỏ).
+  const decidable = canApprove && ['PENDING_APPROVAL', 'APPROVED'].includes(request.status)
+  const commandsKey = `${request.approvalRequestId}:${request.status}:${etag}`
+  const [fetched, setFetched] = useState({ key: null, commands: [] })
+  const allowed = decidable && fetched.key === commandsKey ? fetched.commands : []
+  useEffect(() => {
+    let live = true
+    if (!decidable) return
+    getApprovalRequestsById({ path: { id: request.approvalRequestId } })
+      .then(({ data }) => live && setFetched({ key: commandsKey, commands: data?.allowedCommands ?? [] }))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [decidable, request.approvalRequestId, commandsKey])
 
-  async function submit() {
+  const draft = request.status === 'DRAFT'
+  const sent = request.confirmationRequest
+  const state = confirmationState(request)
+  const needsConfirmation = !!state && !state.done
+
+  async function sendToRepresentative() {
     setBusy(true)
     setFailure(null)
     try {
-      await postApprovalRequestsByIdSubmit({
+      await postResidencyChangeRequestsByIdSendForConfirmation({
         path: { id: request.approvalRequestId },
-        headers: { 'If-Match': etag },
-        body: {},
+        headers: { ...newKey(), 'If-Match': etag },
       })
-      onSubmitted?.('Đã gửi Quản lý viện duyệt', request.approvalRequestId)
+      onReload()
     } catch (e) {
       setFailure(problemOf(e))
     } finally {
       setBusy(false)
     }
+  }
+
+  const addendum = request.addendum
+  const pendingSignature = request.status === 'APPROVED' && addendum?.status === 'PENDING_SIGNATURE'
+  const open = draft || request.status === 'PENDING_APPROVAL'
+  const warnings = (request.warnings ?? []).map((w) => WARNING_LABELS[w] ?? w)
+  const closeAction = () => setAction(null)
+  const actionDone = (message, id) => {
+    setAction(null)
+    onSubmitted?.(message, id)
   }
 
   return (
@@ -168,40 +266,117 @@ export function ChangeRequestView({ request, etag, canUpdate, canConfirm, onEdit
         </p>
       )}
 
-      {request.minorChange && <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được.</p>}
-      {draft && needsConfirmation && (
-        <p className="type-body-sm text-destructive">
-          {canConfirm
-            ? 'Chưa xác nhận với người đại diện: xác nhận, đính kèm bằng chứng rồi mới gửi Quản lý viện duyệt được.'
-            : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện, đính kèm bằng chứng rồi gửi Quản lý viện duyệt.'}
+      {request.minorChange && (
+        <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
+      )}
+      {state && (draft || sent) && (
+        <section className="flex flex-col gap-1 rounded-xl border p-4">
+          <h3 className="type-card-title">Xác nhận của người đại diện</h3>
+          <p className={`type-body-sm font-medium ${state.attention && draft ? 'text-destructive' : ''}`}>
+            {state.text}
+          </p>
+          {sent && <p className="type-body-sm">{confirmationRequestText(sent)}</p>}
+          {draft && needsConfirmation && (
+            <p className="type-caption text-muted-foreground">
+              {canConfirm
+                ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
+                : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
+            </p>
+          )}
+        </section>
+      )}
+      {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
+        <p className="type-body-sm">
+          Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
         </p>
       )}
-      {draft && request.representativeConfirmationRequired === false && (
-        <p className="type-body-sm">Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.</p>
+      {warnings.length > 0 && (
+        <ul className="flex flex-col gap-1" aria-label="Cảnh báo của yêu cầu">
+          {warnings.map((w) => (
+            <li key={w} className="type-body-sm text-destructive">
+              {w}
+            </li>
+          ))}
+        </ul>
       )}
-      {request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>}
+      {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
+        <p className="type-caption text-muted-foreground">
+          {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
+        </p>
+      )}
+      <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
+      {addendum ? (
+        <section className="flex flex-col gap-1 rounded-xl border p-4" aria-label="Phụ lục hợp đồng">
+          <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
+          <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
+          <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
+          {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
+          {pendingSignature && (
+            <p className="type-caption text-muted-foreground">
+              In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
+            </p>
+          )}
+          {addendum.signedFileId && (
+            <Button variant="outline" className="h-11 self-start" onClick={() => openFile(addendum.signedFileId).catch(() => {})}>
+              Xem bản đã ký
+            </Button>
+          )}
+        </section>
+      ) : (
+        request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
+      )}
       <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
       <ProblemAlert problem={failure} />
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="ghost" className="h-11" onClick={onReload}>
           Tải lại
         </Button>
-        {draft && canUpdate && canConfirm && needsConfirmation && (
-          <Button className="h-11" onClick={() => onEdit(request)}>
-            Xác nhận với người đại diện
-          </Button>
-        )}
-        {draft && canUpdate && !(canConfirm && needsConfirmation) && (
+        {draft && canUpdate && (
           <Button variant="outline" className="h-11" onClick={() => onEdit(request)}>
             Sửa yêu cầu nháp
           </Button>
         )}
+        {draft && canUpdate && canConfirm && needsConfirmation && (
+          <Button variant="outline" className="h-11" onClick={() => onConfirm(request)}>
+            Ghi xác nhận trực tiếp
+          </Button>
+        )}
+        {draft && canUpdate && canConfirm && needsConfirmation && (
+          <Button className="h-11" disabled={busy || !etag} onClick={sendToRepresentative}>
+            {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
+          </Button>
+        )}
+        {addendum && onPrint && (
+          <Button variant="outline" className="h-11" onClick={() => onPrint(request)}>
+            In phụ lục
+          </Button>
+        )}
+        {pendingSignature && canConfirm && (
+          <Button className="h-11" disabled={!etag} onClick={() => setAction('sign')}>
+            Ghi nhận phụ lục đã ký
+          </Button>
+        )}
+        {request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft') && (
+          <Button variant="outline" className="h-11" disabled={!etag} onClick={() => setAction('return-to-draft')}>
+            Trả về nháp
+          </Button>
+        )}
+        {((open && canUpdate) || (request.status === 'APPROVED' && allowed.includes('cancel'))) && (
+          <Button variant="outline" className="h-11" disabled={!etag} onClick={() => setAction('cancel')}>
+            Hủy yêu cầu
+          </Button>
+        )}
         {draft && canUpdate && !needsConfirmation && (
-          <Button className="h-11" disabled={busy || !etag} onClick={submit}>
+          <Button className="h-11" disabled={busy || !etag} onClick={() => setAction('submit')}>
             Gửi duyệt
           </Button>
         )}
       </div>
+      {action === 'sign' && <SignatureSheet request={request} etag={etag} onClose={closeAction} onDone={actionDone} />}
+      {action === 'submit' && <SubmitSheet request={request} etag={etag} onClose={closeAction} onDone={actionDone} />}
+      {(action === 'return-to-draft' || action === 'cancel') && (
+        <ReasonCommandSheet command={action} request={request} etag={etag} onClose={closeAction} onDone={actionDone} />
+      )}
     </div>
   )
 }
@@ -213,6 +388,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [contracts, setContracts] = useState([])
   const [names, setNames] = useState({})
   const [catalog, setCatalog] = useState([])
+  const [emptyBeds, setEmptyBeds] = useState(null)
   // Phụ lục 27: trong những người lập được yêu cầu, chỉ Bác sĩ không xem được hợp đồng; Bác sĩ chọn người cao tuổi và chỉ
   // lập yêu cầu đổi mức chăm sóc (FR-039). Hành chính xác nhận với người đại diện, kèm bằng chứng (2026-11-20)
   const { status: permissionStatus, can } = usePermissions()
@@ -224,15 +400,15 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [value, setValue] = useState(request?.newValue ?? {})
   const [date, setDate] = useState(request?.requestedEffectiveDate ?? '')
   const [reason, setReason] = useState(request?.reason ?? '')
-  const previous = request?.representativeConfirmation
-  const [confirmed, setConfirmed] = useState(!!previous)
-  const [method, setMethod] = useState(previous?.method ?? 'IN_PERSON')
-  const [confirmedOn, setConfirmedOn] = useState(previous?.confirmedOn ?? isoDate())
-  const [evidence, setEvidence] = useState(null)
-  const [note, setNote] = useState(previous?.note ?? '')
+  // Sửa nội dung thì xác nhận cũ (ghi trực tiếp hoặc người đại diện đã đồng ý trên ứng dụng) bị bỏ (FR-043a, FR-043c)
+  const hadConfirmation = !!request?.representativeConfirmation || request?.confirmationRequest?.status === 'ACCEPTED'
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  // Lần đánh giá gần nhất đã xác nhận: mức chăm sóc mới lấy từ đây, không chọn tay (FR-043j)
+  const [assessment, setAssessment] = useState(null)
+  // Người lập không được xem Đánh giá (Phụ lục 27, ví dụ Hành chính: 403) thì chọn mức tay, backend kiểm FR-043j khi lưu
+  const [assessmentHidden, setAssessmentHidden] = useState(false)
 
   useEffect(() => {
     if (permissionStatus === 'loading') return
@@ -258,8 +434,51 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   }, [permissionStatus, seesContracts])
 
   const activeTypes = seesContracts ? types : ['CARE_LEVEL']
+  const wantsBed = activeTypes.includes('BED')
+
+  // Giường mới chọn trong các giường đang Trống (bảng giường api-003); chỉ tải khi chọn loại Giường
+  useEffect(() => {
+    if (!wantsBed || emptyBeds !== null) return
+    getBeds({ query: { status: ['EMPTY'] } })
+      .then(({ data }) => setEmptyBeds(data.beds ?? []))
+      .catch((e) => {
+        setEmptyBeds([])
+        setFailure(problemOf(e))
+      })
+  }, [wantsBed, emptyBeds])
+
   const contract = contracts.find((c) => String(c.id) === contractId)
   const contractServiceIds = new Set((contract?.services ?? []).map((s) => s.serviceId))
+  // Dấu thuộc gói theo hợp đồng hiện hành (R19): chỉ dòng có trong hợp đồng mang dấu thuộc gói
+  const inPackageIds = new Set((contract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
+  const subjectId = contract?.residentId ?? (residentId ? Number(residentId) : null)
+
+  useEffect(() => {
+    let live = true
+    if (!subjectId) return
+    getResidentsByIdAssessments({ path: { id: subjectId } })
+      .then(({ data }) => {
+        const confirmed = (data ?? [])
+          .filter((a) => a.status === 'CONFIRMED' && a.confirmedAt)
+          .sort((a, b) => (a.confirmedAt < b.confirmedAt ? 1 : -1))
+        if (live) {
+          setAssessment(confirmed[0] ?? null)
+          setAssessmentHidden(false)
+        }
+      })
+      .catch(() => {
+        if (live) {
+          setAssessment(null)
+          setAssessmentHidden(true)
+        }
+      })
+    return () => {
+      live = false
+    }
+  }, [subjectId])
+
+  const assessedLevel = assessedLevelFor(assessment, contract)
+  const careLevelBlocked = !assessedLevel && !assessmentHidden
 
   const set = (patch) => setValue((v) => ({ ...v, ...patch }))
   const toggleType = (type) => setTypes((t) => (t.includes(type) ? t.filter((x) => x !== type) : [...t, type]))
@@ -269,29 +488,31 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     set({
       services: lineOf(id)
         ? pickedServices.filter((s) => s.serviceId !== id)
-        : [...pickedServices, { serviceId: id, action: contractServiceIds.has(id) ? 'REMOVE' : 'ADD', inPackage: false }],
+        : [
+            ...pickedServices,
+            { serviceId: id, action: contractServiceIds.has(id) ? 'REMOVE' : 'ADD' },
+          ],
     })
-  const setLine = (id, patch) =>
-    set({ services: pickedServices.map((s) => (s.serviceId === id ? { ...s, ...patch } : s)) })
   const setRow = (i, patch) =>
     set({ arrivalSchedule: (value.arrivalSchedule ?? []).map((r, j) => (j === i ? { ...r, ...patch } : r)) })
 
-  const changeErrors = validateChange({ types: activeTypes, value, date, contract })
-  const confirmationErrors =
-    seesContracts && confirmed
-      ? validateConfirmation({ method, confirmedOn, file: evidence, existingFileId: previous?.evidenceFileId, note })
-      : {}
+  // Mức chăm sóc mới luôn là mức theo đánh giá (FR-043j), không chọn tay
+  const effectiveValue = assessedLevel && !assessmentHidden ? { ...value, careLevel: assessedLevel } : value
+  const changeErrors = validateChange({ types: activeTypes, value: effectiveValue, date, contract })
   const errors = {
     contract: seesContracts ? !contractId && 'Chọn hợp đồng' : !residentId && 'Chọn người cao tuổi',
     ...changeErrors,
     reason: !reason.trim() && 'Nhập lý do',
-    ...Object.fromEntries(Object.entries(confirmationErrors).map(([k, v]) => [`confirmation.${k}`, v])),
   }
   const shown = (key) => (submitted ? errors[key] || null : null)
   const companions = activeTypes.includes('RESIDENCE_TYPE')
     ? requiredCompanions(contract?.residenceType, value.residenceType)
     : []
-  const reasonSuggestion = REASON_SUGGESTIONS[activeTypes[0]]
+  // Sửa nháp: giường đã chọn có thể không còn Trống, vẫn hiện để không mất giá trị
+  const bedOptions =
+    value.newBedId && emptyBeds && !emptyBeds.some((b) => b.id === value.newBedId)
+      ? [{ id: value.newBedId, location: { label: `Giường mã ${value.newBedId} (không còn trống)` } }, ...emptyBeds]
+      : (emptyBeds ?? [])
 
   async function save() {
     setSubmitted(true)
@@ -309,7 +530,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     }
     const newValue = {}
     for (const type of activeTypes)
-      for (const key of keep[type]) if (value[key] !== undefined) newValue[key] = value[key]
+      for (const key of keep[type]) if (effectiveValue[key] !== undefined) newValue[key] = effectiveValue[key]
     const body = {
       ...(seesContracts ? { contractId: Number(contractId) } : { residentId: Number(residentId) }),
       changeTypes: activeTypes,
@@ -318,15 +539,6 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
       reason: reason.trim(),
     }
     try {
-      if (seesContracts && confirmed) {
-        const evidenceFileId = evidence ? await uploadFile(evidence) : previous?.evidenceFileId
-        body.representativeConfirmation = {
-          method,
-          confirmedOn,
-          evidenceFileId,
-          ...(note.trim() ? { note: note.trim() } : {}),
-        }
-      }
       if (editing) {
         await putResidencyChangeRequestsById({
           path: { id: request.approvalRequestId },
@@ -351,7 +563,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         <SheetTitle>{editing ? 'Sửa yêu cầu thay đổi lưu trú' : 'Lập yêu cầu thay đổi lưu trú'}</SheetTitle>
         <SheetDescription>
           {seesContracts
-            ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'
+            ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
             : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
         </SheetDescription>
         <FieldGroup className="mt-4">
@@ -413,12 +625,22 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <Field data-invalid={!!shown('types') || undefined}>
               <FieldLabel>Loại thay đổi</FieldLabel>
               <div className="flex flex-col gap-2">
-                {CHANGE_TYPES.map(([code, text]) => (
-                  <label key={code} className="flex items-center gap-2 type-body-sm">
-                    <input type="checkbox" checked={types.includes(code)} onChange={() => toggleType(code)} />
-                    {text}
-                  </label>
-                ))}
+                {CHANGE_TYPES.map(([code, text]) => {
+                  const blocked = code === 'CARE_LEVEL' && careLevelBlocked && !types.includes(code)
+                  return (
+                    <div key={code} className="flex flex-col">
+                      <label className="flex items-center gap-2 type-body-sm">
+                        <input type="checkbox" disabled={blocked} checked={types.includes(code)} onChange={() => toggleType(code)} />
+                        {text}
+                      </label>
+                      {blocked && (
+                        <span className="type-caption text-muted-foreground">
+                          Chưa có lần đánh giá lại ra mức khác mức của hợp đồng; Bác sĩ đánh giá lại trước.
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
               {shown('types') && <FieldError>{shown('types')}</FieldError>}
             </Field>
@@ -430,7 +652,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 label="Loại lưu trú mới"
                 options={RESIDENCE_TYPES}
                 value={value.residenceType ?? ''}
-                onChange={(v) => set({ residenceType: v })}
+                onChange={(v) => {
+                  // Tự chọn loại kèm bắt buộc của loại lưu trú mới, bỏ loại kèm của lựa chọn trước (FR-041)
+                  setTypes((t) => withCompanions(t, contract?.residenceType, value.residenceType, v))
+                  set({ residenceType: v })
+                }}
                 error={shown('residenceType')}
               />
               {companions.length > 0 && (
@@ -442,14 +668,31 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               )}
             </>
           )}
-          {activeTypes.includes('CARE_LEVEL') && (
-            <Choices
-              label="Mức chăm sóc mới"
-              options={CARE_LEVELS}
-              value={value.careLevel ?? ''}
-              onChange={(v) => set({ careLevel: v })}
-              error={shown('careLevel')}
-            />
+          {activeTypes.includes('CARE_LEVEL') && assessmentHidden && (
+            <>
+              <Choices
+                label="Mức chăm sóc mới"
+                options={CARE_LEVELS}
+                value={value.careLevel ?? ''}
+                onChange={(v) => set({ careLevel: v })}
+                error={shown('careLevel')}
+              />
+              <FieldDescription>
+                Chọn đúng mức của lần đánh giá lại gần nhất do Bác sĩ xác nhận; hệ thống kiểm khi lưu.
+              </FieldDescription>
+            </>
+          )}
+          {activeTypes.includes('CARE_LEVEL') && !assessmentHidden && (
+            <Field data-invalid={!!shown('careLevel') || undefined}>
+              <FieldLabel>Mức chăm sóc mới</FieldLabel>
+              <p className="type-body-sm">{assessedLevel ? labelOf(CARE_LEVELS, assessedLevel) : 'Chưa có'}</p>
+              <FieldDescription>
+                {assessment
+                  ? `Theo đánh giá${assessment.confirmedBy ? ` của ${assessment.confirmedBy}` : ''} ngày ${formatDate(assessment.confirmedAt)}`
+                  : 'Mức mới lấy từ lần đánh giá gần nhất đã xác nhận.'}
+              </FieldDescription>
+              {shown('careLevel') && <FieldError>{shown('careLevel')}</FieldError>}
+            </Field>
           )}
           {activeTypes.includes('DURATION') && (
             <Field data-invalid={!!shown('endDate') || undefined}>
@@ -467,17 +710,27 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           )}
           {activeTypes.includes('BED') && (
             <Field data-invalid={!!shown('newBedId') || undefined}>
-              <FieldLabel htmlFor="change-bed">Mã giường mới</FieldLabel>
-              <Input
+              <FieldLabel htmlFor="change-bed">Giường mới</FieldLabel>
+              <select
                 id="change-bed"
-                type="number"
-                min="1"
-                step="1"
-                className="h-11"
+                className={SELECT}
                 value={value.newBedId ?? ''}
                 onChange={(e) => set({ newBedId: e.target.value === '' ? undefined : Number(e.target.value) })}
-              />
-              <FieldDescription>Giường phải trống và hợp mức chăm sóc; kiểm khi duyệt.</FieldDescription>
+              >
+                <option value="">
+                  {emptyBeds === null
+                    ? 'Đang tải…'
+                    : bedOptions.length
+                      ? 'Chọn giường đang trống'
+                      : 'Không có giường trống'}
+                </option>
+                {bedOptions.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.location?.label ?? b.code}
+                  </option>
+                ))}
+              </select>
+              <FieldDescription>Giường phải còn trống và hợp mức chăm sóc lúc duyệt; kiểm khi duyệt.</FieldDescription>
               {shown('newBedId') && <FieldError>{shown('newBedId')}</FieldError>}
             </Field>
           )}
@@ -485,8 +738,8 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <Field data-invalid={!!shown('services') || undefined}>
               <FieldLabel>Dịch vụ thêm hoặc bớt</FieldLabel>
               <FieldDescription>
-                Dịch vụ đang có trong hợp đồng thì chọn để bớt; dịch vụ khác thì chọn để thêm. Chỉ thêm, bớt dịch vụ thuộc gói
-                (không đổi giá) là thay đổi nhỏ.
+                Dịch vụ đang có trong hợp đồng thì chọn để bớt; dịch vụ khác thì chọn để thêm. Thuộc gói hay ngoài gói
+                theo hợp đồng hiện hành; chỉ thêm, bớt dịch vụ thuộc gói là thay đổi nhỏ.
               </FieldDescription>
               {catalog.map((s) => {
                 const line = lineOf(s.id)
@@ -497,15 +750,10 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                       <input type="checkbox" checked={!!line} onChange={() => toggleService(s.id)} />
                       {`${inContract ? 'Bớt' : 'Thêm'} ${s.name}`}
                     </label>
-                    {line?.action === 'ADD' && (
-                      <label className="flex items-center gap-2 type-caption text-muted-foreground">
-                        <input
-                          type="checkbox"
-                          checked={!!line.inPackage}
-                          onChange={(e) => setLine(s.id, { inPackage: e.target.checked })}
-                        />
-                        Thuộc gói
-                      </label>
+                    {line && (
+                      <span className="type-caption text-muted-foreground">
+                        {inPackageIds.has(s.id) ? 'Thuộc gói' : 'Ngoài gói'}
+                      </span>
                     )}
                   </div>
                 )
@@ -593,87 +841,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             {shown('date') && <FieldError>{shown('date')}</FieldError>}
           </Field>
           <ReasonField id="change-reason" value={reason} onChange={setReason} error={shown('reason')} />
-          {reasonSuggestion && !reason.trim() && (
-            <Button variant="outline" className="h-11 self-start" onClick={() => setReason(reasonSuggestion)}>
-              {`Gợi ý lý do: ${reasonSuggestion}`}
-            </Button>
-          )}
 
-          {seesContracts && (
-            <fieldset className="flex flex-col gap-4 rounded-xl border p-4">
-              <legend className="px-1 type-card-title">Xác nhận với người đại diện</legend>
-              <label className="flex items-center gap-2 type-body-sm">
-                <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} />
-                Đã xác nhận nội dung thay đổi với người đại diện
-              </label>
-              {!confirmed && (
-                <FieldDescription>
-                  Lưu được nháp khi chưa xác nhận, nhưng chưa gửi Quản lý viện duyệt được. Sửa nội dung sau khi xác nhận thì
-                  phải xác nhận lại.
-                </FieldDescription>
-              )}
-              {confirmed && (
-                <>
-                  <Choices
-                    label="Cách xác nhận"
-                    options={CONFIRMATION_METHODS}
-                    value={method}
-                    onChange={setMethod}
-                    error={shown('confirmation.method')}
-                  />
-                  <Field data-invalid={!!shown('confirmation.confirmedOn') || undefined}>
-                    <FieldLabel htmlFor="change-confirmed-on">Ngày xác nhận</FieldLabel>
-                    <Input
-                      id="change-confirmed-on"
-                      type="date"
-                      className="h-11"
-                      max={isoDate()}
-                      value={confirmedOn}
-                      onChange={(e) => setConfirmedOn(e.target.value)}
-                    />
-                    {shown('confirmation.confirmedOn') && <FieldError>{shown('confirmation.confirmedOn')}</FieldError>}
-                  </Field>
-                  <Field data-invalid={!!shown('confirmation.evidence') || undefined}>
-                    <FieldLabel htmlFor="change-evidence">Bằng chứng xác nhận</FieldLabel>
-                    <Input
-                      id="change-evidence"
-                      type="file"
-                      accept={EVIDENCE_ACCEPT}
-                      className="h-11"
-                      onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
-                    />
-                    <FieldDescription>
-                      {`${EVIDENCE_HINTS[method] ?? ''} PDF, JPG hoặc PNG, tối đa 10 MB.${
-                        previous?.evidenceFileId && !evidence ? ' Đã đính kèm; chọn tệp khác để thay.' : ''
-                      }`}
-                    </FieldDescription>
-                    {shown('confirmation.evidence') && <FieldError>{shown('confirmation.evidence')}</FieldError>}
-                  </Field>
-                  <Field data-invalid={!!shown('confirmation.note') || undefined}>
-                    <FieldLabel htmlFor="change-confirmation-note">Ghi chú xác nhận</FieldLabel>
-                    <Textarea
-                      id="change-confirmation-note"
-                      rows={2}
-                      maxLength={NOTE_MAX}
-                      placeholder={NOTE_SUGGESTIONS[method]}
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                    />
-                    <FieldDescription>{`${note.length}/${NOTE_MAX} ký tự`}</FieldDescription>
-                    {!note.trim() && (
-                      <Button
-                        variant="outline"
-                        className="h-11 self-start"
-                        onClick={() => setNote(NOTE_SUGGESTIONS[method] ?? '')}
-                      >
-                        Dùng ghi chú gợi ý
-                      </Button>
-                    )}
-                    {shown('confirmation.note') && <FieldError>{shown('confirmation.note')}</FieldError>}
-                  </Field>
-                </>
-              )}
-            </fieldset>
+          {editing && seesContracts && hadConfirmation && (
+            <p className="type-body-sm text-destructive">
+              Lưu thay đổi sẽ bỏ xác nhận của người đại diện đang có; sau khi lưu phải xác nhận lại.
+            </p>
           )}
         </FieldGroup>
         <div className="mt-4">
@@ -685,6 +857,144 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           </Button>
           <Button className="h-11" disabled={busy || (editing && !etag)} onClick={save}>
             Lưu yêu cầu
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+// Ghi xác nhận trực tiếp với người đại diện kèm bằng chứng (FR-043a), mở từ màn chi tiết yêu cầu ở Nháp; gửi lại nội dung
+// yêu cầu như đang có cùng representativeConfirmation (PUT kèm If-Match), không đổi nội dung thay đổi.
+export function ConfirmationSheet({ request, etag, onClose, onDone }) {
+  const [method, setMethod] = useState('IN_PERSON')
+  const [confirmedOn, setConfirmedOn] = useState(isoDate())
+  const [evidence, setEvidence] = useState(null)
+  const [note, setNote] = useState('')
+  const [representative, setRepresentative] = useState(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState(null)
+
+  const errors = {
+    ...validateConfirmation({ method, confirmedOn, file: evidence, existingFileId: null, note }),
+    representative: !representative && 'Chọn người đại diện đã xác nhận',
+  }
+  const shown = (key) => (submitted ? errors[key] || null : null)
+
+  async function save() {
+    setSubmitted(true)
+    if (Object.values(errors).some(Boolean)) return
+    setBusy(true)
+    setFailure(null)
+    try {
+      const evidenceFileId = await uploadFile(evidence)
+      await putResidencyChangeRequestsById({
+        path: { id: request.approvalRequestId },
+        headers: { ...newKey(), 'If-Match': etag },
+        body: {
+          contractId: request.contractId,
+          changeTypes: request.changeTypes,
+          newValue: request.newValue,
+          requestedEffectiveDate: request.requestedEffectiveDate,
+          reason: request.reason,
+          representativeConfirmation: {
+            method,
+            confirmedOn,
+            evidenceFileId,
+            representativeFamilyMemberId: representative,
+            ...(note.trim() ? { note: note.trim() } : {}),
+          },
+        },
+      })
+      onDone('Đã ghi xác nhận với người đại diện', request.approvalRequestId)
+    } catch (e) {
+      setFailure(problemOf(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet open onOpenChange={(next) => !next && onClose()}>
+      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
+        <SheetTitle>Ghi xác nhận trực tiếp</SheetTitle>
+        <SheetDescription>
+          Dùng khi người đại diện đã đồng ý nội dung thay đổi tại viện, qua điện thoại hoặc tin nhắn. Đính kèm bằng
+          chứng rồi lưu; sau đó gửi Quản lý viện duyệt.
+        </SheetDescription>
+        <FieldGroup className="mt-4">
+          <RepresentativeSelect
+            id="change-confirmer"
+            residentId={request.residentId}
+            value={representative}
+            onChange={setRepresentative}
+            error={shown('representative')}
+            label="Người đại diện đã xác nhận"
+          />
+          <Choices
+            label="Cách xác nhận"
+            options={CONFIRMATION_METHODS}
+            value={method}
+            onChange={setMethod}
+            error={shown('method')}
+          />
+          <Field data-invalid={!!shown('confirmedOn') || undefined}>
+            <FieldLabel htmlFor="change-confirmed-on">Ngày xác nhận</FieldLabel>
+            <Input
+              id="change-confirmed-on"
+              type="date"
+              className="h-11"
+              max={isoDate()}
+              value={confirmedOn}
+              onChange={(e) => setConfirmedOn(e.target.value)}
+            />
+            {shown('confirmedOn') && <FieldError>{shown('confirmedOn')}</FieldError>}
+          </Field>
+          <Field data-invalid={!!shown('evidence') || undefined}>
+            <FieldLabel htmlFor="change-evidence">Bằng chứng xác nhận</FieldLabel>
+            <Input
+              id="change-evidence"
+              type="file"
+              accept={EVIDENCE_ACCEPT}
+              className="h-11"
+              onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
+            />
+            <FieldDescription>{`${EVIDENCE_HINTS[method] ?? ''} PDF, JPG hoặc PNG, tối đa 10 MB.`}</FieldDescription>
+            {shown('evidence') && <FieldError>{shown('evidence')}</FieldError>}
+          </Field>
+          <Field data-invalid={!!shown('note') || undefined}>
+            <FieldLabel htmlFor="change-confirmation-note">Ghi chú xác nhận</FieldLabel>
+            <Textarea
+              id="change-confirmation-note"
+              rows={2}
+              maxLength={NOTE_MAX}
+              placeholder={NOTE_SUGGESTIONS[method]}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+            />
+            <FieldDescription>{`${note.length}/${NOTE_MAX} ký tự`}</FieldDescription>
+            {!note.trim() && (
+              <Button
+                variant="outline"
+                className="h-11 self-start"
+                onClick={() => setNote(NOTE_SUGGESTIONS[method] ?? '')}
+              >
+                Dùng ghi chú gợi ý
+              </Button>
+            )}
+            {shown('note') && <FieldError>{shown('note')}</FieldError>}
+          </Field>
+        </FieldGroup>
+        <div className="mt-4">
+          <ProblemAlert problem={failure} />
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button variant="ghost" className="h-11" onClick={onClose}>
+            Đóng
+          </Button>
+          <Button className="h-11" disabled={busy || !etag} onClick={save}>
+            Lưu xác nhận
           </Button>
         </div>
       </SheetContent>

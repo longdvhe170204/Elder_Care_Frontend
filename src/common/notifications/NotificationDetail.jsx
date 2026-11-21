@@ -16,7 +16,22 @@ import { LEVEL_LABELS, PART_LABELS, STATUS_LABELS, label } from './notificationL
 
 const PART_ORDER = ['GENERAL', 'HEALTH', 'COSTS', 'VISITS', 'CONTRACT']
 
-export function NotificationDetail({ id, onOpened, onHidden, sourceAction, Title = 'h2', Description = 'p' }) {
+// Nguồn mở thẳng được trên màn nhân viên khi nơi dùng truyền onNavigate (004 BF-08 sửa đổi, W12): yêu cầu thay đổi lưu trú
+// (nhắc ký phụ lục, quá hạn ký, trả về nháp) và hồ sơ người cao tuổi (quyết định giữ mức, rời viện của 001)
+const SOURCE_PAGES = {
+  'M02.RESIDENCY_CHANGE': ['residency-changes', 'id', 'Mở yêu cầu thay đổi lưu trú'],
+  'M01.RESIDENT': ['residents', 'residentId', 'Mở hồ sơ người cao tuổi'],
+}
+
+export function NotificationDetail({
+  id,
+  onOpened,
+  onHidden,
+  sourceAction,
+  onNavigate,
+  Title = 'h2',
+  Description = 'p',
+}) {
   const [state, setState] = useState({ status: 'loading' })
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -128,6 +143,18 @@ export function NotificationDetail({ id, onOpened, onHidden, sourceAction, Title
       })}
 
       {sourceAction?.(n)}
+      {onNavigate && SOURCE_PAGES[n.sourceRecord?.type] && (
+        <Button
+          variant="outline"
+          className="self-start"
+          onClick={() => {
+            const [page, param] = SOURCE_PAGES[n.sourceRecord.type]
+            onNavigate(page, { [param]: Number(n.sourceRecord.id) })
+          }}
+        >
+          {SOURCE_PAGES[n.sourceRecord.type][2]}
+        </Button>
+      )}
       <ProblemAlert problem={failure} />
       {n.viewedAt && (
         <Button variant="outline" className="self-start" disabled={busy} onClick={hide}>

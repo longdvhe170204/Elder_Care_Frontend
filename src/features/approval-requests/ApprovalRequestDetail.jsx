@@ -6,6 +6,7 @@ import {
   postApprovalRequestsByIdApprove,
   postApprovalRequestsByIdCancel,
   postApprovalRequestsByIdReject,
+  postApprovalRequestsByIdReturnToDraft,
   postApprovalRequestsByIdSubmit,
 } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -129,7 +130,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
 
   const { request, etag } = state
   const allowed = request.allowedCommands ?? []
-  const canDecide = allowed.includes('approve') || allowed.includes('reject')
+  const canDecide = allowed.includes('approve') || allowed.includes('reject') || allowed.includes('return-to-draft')
 
   async function run(command, body, field) {
     setFailure(null)
@@ -166,6 +167,15 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
       return
     }
     run(postApprovalRequestsByIdReject, { comment }, 'comment')
+  }
+
+  // Trả về nháp để người lập sửa, bắt buộc lý do (000 FR-041a, Q-418); dùng ô Ý kiến làm lý do
+  function returnToDraft() {
+    if (!comment.trim()) {
+      setErrors({ comment: 'Nhập lý do trả về nháp' })
+      return
+    }
+    run(postApprovalRequestsByIdReturnToDraft, { reason: comment }, 'comment')
   }
 
   function cancel() {
@@ -253,7 +263,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
             {errors.comment ? (
               <FieldError>{errors.comment}</FieldError>
             ) : (
-              <FieldDescription>Bắt buộc khi từ chối, hoặc khi duyệt yêu cầu do chính mình lập.</FieldDescription>
+              <FieldDescription>Bắt buộc khi từ chối, trả về nháp, hoặc khi duyệt yêu cầu do chính mình lập.</FieldDescription>
             )}
           </Field>
           <div className="flex flex-wrap gap-2">
@@ -265,6 +275,11 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
             {allowed.includes('reject') && (
               <Button variant="outline" className="h-11" disabled={busy} onClick={reject}>
                 Từ chối
+              </Button>
+            )}
+            {allowed.includes('return-to-draft') && (
+              <Button variant="outline" className="h-11" disabled={busy} onClick={returnToDraft}>
+                Trả về nháp
               </Button>
             )}
           </div>
