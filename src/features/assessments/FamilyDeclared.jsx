@@ -69,30 +69,117 @@ export function FamilyDeclaredList({ entries }) {
   )
 }
 
-// Hành chính ghi phần "Gia đình khai": thay toàn bộ danh sách mục mỗi lần lưu
+// Hành chính ghi phần "Gia đình khai" dạng bảng theo chủ đề (nhóm A BF-01 phương án B, chủ dự án chọn 2026-11-21): năm
+// chủ đề là năm khối cố định, mỗi khối một hoặc nhiều dòng (mỗi dòng một nguồn) có ô chọn nhanh và nguồn; lưu một lần,
+// chỉ gửi dòng có nội dung. Lệnh vẫn thay toàn bộ danh sách mục (api-001, không đổi API).
+let rowSeq = 0
+const emptyRow = (topic) => ({ key: ++rowSeq, topic, content: '', sourceType: 'RESIDENT', memberId: '' })
+
+function rowsOf(entries) {
+  return Object.keys(FAMILY_DECLARED_TOPIC_LABELS).flatMap((topic) => {
+    const own = entries.filter((e) => e.topic === topic)
+    if (own.length === 0) return [emptyRow(topic)]
+    return own.map((e) => ({
+      key: ++rowSeq,
+      topic,
+      content: e.content,
+      sourceType: e.source.type,
+      memberId: e.source.familyMemberId ? String(e.source.familyMemberId) : '',
+    }))
+  })
+}
+
+function entriesOf(rows) {
+  return rows
+    .filter((r) => r.content.trim())
+    .map((r) => ({
+      topic: r.topic,
+      content: r.content.trim(),
+      source:
+        r.sourceType === 'FAMILY_MEMBER'
+          ? { type: 'FAMILY_MEMBER', familyMemberId: Number(r.memberId.trim()) }
+          : { type: 'RESIDENT' },
+    }))
+}
+
+function SourceRow({ row, label, onChange, onRemove, error }) {
+  const id = `family-declared-${row.key}`
+  return (
+    <div className="flex flex-col gap-2 border-t pt-3 first:border-0 first:pt-0">
+      <ChoiceTray
+        id={`${id}-content`}
+        label={label}
+        options={FAMILY_DECLARED_CHOICES[row.topic]}
+        multiple
+        value={row.content}
+        onChange={(content) => onChange({ content })}
+      />
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <span className="type-caption text-muted-foreground" id={`${id}-source`}>
+            Nguồn
+          </span>
+          <div role="radiogroup" aria-labelledby={`${id}-source`} className="flex flex-wrap gap-2">
+            {[
+              ['RESIDENT', 'Người cao tuổi'],
+              ['FAMILY_MEMBER', 'Người thân'],
+            ].map(([value, text]) => (
+              <Button
+                key={value}
+                type="button"
+                role="radio"
+                aria-checked={row.sourceType === value}
+                variant={row.sourceType === value ? 'default' : 'outline'}
+                className="h-10"
+                onClick={() => onChange({ sourceType: value })}
+              >
+                {text}
+              </Button>
+            ))}
+          </div>
+        </div>
+        {row.sourceType === 'FAMILY_MEMBER' && (
+          <Field data-invalid={!!error || undefined} className="w-40">
+            <FieldLabel htmlFor={`${id}-member`}>Mã người thân</FieldLabel>
+            <Input
+              id={`${id}-member`}
+              inputMode="numeric"
+              value={row.memberId}
+              onChange={(e) => onChange({ memberId: e.target.value })}
+              aria-invalid={!!error || undefined}
+            />
+          </Field>
+        )}
+        {onRemove && (
+          <Button type="button" variant="ghost" className="h-10" onClick={onRemove}>
+            Bỏ dòng
+          </Button>
+        )}
+      </div>
+      {error && <FieldError>{error}</FieldError>}
+    </div>
+  )
+}
+
 export function FamilyDeclaredEditor({ residentId }) {
   const [state, setState] = useState('loading')
   const [saved, setSaved] = useState([])
-  const [items, setItems] = useState([])
-  const [topic, setTopic] = useState('GENERAL_CONDITION')
-  const [content, setContent] = useState('')
-  const [sourceType, setSourceType] = useState('RESIDENT')
-  const [memberId, setMemberId] = useState('')
+  const [rows, setRows] = useState([])
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(null)
 
   const load = useCallback(async () => {
+    let entries = []
     try {
       const { data } = await getResidentsByIdInitialAssessmentFamilyDeclared({ path: { id: residentId } })
-      setSaved(data.entries)
-      setItems(data.entries)
+      entries = data.entries
     } catch (error) {
       if (!(error instanceof ApiError && error.status === 404)) setFailure(problemOf(error))
-      setSaved([])
-      setItems([])
     }
+    setSaved(entries)
+    setRows(rowsOf(entries))
     setState('ready')
   }, [residentId])
 
@@ -101,33 +188,24 @@ export function FamilyDeclaredEditor({ residentId }) {
     load()
   }, [load])
 
-  function add() {
-    const next = {}
-    if (!content.trim()) next.content = 'Nhập nội dung'
-    if (sourceType === 'FAMILY_MEMBER' && !POSITIVE_INTEGER.test(memberId.trim())) next.memberId = 'Nhập mã người thân'
-    setErrors(next)
-    if (Object.keys(next).length > 0) return
-    const source =
-      sourceType === 'FAMILY_MEMBER'
-        ? { type: 'FAMILY_MEMBER', familyMemberId: Number(memberId.trim()) }
-        : { type: 'RESIDENT' }
-    setItems((current) => [...current, { topic, content: content.trim(), source }])
-    setContent('')
+  function change(key, patch) {
+    setRows((current) => current.map((r) => (r.key === key ? { ...r, ...patch } : r)))
     setDone(null)
   }
 
   async function save() {
     setFailure(null)
-    // Nội dung đang nhập chưa thêm vào danh sách thì không lưu, tránh báo "Đã lưu" mà mục chưa có (F7)
-    if (content.trim()) {
-      setErrors((current) => ({
-        ...current,
-        content: 'Nội dung đang nhập chưa được thêm. Bấm Thêm mục hoặc xóa nội dung.',
-      }))
+    const next = {}
+    for (const r of rows)
+      if (r.content.trim() && r.sourceType === 'FAMILY_MEMBER' && !POSITIVE_INTEGER.test(r.memberId.trim()))
+        next[r.key] = 'Nhập mã người thân'
+    setErrors(next)
+    if (Object.keys(next).length > 0) {
       setDone(null)
       return
     }
-    if (JSON.stringify(items.map(entryKey)) === JSON.stringify(saved.map(entryKey))) {
+    const entries = entriesOf(rows)
+    if (JSON.stringify(entries.map(entryKey)) === JSON.stringify(saved.map(entryKey))) {
       setDone('Chưa có thay đổi để lưu.')
       return
     }
@@ -136,19 +214,10 @@ export function FamilyDeclaredEditor({ residentId }) {
       const { data } = await putResidentsByIdInitialAssessmentFamilyDeclared({
         path: { id: residentId },
         headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: {
-          entries: items.map((e) => ({
-            topic: e.topic,
-            content: e.content,
-            source:
-              e.source.type === 'FAMILY_MEMBER'
-                ? { type: 'FAMILY_MEMBER', familyMemberId: e.source.familyMemberId }
-                : { type: 'RESIDENT' },
-          })),
-        },
+        body: { entries },
       })
       setSaved(data.entries)
-      setItems(data.entries)
+      setRows(rowsOf(data.entries))
       setDone('Đã lưu phần Gia đình khai. Bác sĩ sẽ xem khi đánh giá đầu vào.')
     } catch (error) {
       setFailure(problemOf(error))
@@ -166,8 +235,8 @@ export function FamilyDeclaredEditor({ residentId }) {
         {saved.length > 0 && <Badge variant="attention">{SELF_REPORT_LABEL}</Badge>}
       </div>
       <p className="type-body-sm text-muted-foreground">
-        Ghi điều người cao tuổi hoặc gia đình kể về sức khỏe để Bác sĩ tham khảo khi đánh giá đầu vào. Bác sĩ ghi nhận
-        xét, chọn mức chăm sóc và xác nhận; phần này giữ nguyên trong lần đánh giá.
+        Ghi điều người cao tuổi hoặc gia đình kể về sức khỏe theo từng chủ đề để Bác sĩ tham khảo khi đánh giá đầu vào.
+        Bác sĩ ghi nhận xét, chọn mức chăm sóc và xác nhận; phần này giữ nguyên trong lần đánh giá.
       </p>
       {state === 'loading' ? (
         <div aria-busy="true">
@@ -176,84 +245,41 @@ export function FamilyDeclaredEditor({ residentId }) {
         </div>
       ) : (
         <>
-          {items.length === 0 ? (
-            <p className="type-body-sm text-muted-foreground">Chưa có thông tin gia đình khai.</p>
-          ) : (
-            <EntryItems
-              entries={items}
-              onRemove={(index) => setItems((current) => current.filter((_, i) => i !== index))}
-            />
-          )}
-
-          <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
-            <legend className="type-label px-1">Thêm mục</legend>
-            <Field>
-              <FieldLabel htmlFor="family-declared-topic">Chủ đề</FieldLabel>
-              <select
-                id="family-declared-topic"
-                value={topic}
-                onChange={(e) => setTopic(e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-transparent px-3"
+          {Object.entries(FAMILY_DECLARED_TOPIC_LABELS).map(([topic, topicLabel]) => {
+            const own = rows.filter((r) => r.topic === topic)
+            return (
+              <div
+                key={topic}
+                role="group"
+                aria-label={topicLabel}
+                className="flex flex-col gap-3 rounded-lg border p-3"
               >
-                {Object.entries(FAMILY_DECLARED_TOPIC_LABELS).map(([value, label]) => (
-                  <option key={value} value={value}>
-                    {label}
-                  </option>
+                {own.map((row, i) => (
+                  <SourceRow
+                    key={row.key}
+                    row={row}
+                    label={i === 0 ? topicLabel : `${topicLabel}, nguồn thứ ${i + 1}`}
+                    error={errors[row.key]}
+                    onChange={(patch) => change(row.key, patch)}
+                    onRemove={i > 0 ? () => setRows((current) => current.filter((r) => r.key !== row.key)) : null}
+                  />
                 ))}
-              </select>
-            </Field>
-            <Field data-invalid={!!errors.content || undefined}>
-              <ChoiceTray
-                id="family-declared-content"
-                label="Nội dung"
-                options={FAMILY_DECLARED_CHOICES[topic]}
-                multiple
-                value={content}
-                onChange={setContent}
-                invalid={!!errors.content}
-              />
-              {errors.content && <FieldError>{errors.content}</FieldError>}
-            </Field>
-            <Field>
-              <span className="type-label" id="family-declared-source">
-                Nguồn
-              </span>
-              <div role="radiogroup" aria-labelledby="family-declared-source" className="flex flex-wrap gap-2">
-                {[
-                  ['RESIDENT', 'Người cao tuổi'],
-                  ['FAMILY_MEMBER', 'Người thân'],
-                ].map(([value, label]) => (
-                  <Button
-                    key={value}
-                    type="button"
-                    role="radio"
-                    aria-checked={sourceType === value}
-                    variant={sourceType === value ? 'default' : 'outline'}
-                    className="h-10"
-                    onClick={() => setSourceType(value)}
-                  >
-                    {label}
-                  </Button>
-                ))}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-10 self-start"
+                  onClick={() => {
+                    setRows((current) => {
+                      const last = current.findLastIndex((r) => r.topic === topic)
+                      return [...current.slice(0, last + 1), emptyRow(topic), ...current.slice(last + 1)]
+                    })
+                  }}
+                >
+                  Thêm nguồn khác
+                </Button>
               </div>
-            </Field>
-            {sourceType === 'FAMILY_MEMBER' && (
-              <Field data-invalid={!!errors.memberId || undefined}>
-                <FieldLabel htmlFor="family-declared-member">Mã người thân</FieldLabel>
-                <Input
-                  id="family-declared-member"
-                  inputMode="numeric"
-                  value={memberId}
-                  onChange={(e) => setMemberId(e.target.value)}
-                  aria-invalid={!!errors.memberId || undefined}
-                />
-                {errors.memberId && <FieldError>{errors.memberId}</FieldError>}
-              </Field>
-            )}
-            <Button type="button" variant="outline" className="h-10 self-start" onClick={add}>
-              Thêm mục
-            </Button>
-          </fieldset>
+            )
+          })}
 
           <ProblemAlert problem={failure} />
           {done && (
