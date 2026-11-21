@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { getBedAllocationsSuitableBeds, postBedAllocations } from '@/api'
+import { getBedAllocationsSuitableBeds, getContracts, getRoomTypes, getRooms, postBedAllocations } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -32,6 +32,37 @@ export function BedAllocationForm({ resident, onSaved }) {
       current = false
     }
   }, [resident.id, startAt, revision])
+  // 4b (chủ dự án chọn 2026-11-21): loại phòng của hợp đồng (Hiệu lực, Chờ ký, rồi Nháp) và loại phòng của từng phòng
+  // (GET /rooms) để mặc định chỉ hiện giường đúng loại phòng; không đọc được thì không lọc. Backend không chặn theo loại
+  // phòng (003 FR-018), nên người dùng bỏ chọn được để xem mọi giường phù hợp.
+  const [roomType, setRoomType] = useState(null)
+  const [onlyContractType, setOnlyContractType] = useState(true)
+  useEffect(() => {
+    let current = true
+    Promise.all([
+      getContracts({ query: { residentId: resident.id, status: ['ACTIVE', 'PENDING_SIGNATURE', 'DRAFT'] } }),
+      getRooms({ query: {} }),
+      getRoomTypes({ query: {} }),
+    ])
+      .then(([contracts, rooms, types]) => {
+        const order = ['ACTIVE', 'PENDING_SIGNATURE', 'DRAFT']
+        const contract = contracts.data
+          .filter((c) => order.includes(c.status) && c.roomTypeId)
+          .sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status))[0]
+        if (!current || !contract) return
+        setRoomType({
+          id: contract.roomTypeId,
+          name: types.data.find((t) => t.id === contract.roomTypeId)?.name ?? 'của hợp đồng',
+          rooms: new Set(rooms.data.filter((r) => r.roomTypeId === contract.roomTypeId).map((r) => r.id)),
+        })
+      })
+      .catch(() => {})
+    return () => {
+      current = false
+    }
+  }, [resident.id])
+  const beds =
+    roomType && onlyContractType ? options.beds.filter((bed) => roomType.rooms.has(bed.location.roomId)) : options.beds
   function reload() {
     setBedId('')
     setError(null)
@@ -92,15 +123,30 @@ export function BedAllocationForm({ resident, onSaved }) {
           onChange={(event) => setBedId(event.target.value)}
         >
           <option value="">Chọn giường</option>
-          {options.beds.map((bed) => (
+          {beds.map((bed) => (
             <option key={bed.location.bedId} value={bed.location.bedId}>
               {bed.location.label}
             </option>
           ))}
         </select>
       </label>
+      {roomType && (
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            className="size-4"
+            checked={onlyContractType}
+            disabled={busy}
+            onChange={(event) => {
+              setOnlyContractType(event.target.checked)
+              setBedId('')
+            }}
+          />
+          Chỉ giường loại {roomType.name} của hợp đồng
+        </label>
+      )}
       {options.loading && <p aria-busy="true">Đang tải giường phù hợp…</p>}
-      {!options.loading && !error && !options.beds.length && <p>Chưa có giường phù hợp tại thời điểm này.</p>}
+      {!options.loading && !error && !beds.length && <p>Chưa có giường phù hợp tại thời điểm này.</p>}
       {options.beds
         .filter((bed) => String(bed.location.bedId) === bedId && bed.earliestStartAt)
         .map((bed) => (

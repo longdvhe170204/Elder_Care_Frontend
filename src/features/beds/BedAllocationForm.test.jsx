@@ -72,3 +72,36 @@ it('FR_018_conflictShowsAllConditionsAndReloadClearsChoice', async () => {
   await waitFor(() => expect(api.calls('GET', '/bed-allocations/suitable-beds')).toHaveLength(2))
   expect(screen.getByLabelText('Giường phù hợp')).toHaveValue('')
 })
+
+// 4b (chủ dự án chọn 2026-11-21): mặc định chỉ hiện giường thuộc loại phòng của hợp đồng (loại phòng của giường lấy qua
+// GET /rooms); bỏ chọn thì hiện mọi giường thỏa FR-018 (backend không chặn theo loại phòng)
+it('4b_locGiuongTheoLoaiPhongCuaHopDong_boChonThiHienTatCa', async () => {
+  api.on(
+    'GET',
+    '/bed-allocations/suitable-beds',
+    json(200, [
+      { location: { bedId: 6, roomId: 1, label: 'Khu A – P201 – G2' }, state: 'EMPTY' },
+      { location: { bedId: 7, roomId: 2, label: 'Khu A – P305 – G1' }, state: 'EMPTY' },
+    ]),
+  )
+  api.on('GET', '/contracts', json(200, [{ id: 3, residentId: 11, status: 'DRAFT', roomTypeId: 101 }]))
+  api.on(
+    'GET',
+    '/rooms',
+    json(200, [
+      { id: 1, roomTypeId: 101 },
+      { id: 2, roomTypeId: 202 },
+    ]),
+  )
+  api.on('GET', '/room-types', json(200, [{ id: 101, name: 'Phòng 2 giường' }]))
+  open()
+
+  const only = await screen.findByRole('checkbox', { name: 'Chỉ giường loại Phòng 2 giường của hợp đồng' })
+  expect(only).toBeChecked()
+  expect(await screen.findByText('Khu A – P201 – G2')).toBeInTheDocument()
+  expect(screen.queryByText('Khu A – P305 – G1')).toBeNull()
+  expect(new URL(api.calls('GET', '/contracts')[0][0], 'http://localhost').searchParams.get('residentId')).toBe('11')
+
+  fireEvent.click(only)
+  expect(await screen.findByText('Khu A – P305 – G1')).toBeInTheDocument()
+})

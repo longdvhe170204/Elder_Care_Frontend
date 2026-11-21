@@ -167,9 +167,27 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
   const [submitted, setSubmitted] = useState(false)
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [roomTypeName, setRoomTypeName] = useState(null)
+  const [serviceNames, setServiceNames] = useState({})
   const allowed = contract.allowedCommands ?? []
   const hidden = contract.hiddenFields ?? []
   const draft = contract.status === 'DRAFT'
+
+  // Loại phòng, dịch vụ đăng ký ghi bằng tên (4b, chủ dự án duyệt 2026-11-21); không đọc được danh mục thì ghi "mã …"
+  useEffect(() => {
+    let cancelled = false
+    if (contract.roomTypeId)
+      getRoomTypes({ query: {} })
+        .then(({ data }) => !cancelled && setRoomTypeName(data.find((t) => t.id === contract.roomTypeId)?.name ?? null))
+        .catch(() => {})
+    if (contract.services?.length)
+      getServices({ query: {} })
+        .then(({ data }) => !cancelled && setServiceNames(Object.fromEntries(data.map((s) => [s.id, s.name]))))
+        .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [contract.roomTypeId, contract.services?.length])
 
   useEffect(() => {
     let cancelled = false
@@ -231,11 +249,28 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
         <Info label="Thời gian">
           {`Từ ${formatDate(contract.startDate)}${contract.endDate ? ` đến ${formatDate(contract.endDate)}` : ''}`}
         </Info>
+        {contract.roomTypeId && (
+          <Info label="Loại phòng">{roomTypeName ?? `Loại phòng mã ${contract.roomTypeId}`}</Info>
+        )}
         <Info label="Mức chăm sóc">{labelOf(CARE_LEVELS, contract.careLevel)}</Info>
         <Info label="Kỳ tính phí lưu trú">{labelOf(BILLING_PERIODS, contract.residencyFeeBillingPeriod)}</Info>
         {contract.signedDate && <Info label="Ngày ký">{formatDate(contract.signedDate)}</Info>}
         {contract.terminationReason && <Info label="Lý do chấm dứt">{contract.terminationReason}</Info>}
       </div>
+      {contract.services?.length > 0 && (
+        <section className="flex flex-col gap-1">
+          <h3 id="contract-services" className="type-card-title">
+            Dịch vụ đăng ký
+          </h3>
+          <ul aria-labelledby="contract-services" className="flex flex-col gap-1">
+            {contract.services.map((s) => (
+              <li key={s.serviceId} className="type-body-sm">
+                {`${serviceNames[s.serviceId] ?? `Dịch vụ mã ${s.serviceId}`}, ${s.inPackage ? 'trong gói' : 'ngoài gói'}`}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {hidden.length > 0 && (
         <p className="type-caption text-muted-foreground">Trường tài chính được ẩn theo quyền của bạn.</p>
       )}

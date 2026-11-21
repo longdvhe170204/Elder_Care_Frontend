@@ -63,7 +63,10 @@ describe('ContractSheet', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
 
     await vi.waitFor(() => expect(api.calls('POST', '/contracts')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/contracts')[0][1].body)).toMatchObject({ residenceType: 'LONG_TERM_RESIDENTIAL', roomTypeId: 1 })
+    expect(JSON.parse(api.calls('POST', '/contracts')[0][1].body)).toMatchObject({
+      residenceType: 'LONG_TERM_RESIDENTIAL',
+      roomTypeId: 1,
+    })
   })
 
   // Q-300, 6.4 (chủ dự án duyệt 2026-11-20, hướng B): dịch vụ chăm sóc theo mức và phí lưu trú theo loại phòng là tác động
@@ -151,9 +154,7 @@ describe('ContractSheet', () => {
     render(<ContractSheet contract={contract} residentName="Nguyễn Thị Lan" onClose={() => {}} onDone={() => {}} />)
     const dialog = await screen.findByRole('dialog')
     await within(dialog).findByText('Chăm sóc thường xuyên, theo mức chăm sóc')
-    await vi.waitFor(() =>
-      expect(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' })).not.toBeDisabled(),
-    )
+    await vi.waitFor(() => expect(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' })).not.toBeDisabled())
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
     await vi.waitFor(() => expect(api.calls('PUT', '/contracts/7')).toHaveLength(1))
@@ -207,5 +208,49 @@ describe('ContractDetail', () => {
     expect(await within(select).findByRole('option', { name: 'Trần Văn Đại' })).toBeInTheDocument()
     expect(within(select).queryByRole('option', { name: 'Trần Thị Liên' })).toBeNull()
     expect(within(select).queryByRole('option', { name: 'Trần Văn Cũ' })).toBeNull()
+  })
+
+  // 4b (chủ dự án duyệt 2026-11-21): khung chi tiết ghi loại phòng và các dịch vụ đăng ký bằng tên
+  it('hienLoaiPhongVaDichVuBangTen', async () => {
+    api.on('GET', '/contracts/3/deposit', json(200, { status: 'SATISFIED' }))
+    api.on('GET', '/contracts/3/addenda', json(200, []))
+    api.on('GET', '/room-types', json(200, [{ id: 101, name: 'Phòng 2 giường', status: 'ACTIVE' }]))
+    api.on(
+      'GET',
+      '/services',
+      json(200, [
+        { id: 7, type: 'CARE', name: 'Chăm sóc cơ bản' },
+        { id: 8, type: 'RESIDENCY_FEE', name: 'Phí phòng 2 giường', roomTypeId: 101 },
+        { id: 9, type: 'MEAL', name: 'Suất ăn thêm' },
+      ]),
+    )
+    render(
+      <ContractDetail
+        contract={{
+          id: 3,
+          residentId: 5,
+          status: 'DRAFT',
+          residenceType: 'LONG_TERM_RESIDENTIAL',
+          roomTypeId: 101,
+          services: [
+            { serviceId: 7, inPackage: true },
+            { serviceId: 8, inPackage: true },
+            { serviceId: 9, inPackage: false },
+          ],
+          allowedCommands: [],
+        }}
+        residentName="Nguyễn Thị Lan"
+        onChanged={() => {}}
+        onEdit={() => {}}
+        Title="h2"
+        Description="p"
+      />,
+    )
+
+    expect(await screen.findByText('Phòng 2 giường')).toBeInTheDocument()
+    const list = await screen.findByRole('list', { name: 'Dịch vụ đăng ký' })
+    expect(within(list).getByText('Chăm sóc cơ bản, trong gói')).toBeInTheDocument()
+    expect(within(list).getByText('Phí phòng 2 giường, trong gói')).toBeInTheDocument()
+    expect(within(list).getByText('Suất ăn thêm, ngoài gói')).toBeInTheDocument()
   })
 })
