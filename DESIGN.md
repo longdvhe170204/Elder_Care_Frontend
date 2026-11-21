@@ -1,6 +1,6 @@
 ---
 name: Elder_Care
-version: 6.19.0
+version: 6.20.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
 updated: 2026-11-21
@@ -158,7 +158,7 @@ Các màn web giống nhau nhờ dùng chung một số kiểu bố cục đã d
 | Danh sách và khung chi tiết | Nhiều đối tượng cần tìm, lọc, so sánh; thao tác trên từng đối tượng | `PageHeader`, `FilterBar`, `Table`, `DetailLayout` (khung phải từ 1280px, `Sheet` khi hẹp) | `approval-requests/`, `admin/AdminPage.jsx` (Tài khoản), `activities/` | Mục 5 "Khung chi tiết", 5.1, 7.2 `detail-panel` |
 | Dòng thời gian ca | Việc trong ca xếp theo giờ dự kiến | Nhóm "Quá hạn (n)", `shift-timeline`, `task-block`, `FilterBar`, `DetailLayout` | `care-tasks/ShiftChecklistPage.jsx` | Mục 5.1 dòng Checklist, 7.2 `shift-timeline` |
 | Lưới thẻ theo giờ, dải cần làm ngay | Mỗi thẻ là một người trong một giờ, thao tác nhanh tại chỗ | `NowStrip`, lưới `Card` theo giờ | `medication/MedicationPage.jsx` | Mục 5 "Dải cần làm ngay", 5.1 dòng Phát thuốc |
-| Màn theo luồng | Một hồ sơ đi qua nhiều bước có thứ tự | Đầu màn có thanh tiến độ; cột trái các bước theo giai đoạn, mỗi bước mở form trong `Sheet`; cột phải điều kiện và nút chính | `admissions/AdmissionWorkspacePage.jsx` | Mục 5.3 |
+| Màn theo luồng | Một hồ sơ đi qua nhiều bước có thứ tự | Đầu cột trái thanh tiến độ theo giai đoạn, khối "Việc tiếp theo của bạn" có nút chính, khối "Đang chờ người khác"; danh sách các bước theo giai đoạn gập lại bên dưới, mỗi bước mở form trong `Sheet`; cột phải điều kiện và nút lệnh (từ 6.20.0) | `admissions/AdmissionWorkspacePage.jsx` | Mục 5.3 |
 | Bảng chỉ tiêu | Số liệu theo khoảng thời gian, có lọc | Danh sách nhóm dọc, thanh lọc một hàng, `report-table`, `metric-detail-sheet` | `reports/ReportsPage.jsx` | Mục 5.2, 7.2 `report-table` |
 
 - Làm hay sửa một màn: chọn một mẫu trong bảng và ghi tên mẫu trong mô tả PR. Trong một mẫu được đổi thứ tự khối, cột, nhóm lọc, câu chữ; không đổi khung, component dùng chung, cách mở chi tiết.
@@ -440,10 +440,10 @@ Chủ dự án duyệt 2026-11-17 (6.14.0) cho Tổng quan và Báo cáo của 0
 
 Chủ dự án duyệt 2026-11-17 (6.14.0). Một lượt tiếp nhận là một màn (`src/features/admissions/AdmissionWorkspacePage.jsx`, khóa `admission-workspace`, mở bằng cách bấm tên người cao tuổi ở bảng Đăng ký tiếp nhận; từ 6.14.1 danh sách không còn khung chi tiết). Màn con không có mục menu riêng: quyền mở và mục được chọn trên menu theo màn cha (`PARENT_PAGE` ở `App.jsx`).
 
-- Đầu màn: "Tiếp nhận <họ tên>", mã hồ sơ, loại lưu trú, ngày đăng ký, ngày mong muốn vào, thanh tiến độ theo tiến trình của 004 (`/admission-applications/{id}/progress`), nút "Cập nhật đăng ký" (quyền cập nhật, lượt còn mở; từ 6.14.1) và "Danh sách đăng ký".
-- Cột trái: các bước BF-01 chia năm giai đoạn (Hồ sơ và đăng ký; Sức khỏe và đánh giá; Giường, hợp đồng, đặt cọc; Hoàn tất tiếp nhận; Sau tiếp nhận). Mỗi bước một dòng: tên, ai làm, trạng thái (lấy từ điều kiện `ADM_A` → `ADM_F` của `/admission-conditions`, hoặc "Không chặn tiếp nhận"), nút mở đúng form đang có trong `Sheet` (hồ sơ người cao tuổi, ý kiến, phân bổ giường, hợp đồng (từ 6.15.0 form lập hợp đồng chỉ hiện họ tên người cao tuổi của lượt, không có ô chọn người khác; ô chọn chỉ còn khi lập từ màn Hợp đồng); từ 6.14.1 bước thuộc hồ sơ mở thẳng phần tương ứng, nút ghi tên phần: "Mở Đồng ý", "Mở Sức khỏe", "Mở Nguyện vọng", "Mở Đánh giá", "Mở Trạng thái") hoặc chuyển tới màn sở hữu (Người thân và quyền, Số dư, thu chi, Khai báo cư trú, Kế hoạch chăm sóc). Bước chưa có màn ghi rõ "Chưa có màn".
-- Cột phải: điều kiện Hoàn tất tiếp nhận, cảnh báo, ý kiến về việc vào ở kèm nguồn (mục 2.2), nút chính "Hoàn tất tiếp nhận" (theo `allowedCommands`) mở tab Trạng thái của hồ sơ; dòng "Còn n điều kiện chưa đạt". Backend vẫn kiểm mọi lệnh.
-- Chỉ hiện trạng thái đã ghi; không tự làm bước thay người, không gợi ý thứ tự khác luồng BF-01 (Q-306, Q-307).
+- Đầu màn: "Tiếp nhận <họ tên>", dòng phụ mã hồ sơ, loại lưu trú, ngày đăng ký, ngày mong muốn vào nối bằng dấu phẩy; nút "Cập nhật đăng ký" (quyền cập nhật, lượt còn mở). Từ 6.20.0 bỏ nút "Danh sách đăng ký" (trùng nút Quay lại của khung).
+- Cột trái (6.20.0, chủ dự án chọn phương án B "Việc tiếp theo" 2026-11-21, thay yêu cầu 2026-11-18 bỏ thanh tiến độ): (1) thanh tiến độ bốn giai đoạn (Hồ sơ; Sức khỏe; Giường, hợp đồng; Sau tiếp nhận), mỗi đoạn một thanh xanh thương hiệu trên rãnh nền phụ kèm "<giai đoạn>, x trên y bước xong"; (2) khối "Việc tiếp theo của bạn": bước đầu tiên chưa xong mà vai trò đang đăng nhập làm được (theo `allowedCommands` của hồ sơ và khóa quyền), bước là điều kiện trước, bước không bắt buộc sau, đủ điều kiện thì "Hoàn tất tiếp nhận"; tên bước `title` và một nút chính; (3) khối "Đang chờ người khác": bước chưa xong của vai trò khác, mỗi dòng kèm nhãn vai trò (chủ dự án duyệt ghi vai trò ở khối này; danh sách bước vẫn không ghi); (4) nút "Xem tất cả các bước (n)" mở danh sách bước theo giai đoạn. Mỗi bước: tên, dòng phụ khi cần ("Không bắt buộc để tiếp nhận", "Kế toán ghi thu tiền cọc khi gia đình nộp"), một bộ nhãn trạng thái "Xong" (xanh lá), "Chưa xong" (bước là điều kiện), "Chưa làm" (không bắt buộc), "Sau tiếp nhận", lượt đã đóng thì "Không còn kiểm"; nút mở đúng form hoặc màn sở hữu (bước Đặt cọc: "Xem tiền cọc", với Kế toán "Ghi thu tiền cọc"). Trạng thái bước không bắt buộc lấy từ cảnh báo của lệnh Hoàn tất tiếp nhận (`MISSING_CONSENT`, `UNCONFIRMED_HEALTH_RECORD`, `MISSING_*_WISH`).
+- Cột phải: điều kiện Hoàn tất tiếp nhận cùng bộ nhãn "Xong", "Chưa xong", cảnh báo (câu không mang mã spec), ý kiến về việc vào ở kèm nguồn (mục 2.2), nút "Hoàn tất tiếp nhận" (theo `allowedCommands`) mở tab Trạng thái của hồ sơ, là nút phụ khi khối Việc tiếp theo đang có nút chính; dòng "Còn n điều kiện chưa xong". Backend vẫn kiểm mọi lệnh.
+- Chỉ hiện trạng thái đã ghi; không tự làm bước thay người. "Việc tiếp theo" chỉ theo thứ tự bước BF-01 và quyền của người dùng, không xếp hạng hay gợi ý thứ tự khác (Q-306, Q-307).
 
 ## 6. Hình khối, độ nổi
 
@@ -809,6 +809,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.20.0 | 2026-11-21 | Chủ dự án chọn phương án B "Việc tiếp theo" cho Hồ sơ tiếp nhận (nhóm A BF-01): mục 0 dòng "Màn theo luồng" và mục 5.3 thêm thanh tiến độ bốn giai đoạn, khối "Việc tiếp theo của bạn", "Đang chờ người khác" (ghi vai trò), danh sách bước gập; một bộ nhãn "Xong", "Chưa xong", "Chưa làm"; bỏ nút "Danh sách đăng ký" |
 | 6.19.0 | 2026-11-21 | Chủ dự án yêu cầu một số ô nhập ở BF-01 có danh sách chọn sẵn kèm "Khác", ẩn tới khi bấm vào ô; chọn phương án B "Mở tại chỗ" trên trang so sánh ba phương án (A thả nổi, B mở tại chỗ, C chèn vào câu): thêm công thức `choice-tray` (mục 7.2) |
 | 6.18.0 | 2026-11-20 | Chủ dự án yêu cầu giữ bố cục đồng nhất khi nhiều người dùng AI sửa màn: thêm mục 0 "Mẫu màn" (năm mẫu, màn tham chiếu, luật thêm mẫu mới); mục 12 thêm skill dự án `ui-redesign` và cách dùng `frontend-design` trong một mẫu; mục 13 điều 2 chọn mẫu trước khi đề xuất, đổi bố cục thì đưa 2–3 phương án để chủ dự án chọn một. Chủ dự án quyết chuyển file này và các skill giao diện (`frontend-design`, `shadcn`, `ui-redesign`) từ kho Elder_Care sang gốc kho Elder_Care_Frontend; kho Elder_Care giữ file trỏ sang đây (đầu file, "Vị trí"). Không thêm màu, không đổi màn nào. |
 | 6.17.0 | 2026-11-19 | Chủ dự án chọn phương án B "Cột chú ý" cho Tổng quan, Báo cáo (016) sau khi xem bản demo: Tổng quan hai cột "Cần chú ý", "Tình hình" rồi các nhóm chỉ tiêu mở tại chỗ (mục 5.1); `dashboard-attention` thay `dashboard-urgent`, kèm bảng mã chỉ tiêu theo tông (mục 7.2); `report-table` ba cột, dòng tiêu đề nhóm, thanh trong ô, danh sách nhóm báo cáo dọc (mục 5.2, 7.2). Không thêm màu, không đổi api-016. Kho web nhánh `impl/ui-016-dashboard-attention`. |
