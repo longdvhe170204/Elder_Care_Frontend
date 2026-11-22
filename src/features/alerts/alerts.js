@@ -1,8 +1,9 @@
-import { getResidentsById } from '@/api/api001'
+import { getResidents, getResidentsById } from '@/api/api001'
 import {
   getAlerts,
   getIncidentTypes,
   getAlertsById,
+  postAlerts,
   postAlertsByIdActivateEmergency,
   postAlertsByIdAssign,
   postAlertsByIdChangeLevel,
@@ -53,6 +54,16 @@ export function joinIncident(incidentId) {
 export async function loadIncidentTypes() {
   const { data } = await getIncidentTypes({})
   return (data ?? []).filter((t) => t.status !== 'INACTIVE')
+}
+
+export async function loadResidentChoices() {
+  const { data } = await getResidents({})
+  return (data.items ?? []).map((r) => ({ id: r.id, code: r.profileCode, name: residentName(r) }))
+}
+
+export async function createAlert(body) {
+  const { data } = await postAlerts({ headers: { 'Idempotency-Key': crypto.randomUUID() }, body })
+  return data
 }
 
 export async function loadAlert(id) {

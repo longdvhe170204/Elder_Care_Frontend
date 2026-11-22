@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
@@ -13,11 +14,13 @@ import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { StatusBadge } from '@/common/StatusBadge'
+import { usePermissions } from '@/common/permissions/permissions'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { StaffSelectField } from '@/common/StaffSelectField'
 import { Call115Panel } from './Call115Panel'
+import { CreateAlertSheet } from './CreateAlertSheet'
 import { PressedAlertPanel } from './PressedAlertPanel'
 import {
   joinIncident,
@@ -602,6 +605,8 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
   const [openId, setOpenId] = useState(alertId)
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
+  const [creating, setCreating] = useState(false)
+  const { can } = usePermissions()
 
   const load = useCallback(async () => {
     try {
@@ -666,6 +671,13 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     } finally {
       setBusy(false)
     }
+  }
+
+  async function created(message) {
+    setCreating(false)
+    setProblem(null)
+    setAnnouncement(`${message}.`)
+    await load()
   }
 
   async function done(message, name) {
@@ -738,8 +750,15 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
+          {can('ALERT_HANDLING', 'CREATE') && (
+            <Button className="h-11 lg:ml-auto" onClick={() => setCreating(true)}>
+              <Plus aria-hidden="true" />
+              Tạo cảnh báo
+            </Button>
+          )}
         </div>
       </PageHeader>
+      <CreateAlertSheet open={creating} onClose={() => setCreating(false)} onCreated={created} />
       {/* DESIGN.md 5, 7.2: cảnh báo gấp (Khẩn cấp, đã leo thang tối đa) nổi lên ở dải này, thẻ không thêm viền đỏ */}
       <NowStrip
         items={sortAlerts(alerts.filter(isUrgent)).map((a) => ({
