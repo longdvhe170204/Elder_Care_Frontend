@@ -70,6 +70,22 @@ async function openMore() {
 }
 
 describe('Cổng người thân, phiên thật', () => {
+  it('BF16_trangChu_hienTenNguoiCaoTuoiThat_khongDungTenMau', async () => {
+    signedIn([resident()])
+    render(<FamilyPortal />)
+
+    expect(await screen.findByRole('button', { name: 'Xem thông tin của Nguyễn Thị Lan' })).toBeInTheDocument()
+    expect(screen.queryByText(/\[Họ tên/)).not.toBeInTheDocument()
+  })
+
+  it('BF16_trangChu_chuaCoNguoiCaoTuoi_khongHienTenMau', async () => {
+    signedIn([])
+    render(<FamilyPortal />)
+
+    expect(await screen.findByRole('button', { name: 'Xem thông tin hôm nay' })).toBeInTheDocument()
+    expect(screen.queryByText(/\[Họ tên/)).not.toBeInTheDocument()
+  })
+
   it('US5_2_khongCoQuyenSucKhoe_khongCoMucSucKhoe_HomNayCoDongKhoa', async () => {
     signedIn([resident()])
     render(<FamilyPortal />)

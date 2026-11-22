@@ -18,8 +18,11 @@ const BALANCE = {
   unfinalizedTotal: 400000,
   depositStatus: 'SATISFIED',
   remindersStopped: false,
+  // Người đại diện hiệu lực hiện tại (api-017 BalanceRepresentative, chủ dự án duyệt 2026-11-22)
+  representative: { familyMemberId: 55, fullName: 'Trần Thị Đại Diện' },
   hiddenFields: [],
 }
+const NO_REPRESENTATIVE = { ...BALANCE, representative: null }
 const TRANSACTIONS = [
   {
     id: 1,
@@ -116,7 +119,11 @@ describe('ResidentBalance (017)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
     fill('Loại giao dịch', 'REFUND')
     fill('Số tiền', '1000000')
-    fill('Mã người thân (người đại diện)', '55')
+    // Người nhận là người đại diện của sổ, chọn sẵn; không có ô gõ mã, không có người nhận khác
+    expect(screen.getByLabelText('Người nhận')).toHaveValue('55')
+    expect(screen.getByRole('option', { name: 'Trần Thị Đại Diện (người đại diện)' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Mã người thân (người đại diện)')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Họ tên người nhận khác')).not.toBeInTheDocument()
     fill('Phương thức', 'BANK_TRANSFER')
     fill('Lý do', 'Gia đình xin rút bớt tiền')
     fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
@@ -140,7 +147,6 @@ describe('ResidentBalance (017)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
     fill('Loại giao dịch', 'REFUND')
     fill('Số tiền', '1000000')
-    fill('Mã người thân (người đại diện)', '55')
     fill('Lý do', 'Xin rút')
     fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
     expect(await screen.findByText('Chọn phương thức hoàn.')).toBeInTheDocument()
@@ -149,7 +155,8 @@ describe('ResidentBalance (017)', () => {
   })
 
   it('FR_014_hoanCoc_ghiVaoSoCoc_nguoiNhanKhacCanHoTenVaGiayTo', async () => {
-    const api = setup()
+    // Hồ sơ không còn người đại diện thì ghi người nhận khác (FR-014)
+    const api = setup({ balance: NO_REPRESENTATIVE })
     api.on('POST', '/balance-transactions', json(201, { id: 10, status: 'PENDING_APPROVAL' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
     fill('Loại giao dịch', 'DEPOSIT_REFUND')
@@ -157,9 +164,7 @@ describe('ResidentBalance (017)', () => {
     fill('Phương thức', 'CASH')
     fill('Lý do', 'Hủy hợp đồng')
     fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
-    expect(
-      await screen.findByText('Nhập mã người thân, hoặc họ tên và giấy tờ của người nhận khác.'),
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Nhập họ tên và giấy tờ của người nhận.')).toBeInTheDocument()
     expect(api.calls('POST', '/balance-transactions')).toHaveLength(0)
     fill('Họ tên người nhận khác', 'Trần Văn Khác')
     fill('Giấy tờ người nhận khác', '012345678901')
@@ -182,7 +187,6 @@ describe('ResidentBalance (017)', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
     fill('Loại giao dịch', 'REFUND')
     fill('Số tiền', '3000000')
-    fill('Mã người thân (người đại diện)', '55')
     fill('Phương thức', 'CASH')
     fill('Lý do', 'Xin rút')
     fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))

@@ -214,7 +214,12 @@ export function ResidentBalance({ residentId, fullName }) {
             <SheetDescription>{fullName}</SheetDescription>
           </SheetHeader>
           {sheet === 'transaction' && (
-            <TransactionForm residentId={residentId} transactions={state.transactions ?? []} onDone={done} />
+            <TransactionForm
+              residentId={residentId}
+              transactions={state.transactions ?? []}
+              representative={state.balance?.representative ?? null}
+              onDone={done}
+            />
           )}
           {sheet === 'offset' && <OffsetForm residentId={residentId} onDone={done} />}
         </SheetContent>
