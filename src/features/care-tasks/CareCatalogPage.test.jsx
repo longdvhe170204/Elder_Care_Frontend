@@ -13,6 +13,8 @@ beforeEach(() => {
     json(200, [
       { function: 'CARE_TASK_CATALOG', operation: 'CREATE' },
       { function: 'CARE_TASK_CATALOG', operation: 'UPDATE' },
+      { function: 'DAILY_ROUTINE', operation: 'CREATE' },
+      { function: 'DAILY_ROUTINE', operation: 'UPDATE' },
     ]),
   )
   api.on('GET', '/task-types', json(200, []))

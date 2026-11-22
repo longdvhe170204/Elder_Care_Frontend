@@ -11,7 +11,7 @@ const plan = {
   status: 'DRAFT',
   items: [],
   riskAgreements: [],
-  allowedCommands: ['submit', 'replaceItems', 'replaceRiskAgreements', 'cancel'],
+  allowedCommands: ['issue', 'replaceItems', 'replaceRiskAgreements', 'cancel'],
   createdBy: '[Người lập kiểm thử]',
   noEffectivePlan: true,
 }
@@ -22,14 +22,15 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-it('FR_003_guiDuyetGuiNgayDeXuatVaLyDo', async () => {
-  api.on('POST', '/care-plans/17/submit', json(200, null))
+it('Q_414_banHanhGuiNgayHieuLucVaLyDo_khongCoNutDuyet', async () => {
+  api.on('POST', '/care-plans/17/issue', json(200, null))
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
-  fireEvent.change(await screen.findByLabelText('Ngày hiệu lực đề xuất'), { target: { value: '2026-11-02' } })
+  fireEvent.change(await screen.findByLabelText('Ngày hiệu lực'), { target: { value: '2026-11-02' } })
   fireEvent.change(screen.getByLabelText('Lý do thay đổi'), { target: { value: 'Theo đánh giá mới' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
-  await waitFor(() => expect(api.calls('POST', '/care-plans/17/submit')).toHaveLength(1))
-  expect(JSON.parse(api.calls('POST', '/care-plans/17/submit')[0][1].body)).toEqual({
+  expect(screen.queryByRole('button', { name: /Duyệt|Gửi duyệt|Trả lại/ })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Ban hành kế hoạch' }))
+  await waitFor(() => expect(api.calls('POST', '/care-plans/17/issue')).toHaveLength(1))
+  expect(JSON.parse(api.calls('POST', '/care-plans/17/issue')[0][1].body)).toEqual({
     effectiveFrom: '2026-11-02',
     changeReason: 'Theo đánh giá mới',
   })
@@ -39,7 +40,7 @@ it('FR_007_nutLenhChiTheoAllowedCommands', async () => {
   api.on('GET', '/care-plans/17', json(200, { ...plan, status: 'EFFECTIVE', allowedCommands: [] }, { ETag: '"5"' }))
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
   expect(await screen.findByText('Hiệu lực')).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Gửi duyệt' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Ban hành kế hoạch' })).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Lưu mục công việc' })).not.toBeInTheDocument()
 })
 
@@ -64,4 +65,21 @@ it('FR_003_huyPhienBanBatBuocLyDoTaiO', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Hủy phiên bản' }))
   expect(await screen.findByText('Nhập lý do trước khi thực hiện.')).toBeInTheDocument()
   expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(0)
+})
+
+it('Q_414_thuHoiBanHanhBatBuocLyDo', async () => {
+  api.on(
+    'GET',
+    '/care-plans/17',
+    json(200, { ...plan, status: 'PENDING_EFFECT', effectiveFrom: '2026-11-30', allowedCommands: ['withdraw'] }, { ETag: '"6"' }),
+  )
+  api.on('POST', '/care-plans/17/withdraw', json(200, null))
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Thu hồi ban hành' }))
+  expect(await screen.findByText('Nhập lý do trước khi thực hiện.')).toBeInTheDocument()
+  expect(api.calls('POST', '/care-plans/17/withdraw')).toHaveLength(0)
+  fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Cần khám lại' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Thu hồi ban hành' }))
+  await waitFor(() => expect(api.calls('POST', '/care-plans/17/withdraw')).toHaveLength(1))
+  expect(JSON.parse(api.calls('POST', '/care-plans/17/withdraw')[0][1].body)).toEqual({ reason: 'Cần khám lại' })
 })

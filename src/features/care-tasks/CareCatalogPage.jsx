@@ -54,6 +54,7 @@ const CATALOGS = {
   // 005 FR-056 (Q-416): mốc chung của toàn viện hiện trên Lịch chăm sóc hằng ngày; mọi thay đổi áp dụng từ ngày hôm sau
   routines: {
     title: 'Mốc sinh hoạt cố định',
+    fn: 'DAILY_ROUTINE',
     get: getDailyRoutines,
     create: postDailyRoutines,
     update: putDailyRoutinesById,
@@ -286,7 +287,7 @@ export function CareCatalogPage() {
         <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={loading}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="type-title">{CATALOGS[kind].title}</h2>
-            {can('CARE_TASK_CATALOG', 'CREATE') && (
+            {can(CATALOGS[kind].fn ?? 'CARE_TASK_CATALOG', 'CREATE') && (
               <Button onClick={() => setEditing({ row: null })}>Thêm danh mục</Button>
             )}
           </div>
@@ -310,7 +311,7 @@ export function CareCatalogPage() {
                     )}
                     {row.fixed && <p className="type-body-sm text-muted-foreground">Lý do cố định</p>}
                   </div>
-                  {can('CARE_TASK_CATALOG', 'UPDATE') && !row.fixed && (
+                  {can(CATALOGS[kind].fn ?? 'CARE_TASK_CATALOG', 'UPDATE') && !row.fixed && (
                     <div className="flex gap-2">
                       <Button variant="outline" aria-label={`Sửa ${row.name}`} onClick={() => setEditing({ row })}>
                         Sửa
