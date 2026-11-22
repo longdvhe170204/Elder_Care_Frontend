@@ -9,13 +9,15 @@ import {
   postResidencyChangeRequestsByIdAddendumSignature,
   postResidencyChangeRequestsByIdResidentOpinions,
 } from '@/api'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { FileInput } from '@/common/FileInput'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { formatDate, formatDateTime } from '@/common/dateTime'
+import { formatDate } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { SELECT, labelOf, newKey } from './admissionLabels'
@@ -190,11 +192,9 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
           </Field>
           <Field data-invalid={!!shown('file') || undefined}>
             <FieldLabel htmlFor="sign-file">Bản scan phụ lục đã ký</FieldLabel>
-            <Input
+            <FileInput
               id="sign-file"
-              type="file"
               accept={EVIDENCE_ACCEPT}
-              className="h-11"
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
             <FieldDescription>PDF, JPG hoặc PNG, tối đa 10 MB.</FieldDescription>
@@ -222,6 +222,9 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
 }
 
 // Ý kiến người cao tuổi (FR-043h, W4, W4a): lịch sử, ghi thêm; ý kiến ghi trước khi nội dung đổi thì gắn nhãn
+// Nhãn nguồn ý kiến ở danh sách đã ghi (ý kiến không sửa, xóa: DESIGN.md 2.2); nhãn ở form chọn nguồn là OPINION_SOURCES
+const OPINION_SOURCE_BADGES = { RESIDENT: 'Theo lời người cao tuổi', STAFF_OBSERVATION: 'Nhân viên quan sát' }
+
 export function ResidentOpinions({ request, canRecord, onChanged }) {
   const [items, setItems] = useState(null)
   const [opinion, setOpinion] = useState('')
@@ -272,15 +275,16 @@ export function ResidentOpinions({ request, canRecord, onChanged }) {
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((o, i) => (
-            <li key={o.id} className="flex flex-col">
-              <span className="type-body-sm">
-                {`${labelOf(OPINIONS, o.opinion)} (${labelOf(OPINION_SOURCES, o.source)})${i === 0 ? ', hiện hành' : ''}`}
+            <li key={o.id} className="flex flex-col gap-0.5">
+              <span className="flex flex-wrap items-center gap-2">
+                <span className="type-body-sm font-medium">{`${labelOf(OPINIONS, o.opinion)}${i === 0 ? ', hiện hành' : ''}`}</span>
+                <Badge variant="secondary">{OPINION_SOURCE_BADGES[o.source] ?? o.source}</Badge>
               </span>
               <span className="type-caption text-muted-foreground">
-                {`${formatDateTime(o.recordedAt)}${o.recordedBy ? `, ${o.recordedBy}` : ''}${o.note ? `. ${o.note}` : ''}`}
+                {`Ghi ${o.recordedBy ? `bởi ${o.recordedBy}, ` : ''}${formatDate(o.recordedAt)}${o.note ? `. ${o.note}` : ''}`}
               </span>
               {o.outdated && i === 0 && (
-                <span className="type-caption text-destructive">Ghi trước khi nội dung thay đổi; nên ghi lại.</span>
+                <span className="type-caption text-warning-foreground">Ghi trước khi nội dung thay đổi; nên ghi lại.</span>
               )}
             </li>
           ))}

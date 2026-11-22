@@ -23,7 +23,7 @@ export const DEEP = {
 
 export const CHANGE_TYPE_TONES = {
   RESIDENCE_TYPE: DEEP.primary,
-  CARE_LEVEL: DEEP.danger,
+  CARE_LEVEL: DEEP.info,
   SERVICE: DEEP.accent,
   DURATION: DEEP.success,
   BED: DEEP.primary,

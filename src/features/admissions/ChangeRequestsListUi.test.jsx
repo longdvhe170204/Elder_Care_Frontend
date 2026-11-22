@@ -75,7 +75,7 @@ describe('ChangeRequestsPage: danh sách', () => {
     // route không khai báo thì treo: danh sách chưa tải xong
     api.on('GET', '/residency-change-requests', () => new Promise(() => {}))
     renderPage()
-    expect(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' })).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: 'Tìm theo mã yêu cầu, mã hợp đồng' })).toBeInTheDocument()
   })
 
@@ -143,7 +143,7 @@ describe('ChangeRequestsPage: danh sách', () => {
 describe('ChangeRequestSheet: form lập yêu cầu', () => {
   it('loaiThayDoi_moiLuaChonCoBieuTuong', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = await screen.findByRole('dialog')
     const checkboxes = within(dialog).getAllByRole('checkbox')
     expect(checkboxes.length).toBeGreaterThanOrEqual(6)
@@ -152,7 +152,7 @@ describe('ChangeRequestSheet: form lập yêu cầu', () => {
 
   it('nutHuy_vaLuu_oCuoiForm', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByRole('button', { name: 'Hủy' })).toBeInTheDocument()
     expect(within(dialog).getByText('0 / 2000')).toBeInTheDocument()
@@ -160,7 +160,7 @@ describe('ChangeRequestSheet: form lập yêu cầu', () => {
 
   it('hangNut_dinhDay_khungCuon', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = await screen.findByRole('dialog')
     const save = within(dialog).getByRole('button', { name: 'Lưu yêu cầu' })
     expect(save.parentElement.className).toMatch(/sticky/)
@@ -172,14 +172,13 @@ describe('ChangeRequestView: form xem chi tiết', () => {
     renderPage()
     await openDoneTab()
     fireEvent.click(await screen.findByRole('button', { name: 'Xem yêu cầu mã 11' }))
-    return screen.findByRole('region', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    return screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
   }
 
   it('dauKhung_hienHopDong_trangThai_ngayHieuLuc', async () => {
     const view = await openDetail()
-    expect(within(view).getByRole('heading', { level: 2, name: 'Hợp đồng mã 31' })).toBeInTheDocument()
-    expect(within(view).getByText('Đã áp dụng')).toBeInTheDocument()
-    expect(within(view).getByText(/Ngày hiệu lực mong muốn 20\/11\/2026/)).toBeInTheDocument()
+    expect(within(view).getByRole('heading', { level: 2, name: 'Nguyễn Thị Lan' })).toBeInTheDocument()
+    expect(within(view).getByText('Đã áp dụng. Ngày hiệu lực mong muốn 20/11/2026', { exact: false })).toBeInTheDocument()
   })
 
   it('noiDungThayDoi_hienTruocVaSauThanhHaiO', async () => {
