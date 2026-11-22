@@ -36,12 +36,14 @@ const originalOptions = (transactions, ledger) =>
       label: `${formatDateTime(t.at)} · ${labelOf(TYPE_LABELS, t.type)} · ${formatMoney(t.amount)}`,
     }))
 
-export function TransactionForm({ residentId, transactions = [], onDone }) {
+// representative: người đại diện hiệu lực của sổ (api-017 Balance.representative); có thì người nhận hoàn là người này,
+// không có thì ghi người nhận khác (FR-014)
+export function TransactionForm({ residentId, transactions = [], representative = null, onDone }) {
   const [v, setV] = useState({
     type: 'REFUND',
     ledger: 'BALANCE',
     amount: '',
-    familyMemberId: '',
+    familyMemberId: representative ? String(representative.familyMemberId) : '',
     otherName: '',
     otherDocument: '',
     method: '',
@@ -60,9 +62,8 @@ export function TransactionForm({ residentId, transactions = [], onDone }) {
     const amount = Number(v.amount)
     if (!/^-?\d+$/.test(v.amount.trim()) || amount === 0) found.amount = 'Nhập số tiền là số nguyên khác 0.'
     else if (isRefund(v.type) && amount < 0) found.amount = 'Số tiền hoàn phải lớn hơn 0.'
-    if (isRefund(v.type) && !v.familyMemberId.trim() && !(v.otherName.trim() && v.otherDocument.trim()))
-      found.recipient = 'Nhập mã người thân, hoặc họ tên và giấy tờ của người nhận khác.'
-    if (v.familyMemberId.trim() && !/^[1-9]\d*$/.test(v.familyMemberId.trim())) found.recipient = 'Mã người thân là số.'
+    if (isRefund(v.type) && !representative && !(v.otherName.trim() && v.otherDocument.trim()))
+      found.recipient = 'Nhập họ tên và giấy tờ của người nhận.'
     if (isRefund(v.type) && !v.method) found.method = 'Chọn phương thức hoàn.'
     if (!v.reason.trim()) found.reason = 'Nhập lý do.'
     return found
@@ -77,7 +78,7 @@ export function TransactionForm({ residentId, transactions = [], onDone }) {
     const ledger = v.type === 'REFUND' ? 'BALANCE' : v.type === 'DEPOSIT_REFUND' ? 'DEPOSIT' : v.ledger
     const body = { type: v.type, residentId, ledger, amount: Number(v.amount), reason: v.reason.trim() }
     if (isRefund(v.type)) {
-      body.recipient = v.familyMemberId.trim()
+      body.recipient = representative
         ? { familyMemberId: Number(v.familyMemberId) }
         : { fullName: v.otherName.trim(), identityDocument: v.otherDocument.trim() }
       body.method = v.method
@@ -118,29 +119,43 @@ export function TransactionForm({ residentId, transactions = [], onDone }) {
         />
         {isRefund(v.type) && (
           <>
-            <TextField
-              id="tx-family"
-              label="Mã người thân (người đại diện)"
-              inputMode="numeric"
-              value={v.familyMemberId}
-              onChange={set('familyMemberId')}
-              error={errors.recipient}
-              hint="Người đại diện đang có quan hệ hiệu lực. Không còn người đại diện thì nhập người nhận khác bên dưới."
-            />
-            <div className="grid gap-4 sm:grid-cols-2">
-              <TextField
-                id="tx-other-name"
-                label="Họ tên người nhận khác"
-                value={v.otherName}
-                onChange={set('otherName')}
+            {representative ? (
+              <SelectField
+                id="tx-recipient"
+                label="Người nhận"
+                value={v.familyMemberId}
+                onChange={set('familyMemberId')}
+                options={[
+                  {
+                    value: String(representative.familyMemberId),
+                    label: `${representative.fullName ?? `Người thân mã ${representative.familyMemberId}`} (người đại diện)`,
+                  },
+                ]}
+                hint="Hoàn tiền cho người đại diện đang có quan hệ hiệu lực."
               />
-              <TextField
-                id="tx-other-doc"
-                label="Giấy tờ người nhận khác"
-                value={v.otherDocument}
-                onChange={set('otherDocument')}
-              />
-            </div>
+            ) : (
+              <div className="flex flex-col gap-2">
+                <p className="type-body-sm text-muted-foreground">
+                  Hồ sơ chưa có người đại diện hiệu lực: ghi họ tên và giấy tờ của người nhận, Quản lý viện duyệt kèm lý
+                  do.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <TextField
+                    id="tx-other-name"
+                    label="Họ tên người nhận khác"
+                    value={v.otherName}
+                    onChange={set('otherName')}
+                    error={errors.recipient}
+                  />
+                  <TextField
+                    id="tx-other-doc"
+                    label="Giấy tờ người nhận khác"
+                    value={v.otherDocument}
+                    onChange={set('otherDocument')}
+                  />
+                </div>
+              </div>
+            )}
             <SelectField
               id="tx-method"
               label="Phương thức"
