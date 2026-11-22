@@ -6,6 +6,7 @@ import { LeafMark } from '@/common/layout/AppShell'
 import { DEMO_PORTAL_CONFIRMATIONS, DEMO_PORTAL_NOTIFICATIONS, DEMO_PORTAL_VIEWER } from '@/common/demoData'
 import { cn } from '@/lib/utils'
 import { AccountPage } from './AccountPage'
+import { CareSchedulePage, LiveCareSchedulePage } from './CareSchedulePage'
 import { ContractPage } from './ContractPage'
 import { CostsPage } from './CostsPage'
 import { DepositsPage } from './DepositsPage'
@@ -49,6 +50,7 @@ const PAGES = {
   deposits: DepositsPage,
   contract: ContractPage,
   account: AccountPage,
+  'care-schedule': CareSchedulePage,
 }
 
 // Có phiên thật: ba màn đọc API của 012 (T028), Chi phí, số dư đọc số dư của 017 (T011), Đồ gửi đọc phần của 013 (T028)
@@ -61,6 +63,7 @@ const LIVE_PAGES = {
   costs: LiveCostsPage,
   feedback: LiveFeedbackPage,
   deposits: LiveDepositsPage,
+  'care-schedule': LiveCareSchedulePage,
 }
 
 // Người xem từ phiên và người cao tuổi đầu tiên có quan hệ Hiệu lực (chọn người khi có nhiều người: chưa thiết kế,

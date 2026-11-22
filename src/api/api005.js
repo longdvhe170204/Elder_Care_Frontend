@@ -87,6 +87,18 @@ export const putTaskTypesById = (params) => request('PUT', '/task-types/{id}', p
 /** Ngừng hiệu lực loại công việc (FR-038) */
 export const postTaskTypesByIdDeactivate = (params) => request('POST', '/task-types/{id}/deactivate', params)
 
+/** Mốc sinh hoạt cố định (giá trị mới nhất kèm ngày bắt đầu áp dụng) (FR-056) */
+export const getDailyRoutines = (params) => request('GET', '/daily-routines', params)
+
+/** Thêm mốc sinh hoạt (Quản lý viện); áp dụng từ ngày hôm sau (FR-056) */
+export const postDailyRoutines = (params) => request('POST', '/daily-routines', params)
+
+/** Sửa mốc sinh hoạt; áp dụng từ ngày hôm sau (FR-056) */
+export const putDailyRoutinesById = (params) => request('PUT', '/daily-routines/{id}', params)
+
+/** Ngừng mốc sinh hoạt; từ ngày hôm sau không còn hiện (FR-056) */
+export const postDailyRoutinesByIdDeactivate = (params) => request('POST', '/daily-routines/{id}/deactivate', params)
+
 /** Danh mục loại lý do Không thực hiện (bổ sung 2026-10-18) (FR-028a) */
 export const getNonPerformanceReasonTypes = (params) => request('GET', '/non-performance-reason-types', params)
 
