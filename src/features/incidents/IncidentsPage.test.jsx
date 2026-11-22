@@ -142,6 +142,35 @@ describe('IncidentsPage', () => {
     })
   })
 
+  it('FR_052_ketThucTheoDoiSauNga_chiKhiCoLenh_batBuocLyDo', async () => {
+    api.on('GET', '/incidents/11', json(200, { ...NEW_INCIDENT, allowedCommands: ['end-post-fall-monitoring'] }))
+    api.on('POST', '/incidents/11/end-post-fall-monitoring', json(200, {}))
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc theo dõi sau ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và kết thúc theo dõi' }))
+    expect(await screen.findByText('Nhập lý do kết thúc theo dõi')).toBeTruthy()
+    expect(api.calls('POST', '/incidents/11/end-post-fall-monitoring')).toHaveLength(0)
+    fireEvent.change(screen.getByLabelText('Lý do kết thúc theo dõi'), { target: { value: 'Ổn định, tự đi lại' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và kết thúc theo dõi' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents/11/end-post-fall-monitoring')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents/11/end-post-fall-monitoring')[0][1].body)).toEqual({
+      reason: 'Ổn định, tự đi lại',
+    })
+  })
+
+  it('FR_052_khongCoLenh_khongHienNutKetThucTheoDoi', async () => {
+    api.on('GET', '/incidents/11', json(200, { ...NEW_INCIDENT, allowedCommands: ['assign-handler'] }))
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button'))
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm' }))
+    await screen.findByRole('button', { name: 'Giao người xử lý' })
+    expect(screen.queryByRole('button', { name: 'Kết thúc theo dõi sau ngã' })).toBeNull()
+  })
+
   it('FR_045_dangMo_khanCapLenDau_tenLoaiVaHoTen', async () => {
     render(<IncidentsPage />)
     const list = await rows()

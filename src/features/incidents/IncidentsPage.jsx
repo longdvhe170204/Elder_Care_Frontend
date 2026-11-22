@@ -63,6 +63,7 @@ const FORM_TITLE = {
   reopen: 'Mở lại xử lý',
   close: 'Đóng sự cố',
   'assign-handler': 'Giao người xử lý',
+  'end-post-fall-monitoring': 'Kết thúc theo dõi sau ngã',
 }
 const SUBMIT_LABEL = {
   progressions: 'Lưu diễn biến',
@@ -70,6 +71,7 @@ const SUBMIT_LABEL = {
   reopen: 'Lưu và mở lại',
   close: 'Lưu và đóng sự cố',
   'assign-handler': 'Lưu và giao',
+  'end-post-fall-monitoring': 'Lưu và kết thúc theo dõi',
 }
 const TEXT_LABEL = {
   progressions: 'Nội dung',
@@ -77,6 +79,7 @@ const TEXT_LABEL = {
   reopen: 'Lý do mở lại',
   close: 'Kết quả xử lý',
   'assign-handler': 'Ghi chú giao việc',
+  'end-post-fall-monitoring': 'Lý do kết thúc theo dõi',
 }
 const TEXT_ERROR = {
   progressions: 'Nhập nội dung diễn biến',
@@ -84,6 +87,7 @@ const TEXT_ERROR = {
   reopen: 'Nhập lý do mở lại',
   close: 'Nhập kết quả xử lý',
   'assign-handler': 'Nhập ghi chú giao việc',
+  'end-post-fall-monitoring': 'Nhập lý do kết thúc theo dõi',
 }
 
 // Ai đã được báo về sự cố (api-007 notifiedRecipients, nguồn 009): đếm theo nhóm Nhân viên, Người thân, ghi kênh, giờ gửi và
@@ -279,6 +283,7 @@ function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode
       progressions: { progressionTypeId: Number(choice), content: value },
       'change-level': { newLevel: choice, reason: value },
       reopen: { reason: value },
+      'end-post-fall-monitoring': { reason: value },
       'assign-handler': { assigneeId: Number(assignee), note: value },
       close: { resolution: value, ...(outcome ? { infectionOutcome: outcome } : {}) },
     }[mode]
@@ -447,7 +452,9 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
 
   const missingGroups = missingMonitoringGroups(incident, progressionTypes)
   const transferredNote = (incident.progressions ?? []).find((p) => p.typeCode === 'TRANSFERRED_OUT') ?? null
-  const hasMore = ['move-to-monitoring', 'change-level', 'assign-handler'].some((c) => commands.includes(c))
+  const hasMore = ['move-to-monitoring', 'change-level', 'assign-handler', 'end-post-fall-monitoring'].some((c) =>
+    commands.includes(c),
+  )
   const transferOffered =
     ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
     incident.content?.residentId != null &&
@@ -461,6 +468,7 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
     reopen: 'Đã mở lại xử lý',
     close: 'Đã đóng sự cố',
     'assign-handler': 'Đã giao người xử lý',
+    'end-post-fall-monitoring': 'Đã kết thúc theo dõi sau ngã',
   }
 
   return (
@@ -645,6 +653,11 @@ function IncidentDetail({ id, name, types, Title, Description, onChanged, onNavi
                   {commands.includes('assign-handler') && (
                     <Button variant="outline" className="h-11" onClick={() => setMode('assign-handler')}>
                       {incident.assignee ? 'Chuyển cho người khác' : 'Giao người xử lý'}
+                    </Button>
+                  )}
+                  {commands.includes('end-post-fall-monitoring') && (
+                    <Button variant="outline" className="h-11" onClick={() => setMode('end-post-fall-monitoring')}>
+                      Kết thúc theo dõi sau ngã
                     </Button>
                   )}
                 </div>
