@@ -124,7 +124,9 @@ export function TaskBlock({ task, selected, onSelect, hideStatus = false, follow
         </>
       )}
       {following?.length > 0 && (
-        <span className="type-caption text-warning-foreground">Đang theo dõi: {following.join(', ')}</span>
+        <span className="type-caption text-warning-foreground">
+          Đang theo dõi: {following.join(', ')}. Mở để ghi kết quả theo dõi
+        </span>
       )}
       <AssigneeLine task={task} />
     </button>

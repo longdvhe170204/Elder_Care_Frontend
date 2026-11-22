@@ -17,6 +17,7 @@ import { CareField } from './CareField'
 import { FilterBar } from '@/common/FilterBar'
 import { CareChecklistDetail } from './CareChecklistDetail'
 import { CareChecklistSources } from './CareChecklistSources'
+import { FollowingAlerts } from './FollowingAlerts'
 import { TaskBlock } from './TaskCard'
 import { careChecklistView } from './careChecklistView'
 import { DONE } from './taskText'
@@ -126,9 +127,11 @@ export function CareChecklistPage({ shiftId: initialShiftId, role }) {
   const view = data ? careChecklistView(data) : null
   // Q-419, 005 FR-057: người cao tuổi có cảnh báo đang mở (checklist `openAlerts`) mang nhãn "Đang theo dõi"
   const following = {}
+  const followingIds = {}
   for (const a of data?.openAlerts ?? []) {
     if (a.residentId == null) continue
     following[a.residentId] = [...new Set([...(following[a.residentId] ?? []), typeLabel(a.type)])]
+    followingIds[a.residentId] = [...(followingIds[a.residentId] ?? []), a.id]
   }
   const visible = view?.tasks.filter(FILTERS.find((f) => f[0] === filter)[2]) ?? []
   const overdue = visible.filter((t) => t.raw.status === 'OVERDUE')
@@ -189,16 +192,19 @@ export function CareChecklistPage({ shiftId: initialShiftId, role }) {
       label="Chi tiết công việc"
       renderDetail={({ Title, Description }) =>
         selected && (
-          <CareChecklistDetail
-            key={selected.id}
-            task={selected}
-            reasons={view.reasons}
-            Title={Title}
-            Description={Description}
-            readOnly={stale}
-            onSaved={saved}
-            onBusy={setBusy}
-          />
+          <>
+            <CareChecklistDetail
+              key={selected.id}
+              task={selected}
+              reasons={view.reasons}
+              Title={Title}
+              Description={Description}
+              readOnly={stale}
+              onSaved={saved}
+              onBusy={setBusy}
+            />
+            <FollowingAlerts key={`following-${selected.nctId}`} alertIds={followingIds[selected.nctId]} />
+          </>
         )
       }
     >

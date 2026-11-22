@@ -17,7 +17,7 @@ const TASK = {
 
 it('Q_419_coCanhBaoDangMo_hienNhanDangTheoDoi', () => {
   render(<TaskBlock task={TASK} onSelect={() => {}} following={['Huyết áp cao']} />)
-  expect(screen.getByText('Đang theo dõi: Huyết áp cao')).toBeTruthy()
+  expect(screen.getByText(/Đang theo dõi: Huyết áp cao/)).toBeTruthy()
 })
 
 it('Q_419_khongCoCanhBao_khongCoNhan', () => {

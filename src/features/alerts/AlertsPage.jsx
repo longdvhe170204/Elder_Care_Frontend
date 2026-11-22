@@ -16,6 +16,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
+import { AlertFollowUps } from './AlertFollowUps'
 import { PressedAlertPanel } from './PressedAlertPanel'
 import { loadAlert, loadAlertBoard, runAlertCommand } from './alerts'
 import {
@@ -115,73 +116,6 @@ function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile 
 }
 
 // Kết quả theo dõi (FR-087): danh sách cũ trước, form ghi khi backend cho lệnh `follow-up`. Ghi không đổi trạng thái.
-function FollowUps({ alert, canRecord, onRecorded }) {
-  const [text, setText] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState(null)
-  const items = alert.followUps ?? []
-  if (!canRecord && items.length === 0) return null
-  const missing = !text.trim()
-
-  async function submit(event) {
-    event.preventDefault()
-    setSubmitted(true)
-    if (missing) return
-    setBusy(true)
-    setProblem(null)
-    try {
-      await runAlertCommand(alert.id, 'follow-up', { content: text.trim() })
-      setText('')
-      setSubmitted(false)
-      await onRecorded()
-    } catch (error) {
-      setProblem(problemOf(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section className="flex flex-col gap-2" aria-label="Theo dõi">
-      <h3 className="type-caption text-muted-foreground">Theo dõi</h3>
-      {items.length > 0 ? (
-        <ol className="flex flex-col gap-1.5 border-l-2 pl-3 type-body-sm">
-          {items.map((f, i) => (
-            <li key={`${f.at}:${i}`}>
-              <span className="tabular-nums text-muted-foreground">{formatDateTime(f.at)}</span>
-              {f.recordedBy && <span className="text-muted-foreground">, {f.recordedBy}</span>}
-              <p className="whitespace-pre-wrap">{f.content}</p>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="type-body-sm text-muted-foreground">Chưa có lần theo dõi nào.</p>
-      )}
-      {canRecord && (
-        <form onSubmit={submit} noValidate className="flex flex-col gap-2">
-          <Field data-invalid={(submitted && missing) || undefined}>
-            <FieldLabel htmlFor="alert-follow-up">Ghi kết quả theo dõi</FieldLabel>
-            <Textarea
-              id="alert-follow-up"
-              rows={2}
-              maxLength={2000}
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              aria-invalid={(submitted && missing) || undefined}
-            />
-            {submitted && missing && <FieldError>Nhập kết quả theo dõi</FieldError>}
-          </Field>
-          {problem && <ProblemAlert problem={problem} />}
-          <Button type="submit" variant="outline" className="h-11 self-end" disabled={busy}>
-            Lưu theo dõi
-          </Button>
-        </form>
-      )}
-    </section>
-  )
-}
-
 // Khung chi tiết: nguồn, thời điểm, lệnh cần nhập kết quả hoặc lý do (Đóng, Đổi mức), khối nút bấm khẩn cấp
 function AlertDetail({ id, name, Title, Description, onDone }) {
   const [alert, setAlert] = useState(null)
@@ -277,7 +211,7 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
         </section>
       )}
       {['SOS', 'ASSIST_BUTTON'].includes(alert.origin) && <PressedAlertPanel alert={alert} onChanged={reload} />}
-      <FollowUps alert={alert} canRecord={commands.includes('follow-up')} onRecorded={reload} />
+      <AlertFollowUps alert={alert} canRecord={commands.includes('follow-up')} onRecorded={reload} />
       {problem && <ProblemAlert problem={problem} />}
       {!mode && (commands.includes('close') || commands.includes('change-level')) && (
         <div className="flex flex-col gap-2">
