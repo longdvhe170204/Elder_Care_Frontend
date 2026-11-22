@@ -11,7 +11,7 @@ import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { problemOf } from '@/common/problem'
 import { hhmm } from './doseRoundView'
 import { DoseTags } from './DoseTags'
-import { loadPrnOrders, recordPrn } from './prnApi'
+import { loadPrnOrders, recordEffectiveness, recordPrn } from './prnApi'
 import { ResidentPicker } from './ResidentPicker'
 
 // Thuốc khi cần (spec 006 User Story 6; FR-024, FR-025): không có lịch, ghi từng lần kèm lý do. Đơn, lịch sử và thời
@@ -96,11 +96,59 @@ function PrnForm({ order, now, onSave }) {
   )
 }
 
+// Ghi hiệu quả của một lần dùng (BR-M07-04): bắt buộc nội dung, mỗi lần dùng một lần ghi.
+function EffectForm({ order, use, onSave }) {
+  const [text, setText] = useState('')
+  const [submitted, setSubmitted] = useState(false)
+  const [problem, setProblem] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [key] = useState(() => crypto.randomUUID())
+
+  async function submit(event) {
+    event.preventDefault()
+    setSubmitted(true)
+    if (!text.trim()) return
+    setSaving(true)
+    setProblem(null)
+    try {
+      await onSave(order, use, text, key)
+    } catch (error) {
+      setProblem(problemOf(error))
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex min-h-0 flex-1 flex-col">
+      <SheetHeader className="gap-3 pt-6">
+        <SheetTitle className="type-title">Hiệu quả sau khi dùng</SheetTitle>
+        <SheetDescription>
+          {order.drug}, lần dùng lúc <span className="tabular-nums">{use.time}</span>
+        </SheetDescription>
+      </SheetHeader>
+      <div className="flex flex-col gap-4 px-4">
+        <ProblemAlert problem={problem} />
+        <Field data-invalid={(submitted && !text.trim()) || undefined}>
+          <FieldLabel htmlFor="prn-effect">Hiệu quả</FieldLabel>
+          <Textarea id="prn-effect" rows={3} value={text} onChange={(e) => setText(e.target.value)} aria-invalid={(submitted && !text.trim()) || undefined} />
+          {submitted && !text.trim() && <FieldError>Nhập hiệu quả sau khi dùng thuốc</FieldError>}
+        </Field>
+      </div>
+      <SheetFooter>
+        <Button type="submit" className="h-11" disabled={saving}>
+          Lưu hiệu quả
+        </Button>
+      </SheetFooter>
+    </form>
+  )
+}
+
 export function PrnPanel({ canRecord, now, onSaved }) {
   const [resident, setResident] = useState(null)
   const [orders, setOrders] = useState(null)
   const [problem, setProblem] = useState(null)
   const [recording, setRecording] = useState(null)
+  const [effecting, setEffecting] = useState(null)
 
   const load = useCallback(async (id) => {
     try {
@@ -123,6 +171,13 @@ export function PrnPanel({ canRecord, now, onSaved }) {
     await recordPrn(order, entry)
     setRecording(null)
     onSaved(`Đã lưu lần dùng ${order.drug} lúc ${entry.time}.`)
+    await load(resident.id)
+  }
+
+  async function saveEffect(order, use, text, key) {
+    await recordEffectiveness(order, use.id, text, key)
+    setEffecting(null)
+    onSaved(`Đã ghi hiệu quả lần dùng ${order.drug} lúc ${use.time}.`)
     await load(resident.id)
   }
 
@@ -157,6 +212,7 @@ export function PrnPanel({ canRecord, now, onSaved }) {
                     </span>
                   </span>
                   <DoseTags dose={o} />
+                  {o.indication && <span className="type-caption text-muted-foreground">Chỉ định: {o.indication}</span>}
                 </div>
                 <span className="text-muted-foreground tabular-nums">
                   Lần gần nhất {o.lastUse ?? 'chưa có'}; {o.usesIn24h} lần trong 24 giờ
@@ -172,6 +228,17 @@ export function PrnPanel({ canRecord, now, onSaved }) {
                     . Không có thao tác vượt chặn; cần thì báo bác sĩ.
                   </p>
                 )}
+                {canRecord &&
+                  o.awaitingEffect.map((use) => (
+                    <div key={use.id} className="flex items-center justify-between gap-2 rounded-lg bg-info px-3 py-2 text-info-foreground">
+                      <span>
+                        Lần dùng lúc <span className="tabular-nums">{use.time}</span> chưa ghi hiệu quả
+                      </span>
+                      <Button variant="outline" size="sm" onClick={() => setEffecting({ order: o, use })}>
+                        Ghi hiệu quả
+                      </Button>
+                    </div>
+                  ))}
                 {canRecord && o.canAdministerNow && (
                   <div className="mt-auto flex justify-end border-t pt-3">
                     <Button variant="tonal" onClick={() => setRecording(o)}>
@@ -184,6 +251,9 @@ export function PrnPanel({ canRecord, now, onSaved }) {
           )
         })}
       </div>
+      <Sheet open={!!effecting} onOpenChange={(open) => !open && setEffecting(null)}>
+        <SheetContent>{effecting && <EffectForm key={effecting.use.id} order={effecting.order} use={effecting.use} onSave={saveEffect} />}</SheetContent>
+      </Sheet>
       <Sheet open={!!recording} onOpenChange={(open) => !open && setRecording(null)}>
         <SheetContent>{recording && <PrnForm key={recording.id} order={recording} now={now} onSave={save} />}</SheetContent>
       </Sheet>

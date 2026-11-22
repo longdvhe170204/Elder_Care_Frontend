@@ -14,6 +14,8 @@ const STATUS = {
   CANCELLED: 'Đã hủy',
 }
 const SOURCE = { FACILITY: 'Viện', FAMILY_SENT: 'Gia đình gửi' }
+// Kết quả Hoãn có chủ đích trên khung xác nhận (BR-M07-26)
+export const POSTPONE = 'Hoãn có chủ đích'
 
 const HHMM = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Asia/Ho_Chi_Minh',
@@ -71,6 +73,15 @@ export function doseView(dose, now = new Date()) {
     })),
     handoverId: dose.handoverId,
     awaitingRecordAfterReturn: dose.awaitingRecordAfterReturn,
+    // BF-07: mức quan trọng, dấu Hoãn, người nhận liều, chỉ số phải đo trước khi dùng, dấu dùng muộn
+    critical: dose.timeCriticality === 'CRITICAL',
+    postponed: Boolean(dose.postponed),
+    postponedReason: dose.postponedReason ?? null,
+    claimedBy: dose.claimedBy ?? null,
+    claimExpiresAt: dose.claimExpiresAt ?? null,
+    measurements: dose.requiredMeasurements ?? [],
+    late: Boolean(dose.result?.late),
+    resultId: dose.result?.id ?? null,
   }
 }
 
