@@ -1,6 +1,6 @@
 export const PLAN_STATUS = {
   DRAFT: 'Nháp',
-  PENDING_APPROVAL: 'Chờ duyệt', // dữ liệu cũ; Q-414 bỏ bước duyệt
+  PENDING_APPROVAL: 'Chờ duyệt',
   PENDING_EFFECT: 'Chờ hiệu lực',
   EFFECTIVE: 'Hiệu lực',
   EXPIRED: 'Hết hiệu lực',
