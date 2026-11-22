@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, CalendarDays, FilePlus2 } from 'lucide-react'
+import { ArrowRight, FilePlus2 } from 'lucide-react'
 import {
   getApprovalRequestsById,
   getBeds,
@@ -13,11 +13,13 @@ import {
   postResidencyChangeRequestsByIdSendForConfirmation,
   putResidencyChangeRequestsById,
 } from '@/api'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { FileInput } from '@/common/FileInput'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate, formatDateTime } from '@/common/dateTime'
@@ -53,12 +55,13 @@ import {
   WARNING_LABELS,
   addendumNoText,
   assessedLevelFor,
+  changeSteps,
   withCompanions,
   SERVICE_CHOICE_HINT,
   serviceChoices,
 } from './changeRequestRules'
 import { CHANGE_TYPE_ICONS, CHANGE_TYPE_TONES } from './changeTypeIcons'
-import { StatusPill } from './RequestStatusPill'
+import { ChangeProgress } from './ChangeProgress'
 import { Choices, Info, ReasonField } from './FormParts'
 import {
   ReasonCommandSheet,
@@ -221,34 +224,20 @@ export function ChangeRequestView({
   canConfirm,
   canApprove = false,
   canRecordOpinion = false,
+  residentName,
+  contractNumber,
+  Title = 'h2',
+  Description = 'p',
   onEdit,
   onConfirm,
   onReload,
   onSubmitted,
   onPrint,
 }) {
-  const [contractName, setContractName] = useState('')
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   // Khung lệnh đang mở: sign, submit, return-to-draft, cancel (BF-08 sửa đổi)
   const [action, setAction] = useState(null)
-
-  useEffect(() => {
-    let cancelled = false
-    if (!canConfirm) return
-    getContracts({ query: {} })
-      .then(({ data }) => {
-        const contract = data.find((c) => c.id === request.contractId)
-        if (!contract) return
-        return getResidentsById({ path: { id: contract.residentId } }).then(({ data: r }) => {
-          if (!cancelled) setContractName(`${r.personalInfo?.fullName ?? ''}, ${contract.contractNumber}`)
-        })
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [request.contractId, canConfirm])
 
   // Lệnh duyệt viên được làm theo backend (api-000 allowedCommands): trả về nháp chỉ người duyệt được loại yêu cầu này,
   // hủy yêu cầu Đã duyệt chỉ người duyệt; quyền APPROVE của chức năng chưa đủ (Hành chính duyệt thay đổi nhỏ).
@@ -299,19 +288,15 @@ export function ChangeRequestView({
   }
 
   return (
-    <section
-      aria-label="Chi tiết yêu cầu điều chỉnh hợp đồng"
-      className="overflow-hidden rounded-2xl border bg-card shadow-lg ring-1 ring-primary/10 [&_svg]:stroke-[2.5]"
-    >
-      <header className="flex flex-col items-start gap-2 bg-primary px-6 py-5 text-primary-foreground">
-        <StatusPill onDark request={request} text={REQUEST_STATUS[request.status] ?? request.status} />
-        <h2 className="type-title">{contractName || `Hợp đồng mã ${request.contractId}`}</h2>
-        <p className="flex items-center gap-2 type-body-sm text-primary-foreground/80">
-          <CalendarDays aria-hidden className="size-4 shrink-0" />
-          {`Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}`}
-        </p>
-      </header>
-      <div className="flex flex-col gap-5 p-6">
+    <div className="flex min-h-0 flex-1 flex-col gap-5 [&_svg]:stroke-[2.5]">
+      <div className="flex flex-col gap-1">
+        <Title className="type-title">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
+        <Description className="type-body-sm text-muted-foreground">
+          {`${REQUEST_STATUS[request.status] ?? request.status}. Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}${contractNumber ? `. Hợp đồng ${contractNumber}` : ''}`}
+        </Description>
+      </div>
+      <ChangeProgress progress={changeSteps(request)} />
+      <div className="flex flex-col gap-5">
         <div className="rounded-xl border-l-4 border-primary bg-muted/60 p-4">
           <Info label="Lý do">{request.reason}</Info>
         </div>
@@ -328,9 +313,13 @@ export function ChangeRequestView({
         {state && (draft || sent) && (
           <section className="flex flex-col gap-1 rounded-xl border p-4">
             <h3 className="type-card-title">Xác nhận của người đại diện</h3>
-            <p className={`type-body-sm font-medium ${state.attention && draft ? 'text-destructive' : ''}`}>
-              {state.text}
-            </p>
+            {state.attention && draft ? (
+              <Alert variant="attention">
+                <AlertTitle>{state.text}</AlertTitle>
+              </Alert>
+            ) : (
+              <p className="type-body-sm font-medium">{state.text}</p>
+            )}
             {sent && <p className="type-body-sm">{confirmationRequestText(sent)}</p>}
             {draft && needsConfirmation && (
               <p className="type-caption text-muted-foreground">
@@ -347,13 +336,11 @@ export function ChangeRequestView({
           </p>
         )}
         {warnings.length > 0 && (
-          <ul className="flex flex-col gap-1" aria-label="Cảnh báo của yêu cầu">
+          <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
             {warnings.map((w) => (
-              <li key={w} className="type-body-sm text-destructive">
-                {w}
-              </li>
+              <AlertDescription key={w}>{w}</AlertDescription>
             ))}
-          </ul>
+          </Alert>
         )}
         {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
           <p className="type-caption text-muted-foreground">
@@ -361,17 +348,20 @@ export function ChangeRequestView({
           </p>
         )}
         <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
+        {pendingSignature && (
+          <Alert variant="attention">
+            <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>
+            <AlertDescription>
+              In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
+            </AlertDescription>
+          </Alert>
+        )}
         {addendum ? (
           <section className="flex flex-col gap-1 rounded-xl border p-4" aria-label="Phụ lục hợp đồng">
             <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
             <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
             <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
             {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
-            {pendingSignature && (
-              <p className="type-caption text-muted-foreground">
-                In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
-              </p>
-            )}
             {addendum.signedFileId && (
               <Button variant="outline" className="h-11 self-start" onClick={() => openFile(addendum.signedFileId).catch(() => {})}>
                 Xem bản đã ký
@@ -387,7 +377,7 @@ export function ChangeRequestView({
       <div
         role="group"
         aria-label="Lệnh của yêu cầu"
-        className="flex flex-wrap justify-end gap-2 border-t bg-muted/50 px-6 py-4"
+        className="sticky bottom-0 -mx-6 -mb-6 mt-auto flex flex-wrap justify-end gap-2 border-t bg-card px-6 py-4"
       >
         <Button variant="ghost" className="h-11" onClick={onReload}>
           Tải lại
@@ -438,7 +428,7 @@ export function ChangeRequestView({
       {(action === 'return-to-draft' || action === 'cancel') && (
         <ReasonCommandSheet command={action} request={request} etag={etag} onClose={closeAction} onDone={actionDone} />
       )}
-    </section>
+    </div>
   )
 }
 
@@ -1061,11 +1051,9 @@ export function ConfirmationSheet({ request, etag, onClose, onDone }) {
           </Field>
           <Field data-invalid={!!shown('evidence') || undefined}>
             <FieldLabel htmlFor="change-evidence">Bằng chứng xác nhận</FieldLabel>
-            <Input
+            <FileInput
               id="change-evidence"
-              type="file"
               accept={EVIDENCE_ACCEPT}
-              className="h-11"
               onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
             />
             <FieldDescription>{`${EVIDENCE_HINTS[method] ?? ''} PDF, JPG hoặc PNG, tối đa 10 MB.`}</FieldDescription>

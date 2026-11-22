@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { CalendarDays, CircleCheck, Eye, FileSignature, FileText, Funnel, Plus, Search } from 'lucide-react'
-import { getResidencyChangeRequests, getResidencyChangeRequestsById } from '@/api'
+import { getContracts, getResidencyChangeRequests, getResidencyChangeRequestsById, getResidentsById } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { DetailLayout } from '@/common/DetailLayout'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -46,6 +47,9 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   const [dateFilter, setDateFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState([])
   const [filterOpen, setFilterOpen] = useState(false)
+  // Họ tên người cao tuổi và số hợp đồng ghi ở dòng danh sách; không tra được (không đủ quyền) thì ghi mã yêu cầu
+  const [residentNames, setResidentNames] = useState({})
+  const [contractNumbers, setContractNumbers] = useState({})
 
   const load = useCallback(
     () =>
@@ -64,6 +68,25 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    if (!requests?.length) return
+    let live = true
+    getContracts({ query: {} })
+      .then(({ data }) => live && setContractNumbers(Object.fromEntries(data.map((c) => [c.id, c.contractNumber]))))
+      .catch(() => {})
+    const residentIds = [...new Set(requests.map((r) => r.residentId))]
+    Promise.all(
+      residentIds.map((id) =>
+        getResidentsById({ path: { id } })
+          .then(({ data }) => [id, data.personalInfo?.fullName])
+          .catch(() => null),
+      ),
+    ).then((entries) => live && setResidentNames(Object.fromEntries(entries.filter((e) => e?.[1]))))
+    return () => {
+      live = false
+    }
+  }, [requests])
 
   // Mở thẳng yêu cầu từ thông báo (#residency-changes?id=…, W12)
   useEffect(() => {
@@ -101,10 +124,36 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
     setTypeFilter((t) => (t.includes(code) ? t.filter((x) => x !== code) : [...t, code]))
 
   return (
-    <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
+    <DetailLayout
+      open={!!shown}
+      detailKey={openedId}
+      onClose={() => setShown(null)}
+      label="Chi tiết yêu cầu điều chỉnh hợp đồng"
+      renderDetail={(titles) =>
+        shown && (
+          <ChangeRequestView
+            key={`${shown.request.approvalRequestId}-${shown.etag}`}
+            request={shown.request}
+            etag={shown.etag}
+            residentName={residentNames[shown.request.residentId]}
+            contractNumber={contractNumbers[shown.request.contractId]}
+            canUpdate={can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
+            canConfirm={can('ADMISSION_CONTRACT_DEPOSIT', 'VIEW')}
+            canApprove={can('RESIDENCY_CHANGE_REQUEST', 'APPROVE')}
+            canRecordOpinion={can('RESIDENCY_CHANGE_REQUEST', 'CREATE') || can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
+            onPrint={(r) => onNavigate('addendum-print', { id: r.approvalRequestId })}
+            onEdit={(request) => setSheet({ request, etag: shown.etag })}
+            onConfirm={(request) => setConfirming({ request, etag: shown.etag })}
+            onReload={() => open(shown.request.approvalRequestId)}
+            onSubmitted={changed}
+            {...titles}
+          />
+        )
+      }
+    >
       <PageHeader
         icon={FileSignature}
-        title="Yêu cầu điều chỉnh hợp đồng"
+        title="Điều chỉnh hợp đồng"
         subtitle="Đổi loại lưu trú, mức chăm sóc, dịch vụ, thời hạn, giường hoặc lịch đến của hợp đồng đang hiệu lực."
       />
       {sheet && (
@@ -190,7 +239,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
               onClick={() => setSheet({})}
             >
               <Plus aria-hidden />
-              Lập yêu cầu thay đổi
+              Lập yêu cầu điều chỉnh
             </Button>
           )}
         </div>
@@ -238,6 +287,8 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
               {rows.map((r, i) => {
                 const status = displayStatus(r, REQUEST_STATUS)
                 const confirmation = r.status === 'DRAFT' ? confirmationState(r) : null
+                const residentName = residentNames[r.residentId]
+                const contractNumber = contractNumbers[r.contractId]
                 return (
                   <TableRow
                     key={r.approvalRequestId}
@@ -255,9 +306,15 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
                         aria-pressed={r.approvalRequestId === openedId}
                         onClick={() => open(r.approvalRequestId)}
                       >
-                        {`Yêu cầu mã ${r.approvalRequestId}`}
+                        {residentName ?? `Yêu cầu mã ${r.approvalRequestId}`}
                       </button>
-                      <span className="block type-caption text-muted-foreground">{`Hợp đồng mã ${r.contractId}`}</span>
+                      <span className="block type-caption text-muted-foreground">
+                        {residentName
+                          ? contractNumber
+                            ? `${contractNumber}, yêu cầu mã ${r.approvalRequestId}`
+                            : `Yêu cầu mã ${r.approvalRequestId}`
+                          : (contractNumber ?? `Hợp đồng mã ${r.contractId}`)}
+                      </span>
                     </TableCell>
                     <TableCell className="whitespace-normal">
                       <div className="flex flex-col gap-1">
@@ -323,22 +380,6 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
           </Table>
         )}
       </Card>
-      {shown && (
-        <ChangeRequestView
-          key={`${shown.request.approvalRequestId}-${shown.etag}`}
-          request={shown.request}
-          etag={shown.etag}
-          canUpdate={can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
-          canConfirm={can('ADMISSION_CONTRACT_DEPOSIT', 'VIEW')}
-          canApprove={can('RESIDENCY_CHANGE_REQUEST', 'APPROVE')}
-          canRecordOpinion={can('RESIDENCY_CHANGE_REQUEST', 'CREATE') || can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')}
-          onPrint={(r) => onNavigate('addendum-print', { id: r.approvalRequestId })}
-          onEdit={(request) => setSheet({ request, etag: shown.etag })}
-          onConfirm={(request) => setConfirming({ request, etag: shown.etag })}
-          onReload={() => open(shown.request.approvalRequestId)}
-          onSubmitted={changed}
-        />
-      )}
-    </div>
+    </DetailLayout>
   )
 }
