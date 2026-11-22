@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
@@ -54,7 +54,13 @@ function renderPage(props = {}) {
   )
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 beforeEach(() => {
+  // Từ 1280px khung chi tiết là khung cố định bên phải (DESIGN.md mục 5); dưới đó là Sheet
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }))
   api = mockRoutes()
   permissions([
     ...['VIEW', 'CREATE', 'UPDATE'].map((operation) => ({ function: 'RESIDENCY_CHANGE_REQUEST', operation })),
@@ -76,9 +82,79 @@ describe('BF-08 sửa đổi', () => {
   it('W10_locChoKy_hienDaDuyetChoKy_kemSoNgay', async () => {
     api.on('GET', '/residency-change-requests', json(200, [PENDING_SIGNATURE]))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: /Chờ ký 1/ }))
-    expect(await screen.findByText('Đã duyệt · Chờ ký')).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: /Chờ ký \(1\)/ }))
+    expect(await screen.findByText('Đã duyệt, chờ ký')).toBeInTheDocument()
     expect(screen.getByText(/ngày từ lúc duyệt/)).toBeInTheDocument()
+  })
+
+  it('A_phuLucChoKy_nhanHoPhachTrongDanhSach_vaKhoiAlertTrongKhung', async () => {
+    api.on('GET', '/residency-change-requests', json(200, [PENDING_SIGNATURE]))
+    api.on('GET', '/residency-change-requests/12', json(200, PENDING_SIGNATURE, { ETag: '"5"' }))
+    renderPage({ id: 12 })
+    fireEvent.click(await screen.findByRole('button', { name: /Chờ ký \(1\)/ }))
+    // nhãn trạng thái trong bảng là chữ hổ phách (tông chú ý), không phải trung tính
+    expect((await screen.findByText('Đã duyệt, chờ ký')).className).toMatch(/text-warning-foreground/)
+
+    const panel = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    expect(within(panel).getByText('Bước 4 trên 5: Ký phụ lục')).toBeInTheDocument()
+    const alert = within(panel).getByRole('alert')
+    expect(alert.className).toMatch(/bg-warning/)
+    expect(within(alert).getByText(/Phụ lục số 02 chờ ký/)).toBeInTheDocument()
+    // nút chính ở chân khung là việc của bước hiện tại
+    const footer = within(panel).getByRole('group', { name: 'Lệnh của yêu cầu' })
+    expect(within(footer).getByRole('button', { name: 'Ghi nhận phụ lục đã ký' })).toBeInTheDocument()
+  })
+
+  it('A_canhBaoThieuYKien_laAlertChuY_khongDoDo', async () => {
+    const draft = {
+      ...BASE,
+      status: 'DRAFT',
+      representativeConfirmationRequired: false,
+      warnings: ['RESIDENT_OPINION_MISSING'],
+    }
+    api.on('GET', '/residency-change-requests', json(200, [draft]))
+    api.on('GET', '/residency-change-requests/12', json(200, draft, { ETag: '"2"' }))
+    renderPage({ id: 12 })
+    const panel = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    const alert = within(panel).getByRole('alert')
+    expect(alert.className).toMatch(/bg-warning/)
+    expect(within(alert).getByText(/Chưa ghi ý kiến người cao tuổi/)).toBeInTheDocument()
+    expect(panel.innerHTML).not.toMatch(/text-destructive/)
+  })
+
+  it('A_yKienNguoiCaoTuoi_coNhanNguoiNoiVaDongGhiBoi', async () => {
+    api.on('GET', '/residency-change-requests', json(200, [PENDING_SIGNATURE]))
+    api.on('GET', '/residency-change-requests/12', json(200, PENDING_SIGNATURE, { ETag: '"5"' }))
+    api.on(
+      'GET',
+      '/residency-change-requests/12/resident-opinions',
+      json(200, [
+        { id: 1, opinion: 'AGREE', source: 'RESIDENT', recordedBy: 'Lê Hành Chính', recordedAt: '2026-11-18T03:00:00Z' },
+        {
+          id: 2,
+          opinion: 'UNABLE_TO_EXPRESS',
+          source: 'STAFF_OBSERVATION',
+          recordedBy: 'Trần Điều Dưỡng',
+          recordedAt: '2026-11-10T03:00:00Z',
+        },
+      ]),
+    )
+    renderPage({ id: 12 })
+    const panel = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    expect(await within(panel).findByText('Theo lời người cao tuổi')).toBeInTheDocument()
+    expect(within(panel).getByText('Nhân viên quan sát')).toBeInTheDocument()
+    expect(within(panel).getByText('Ghi bởi Lê Hành Chính, 18/11/2026')).toBeInTheDocument()
+    // không có nút Sửa, Xóa trên ý kiến đã ghi (DESIGN.md 2.2)
+    expect(within(panel).queryByRole('button', { name: /Sửa ý kiến|Xóa ý kiến/ })).not.toBeInTheDocument()
+  })
+
+  it('A_ghiNhanPhuLucDaKy_oChonTepDungFileInput', async () => {
+    api.on('GET', '/residency-change-requests', json(200, [PENDING_SIGNATURE]))
+    api.on('GET', '/residency-change-requests/12', json(200, PENDING_SIGNATURE, { ETag: '"5"' }))
+    renderPage({ id: 12 })
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận phụ lục đã ký' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('Bản scan phụ lục đã ký')).toHaveAttribute('data-slot', 'file-input')
   })
 
   it('W2_ghiNhanPhuLucDaKy_guiNgayNguoiKyTepVaIfMatch_baoNgayDoi', async () => {
@@ -282,7 +358,7 @@ describe('BF-08 sửa đổi', () => {
     )
     api.on('POST', '/residency-change-requests', json(201, { ...BASE, status: 'DRAFT' }))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
@@ -334,7 +410,7 @@ describe('BF-08 sửa đổi', () => {
       ]),
     )
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
@@ -362,7 +438,7 @@ describe('BF-08 sửa đổi', () => {
     api.on('GET', '/residents/5/assessments', problem(403, 'PERMISSION_DENIED'))
     api.on('POST', '/residency-change-requests', json(201, { ...BASE, status: 'DRAFT' }))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })

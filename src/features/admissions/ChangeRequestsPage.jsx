@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useState } from 'react'
+import { CalendarDays, CircleCheck, Eye, FileSignature, FileText, Funnel, Plus, Search } from 'lucide-react'
 import { getResidencyChangeRequests, getResidencyChangeRequestsById } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { CHANGE_TYPES, REQUEST_STATUS, labelOf } from './admissionLabels'
 import { ChangeRequestSheet, ChangeRequestView, ConfirmationSheet } from './ChangeParts'
+import { CHANGE_TYPE_ICONS, CHANGE_TYPE_TONES } from './changeTypeIcons'
+import { StatusPill } from './RequestStatusPill'
 import { confirmationState, displayStatus } from './changeRequestRules'
 
 // Yêu cầu thay đổi lưu trú (004 T047; US5, FR-037 → FR-047): bảng yêu cầu lọc theo trạng thái (GET
@@ -39,6 +42,10 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   const [sheet, setSheet] = useState(null)
   const [confirming, setConfirming] = useState(null)
   const [announcement, setAnnouncement] = useState('')
+  const [query, setQuery] = useState('')
+  const [dateFilter, setDateFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState([])
+  const [filterOpen, setFilterOpen] = useState(false)
 
   const load = useCallback(
     () =>
@@ -82,22 +89,23 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   if (failure?.status === 403) return <PermissionDeniedState label="Yêu cầu điều chỉnh hợp đồng" />
 
   const matcherOf = (key) => FILTERS.find(([k]) => k === key)[2]
-  const rows = (requests ?? []).filter(matcherOf(filter))
-  const showsAddendumNo = rows.some((r) => r.addendum?.addendumNo)
+  // Ô tìm khớp mã yêu cầu hoặc mã hợp đồng; bộ lọc theo loại thay đổi và ngày hiệu lực (chỉ lọc trên danh sách đã tải)
+  const term = query.trim()
+  const rows = (requests ?? [])
+    .filter(matcherOf(filter))
+    .filter((r) => !term || `${r.approvalRequestId} ${r.contractId}`.includes(term))
+    .filter((r) => typeFilter.length === 0 || r.changeTypes.some((t) => typeFilter.includes(t)))
+    .filter((r) => !dateFilter || r.requestedEffectiveDate === dateFilter)
   const openedId = shown?.request.approvalRequestId
+  const toggleTypeFilter = (code) =>
+    setTypeFilter((t) => (t.includes(code) ? t.filter((x) => x !== code) : [...t, code]))
 
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-5">
       <PageHeader
+        icon={FileSignature}
         title="Yêu cầu điều chỉnh hợp đồng"
         subtitle="Đổi loại lưu trú, mức chăm sóc, dịch vụ, thời hạn, giường hoặc lịch đến của hợp đồng đang hiệu lực."
-        aside={
-          can('RESIDENCY_CHANGE_REQUEST', 'CREATE') && (
-            <Button className="h-11" onClick={() => setSheet({})}>
-              Lập yêu cầu thay đổi
-            </Button>
-          )
-        }
       />
       {sheet && (
         <ChangeRequestSheet
@@ -129,8 +137,13 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
         aria-label="Lọc yêu cầu theo trạng thái"
       >
         {FILTERS.map(([key, label, matches]) => (
-          <ToggleGroupItem key={key} value={key} className="h-11 px-4">
-            {`${label} ${(requests ?? []).filter(matches).length}`}
+          <ToggleGroupItem
+            key={key}
+            value={key}
+            className="h-11 gap-1.5 px-4 md:rounded-t-lg md:px-4 font-semibold transition-colors duration-200 md:aria-pressed:bg-primary md:aria-pressed:text-primary-foreground md:data-[state=on]:bg-primary md:data-[state=on]:text-primary-foreground"
+          >
+            {key === filter && <CircleCheck aria-hidden />}
+            {`${label} (${(requests ?? []).filter(matches).length})`}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>
@@ -138,71 +151,178 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
         {announcement}
       </p>
       <ProblemAlert problem={failure} />
-      {requests === null ? (
-        <Skeleton className="h-24 w-full" />
-      ) : rows.length === 0 ? (
-        !failure && <p className="type-body-sm text-muted-foreground">Không có yêu cầu nào trong nhóm này.</p>
-      ) : (
-        <Card className="py-0">
+      <Card className="gap-0 overflow-hidden py-0 shadow-md ring-1 ring-primary/10 [&_svg]:stroke-[2.5]">
+        <div className="flex flex-wrap items-center gap-3 p-4">
+          <div className="relative min-w-60 flex-1 md:max-w-sm">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-primary"
+            />
+            <Input
+              type="search"
+              className="h-11 rounded-full pl-9"
+              placeholder="Tìm theo mã yêu cầu, mã hợp đồng..."
+              aria-label="Tìm theo mã yêu cầu, mã hợp đồng"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <Button
+            variant="outline"
+            className="h-11 px-4"
+            aria-expanded={filterOpen}
+            onClick={() => setFilterOpen((open) => !open)}
+          >
+            <Funnel aria-hidden />
+            Lọc
+            {typeFilter.length > 0 && ` (${typeFilter.length})`}
+          </Button>
+          <Input
+            type="date"
+            className="h-11 w-44 rounded-full"
+            aria-label="Ngày hiệu lực"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value)}
+          />
+          {can('RESIDENCY_CHANGE_REQUEST', 'CREATE') && (
+            <Button
+              className="ml-auto h-11 px-5 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+              onClick={() => setSheet({})}
+            >
+              <Plus aria-hidden />
+              Lập yêu cầu thay đổi
+            </Button>
+          )}
+        </div>
+        {filterOpen && (
+          <div role="group" aria-label="Lọc theo loại thay đổi" className="flex flex-wrap gap-2 px-4 pb-4">
+            {CHANGE_TYPES.map(([code, text]) => {
+              const Icon = CHANGE_TYPE_ICONS[code]
+              return (
+                <Button
+                  key={code}
+                  variant={typeFilter.includes(code) ? 'tonal' : 'outline'}
+                  className="h-10"
+                  aria-pressed={typeFilter.includes(code)}
+                  onClick={() => toggleTypeFilter(code)}
+                >
+                  <Icon aria-hidden />
+                  {text}
+                </Button>
+              )
+            })}
+          </div>
+        )}
+        {requests === null ? (
+          <Skeleton className="m-4 h-24" />
+        ) : rows.length === 0 ? (
+          !failure && (
+            <p className="border-t p-4 type-body-sm text-muted-foreground">Không có yêu cầu nào trong nhóm này.</p>
+          )
+        ) : (
           <Table aria-label="Yêu cầu điều chỉnh hợp đồng">
-            <TableHeader>
+            <TableHeader className="bg-primary text-primary-foreground [&_th]:font-semibold [&_th]:text-primary-foreground">
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-4">Yêu cầu</TableHead>
+                <TableHead className="w-14 pl-4">#</TableHead>
+                <TableHead>Yêu cầu</TableHead>
                 <TableHead>Thay đổi</TableHead>
-                <TableHead>Ngày hiệu lực mong muốn</TableHead>
-                {showsAddendumNo && <TableHead>Số phụ lục</TableHead>}
-                <TableHead className="pr-4">Trạng thái</TableHead>
+                <TableHead>Ngày hiệu lực</TableHead>
+                <TableHead>Số phụ lục</TableHead>
+                <TableHead>Trạng thái</TableHead>
+                <TableHead className="w-16 pr-4">
+                  <span className="sr-only">Xem chi tiết</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((r) => (
-                <TableRow
-                  key={r.approvalRequestId}
-                  className={r.approvalRequestId === openedId ? 'bg-accent/40' : undefined}
-                >
-                  <TableCell className="whitespace-normal pl-4">
-                    <button
-                      type="button"
-                      className="text-left underline-offset-4 hover:underline"
-                      aria-pressed={r.approvalRequestId === openedId}
-                      onClick={() => open(r.approvalRequestId)}
-                    >
-                      {`Yêu cầu mã ${r.approvalRequestId}`}
-                    </button>
-                    <span className="block type-caption text-muted-foreground">{`Hợp đồng mã ${r.contractId}`}</span>
-                  </TableCell>
-                  <TableCell className="whitespace-normal">
-                    {r.changeTypes.map((t) => labelOf(CHANGE_TYPES, t)).join(', ')}
-                  </TableCell>
-                  <TableCell className="tabular-nums">{formatDate(r.requestedEffectiveDate)}</TableCell>
-                  {showsAddendumNo && (
-                    <TableCell className="tabular-nums">
-                      {r.addendum?.addendumNo ? String(r.addendum.addendumNo).padStart(2, '0') : '—'}
+              {rows.map((r, i) => {
+                const status = displayStatus(r, REQUEST_STATUS)
+                const confirmation = r.status === 'DRAFT' ? confirmationState(r) : null
+                return (
+                  <TableRow
+                    key={r.approvalRequestId}
+                    className={
+                      r.approvalRequestId === openedId
+                        ? 'bg-accent hover:bg-accent shadow-[inset_4px_0_0_var(--primary)]'
+                        : 'hover:bg-accent/50'
+                    }
+                  >
+                    <TableCell className="pl-4 tabular-nums text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="whitespace-normal">
+                      <button
+                        type="button"
+                        className="text-left font-semibold text-primary underline underline-offset-4 transition-colors hover:text-accent-foreground"
+                        aria-pressed={r.approvalRequestId === openedId}
+                        onClick={() => open(r.approvalRequestId)}
+                      >
+                        {`Yêu cầu mã ${r.approvalRequestId}`}
+                      </button>
+                      <span className="block type-caption text-muted-foreground">{`Hợp đồng mã ${r.contractId}`}</span>
                     </TableCell>
-                  )}
-                  <TableCell className="pr-4">
-                    <StatusBadge status={displayStatus(r, REQUEST_STATUS).text} />
-                    {displayStatus(r, REQUEST_STATUS).days !== null && (
-                      <span
-                        className={`block type-caption ${displayStatus(r, REQUEST_STATUS).overdue ? 'text-destructive' : 'text-muted-foreground'}`}
-                      >
-                        {`${displayStatus(r, REQUEST_STATUS).days} ngày từ lúc duyệt`}
+                    <TableCell className="whitespace-normal">
+                      <div className="flex flex-col gap-1">
+                        {r.changeTypes.map((t) => {
+                          const Icon = CHANGE_TYPE_ICONS[t]
+                          return (
+                            <span key={t} className="flex items-center gap-2">
+                              {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[t]}`} />}
+                              {labelOf(CHANGE_TYPES, t)}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      <span className="flex items-center gap-2">
+                        <CalendarDays aria-hidden className="size-[18px] text-primary" />
+                        {formatDate(r.requestedEffectiveDate)}
                       </span>
-                    )}
-                    {r.status === 'DRAFT' && confirmationState(r) && (
-                      <span
-                        className={`block type-caption ${confirmationState(r).attention ? 'text-destructive' : 'text-muted-foreground'}`}
+                    </TableCell>
+                    <TableCell className="tabular-nums">
+                      {r.addendum?.addendumNo ? (
+                        <span className="flex items-center gap-2">
+                          <FileText aria-hidden className="size-[18px] text-primary" />
+                          {String(r.addendum.addendumNo).padStart(2, '0')}
+                        </span>
+                      ) : (
+                        '—'
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill request={r} text={status.text} />
+                      {status.days !== null && (
+                        <span
+                          className={`block type-caption ${status.overdue ? 'text-destructive' : 'text-muted-foreground'}`}
+                        >
+                          {`${status.days} ngày từ lúc duyệt`}
+                        </span>
+                      )}
+                      {confirmation && (
+                        <span
+                          className={`block type-caption ${confirmation.attention ? 'text-destructive' : 'text-muted-foreground'}`}
+                        >
+                          {confirmation.text}
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="pr-4">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="size-11 border-primary/40 text-primary transition-colors duration-200 hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                        aria-label={`Xem yêu cầu mã ${r.approvalRequestId}`}
+                        onClick={() => open(r.approvalRequestId)}
                       >
-                        {confirmationState(r).text}
-                      </span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
+                        <Eye aria-hidden />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
-        </Card>
-      )}
+        )}
+      </Card>
       {shown && (
         <ChangeRequestView
           key={`${shown.request.approvalRequestId}-${shown.etag}`}

@@ -117,6 +117,7 @@ export const REQUEST_STATUS = {
   APPLY_FAILED: 'Áp dụng không thành',
   REJECTED: 'Từ chối',
   CANCELLED: 'Đã hủy',
+  SUPERSEDED: 'Đã thay thế',
 }
 
 export const ADDENDUM_STATUS = {

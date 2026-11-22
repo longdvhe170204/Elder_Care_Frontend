@@ -200,15 +200,69 @@ export function daysSince(dateText, now = new Date()) {
   return Math.max(0, Math.round((today - start) / DAY))
 }
 
-// Trạng thái hiển thị gộp yêu cầu và phụ lục (W10): Đã duyệt mà phụ lục Chờ ký thì "Đã duyệt · Chờ ký" kèm số ngày;
-// overdue khi quá CFG-M02-18 ngày
+// Trạng thái hiển thị gộp yêu cầu và phụ lục (W10): Đã duyệt mà phụ lục Chờ ký thì "Đã duyệt, chờ ký" tông chú ý (Hành
+// chính còn việc phải làm, DESIGN.md 3.5) kèm số ngày; overdue khi quá CFG-M02-18 ngày. tone null: để StatusBadge quyết.
 export function displayStatus(r, requestLabels, now = new Date()) {
   const base = requestLabels[r.status] ?? r.status
   if (r.status === 'APPROVED' && r.addendum?.status === 'PENDING_SIGNATURE') {
     const days = daysSince(r.addendum.createdAt, now)
-    return { text: `${base} · Chờ ký`, days, overdue: days >= SIGNATURE_OVERDUE_DAYS }
+    return { text: `${base}, chờ ký`, tone: 'attention', days, overdue: days >= SIGNATURE_OVERDUE_DAYS }
   }
-  return { text: base, days: null, overdue: false }
+  return { text: base, tone: null, days: null, overdue: false }
+}
+
+// Tiến trình của một yêu cầu theo BF-08 (DESIGN.md 7.2 change-progress). Chỉ đọc trạng thái đã ghi của yêu cầu và phụ lục,
+// không tự suy bước chưa có dữ liệu (Q-306, Q-307). Thay đổi nhỏ không cần xác nhận người đại diện và ký phụ lục (Q-338);
+// yêu cầu người đại diện tự gửi qua cổng không cần xác nhận thêm (representativeConfirmationRequired = false). Ý kiến người
+// cao tuổi không chặn luồng nên không là một bước. Yêu cầu Từ chối, Hủy, Được thay thế không có tiến trình (null).
+// state: done, current, todo, failed (Áp dụng không thành).
+const STEP_LABELS = {
+  draft: 'Lập yêu cầu',
+  confirm: 'Xác nhận người đại diện',
+  approve: 'Duyệt',
+  sign: 'Ký phụ lục',
+  apply: 'Áp dụng',
+}
+
+export function changeSteps(r) {
+  const needsConfirmation = !!r.representativeConfirmationRequired
+  const confirmed = !!r.representativeConfirmation || r.confirmationRequest?.status === 'ACCEPTED'
+  const needsSignature = !r.minorChange
+  const keys = ['draft', needsConfirmation && 'confirm', 'approve', needsSignature && 'sign', 'apply'].filter(Boolean)
+
+  let currentKey
+  switch (r.status) {
+    case 'DRAFT':
+      currentKey = needsConfirmation && !confirmed ? 'confirm' : 'approve'
+      break
+    case 'PENDING_APPROVAL':
+      currentKey = 'approve'
+      break
+    case 'APPROVED':
+      currentKey = needsSignature && r.addendum?.status === 'PENDING_SIGNATURE' ? 'sign' : 'apply'
+      break
+    case 'APPLY_FAILED':
+      currentKey = 'apply'
+      break
+    case 'APPLIED':
+      currentKey = null
+      break
+    default:
+      return null
+  }
+
+  const currentIndex = currentKey === null ? keys.length : keys.indexOf(currentKey)
+  const steps = keys.map((key, i) => ({
+    key,
+    label: STEP_LABELS[key],
+    state: i < currentIndex ? 'done' : i === currentIndex ? (r.status === 'APPLY_FAILED' ? 'failed' : 'current') : 'todo',
+  }))
+  return {
+    steps,
+    total: keys.length,
+    position: currentKey === null ? keys.length : currentIndex + 1,
+    current: currentKey === null ? null : steps[currentIndex],
+  }
 }
 
 // Mức của lần đánh giá gần nhất đã xác nhận dùng làm mức mới khi đổi mức chăm sóc (FR-043j); null khi không dùng được

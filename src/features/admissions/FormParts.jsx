@@ -39,18 +39,19 @@ export function Info({ label, children }) {
   )
 }
 
-export function ReasonField({ id, value, onChange, error, label = 'Lý do' }) {
+export function ReasonField({ id, value, onChange, error, label = 'Lý do', showCount = false }) {
   return (
     <Field data-invalid={!!error || undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Textarea
         id={id}
-        rows={2}
+        rows={showCount ? 4 : 2}
         maxLength={2000}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!error || undefined}
       />
+      {showCount && <span className="self-end type-caption tabular-nums text-muted-foreground">{`${value.length} / 2000`}</span>}
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )

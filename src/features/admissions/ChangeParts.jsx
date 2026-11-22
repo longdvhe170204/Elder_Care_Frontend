@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { ArrowRight, CalendarDays, FilePlus2 } from 'lucide-react'
 import {
   getApprovalRequestsById,
   getBeds,
@@ -56,6 +57,8 @@ import {
   SERVICE_CHOICE_HINT,
   serviceChoices,
 } from './changeRequestRules'
+import { CHANGE_TYPE_ICONS, CHANGE_TYPE_TONES } from './changeTypeIcons'
+import { StatusPill } from './RequestStatusPill'
 import { Choices, Info, ReasonField } from './FormParts'
 import {
   ReasonCommandSheet,
@@ -100,34 +103,78 @@ function confirmationText(c, confirmerName) {
 
 // Nội dung thay đổi (trước, sau theo loại) và ảnh hưởng chi phí; dùng ở màn này và màn Yêu cầu phê duyệt (nội dung yêu cầu
 // phê duyệt loại M02.RESIDENCY_CHANGE cùng các trường changeTypes, previousValue, newValue, costImpact).
-export function ChangeContent({ content, headingClassName = 'type-card-title' }) {
+// Một loại thay đổi dạng thẻ: biểu tượng, tên loại, giá trị trước và giá trị sau (variant "cards" của ChangeContent)
+function ChangeRow({ type, content }) {
+  const Icon = CHANGE_TYPE_ICONS[type]
+  return (
+    <li className="flex flex-col gap-2 rounded-xl border bg-muted/40 p-3 transition-colors hover:border-primary/40 hover:bg-accent/40 sm:flex-row sm:items-center sm:justify-between">
+      <span className="flex items-center gap-2 type-label font-semibold">
+        {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[type]}`} />}
+        {labelOf(CHANGE_TYPES, type)}
+      </span>
+      <span className="flex flex-wrap items-center gap-2 type-body-sm tabular-nums">
+        <span className="sr-only">Trước:</span>
+        <span className="rounded-md bg-card px-2.5 py-1 text-muted-foreground ring-1 ring-border">
+          {changeValueText(type, content.previousValue)}
+        </span>
+        <ArrowRight aria-hidden className="size-4 text-primary" />
+        <span className="sr-only">Sau:</span>
+        <span className="rounded-md bg-primary px-2.5 py-1 font-semibold text-primary-foreground shadow-sm">
+          {changeValueText(type, content.newValue)}
+        </span>
+      </span>
+    </li>
+  )
+}
+
+// variant "cards": khung chi tiết của màn Yêu cầu điều chỉnh hợp đồng; mặc định giữ dạng chữ cho màn duyệt và bản in
+export function ChangeContent({ content, headingClassName = 'type-card-title', variant = 'plain' }) {
+  const cards = variant === 'cards'
   const types = content.changeTypes ?? []
   const confirmation = content.representativeConfirmation
   const confirmerName = useFamilyMemberName(content.residentId, confirmation?.representativeFamilyMemberId)
   return (
     <>
-      <section className="flex flex-col gap-2">
+      <section className={`flex flex-col ${cards ? 'gap-3' : 'gap-2'}`}>
         <h3 className={headingClassName}>Nội dung thay đổi</h3>
         <ul className="flex flex-col gap-2">
-          {types.map((type) => (
-            <li key={type} className="flex flex-col">
-              <span className="type-body-sm">{labelOf(CHANGE_TYPES, type)}</span>
-              <span className="type-caption text-muted-foreground">
-                {`Trước: ${changeValueText(type, content.previousValue)}; sau: ${changeValueText(type, content.newValue)}`}
-              </span>
-            </li>
-          ))}
+          {types.map((type) =>
+            cards ? (
+              <ChangeRow key={type} type={type} content={content} />
+            ) : (
+              <li key={type} className="flex flex-col">
+                <span className="type-body-sm">{labelOf(CHANGE_TYPES, type)}</span>
+                <span className="type-caption text-muted-foreground">
+                  {`Trước: ${changeValueText(type, content.previousValue)}; sau: ${changeValueText(type, content.newValue)}`}
+                </span>
+              </li>
+            ),
+          )}
         </ul>
       </section>
       {content.costImpact?.length > 0 && (
-        <section className="flex flex-col gap-2">
+        <section className={`flex flex-col ${cards ? 'gap-3' : 'gap-2'}`}>
           <h3 className={headingClassName}>Ảnh hưởng chi phí</h3>
           <ul className="flex flex-col gap-1">
-            {content.costImpact.map((c) => (
-              <li key={c.item} className="type-body-sm tabular-nums">
-                {`${costItemLabel(c.item)}: ${money(c.previousUnitPrice)} → ${money(c.newUnitPrice)}`}
-              </li>
-            ))}
+            {content.costImpact.map((c) =>
+              cards ? (
+                <li
+                  key={c.item}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2 type-body-sm tabular-nums"
+                >
+                  <span>{costItemLabel(c.item)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="text-muted-foreground">{money(c.previousUnitPrice)}</span>
+                    <ArrowRight aria-hidden className="size-4 text-primary" />
+                    <span className="font-semibold text-primary">{money(c.newUnitPrice)}</span>
+                  </span>
+                </li>
+              ) : (
+                <li key={c.item} className="type-body-sm tabular-nums">
+                  {`${costItemLabel(c.item)}: ${money(c.previousUnitPrice)} → ${money(c.newUnitPrice)}`}
+                </li>
+              ),
+            )}
           </ul>
         </section>
       )}
@@ -252,84 +299,96 @@ export function ChangeRequestView({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-2xl border bg-card p-5">
-      <div className="flex flex-col gap-1">
-        <StatusBadge status={REQUEST_STATUS[request.status] ?? request.status} />
+    <section
+      aria-label="Chi tiết yêu cầu điều chỉnh hợp đồng"
+      className="overflow-hidden rounded-2xl border bg-card shadow-lg ring-1 ring-primary/10 [&_svg]:stroke-[2.5]"
+    >
+      <header className="flex flex-col items-start gap-2 bg-primary px-6 py-5 text-primary-foreground">
+        <StatusPill onDark request={request} text={REQUEST_STATUS[request.status] ?? request.status} />
         <h2 className="type-title">{contractName || `Hợp đồng mã ${request.contractId}`}</h2>
-        <p className="type-body-sm text-muted-foreground">
+        <p className="flex items-center gap-2 type-body-sm text-primary-foreground/80">
+          <CalendarDays aria-hidden className="size-4 shrink-0" />
           {`Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}`}
         </p>
-      </div>
-      <Info label="Lý do">{request.reason}</Info>
-      <ChangeContent content={request} />
-      {request.representativeConfirmation?.recordedAt && (
-        <p className="type-caption text-muted-foreground">
-          {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
-        </p>
-      )}
-
-      {request.minorChange && (
-        <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
-      )}
-      {state && (draft || sent) && (
-        <section className="flex flex-col gap-1 rounded-xl border p-4">
-          <h3 className="type-card-title">Xác nhận của người đại diện</h3>
-          <p className={`type-body-sm font-medium ${state.attention && draft ? 'text-destructive' : ''}`}>
-            {state.text}
+      </header>
+      <div className="flex flex-col gap-5 p-6">
+        <div className="rounded-xl border-l-4 border-primary bg-muted/60 p-4">
+          <Info label="Lý do">{request.reason}</Info>
+        </div>
+        <ChangeContent content={request} variant="cards" />
+        {request.representativeConfirmation?.recordedAt && (
+          <p className="type-caption text-muted-foreground">
+            {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
           </p>
-          {sent && <p className="type-body-sm">{confirmationRequestText(sent)}</p>}
-          {draft && needsConfirmation && (
-            <p className="type-caption text-muted-foreground">
-              {canConfirm
-                ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
-                : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
+        )}
+
+        {request.minorChange && (
+          <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
+        )}
+        {state && (draft || sent) && (
+          <section className="flex flex-col gap-1 rounded-xl border p-4">
+            <h3 className="type-card-title">Xác nhận của người đại diện</h3>
+            <p className={`type-body-sm font-medium ${state.attention && draft ? 'text-destructive' : ''}`}>
+              {state.text}
             </p>
-          )}
-        </section>
-      )}
-      {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
-        <p className="type-body-sm">
-          Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
-        </p>
-      )}
-      {warnings.length > 0 && (
-        <ul className="flex flex-col gap-1" aria-label="Cảnh báo của yêu cầu">
-          {warnings.map((w) => (
-            <li key={w} className="type-body-sm text-destructive">
-              {w}
-            </li>
-          ))}
-        </ul>
-      )}
-      {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
-        <p className="type-caption text-muted-foreground">
-          {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
-        </p>
-      )}
-      <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
-      {addendum ? (
-        <section className="flex flex-col gap-1 rounded-xl border p-4" aria-label="Phụ lục hợp đồng">
-          <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
-          <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
-          <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
-          {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
-          {pendingSignature && (
-            <p className="type-caption text-muted-foreground">
-              In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
-            </p>
-          )}
-          {addendum.signedFileId && (
-            <Button variant="outline" className="h-11 self-start" onClick={() => openFile(addendum.signedFileId).catch(() => {})}>
-              Xem bản đã ký
-            </Button>
-          )}
-        </section>
-      ) : (
-        request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
-      )}
-      <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
-      <ProblemAlert problem={failure} />
-      <div className="flex flex-wrap justify-end gap-2">
+            {sent && <p className="type-body-sm">{confirmationRequestText(sent)}</p>}
+            {draft && needsConfirmation && (
+              <p className="type-caption text-muted-foreground">
+                {canConfirm
+                  ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
+                  : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
+              </p>
+            )}
+          </section>
+        )}
+        {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
+          <p className="type-body-sm">
+            Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
+          </p>
+        )}
+        {warnings.length > 0 && (
+          <ul className="flex flex-col gap-1" aria-label="Cảnh báo của yêu cầu">
+            {warnings.map((w) => (
+              <li key={w} className="type-body-sm text-destructive">
+                {w}
+              </li>
+            ))}
+          </ul>
+        )}
+        {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
+          <p className="type-caption text-muted-foreground">
+            {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
+          </p>
+        )}
+        <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
+        {addendum ? (
+          <section className="flex flex-col gap-1 rounded-xl border p-4" aria-label="Phụ lục hợp đồng">
+            <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
+            <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
+            <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
+            {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
+            {pendingSignature && (
+              <p className="type-caption text-muted-foreground">
+                In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
+              </p>
+            )}
+            {addendum.signedFileId && (
+              <Button variant="outline" className="h-11 self-start" onClick={() => openFile(addendum.signedFileId).catch(() => {})}>
+                Xem bản đã ký
+              </Button>
+            )}
+          </section>
+        ) : (
+          request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
+        )}
+        <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
+        <ProblemAlert problem={failure} />
+      </div>
+      <div
+        role="group"
+        aria-label="Lệnh của yêu cầu"
+        className="flex flex-wrap justify-end gap-2 border-t bg-muted/50 px-6 py-4"
+      >
         <Button variant="ghost" className="h-11" onClick={onReload}>
           Tải lại
         </Button>
@@ -379,11 +438,13 @@ export function ChangeRequestView({
       {(action === 'return-to-draft' || action === 'cancel') && (
         <ReasonCommandSheet command={action} request={request} etag={etag} onClose={closeAction} onDone={actionDone} />
       )}
-    </div>
+    </section>
   )
 }
 
 const ARRIVAL_ROW = { dayOfWeek: 1, arrivalTime: '07:30', departureTime: '17:00' }
+
+const REQUIRED = "after:ml-1 after:text-destructive after:content-['*']"
 
 export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const editing = !!request
@@ -561,8 +622,15 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
 
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
-        <SheetTitle>{editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}</SheetTitle>
+      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg [&_svg]:stroke-[2.5]">
+        <div className="flex items-center gap-3 pr-10">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+            <FilePlus2 aria-hidden className="size-5" />
+          </span>
+          <SheetTitle className="type-title text-primary">
+            {editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}
+          </SheetTitle>
+        </div>
         <SheetDescription>
           {seesContracts
             ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
@@ -571,7 +639,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         <FieldGroup className="mt-4">
           {!seesContracts && (
             <Field data-invalid={!!shown('contract') || undefined}>
-              <FieldLabel htmlFor="change-resident">Người cao tuổi</FieldLabel>
+              <FieldLabel htmlFor="change-resident" className={REQUIRED}>
+                Người cao tuổi
+              </FieldLabel>
               <select
                 id="change-resident"
                 className={SELECT}
@@ -591,7 +661,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           )}
           {seesContracts && (
             <Field data-invalid={!!shown('contract') || undefined}>
-              <FieldLabel htmlFor="change-contract">Hợp đồng</FieldLabel>
+              <FieldLabel htmlFor="change-contract" className={REQUIRED}>
+                Hợp đồng
+              </FieldLabel>
               <select
                 id="change-contract"
                 className={SELECT}
@@ -625,14 +697,22 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
 
           {seesContracts && (
             <Field data-invalid={!!shown('types') || undefined}>
-              <FieldLabel>Loại thay đổi</FieldLabel>
-              <div className="flex flex-col gap-2">
+              <FieldLabel className={REQUIRED}>Loại thay đổi</FieldLabel>
+              <div className="flex flex-col gap-1">
                 {CHANGE_TYPES.map(([code, text]) => {
                   const blocked = code === 'CARE_LEVEL' && careLevelBlocked && !types.includes(code)
+                  const Icon = CHANGE_TYPE_ICONS[code]
                   return (
                     <div key={code} className="flex flex-col">
-                      <label className="flex items-center gap-2 type-body-sm">
-                        <input type="checkbox" disabled={blocked} checked={types.includes(code)} onChange={() => toggleType(code)} />
+                      <label className="flex items-center gap-3 rounded-lg px-3 py-2 type-body-sm has-[:checked]:bg-accent has-[:checked]:font-medium has-[:checked]:ring-1 has-[:checked]:ring-primary/50 transition-colors hover:bg-accent/50">
+                        <input
+                          type="checkbox"
+                          className="size-4 accent-primary"
+                          disabled={blocked}
+                          checked={types.includes(code)}
+                          onChange={() => toggleType(code)}
+                        />
+                        <Icon aria-hidden className={`size-4 ${CHANGE_TYPE_TONES[code]}`} />
                         {text}
                       </label>
                       {blocked && (
@@ -845,7 +925,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           )}
 
           <Field data-invalid={!!shown('date') || undefined}>
-            <FieldLabel htmlFor="change-date">Ngày hiệu lực mong muốn</FieldLabel>
+            <FieldLabel htmlFor="change-date" className={REQUIRED}>
+              Ngày hiệu lực mong muốn
+            </FieldLabel>
             <Input
               id="change-date"
               type="date"
@@ -856,13 +938,17 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             />
             <FieldDescription>
               Duyệt muộn hơn ngày này thì thay đổi tính từ ngày duyệt, không tính lùi.{' '}
-              <button type="button" className="underline underline-offset-4" onClick={() => setDate(tomorrowIso())}>
+              <button
+                type="button"
+                className="rounded-md bg-accent px-2 py-0.5 text-accent-foreground"
+                onClick={() => setDate(tomorrowIso())}
+              >
                 {`Dùng ngày mai (${formatDate(tomorrowIso())})`}
               </button>
             </FieldDescription>
             {shown('date') && <FieldError>{shown('date')}</FieldError>}
           </Field>
-          <ReasonField id="change-reason" value={reason} onChange={setReason} error={shown('reason')} />
+          <ReasonField id="change-reason" value={reason} onChange={setReason} error={shown('reason')} showCount />
 
           {editing && seesContracts && hadConfirmation && (
             <p className="type-body-sm text-destructive">
@@ -873,11 +959,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         <div className="mt-4">
           <ProblemAlert problem={failure} />
         </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" className="h-11" onClick={onClose}>
-            Đóng
+        <div className="sticky bottom-0 -mx-6 -mb-6 mt-4 flex justify-end gap-2 border-t bg-background px-6 py-4">
+          <Button variant="outline" className="h-11 px-6" onClick={onClose}>
+            Hủy
           </Button>
-          <Button className="h-11" disabled={busy || (editing && !etag)} onClick={save}>
+          <Button className="h-11 px-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg" disabled={busy || (editing && !etag)} onClick={save}>
             Lưu yêu cầu
           </Button>
         </div>

@@ -1,12 +1,19 @@
 // Đầu trang dùng chung (DESIGN.md mục 5, công thức page-header): đặt thẳng trên nền trang, không bọc thẻ;
 // tiêu đề, dòng phụ bên trái, ô bên phải (giờ hoặc ô tìm), phần dưới cho thanh lọc.
-export function PageHeader({ title, subtitle, aside, children }) {
+export function PageHeader({ title, subtitle, aside, icon: Icon, children }) {
   return (
     <section className="flex flex-col gap-4">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <h1 className="type-page text-primary">{title}</h1>
-          {subtitle && <p className="text-muted-foreground">{subtitle}</p>}
+        <div className="flex items-center gap-4">
+          {Icon && (
+            <span className="flex size-14 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+              <Icon aria-hidden className="size-7" />
+            </span>
+          )}
+          <div className="flex flex-col gap-1">
+            <h1 className="type-page text-primary">{title}</h1>
+            {subtitle && <p className="text-muted-foreground">{subtitle}</p>}
+          </div>
         </div>
         {aside}
       </div>

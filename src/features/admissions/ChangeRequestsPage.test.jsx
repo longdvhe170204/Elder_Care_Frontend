@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
@@ -44,12 +44,19 @@ function renderPage() {
   )
 }
 
+// Dòng yêu cầu là nút ghi họ tên người cao tuổi (DESIGN.md 5.1, 9.2 điểm 10)
 async function openRequest() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Yêu cầu mã 12' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
   await screen.findByText('Sau đợt đánh giá mới')
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 beforeEach(() => {
+  // Từ 1280px khung chi tiết là khung cố định bên phải (DESIGN.md mục 5); dưới đó là Sheet
+  vi.stubGlobal('matchMedia', () => ({ matches: true, addEventListener() {}, removeEventListener() {} }))
   api = mockRoutes()
   api.on(
     'GET',
@@ -135,7 +142,7 @@ describe('ChangeRequestsPage', () => {
 
   it('FR_040_lapYeuCau_thieuTruong_baoTaiO', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
     expect(await within(dialog).findByText('Chọn hợp đồng')).toBeInTheDocument()
@@ -166,7 +173,7 @@ describe('ChangeRequestsPage', () => {
       json(200, [{ id: 91, status: 'CONFIRMED', careLevel: 'SPECIAL', confirmedAt: '2026-11-18T03:00:00Z' }]),
     )
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: 'Phạm Văn Hùng' })
 
@@ -194,7 +201,7 @@ describe('ChangeRequestsPage', () => {
 
   it('lapYeuCau_khongCoPhanXacNhan_khongBatTaiBangChung', async () => {
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     expect(within(dialog).queryByLabelText('Bằng chứng xác nhận')).not.toBeInTheDocument()
@@ -384,7 +391,7 @@ describe('ChangeRequestsPage', () => {
       json(200, [{ id: 90, status: 'CONFIRMED', careLevel: 'REGULAR', confirmedAt: '2026-11-18T03:00:00Z' }]),
     )
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
@@ -395,7 +402,7 @@ describe('ChangeRequestsPage', () => {
   it('FR_037_lapYeuCauDoiMuc_guiGiaTriMoi', async () => {
     api.on('POST', '/residency-change-requests', json(201, REQUEST))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
@@ -427,7 +434,7 @@ describe('ChangeRequestsPage', () => {
     )
     api.on('POST', '/residency-change-requests', json(201, REQUEST))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
@@ -454,7 +461,7 @@ describe('ChangeRequestsPage', () => {
       problem(422, 'INVALID_VALUE', { detail: 'Ngày hiệu lực sớm hơn ngày bắt đầu hợp đồng' }),
     )
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu thay đổi' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
@@ -475,5 +482,76 @@ describe('ChangeRequestsPage', () => {
     renderPage()
     await openRequest()
     expect(screen.queryByRole('button', { name: 'Sửa yêu cầu nháp' })).not.toBeInTheDocument()
+  })
+})
+
+// Phương án A (2026-11-22; DESIGN.md 6.19.0): danh sách ghi họ tên, chi tiết trong khung bên phải (DetailLayout) có thanh
+// tiến trình theo bước của BF-08, cảnh báo không gấp là Alert tông chú ý chứ không phải chữ đỏ.
+describe('ChangeRequestsPage: giao diện danh sách và khung chi tiết', () => {
+  it('A_tenMan_theoTenMucMenu_vaNutLap', async () => {
+    renderPage()
+    expect(await screen.findByRole('heading', { name: 'Điều chỉnh hợp đồng' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Lập yêu cầu điều chỉnh' })).toBeInTheDocument()
+  })
+
+  it('A_danhSach_hienHoTenNguoiCaoTuoiVaSoHopDong', async () => {
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' })).toBeInTheDocument()
+    expect(await screen.findByText('HD-031, yêu cầu mã 12')).toBeInTheDocument()
+  })
+
+  it('A_danhSach_khongTraDuocTen_hienMaYeuCau', async () => {
+    api.on('GET', '/residents/5', json(403, { title: 'Forbidden', status: 403 }))
+    api.on('GET', '/contracts', json(403, { title: 'Forbidden', status: 403 }))
+    renderPage()
+    expect(await screen.findByRole('button', { name: 'Yêu cầu mã 12' })).toBeInTheDocument()
+  })
+
+  it('A_chiTiet_nangTrongKhungBenPhai_coNutDong_dongThiMatKhung', async () => {
+    renderPage()
+    await openRequest()
+    const panel = screen.getByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    expect(within(panel).getByRole('heading', { name: 'Nguyễn Thị Lan' })).toBeInTheDocument()
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Đóng chi tiết' }))
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+  })
+
+  it('A_chiTiet_hienTienTrinhVaBuocHienTai', async () => {
+    renderPage()
+    await openRequest()
+    const panel = screen.getByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    expect(within(panel).getByText('Bước 2 trên 5: Xác nhận người đại diện')).toBeInTheDocument()
+    const bar = within(panel).getByRole('progressbar', { name: 'Tiến trình yêu cầu' })
+    expect(bar).toHaveAttribute('aria-valuenow', '2')
+    expect(bar).toHaveAttribute('aria-valuemax', '5')
+  })
+
+  it('A_chiTiet_chuaXacNhanNguoiDaiDien_laAlertChuY_khongPhaiChuDo', async () => {
+    renderPage()
+    await openRequest()
+    const panel = screen.getByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    const alert = within(panel).getByRole('alert')
+    expect(alert.className).toMatch(/bg-warning/)
+    expect(within(alert).getByText('Chưa xác nhận với người đại diện')).toBeInTheDocument()
+    expect(panel.innerHTML).not.toMatch(/text-destructive/)
+  })
+
+  it('A_chiTiet_nutChinhDuyNhatOChanKhung', async () => {
+    renderPage()
+    await openRequest()
+    const panel = screen.getByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    const footer = within(panel).getByRole('group', { name: 'Lệnh của yêu cầu' })
+    expect(within(footer).getByRole('button', { name: 'Gửi người đại diện xác nhận' })).toBeInTheDocument()
+    // một nút chính (nền xanh đêm), các nút còn lại là nút phụ
+    expect(footer.querySelectorAll('button.bg-primary')).toHaveLength(1)
+  })
+
+  it('A_ghiXacNhanTrucTiep_oChonTepDungFileInput', async () => {
+    renderPage()
+    await openRequest()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi xác nhận trực tiếp' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByLabelText('Bằng chứng xác nhận')).toHaveAttribute('data-slot', 'file-input')
   })
 })
