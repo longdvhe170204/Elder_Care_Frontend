@@ -9,6 +9,7 @@ import {
   postIncidents,
   postIncidentsByIdAssignHandler,
   postIncidentsByIdChangeLevel,
+  postIncidentsByIdConfirmWishCheck,
   postIncidentsByIdClose,
   postIncidentsByIdJoinHandling,
   postIncidentsByIdMoveToMonitoring,
@@ -79,6 +80,7 @@ const COMMANDS = {
   progressions: postIncidentsByIdProgressions,
   'change-level': postIncidentsByIdChangeLevel,
   'move-to-monitoring': postIncidentsByIdMoveToMonitoring,
+  'confirm-wish-check': postIncidentsByIdConfirmWishCheck,
   reopen: postIncidentsByIdReopen,
   close: postIncidentsByIdClose,
 }
