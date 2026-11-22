@@ -202,24 +202,47 @@ export function PrnPanel({ canRecord, now, onSaved }) {
                   <span className="truncate type-label">{r.name}</span>
                 </div>
               </CardHeader>
-              <CardContent className="flex flex-1 flex-col gap-3 type-body-sm">
+              <CardContent className="flex flex-1 flex-col gap-4 type-body-sm">
                 <AllergyNote allergies={r.allergies} />
-                <div className="flex flex-col gap-1.5">
-                  <span className="type-card-title">
-                    {o.drug}
-                    <span className="block type-body-sm font-normal text-muted-foreground">
-                      {o.dose}, {o.route}; cách ít nhất {o.minHours} giờ, tối đa {o.maxPer24h} lần trong 24 giờ
+
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex min-w-0 flex-col">
+                      <span className="type-card-title">{o.drug}</span>
+                      <span className="text-muted-foreground">
+                        {o.dose}, {o.route}
+                      </span>
+                    </div>
+                    <DoseTags dose={o} />
+                  </div>
+                  {o.indication && (
+                    <span className="rounded-lg bg-muted px-3 py-1.5 text-foreground">
+                      Chỉ định: {o.indication}
                     </span>
-                  </span>
-                  <DoseTags dose={o} />
-                  {o.indication && <span className="type-caption text-muted-foreground">Chỉ định: {o.indication}</span>}
+                  )}
                 </div>
-                <span className="text-muted-foreground tabular-nums">
-                  Lần gần nhất {o.lastUse ?? 'chưa có'}; {o.usesIn24h} lần trong 24 giờ
-                </span>
+
+                <dl className="grid grid-cols-3 gap-2 rounded-xl border bg-muted/40 p-3 text-center">
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="type-caption text-muted-foreground">Cách ít nhất</dt>
+                    <dd className="type-label tabular-nums">{o.minHours} giờ</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="type-caption text-muted-foreground">Tối đa / 24 giờ</dt>
+                    <dd className="type-label tabular-nums">{o.maxPer24h} lần</dd>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <dt className="type-caption text-muted-foreground">Đã dùng / 24 giờ</dt>
+                    <dd className="type-label tabular-nums">{o.usesIn24h} lần</dd>
+                  </div>
+                  <div className="col-span-3 border-t pt-2 text-muted-foreground">
+                    Lần gần nhất: <span className="type-label tabular-nums text-foreground">{o.lastUse ?? 'chưa có'}</span>
+                  </div>
+                </dl>
+
                 {!o.canAdministerNow && (
-                  <p className="rounded-lg bg-warning px-3 py-2 text-warning-foreground">
-                    Chưa được dùng tiếp
+                  <p className="rounded-xl bg-warning px-3 py-2.5 text-warning-foreground">
+                    <strong>Chưa được dùng tiếp</strong>
                     {o.earliest && (
                       <>
                         : sớm nhất được dùng lúc <span className="tabular-nums">{o.earliest}</span>
@@ -228,23 +251,23 @@ export function PrnPanel({ canRecord, now, onSaved }) {
                     . Không có thao tác vượt chặn; cần thì báo bác sĩ.
                   </p>
                 )}
+
                 {canRecord &&
                   o.awaitingEffect.map((use) => (
-                    <div key={use.id} className="flex items-center justify-between gap-2 rounded-lg bg-info px-3 py-2 text-info-foreground">
+                    <div key={use.id} className="flex items-center justify-between gap-3 rounded-xl bg-info px-3 py-2.5 text-info-foreground">
                       <span>
-                        Lần dùng lúc <span className="tabular-nums">{use.time}</span> chưa ghi hiệu quả
+                        Lần dùng lúc <span className="type-label tabular-nums">{use.time}</span> chưa ghi hiệu quả
                       </span>
                       <Button variant="outline" size="sm" onClick={() => setEffecting({ order: o, use })}>
                         Ghi hiệu quả
                       </Button>
                     </div>
                   ))}
+
                 {canRecord && o.canAdministerNow && (
-                  <div className="mt-auto flex justify-end border-t pt-3">
-                    <Button variant="tonal" onClick={() => setRecording(o)}>
-                      Ghi lần dùng
-                    </Button>
-                  </div>
+                  <Button className="mt-auto h-11 w-full" onClick={() => setRecording(o)}>
+                    Ghi lần dùng
+                  </Button>
                 )}
               </CardContent>
             </Card>
