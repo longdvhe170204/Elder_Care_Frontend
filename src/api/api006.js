@@ -30,7 +30,7 @@ export const postResidentsByResidentIdPrescriptionsCheck = (params) => request('
 /** Xem đơn, kèm vấn đề đã xác nhận, căn cứ, lô gắn, allowedCommands[] (FR-004, FR-013, FR-016a) */
 export const getPrescriptionsById = (params) => request('GET', '/prescriptions/{id}', params)
 
-/** Sửa ghi chú hướng dẫn (trường duy nhất sửa được) (FR-014) */
+/** Sửa ghi chú hướng dẫn, mức quan trọng về thời gian, chỉ số cần đo, chỉ định (các trường sửa được) (FR-014) */
 export const patchPrescriptionsByIdInstructionNote = (params) => request('PATCH', '/prescriptions/{id}/instruction-note', params)
 
 /** Tạm dừng đơn (FR-011, FR-013) */
@@ -38,6 +38,9 @@ export const postPrescriptionsByIdSuspend = (params) => request('POST', '/prescr
 
 /** Tiếp tục đơn (FR-011, FR-037) */
 export const postPrescriptionsByIdResume = (params) => request('POST', '/prescriptions/{id}/resume', params)
+
+/** Tiếp tục tạm đơn Quan trọng có trong giấy ra viện, khi đang chờ đối chiếu (FR-011, FR-013, FR-037, BR-M07-28) */
+export const postPrescriptionsByIdResumeTemporarily = (params) => request('POST', '/prescriptions/{id}/resume-temporarily', params)
 
 /** Ngừng đơn (ngay hoặc từ một thời điểm tương lai) (FR-011, FR-015, FR-016, FR-037, BR-M07-07, BR-M07-15) */
 export const postPrescriptionsByIdDiscontinue = (params) => request('POST', '/prescriptions/{id}/discontinue', params)
@@ -66,6 +69,21 @@ export const postMedicationDosesByDoseKeyRefuse = (params) => request('POST', '/
 /** Ghi Không thực hiện (bắt buộc lý do) (FR-021, FR-023, FR-026, FR-027) */
 export const postMedicationDosesByDoseKeySkip = (params) => request('POST', '/medication-doses/{doseKey}/skip', params)
 
+/** Hoãn có chủ đích (bắt buộc lý do) (FR-021, FR-026, BR-M07-26) */
+export const postMedicationDosesByDoseKeyPostpone = (params) => request('POST', '/medication-doses/{doseKey}/postpone', params)
+
+/** Nhận liều trước khi soạn thuốc (FR-026, BR-M07-26) */
+export const postMedicationDosesByDoseKeyClaim = (params) => request('POST', '/medication-doses/{doseKey}/claim', params)
+
+/** Bỏ nhận liều (BR-M07-26) */
+export const postMedicationDosesByDoseKeyRelease = (params) => request('POST', '/medication-doses/{doseKey}/release', params)
+
+/** Điều dưỡng đang được chỉ định phụ trách tạm của tầng (còn hiệu lực) (BR-M07-31) */
+export const getFloorsByFloorAreaIdTemporaryNurses = (params) => request('GET', '/floors/{floorAreaId}/temporary-nurses', params)
+
+/** Quản lý viện chỉ định Điều dưỡng tầng khác phụ trách tạm khi tầng không có Điều dưỡng nào có ca (BR-M07-31) */
+export const postFloorsByFloorAreaIdTemporaryNurses = (params) => request('POST', '/floors/{floorAreaId}/temporary-nurses', params)
+
 /** Bản ghi thuốc kiểm soát đặc biệt "ghi sau mất kết nối" chờ xem lại trong phạm vi (FR-029) */
 export const getDoseReviews = (params) => request('GET', '/dose-reviews', params)
 
@@ -77,6 +95,9 @@ export const getPrescriptionsByIdPrnAdministrations = (params) => request('GET',
 
 /** Ghi một lần dùng PRN (FR-024, FR-025, FR-025a, FR-027, BR-M07-04) */
 export const postPrescriptionsByIdPrnAdministrations = (params) => request('POST', '/prescriptions/{id}/prn-administrations', params)
+
+/** Ghi hiệu quả của một lần dùng PRN (BR-M07-04) */
+export const postPrescriptionsByIdPrnAdministrationsByPrnIdEffectiveness = (params) => request('POST', '/prescriptions/{id}/prn-administrations/{prnId}/effectiveness', params)
 
 /** Các phiếu đối chiếu; kèm hạn đối chiếu hiện hành và dữ liệu nguồn (đơn chờ đối chiếu, thuốc đang dùng khi tiếp nhận) để hiển thị (FR-034, FR-034a, FR-049) */
 export const getResidentsByResidentIdMedicationReconciliations = (params) => request('GET', '/residents/{residentId}/medication-reconciliations', params)
@@ -144,7 +165,7 @@ export const postFamilyMedicationsByIdNotifyRunningLow = (params) => request('PO
 /** Hoàn trả cả lô (từ Chờ đối chiếu, Chỉ giữ hộ; số lượng đếm thực tế) (FR-041, FR-045, BR-M07-19) */
 export const postFamilyMedicationsByIdReturn = (params) => request('POST', '/family-medications/{id}/return', params)
 
-/** Hủy cả lô theo yêu cầu gia đình (người đại diện yêu cầu; có người chứng kiến; quantity đếm thực tế) (FR-041, FR-045, BR-M07-19) */
+/** Hủy cả lô, theo yêu cầu gia đình (mặc định) hoặc do hết hạn dùng; có người chứng kiến; quantity đếm thực tế (FR-041, FR-045, BR-M07-19) */
 export const postFamilyMedicationsByIdDispose = (params) => request('POST', '/family-medications/{id}/dispose', params)
 
 /** Thuốc cần mang cho khoảng vắng hoặc chuyến đi (đơn có liều Mang theo, đơn PRN, lô dùng được) (FR-048a, FR-048b) */

@@ -150,6 +150,12 @@ export const postAssessmentsByIdCorrect = (params) => request('POST', '/assessme
 /** Trạng thái cần / quá hạn đánh giá lại và các căn cứ đã báo (FR-041, FR-042, FR-043, BR-M01-02) */
 export const getResidentsByIdReassessment = (params) => request('GET', '/residents/{id}/reassessment', params)
 
+/** Quyết định khi gia đình không đồng ý đổi mức chăm sóc, mới nhất trước (FR-036b) */
+export const getResidentsByResidentIdCareLevelChangeDecisions = (params) => request('GET', '/residents/{residentId}/care-level-change-decisions', params)
+
+/** Ghi quyết định khi gia đình không đồng ý đổi mức chăm sóc (Hành chính) (FR-036b) */
+export const postResidentsByResidentIdCareLevelChangeDecisions = (params) => request('POST', '/residents/{residentId}/care-level-change-decisions', params)
+
 /** Danh sách người cao tuổi cần đánh giá lại (Bác sĩ), sắp theo hạn (FR-039, FR-041) */
 export const getReassessmentsDue = (params) => request('GET', '/reassessments/due', params)
 

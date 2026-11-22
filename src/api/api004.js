@@ -117,7 +117,7 @@ export const getServicesByIdMismatchedPriceContracts = (params) => request('GET'
 /** Danh sách yêu cầu thay đổi lưu trú (FR-038) */
 export const getResidencyChangeRequests = (params) => request('GET', '/residency-change-requests', params)
 
-/** Lập yêu cầu thay đổi lưu trú ở Nháp (FR-037, FR-038, FR-039, FR-040, FR-043, BR-M01-03, BR-M02-16) */
+/** Lập yêu cầu thay đổi lưu trú ở Nháp (FR-037, FR-038, FR-039, FR-040, FR-043, FR-043k, BR-M01-03, BR-M02-16) */
 export const postResidencyChangeRequests = (params) => request('POST', '/residency-change-requests', params)
 
 /** Xem yêu cầu thay đổi lưu trú (FR-038) */
@@ -125,6 +125,27 @@ export const getResidencyChangeRequestsById = (params) => request('GET', '/resid
 
 /** Sửa yêu cầu ở Nháp (Hành chính hoàn thiện yêu cầu của người đại diện) (FR-038, FR-039) */
 export const putResidencyChangeRequestsById = (params) => request('PUT', '/residency-change-requests/{id}', params)
+
+/** Gửi yêu cầu ở Nháp cho người đại diện xác nhận trên ứng dụng (Hành chính, Quản lý viện) (FR-043a, FR-043c) */
+export const postResidencyChangeRequestsByIdSendForConfirmation = (params) => request('POST', '/residency-change-requests/{id}/send-for-confirmation', params)
+
+/** Ý kiến người cao tuổi về yêu cầu, mới nhất trước (FR-043h) */
+export const getResidencyChangeRequestsByIdResidentOpinions = (params) => request('GET', '/residency-change-requests/{id}/resident-opinions', params)
+
+/** Ghi ý kiến người cao tuổi (Hành chính, Bác sĩ, Điều dưỡng phụ trách) (FR-043h) */
+export const postResidencyChangeRequestsByIdResidentOpinions = (params) => request('POST', '/residency-change-requests/{id}/resident-opinions', params)
+
+/** Ghi nhận phụ lục đã ký (Hành chính, Quản lý viện) (FR-043d) */
+export const postResidencyChangeRequestsByIdAddendumSignature = (params) => request('POST', '/residency-change-requests/{id}/addendum-signature', params)
+
+/** Đề nghị xác nhận thay đổi lưu trú đang chờ người đại diện (cổng người thân) (FR-043c) */
+export const getFamilyPortalResidencyChangeConfirmations = (params) => request('GET', '/family-portal/residency-change-confirmations', params)
+
+/** Người đại diện đồng ý yêu cầu thay đổi lưu trú (FR-043c) */
+export const postFamilyPortalResidencyChangeConfirmationsByIdAccept = (params) => request('POST', '/family-portal/residency-change-confirmations/{id}/accept', params)
+
+/** Người đại diện không đồng ý yêu cầu thay đổi lưu trú, kèm lý do (FR-043c) */
+export const postFamilyPortalResidencyChangeConfirmationsByIdDecline = (params) => request('POST', '/family-portal/residency-change-confirmations/{id}/decline', params)
 
 /** Lượt vắng của một người cao tuổi (FR-048, FR-049) */
 export const getAbsences = (params) => request('GET', '/absences', params)

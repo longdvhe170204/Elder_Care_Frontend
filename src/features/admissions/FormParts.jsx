@@ -41,7 +41,7 @@ export function Info({ label, children }) {
 }
 
 // options: danh sách lựa chọn nhanh (ChoiceTray, một lựa chọn kèm "Khác"); không truyền thì là ô gõ tự do như cũ
-export function ReasonField({ id, value, onChange, error, label = 'Lý do', options }) {
+export function ReasonField({ id, value, onChange, error, label = 'Lý do', showCount = false, options }) {
   if (options)
     return (
       <Field data-invalid={!!error || undefined}>
@@ -54,12 +54,13 @@ export function ReasonField({ id, value, onChange, error, label = 'Lý do', opti
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Textarea
         id={id}
-        rows={2}
+        rows={showCount ? 4 : 2}
         maxLength={2000}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!error || undefined}
       />
+      {showCount && <span className="self-end type-caption tabular-nums text-muted-foreground">{`${value.length} / 2000`}</span>}
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )

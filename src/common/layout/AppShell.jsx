@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ChevronDown, LogOut, Menu, Moon, Sun, UserRound, X } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
+import { getMeNotifications } from '@/api'
 import { applyTheme, readTheme } from '@/common/theme'
 import { cn } from '@/lib/utils'
 import { ACCOUNT_PAGE, ROLES, groupOfPage, navForRole } from './navigation'
@@ -168,9 +169,36 @@ function useOpenGroups(page, role) {
   return [state.ids, setOpen]
 }
 
-function NavItem({ item, page, onSelect }) {
+// Số thông báo chưa xem cạnh mục "Thông báo" (009 FR-033, unreadCount của GET /me/notifications; chủ dự án yêu cầu
+// 2026-11-21: người duyệt, Hành chính biết có yêu cầu mới). Chỉ khi đăng nhập thật; tải lại mỗi phút, khi quay lại cửa
+// sổ và khi đổi màn (vừa xem thông báo xong).
+const UNREAD_REFRESH_MS = 60_000
+
+function useUnreadCount(enabled, page) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!enabled) return undefined
+    let live = true
+    const load = () =>
+      getMeNotifications({ query: { unread: true } })
+        .then(({ data }) => live && setCount(data?.unreadCount ?? 0))
+        .catch(() => {})
+    load()
+    const timer = setInterval(load, UNREAD_REFRESH_MS)
+    window.addEventListener('focus', load)
+    return () => {
+      live = false
+      clearInterval(timer)
+      window.removeEventListener('focus', load)
+    }
+  }, [enabled, page])
+  return enabled ? count : 0
+}
+
+function NavItem({ item, page, onSelect, badges }) {
   const Icon = ICONS[item.icon]
   const active = item.key === page
+  const badge = badges?.[item.key] ?? 0
   return (
     <button
       type="button"
@@ -183,14 +211,25 @@ function NavItem({ item, page, onSelect }) {
       )}
     >
       <Icon className="size-4 shrink-0" aria-hidden="true" />
-      {item.label}
+      <span className="flex-1">{item.label}</span>
+      {badge > 0 && (
+        <>
+          <span
+            aria-hidden="true"
+            className="min-w-6 rounded-full bg-sidebar-primary px-1.5 text-center type-caption tabular-nums text-sidebar-primary-foreground"
+          >
+            {badge > 99 ? '99+' : badge}
+          </span>
+          <span className="sr-only">{`, ${badge} chưa xem`}</span>
+        </>
+      )}
     </button>
   )
 }
 
 // Khối đầu không tên luôn hiện; nhóm nghiệp vụ là Collapsible (Base UI): nút có aria-expanded, aria-controls,
 // Enter/Space bằng bàn phím; cao 44px (DESIGN.md 9.1)
-function NavList({ groups, page, onSelect, openGroups, onGroupOpenChange }) {
+function NavList({ groups, page, onSelect, openGroups, onGroupOpenChange, badges }) {
   return (
     <nav aria-label="Menu chính" className="flex flex-1 flex-col gap-1 overflow-y-auto px-3">
       {groups.map((group) =>
@@ -201,7 +240,7 @@ function NavList({ groups, page, onSelect, openGroups, onGroupOpenChange }) {
               {group.label}
             </h2>
             {group.items.map((item) => (
-              <NavItem key={item.key} item={item} page={page} onSelect={onSelect} />
+              <NavItem key={item.key} item={item} page={page} onSelect={onSelect} badges={badges} />
             ))}
           </section>
         ) : group.label ? (
@@ -220,14 +259,14 @@ function NavList({ groups, page, onSelect, openGroups, onGroupOpenChange }) {
             </CollapsibleTrigger>
             <CollapsibleContent className="flex flex-col gap-1">
               {group.items.map((item) => (
-                <NavItem key={item.key} item={item} page={page} onSelect={onSelect} />
+                <NavItem key={item.key} item={item} page={page} onSelect={onSelect} badges={badges} />
               ))}
             </CollapsibleContent>
           </Collapsible>
         ) : (
           <div key={group.id} className="flex flex-col gap-1">
             {group.items.map((item) => (
-              <NavItem key={item.key} item={item} page={page} onSelect={onSelect} />
+              <NavItem key={item.key} item={item} page={page} onSelect={onSelect} badges={badges} />
             ))}
           </div>
         ),
@@ -242,6 +281,7 @@ export function AppShell({ role, hasFunction, built, onRoleChange, session, onLo
   const groups = navForRole(role, hasFunction, built)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [openGroups, setGroupOpen] = useOpenGroups(page, role)
+  const badges = { notifications: useUnreadCount(!!session, page) }
   const pageLabel =
     page === ACCOUNT_PAGE
       ? 'Tài khoản của tôi'
@@ -314,6 +354,7 @@ export function AppShell({ role, hasFunction, built, onRoleChange, session, onLo
           <NavList
             groups={groups}
             page={page}
+            badges={badges}
             openGroups={openGroups}
             onGroupOpenChange={setGroupOpen}
             onSelect={(key) => {
@@ -336,6 +377,7 @@ export function AppShell({ role, hasFunction, built, onRoleChange, session, onLo
         <NavList
           groups={groups}
           page={page}
+          badges={badges}
           openGroups={openGroups}
           onGroupOpenChange={setGroupOpen}
           onSelect={onPageChange}

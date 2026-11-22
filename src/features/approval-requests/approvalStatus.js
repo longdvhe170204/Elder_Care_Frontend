@@ -13,6 +13,7 @@ export const STATUS_LABELS = {
 // Loại yêu cầu do module sở hữu đăng ký; module sau thêm nhãn ở đây khi có loại mới
 export const TYPE_LABELS = {
   'M15.CORRECTION': 'Đính chính',
+  'M02.RESIDENCY_CHANGE': 'Điều chỉnh hợp đồng',
 }
 
 export const ACTION_LABELS = {
@@ -29,6 +30,8 @@ export const ACTION_LABELS = {
   REQUEST_ESCALATED: 'Báo Quản lý viện',
   REQUEST_EXTENDED_TRANSITION: 'Chuyển trạng thái riêng của loại yêu cầu',
   REQUEST_CLOSED_FOR_FINAL_STATE: 'Đóng vì bản ghi liên quan đã kết thúc',
+  REQUEST_RETURNED_TO_DRAFT: 'Trả về nháp',
+  REQUEST_EFFECTIVE_DATE_POSTPONED: 'Dời ngày hiệu lực',
 }
 
 export function statusLabel(status) {

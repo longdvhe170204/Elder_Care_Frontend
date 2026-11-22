@@ -66,6 +66,11 @@ export function prescriptionView({ prescription: p, medication }) {
     awaitingReconciliation: p.status === 'SUSPENDED' && p.suspensionReason === 'RECONCILIATION_PENDING',
     confirmedIssues: (p.confirmedIssues ?? []).map((i) => ({ issueCode: i.issueCode, text: issueText(i) })),
     allowedCommands: p.allowedCommands ?? [],
+    // BF-07: mức quan trọng, chỉ số cần đo, chỉ định PRN, Tiếp tục tạm theo giấy ra viện
+    critical: p.timeCriticality === 'CRITICAL',
+    measurements: p.requiredMeasurements ?? [],
+    indication: p.indication ?? null,
+    tempResumed: Boolean(p.tempResumedAt),
     raw: p,
   }
 }
@@ -116,6 +121,9 @@ export function newPrescriptionBody(form, now = new Date()) {
       ? { type: 'EXTERNAL', facilityName: form.facilityName.trim(), prescriberName: form.prescriberName.trim(), prescribedAt: form.prescribedAt }
       : { type: 'INTERNAL' },
     ...(form.instructionNote?.trim() && { instructionNote: form.instructionNote.trim() }),
+    ...(form.timeCriticality === 'CRITICAL' && { timeCriticality: 'CRITICAL' }),
+    ...(form.requiredMeasurements?.length > 0 && { requiredMeasurements: form.requiredMeasurements }),
+    ...(!periodic && form.indication?.trim() && { indication: form.indication.trim() }),
     ...(confirmations.length > 0 && { issueConfirmations: confirmations }),
   }
 }
@@ -139,6 +147,9 @@ export function changeDosageBody(prescription, form) {
     ...(prescription.minIntervalMinutes && { minIntervalMinutes: prescription.minIntervalMinutes }),
     ...(prescription.maxDosesPer24h && { maxDosesPer24h: prescription.maxDosesPer24h }),
     startedAt: effectiveFrom,
+    ...(prescription.raw?.timeCriticality === 'CRITICAL' && { timeCriticality: 'CRITICAL' }),
+    ...(prescription.raw?.requiredMeasurements?.length > 0 && { requiredMeasurements: prescription.raw.requiredMeasurements }),
+    ...(prescription.raw?.indication && { indication: prescription.raw.indication }),
     ...(prescription.endedAt && { endedAt: prescription.endedAt }),
     medicationSource: prescription.medicationSource,
     prescriber: prescription.prescriber,

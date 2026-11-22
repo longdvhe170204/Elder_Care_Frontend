@@ -38,7 +38,7 @@ export const RESIDENCE_TYPE_LABELS = {
 
 export const BASIS_TYPE_LABELS = {
   ASSESSMENT: 'theo lần đánh giá',
-  RESIDENCY_CHANGE_REQUEST: 'theo yêu cầu thay đổi lưu trú',
+  RESIDENCY_CHANGE_REQUEST: 'theo yêu cầu điều chỉnh hợp đồng',
 }
 
 // Loại bản ghi của 000 và các ô đính chính được (FR-032). Form đính chính dùng chung gửi mọi ô: nhận xét và mức để

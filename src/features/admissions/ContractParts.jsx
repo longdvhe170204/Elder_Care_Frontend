@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import {
   getContractsById,
   getContractsByIdAddenda,
+  getContractsByIdContent,
   getContractsByIdDeposit,
   getContractsByIdNonStandardTerms,
   getResidentsByResidentIdRelationships,
@@ -28,6 +29,8 @@ import {
   ADDENDUM_STATUS,
   BILLING_PERIODS,
   CARE_LEVELS,
+  CHANGE_TYPES,
+  changeValueText,
   CONTRACT_STATUS,
   RESIDENCE_TYPES,
   SELECT,
@@ -42,6 +45,9 @@ import { CONTRACT_REASONS } from '@/common/quickChoices'
 const FIXED_SERVICE_TYPES = ['CARE', 'RESIDENCY_FEE']
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 import { FileInput } from '@/common/FileInput'
+
+// Hôm nay ở Việt Nam, dạng yyyy-MM-dd (en-CA định dạng đúng kiểu này)
+const vietnamToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
 
 // Khung chi tiết và form của hợp đồng (004 T038; US3, US4, FR-019 → FR-025a, FR-028 → FR-031). Nút lệnh theo
 // allowedCommands của hợp đồng; trường tài chính ẩn theo quyền (hiddenFields); đặt cọc chỉ đọc vì 017 tính (FR-030).
@@ -163,6 +169,7 @@ function RecordSignedForm({ contract, onDone, onCancel }) {
 export function ContractDetail({ contract, residentName, canUpdate, onChanged, onEdit, Title, Description }) {
   const [deposit, setDeposit] = useState(null)
   const [addenda, setAddenda] = useState([])
+  const [current, setCurrent] = useState(null)
   const [terms, setTerms] = useState([])
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
@@ -174,6 +181,9 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
   const allowed = contract.allowedCommands ?? []
   const hidden = contract.hiddenFields ?? []
   const draft = contract.status === 'DRAFT'
+  const active = contract.status === 'ACTIVE'
+  // BR-M02-09: hợp đồng hiệu lực tại một ngày = bản gốc + phụ lục đã áp dụng tới ngày đó
+  const shown = { ...contract, ...(current?.content ?? {}) }
 
   // Loại phòng, dịch vụ đăng ký ghi bằng tên (4b, chủ dự án duyệt 2026-11-21); không đọc được danh mục thì ghi "mã …"
   useEffect(() => {
@@ -193,6 +203,10 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
 
   useEffect(() => {
     let cancelled = false
+    if (active)
+      getContractsByIdContent({ path: { id: contract.id }, query: { date: vietnamToday() } })
+        .then(({ data }) => !cancelled && setCurrent(data))
+        .catch(() => {})
     getContractsByIdDeposit({ path: { id: contract.id } })
       .then(({ data }) => !cancelled && setDeposit(data))
       .catch(() => {})
@@ -206,7 +220,7 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
     return () => {
       cancelled = true
     }
-  }, [contract.id, draft])
+  }, [contract.id, draft, active])
 
   function open(next) {
     setMode(next)
@@ -247,18 +261,23 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
         <p className="type-body-sm text-destructive">{`Quá hạn từ ${formatDate(contract.overdueSince)}`}</p>
       )}
       <div className="grid gap-3">
-        <Info label="Loại lưu trú">{labelOf(RESIDENCE_TYPES, contract.residenceType)}</Info>
+        <Info label="Loại lưu trú">{labelOf(RESIDENCE_TYPES, shown.residenceType)}</Info>
         <Info label="Thời gian">
-          {`Từ ${formatDate(contract.startDate)}${contract.endDate ? ` đến ${formatDate(contract.endDate)}` : ''}`}
+          {`Từ ${formatDate(shown.startDate)}${shown.endDate ? ` đến ${formatDate(shown.endDate)}` : ''}`}
         </Info>
         {contract.roomTypeId && (
           <Info label="Loại phòng">{roomTypeName ?? `Loại phòng mã ${contract.roomTypeId}`}</Info>
         )}
-        <Info label="Mức chăm sóc">{labelOf(CARE_LEVELS, contract.careLevel)}</Info>
-        <Info label="Kỳ tính phí lưu trú">{labelOf(BILLING_PERIODS, contract.residencyFeeBillingPeriod)}</Info>
+        <Info label="Mức chăm sóc">{labelOf(CARE_LEVELS, shown.careLevel)}</Info>
+        <Info label="Kỳ tính phí lưu trú">{labelOf(BILLING_PERIODS, shown.residencyFeeBillingPeriod)}</Info>
         {contract.signedDate && <Info label="Ngày ký">{formatDate(contract.signedDate)}</Info>}
         {contract.terminationReason && <Info label="Lý do chấm dứt">{contract.terminationReason}</Info>}
       </div>
+      {current?.addendumId && (
+        <p className="type-caption text-muted-foreground">
+          {`Theo phụ lục hiệu lực từ ${formatDate(current.effectiveFrom)}; bản gốc giữ nguyên.`}
+        </p>
+      )}
       {contract.services?.length > 0 && (
         <section className="flex flex-col gap-1">
           <h3 id="contract-services" className="type-card-title">
@@ -310,6 +329,11 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
             {addenda.map((a) => (
               <li key={a.id} className="type-body-sm">
                 {`Hiệu lực ${formatDate(a.effectiveDate)}`}
+                {(a.changeTypes ?? []).map((type) => (
+                  <span key={type} className="block">
+                    {`${labelOf(CHANGE_TYPES, type)}: ${changeValueText(type, a.contentBefore)} → ${changeValueText(type, a.contentAfter)}`}
+                  </span>
+                ))}
                 <span className="block type-caption text-muted-foreground">
                   {ADDENDUM_STATUS[a.status] ?? a.status}
                 </span>

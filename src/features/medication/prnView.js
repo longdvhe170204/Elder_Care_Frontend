@@ -28,5 +28,10 @@ export function prnOrderView({ prescription, history, medication, profile, now =
     usesIn24h: uses.filter((at) => now - new Date(at) < DAY_MS && new Date(at) <= now).length,
     canAdministerNow: history?.canAdministerNow !== false,
     earliest: history?.earliestNextAllowedTime ? hhmm(history.earliestNextAllowedTime) : null,
+    // BF-07 (BR-M07-04): chỉ định dùng; các lần dùng trong 24 giờ chưa ghi hiệu quả
+    indication: history?.indication ?? prescription.indication ?? null,
+    awaitingEffect: (history?.administrations ?? [])
+      .filter((a) => !a.effectiveness && now - new Date(a.administeredAt) < DAY_MS && new Date(a.administeredAt) <= now)
+      .map((a) => ({ id: a.id, time: hhmm(a.administeredAt) })),
   }
 }

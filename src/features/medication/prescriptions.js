@@ -6,6 +6,7 @@ import {
   postPrescriptionsByIdDiscontinue,
   postPrescriptionsByIdExtend,
   postPrescriptionsByIdResume,
+  postPrescriptionsByIdResumeTemporarily,
   postPrescriptionsByIdSuspend,
   postResidentsByResidentIdPrescriptions,
   postResidentsByResidentIdPrescriptionsCheck,
@@ -47,11 +48,12 @@ export const changeDosage = (id, body, key) =>
 const COMMANDS = {
   SUSPEND: postPrescriptionsByIdSuspend,
   RESUME: postPrescriptionsByIdResume,
+  RESUME_TEMPORARILY: postPrescriptionsByIdResumeTemporarily,
   DISCONTINUE: postPrescriptionsByIdDiscontinue,
   EXTEND: postPrescriptionsByIdExtend,
 }
 
-// command: SUSPEND | RESUME | DISCONTINUE | EXTEND; thân có lý do (Bác sĩ không cần căn cứ bên ngoài); extra: thân thêm,
+// command: SUSPEND | RESUME | RESUME_TEMPORARILY | DISCONTINUE | EXTEND; thân có lý do (Bác sĩ không cần căn cứ bên ngoài); extra: thân thêm,
 // ví dụ { newEndedAt } của EXTEND
 export const runPrescriptionCommand = (command, id, reason, key, extra = {}) =>
   COMMANDS[command]({ path: { id }, headers: { 'Idempotency-Key': key }, body: { reason: reason.trim(), ...extra } })
