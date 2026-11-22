@@ -5,8 +5,9 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
+import { formatDateTime } from '@/common/dateTime'
 import { SelectField, TextField } from './BalanceFields'
-import { LEDGER_LABELS } from './balanceLabels'
+import { LEDGER_LABELS, TYPE_LABELS, formatMoney, labelOf } from './balanceLabels'
 
 // Lập hoàn tiền, hoàn cọc hoặc điều chỉnh (017 T027; FR-010, FR-011, FR-013, FR-014, BR-M11-10, BR-M11-14). Giao dịch
 // vào trạng thái Chờ duyệt, Quản lý viện duyệt ở màn Yêu cầu phê duyệt của 000; giới hạn số tiền và người nhận do máy chủ
@@ -26,7 +27,16 @@ const METHOD_OPTIONS = [
 ]
 const isRefund = (type) => type === 'REFUND' || type === 'DEPOSIT_REFUND'
 
-export function TransactionForm({ residentId, onDone }) {
+// Giao dịch gốc của điều chỉnh: giao dịch Đã xác nhận cùng sổ, trừ thanh toán bảng chi phí (FR-011; máy chủ vẫn kiểm)
+const originalOptions = (transactions, ledger) =>
+  transactions
+    .filter((t) => t.ledger === ledger && t.status === 'CONFIRMED' && t.type !== 'STATEMENT_PAYMENT')
+    .map((t) => ({
+      value: String(t.id),
+      label: `${formatDateTime(t.at)} · ${labelOf(TYPE_LABELS, t.type)} · ${formatMoney(t.amount)}`,
+    }))
+
+export function TransactionForm({ residentId, transactions = [], onDone }) {
   const [v, setV] = useState({
     type: 'REFUND',
     ledger: 'BALANCE',
@@ -53,7 +63,7 @@ export function TransactionForm({ residentId, onDone }) {
     if (isRefund(v.type) && !v.familyMemberId.trim() && !(v.otherName.trim() && v.otherDocument.trim()))
       found.recipient = 'Nhập mã người thân, hoặc họ tên và giấy tờ của người nhận khác.'
     if (v.familyMemberId.trim() && !/^[1-9]\d*$/.test(v.familyMemberId.trim())) found.recipient = 'Mã người thân là số.'
-    if (v.originalId.trim() && !/^[1-9]\d*$/.test(v.originalId.trim())) found.originalId = 'Mã giao dịch gốc là số.'
+    if (isRefund(v.type) && !v.method) found.method = 'Chọn phương thức hoàn.'
     if (!v.reason.trim()) found.reason = 'Nhập lý do.'
     return found
   }
@@ -70,8 +80,8 @@ export function TransactionForm({ residentId, onDone }) {
       body.recipient = v.familyMemberId.trim()
         ? { familyMemberId: Number(v.familyMemberId) }
         : { fullName: v.otherName.trim(), identityDocument: v.otherDocument.trim() }
-      if (v.method) body.method = v.method
-    } else if (v.originalId.trim()) body.originalTransactionId = Number(v.originalId)
+      body.method = v.method
+    } else if (v.originalId) body.originalTransactionId = Number(v.originalId)
     if (v.note.trim()) body.note = v.note.trim()
     setBusy(true)
     try {
@@ -89,7 +99,13 @@ export function TransactionForm({ residentId, onDone }) {
       <FieldGroup>
         <SelectField id="tx-type" label="Loại giao dịch" value={v.type} onChange={set('type')} options={TYPE_OPTIONS} />
         {v.type === 'ADJUSTMENT' && (
-          <SelectField id="tx-ledger" label="Sổ" value={v.ledger} onChange={set('ledger')} options={LEDGER_OPTIONS} />
+          <SelectField
+            id="tx-ledger"
+            label="Sổ"
+            value={v.ledger}
+            onChange={(ledger) => setV((s) => ({ ...s, ledger, originalId: '' }))}
+            options={LEDGER_OPTIONS}
+          />
         )}
         <TextField
           id="tx-amount"
@@ -131,19 +147,20 @@ export function TransactionForm({ residentId, onDone }) {
               value={v.method}
               onChange={set('method')}
               options={METHOD_OPTIONS}
-              placeholder="Không ghi"
+              placeholder="Chọn phương thức"
+              error={errors.method}
             />
           </>
         )}
         {v.type === 'ADJUSTMENT' && (
-          <TextField
+          <SelectField
             id="tx-original"
-            label="Mã giao dịch gốc"
-            inputMode="numeric"
+            label="Giao dịch gốc"
             value={v.originalId}
             onChange={set('originalId')}
-            error={errors.originalId}
-            hint="Để trống nếu không sửa một giao dịch cụ thể. Không điều chỉnh giao dịch thanh toán bảng chi phí."
+            options={originalOptions(transactions, v.ledger)}
+            placeholder="Không trỏ giao dịch nào"
+            hint="Chọn khi sửa sai một giao dịch đã xác nhận của sổ này. Không điều chỉnh thanh toán bảng chi phí."
           />
         )}
         <Field data-invalid={!!errors.reason || undefined}>

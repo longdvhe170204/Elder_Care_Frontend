@@ -104,7 +104,7 @@ export function PaymentRecording({ residentId: presetResidentId = null } = {}) {
         const { data } = await getResidentsByResidentIdBalance({ path: { residentId: presetResidentId } })
         let fullName = null
         try {
-          fullName = (await getResidentsById({ path: { id: presetResidentId } })).data?.fullName ?? null
+          fullName = (await getResidentsById({ path: { id: presetResidentId } })).data?.personalInfo?.fullName ?? null
         } catch {
           // Không đọc được hồ sơ thì chỉ hiện mã hồ sơ
         }
@@ -134,7 +134,7 @@ export function PaymentRecording({ residentId: presetResidentId = null } = {}) {
       const { data } = await getBalancesByPaymentCode({ query: { code: code.trim() } })
       let fullName = null
       try {
-        fullName = (await getResidentsById({ path: { id: data.residentId } })).data?.fullName ?? null
+        fullName = (await getResidentsById({ path: { id: data.residentId } })).data?.personalInfo?.fullName ?? null
       } catch {
         // Không đọc được hồ sơ thì chỉ hiện mã hồ sơ
       }
