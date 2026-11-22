@@ -5,7 +5,7 @@ import { PermissionsProvider } from '@/common/permissions/permissions'
 import { ChangeRequestsPage } from './ChangeRequestsPage'
 import { withCompanions } from './changeRequestRules'
 
-// BF-08 sửa đổi (004 FR-043d → FR-043j; Q-414 → Q-423; plan-bf08 W1 → W13): phụ lục Chờ ký và ghi nhận đã ký, bộ lọc
+// BF-08 sửa đổi (004 FR-043d → FR-043j; Q-415 → Q-424; plan-bf08 W1 → W13): phụ lục Chờ ký và ghi nhận đã ký, bộ lọc
 // Chờ ký, trả về nháp, hủy, ý kiến người cao tuổi và cảnh báo khi gửi duyệt, nhãn thuộc gói theo hợp đồng, loại kèm tự chọn.
 
 let api

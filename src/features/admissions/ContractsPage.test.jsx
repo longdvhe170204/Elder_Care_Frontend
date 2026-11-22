@@ -70,7 +70,13 @@ beforeEach(() => {
     'GET',
     '/residents/6/relationships',
     json(200, [
-      { id: 1, status: 'ACTIVE', relationship: 'CHILD', representative: true, familyMember: { id: 41, fullName: 'Trần Văn Minh' } },
+      {
+        id: 1,
+        status: 'ACTIVE',
+        relationship: 'CHILD',
+        representative: true,
+        familyMember: { id: 41, fullName: 'Trần Văn Minh' },
+      },
     ]),
   )
   api.on(
@@ -206,7 +212,7 @@ describe('ContractsPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hợp đồng' }))
     const dialog = screen.getByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tiếp' }))
     expect(await within(dialog).findByText('Chọn người cao tuổi')).toBeInTheDocument()
     expect(within(dialog).getByText('Chọn loại lưu trú')).toBeInTheDocument()
     expect(api.calls('POST', '/contracts')).toHaveLength(0)

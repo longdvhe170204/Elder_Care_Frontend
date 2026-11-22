@@ -28,6 +28,17 @@ function fill(username, password) {
 }
 
 describe('LoginPage', () => {
+  it('dangNhapXong_veManDichTheoHash', async () => {
+    window.history.replaceState(null, '', '/login#residents')
+    api.on('POST', '/auth/login', json(200, { mustChangePassword: false, user: user() }))
+    const navigate = vi.fn()
+    render(<LoginPage onNavigate={navigate} />)
+
+    fill('nv-a', 'dung12345')
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/#residents'))
+    window.history.replaceState(null, '', '/')
+  })
+
   it('FR_014_sai_thongBaoChung_khongLoTaiKhoan', async () => {
     api.on('POST', '/auth/login', problem(401, 'LOGIN_FAILED', { detail: 'Tên đăng nhập hoặc mật khẩu không đúng' }))
     render(<LoginPage onNavigate={vi.fn()} />)

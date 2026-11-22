@@ -1,10 +1,28 @@
+import { FieldError } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 
-// Label bao điều khiển để tên truy cập được giữ cả khi form có nhiều mục lặp lại.
-export function CareField({ label, value, onChange, type = 'text', options, required, maxLength, min, disabled }) {
-  const props = { value: value ?? '', onChange: (e) => onChange(e.target.value), required, disabled }
-  return (
+// Label bao điều khiển để tên truy cập được giữ cả khi form có nhiều mục lặp lại. error: lời báo tại ô (DESIGN.md 7.4)
+export function CareField({
+  label,
+  value,
+  onChange,
+  type = 'text',
+  options,
+  required,
+  maxLength,
+  min,
+  disabled,
+  error,
+}) {
+  const props = {
+    value: value ?? '',
+    onChange: (e) => onChange(e.target.value),
+    required,
+    disabled,
+    'aria-invalid': error ? true : undefined,
+  }
+  const field = (
     <label className="flex min-w-0 flex-col gap-2">
       <span className="type-label">{label}</span>
       {options ? (
@@ -25,6 +43,14 @@ export function CareField({ label, value, onChange, type = 'text', options, requ
         <Input {...props} className="h-11" type={type} maxLength={maxLength} min={min} />
       )}
     </label>
+  )
+  // Lời báo đặt ngoài nhãn để không nối vào tên ô
+  if (!error) return field
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      {field}
+      <FieldError>{error}</FieldError>
+    </div>
   )
 }
 

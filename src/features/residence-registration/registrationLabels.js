@@ -63,11 +63,10 @@ export const CHANNEL_LABELS = { PUBLIC_SERVICE_PORTAL: 'Cổng dịch vụ công
 export const RESULT_LABELS = { PENDING: 'Chờ kết quả', ACCEPTED: 'Được chấp nhận', REJECTED: 'Bị từ chối' }
 export const RESULT_TONES = { PENDING: 'neutral', ACCEPTED: 'settled', REJECTED: 'attention' }
 
+// Ghi đã nộp, Ghi bị từ chối bỏ theo Q-414; CHANNEL_LABELS, RESULT_LABELS còn cho lịch sử lần nộp cũ
 export const COMMANDS = {
   CONFIRM_LOCAL: 'confirm-local-permanent-resident',
-  SUBMITTED: 'record-submitted',
   ACCEPTED: 'record-accepted',
-  REJECTED: 'record-rejected',
   DEREGISTERED: 'record-deregistered',
 }
 

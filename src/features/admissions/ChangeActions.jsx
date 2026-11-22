@@ -30,7 +30,7 @@ import {
 } from './changeRequestRules'
 import { Choices, ReasonField } from './FormParts'
 
-// Lệnh trên yêu cầu thay đổi lưu trú theo BF-08 sửa đổi (004 FR-043d → FR-043h; Q-416 → Q-420): ghi nhận phụ lục đã
+// Lệnh trên yêu cầu thay đổi lưu trú theo BF-08 sửa đổi (004 FR-043d → FR-043h; Q-417 → Q-421): ghi nhận phụ lục đã
 // ký, ý kiến người cao tuổi, trả về nháp, hủy, gửi duyệt kèm cảnh báo và lý do. Kiểm thật ở backend; lỗi 409 hiện mô tả
 // của backend (ProblemAlert).
 

@@ -34,7 +34,7 @@ export async function loadPrnOrders(residentId, now = new Date()) {
   )
 }
 
-// Hiệu quả sau khi dùng (BR-M07-04, Q-431): mỗi lần dùng một lần ghi; sau 60 phút chưa ghi thì hệ thống nhắc
+// Hiệu quả sau khi dùng (BR-M07-04, Q-432): mỗi lần dùng một lần ghi; sau 60 phút chưa ghi thì hệ thống nhắc
 export const recordEffectiveness = (order, prnId, text, key) =>
   postPrescriptionsByIdPrnAdministrationsByPrnIdEffectiveness({
     path: { id: order.id, prnId },

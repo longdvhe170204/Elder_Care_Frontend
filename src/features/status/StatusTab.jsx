@@ -19,6 +19,8 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { ChoiceTray } from '@/common/ChoiceTray'
+import { STATUS_COMMAND_REASONS } from '@/common/quickChoices'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
@@ -237,14 +239,27 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
       )}
 
       <Field data-invalid={!!errors.reason || undefined}>
-        <FieldLabel htmlFor={`status-reason-${command}`}>Lý do của lệnh (bắt buộc)</FieldLabel>
-        <Textarea
-          id={`status-reason-${command}`}
-          rows={3}
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          aria-invalid={!!errors.reason || undefined}
-        />
+        {STATUS_COMMAND_REASONS[command] ? (
+          <ChoiceTray
+            id={`status-reason-${command}`}
+            label="Lý do của lệnh (bắt buộc)"
+            options={STATUS_COMMAND_REASONS[command]}
+            value={reason}
+            onChange={setReason}
+            invalid={!!errors.reason}
+          />
+        ) : (
+          <>
+            <FieldLabel htmlFor={`status-reason-${command}`}>Lý do của lệnh (bắt buộc)</FieldLabel>
+            <Textarea
+              id={`status-reason-${command}`}
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              aria-invalid={!!errors.reason || undefined}
+            />
+          </>
+        )}
         {errors.reason && <FieldError>{errors.reason}</FieldError>}
       </Field>
 

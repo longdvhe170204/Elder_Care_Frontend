@@ -16,7 +16,7 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { CARE_LEVEL_LABELS } from '../assessments/assessmentLabels'
 
-// Quyết định khi gia đình không đồng ý đổi mức chăm sóc theo lần đánh giá lại (001 FR-036b, Q-423; W7, W14): giữ mức cũ
+// Quyết định khi gia đình không đồng ý đổi mức chăm sóc theo lần đánh giá lại (001 FR-036b, Q-424; W7, W14): giữ mức cũ
 // kèm thỏa thuận lựa chọn có rủi ro đang hiệu lực (từ kế hoạch chăm sóc Hiệu lực của 005) và ngày xem lại, hoặc rời
 // viện. Chỉ hiện khi lần đánh giá gần nhất đã xác nhận ra mức khác mức hiện hành và chưa có quyết định cho lần đó.
 

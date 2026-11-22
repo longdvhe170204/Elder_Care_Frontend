@@ -7,6 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/common/PageHeader'
+import { usePermissions } from '@/common/permissions/permissions'
 import { BreakdownChart } from '@/common/charts/BreakdownChart'
 import { chartKind } from '@/common/charts/chartRules'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -224,7 +225,8 @@ export function DashboardPage({ role, onNavigate }) {
   const [openGroups, setOpenGroups] = useState(readOpenGroups)
   const [catalogFailed, setCatalogFailed] = useState(false)
   const etag = useRef(null)
-  const catalogs = useRef({ metrics: false, floors: false })
+  const catalogs = useRef({ metrics: false })
+  const canViewFloors = usePermissions().can('ROOM_BED_CONFIGURATION', 'VIEW')
 
   // Danh mục tên chỉ tiêu: tải tới khi được; lỗi (phiên hết hạn, backend khởi động lại, trình duyệt chặn request) thì
   // báo rõ kèm nút Thử lại và thử lại ở lần làm mới sau, không lặng lẽ hiện mã chỉ tiêu.
@@ -240,16 +242,7 @@ export function DashboardPage({ role, onNavigate }) {
 
   const load = useCallback(
     async (background = false) => {
-      // Không xem được danh mục tầng thì giữ "Tầng/khu <mã>".
       if (!catalogs.current.metrics) loadMetricCatalog()
-      if (!catalogs.current.floors) {
-        getFloors()
-          .then(({ data }) => {
-            catalogs.current.floors = true
-            setFloors(data)
-          })
-          .catch(() => {})
-      }
       // 007 FR-034: cảnh báo đã leo thang tối đa chưa tiếp nhận; vai trò không xem được cảnh báo thì không có dòng này
       getAlerts({
         query: { maxEscalationReached: true, status: ['NEW', 'ESCALATED'] },
@@ -274,6 +267,18 @@ export function DashboardPage({ role, onNavigate }) {
     },
     [loadMetricCatalog],
   )
+
+  // Tên tầng cần ROOM_BED_CONFIGURATION:VIEW (003); không có quyền thì không gọi /floors và giữ "Tầng/khu <mã>"
+  useEffect(() => {
+    if (!canViewFloors) return
+    let active = true
+    getFloors()
+      .then(({ data }) => active && setFloors(data))
+      .catch(() => {})
+    return () => {
+      active = false
+    }
+  }, [canViewFloors])
 
   useEffect(() => {
     // tải khi mở màn

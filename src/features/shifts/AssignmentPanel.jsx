@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   deleteAssignmentsById,
+  getResidents,
+  getRooms,
   getShiftsByIdAssignments,
+  getTaskTypes,
   postAssignmentsByIdCancel,
   postAssignmentsByIdEnd,
   postShiftsByIdAssignments,
@@ -30,12 +33,23 @@ const ROLES = {
 }
 const STATES = { DRAFT: 'Nháp', SCHEDULED: 'Tương lai', ACTIVE: 'Hiệu lực', ENDED: 'Đã kết thúc', CANCELLED: 'Đã hủy' }
 
-export function AssignmentPanel({ shift, staff = [] }) {
+const listOf = (result) =>
+  result.status === 'fulfilled'
+    ? Array.isArray(result.value.data)
+      ? result.value.data
+      : (result.value.data?.items ?? [])
+    : []
+
+// D13 (DESIGN.md mục 8): chọn đối tượng, loại công việc, ca nguồn theo tên thay cho gõ mã. scope: phạm vi của lịch
+// ({ scopeType, scopeId }); places: tên tầng, khu ({ FLOOR: { id: tên }, AREA: {...} }); shifts: các ca cùng lịch.
+export function AssignmentPanel({ shift, staff = [], scope, places = {}, shifts = [] }) {
   const commands = shift.allowedCommands ?? []
   const canCreate = commands.includes('createAssignment')
   const [rows, setRows] = useState([])
   const [revision, setRevision] = useState(0)
   const [failure, setFailure] = useState(null)
+  // Lỗi của Kiểm tra, Lưu phân công hiện ngay trong form Lập phân công (DESIGN.md 7.4: Alert trong khung đang thao tác)
+  const [formFailure, setFormFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
@@ -53,9 +67,12 @@ export function AssignmentPanel({ shift, staff = [] }) {
   const [preview, setPreview] = useState(null)
   const [confirmed, setConfirmed] = useState(false)
   const [action, setAction] = useState(null)
+  const nameOf = (id) => staff.find((s) => s.id === id)?.fullName ?? `Nhân viên #${id}`
   const [reason, setReason] = useState('')
   const [source, setSource] = useState('')
   const [copyResult, setCopyResult] = useState(null)
+  const [targets, setTargets] = useState({ RESIDENT: {}, ROOM: {} })
+  const [taskTypes, setTaskTypes] = useState({})
   const keys = useRef(new Map())
   const keyFor = (body) => {
     const text = JSON.stringify(body)
@@ -78,6 +95,35 @@ export function AssignmentPanel({ shift, staff = [] }) {
       active = false
     }
   }, [shift.id, revision])
+  useEffect(() => {
+    let active = true
+    Promise.allSettled([
+      getResidents(),
+      getRooms(scope?.scopeType === 'FLOOR' ? { query: { floorId: scope.scopeId } } : {}),
+      getTaskTypes(),
+    ]).then(([residents, rooms, types]) => {
+      if (!active) return
+      setTargets({
+        RESIDENT: Object.fromEntries(
+          listOf(residents).map((p) => [p.id, p.personalInfo?.fullName ?? `Người cao tuổi mã ${p.id}`]),
+        ),
+        ROOM: Object.fromEntries(listOf(rooms).map((r) => [r.id, r.name || r.code])),
+      })
+      setTaskTypes(
+        Object.fromEntries(
+          listOf(types)
+            .filter((t) => t.status !== 'INACTIVE')
+            .map((t) => [t.id, t.name]),
+        ),
+      )
+    })
+    return () => {
+      active = false
+    }
+  }, [scope?.scopeType, scope?.scopeId])
+  const targetOptions = { FLOOR: places.FLOOR ?? {}, AREA: places.AREA ?? {}, ...targets }
+  const targetName = (type, id) => targetOptions[type]?.[id] ?? `mã ${id}`
+  const sourceShifts = shifts.filter((s) => s.id !== shift.id)
   function change(name, value) {
     setInput((current) => ({ ...current, [name]: value }))
     setPreview(null)
@@ -101,12 +147,13 @@ export function AssignmentPanel({ shift, staff = [] }) {
     e.preventDefault()
     setBusy(true)
     setFailure(null)
+    setFormFailure(null)
     try {
       const { data } = await postShiftsByIdAssignmentsPreview({ path: { id: shift.id }, body: body() })
       setPreview(data)
       setConfirmed(false)
     } catch (error) {
-      setFailure(problemOf(error))
+      setFormFailure(problemOf(error))
       setPreview(null)
     } finally {
       setBusy(false)
@@ -115,6 +162,7 @@ export function AssignmentPanel({ shift, staff = [] }) {
   async function save() {
     setBusy(true)
     setFailure(null)
+    setFormFailure(null)
     try {
       const value = body()
       await postShiftsByIdAssignments({
@@ -127,7 +175,7 @@ export function AssignmentPanel({ shift, staff = [] }) {
       setNotice('Đã lưu phân công.')
       setRevision((n) => n + 1)
     } catch (error) {
-      setFailure(problemOf(error))
+      setFormFailure(problemOf(error))
       setPreview(null)
     } finally {
       setBusy(false)
@@ -200,12 +248,10 @@ export function AssignmentPanel({ shift, staff = [] }) {
             {rows.map((row) => (
               <TableRow key={row.id}>
                 <TableCell>
-                  <p className="font-medium">
-                    {staff.find((s) => s.id === row.staffId)?.fullName ?? `Nhân viên #${row.staffId}`}
-                  </p>
+                  <p className="font-medium">{nameOf(row.staffId)}</p>
                   <p>
-                    {TARGETS[row.targetType]} #{row.targetId}
-                    {row.taskTypeId ? ` · Công việc #${row.taskTypeId}` : ''}
+                    {TARGETS[row.targetType]} {targetName(row.targetType, row.targetId)}
+                    {row.taskTypeId ? `, công việc ${taskTypes[row.taskTypeId] ?? `mã ${row.taskTypeId}`}` : ''}
                   </p>
                   {row.startsAt && (
                     <p className="text-muted-foreground">
@@ -215,11 +261,11 @@ export function AssignmentPanel({ shift, staff = [] }) {
                 </TableCell>
                 <TableCell>
                   <p>
-                    {ROLES[row.role]} · {row.assignmentKind === 'PRIMARY' ? 'Chính' : 'Hỗ trợ'}
+                    {ROLES[row.role]}, {row.assignmentKind === 'PRIMARY' ? 'chính' : 'hỗ trợ'}
                   </p>
                   <p>
                     {STATES[row.status]}
-                    {row.assignedNurse ? ' · Điều dưỡng phụ trách' : ''}
+                    {row.assignedNurse ? ', Điều dưỡng phụ trách' : ''}
                   </p>
                 </TableCell>
                 <TableCell>
@@ -237,12 +283,13 @@ export function AssignmentPanel({ shift, staff = [] }) {
                             size="sm"
                             variant="outline"
                             disabled={busy}
+                            aria-label={`${label} phân công của ${nameOf(row.staffId)}`}
                             onClick={() => {
                               setAction({ row, kind })
                               setReason('')
                             }}
                           >
-                            {label} #{row.id}
+                            {label}
                           </Button>
                         ),
                     )}
@@ -261,7 +308,7 @@ export function AssignmentPanel({ shift, staff = [] }) {
               : action.kind === 'end'
                 ? 'Kết thúc phân công'
                 : 'Hủy phân công'}{' '}
-            #{action.row.id}
+            của {nameOf(action.row.staffId)}
           </h3>
           {action.kind !== 'delete' && (
             <Field>
@@ -309,7 +356,10 @@ export function AssignmentPanel({ shift, staff = [] }) {
               id="assignment-target"
               label="Đối tượng phân công"
               value={input.targetType}
-              onChange={(e) => change('targetType', e.target.value)}
+              onChange={(e) => {
+                change('targetType', e.target.value)
+                change('targetId', '')
+              }}
             >
               {Object.entries(TARGETS).map(([value, label]) => (
                 <option key={value} value={value}>
@@ -317,27 +367,33 @@ export function AssignmentPanel({ shift, staff = [] }) {
                 </option>
               ))}
             </Choice>
-            <Field>
-              <FieldLabel htmlFor="assignment-target-id">Mã đối tượng</FieldLabel>
-              <Input
-                id="assignment-target-id"
-                type="number"
-                min="1"
-                required
-                value={input.targetId}
-                onChange={(e) => change('targetId', e.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="assignment-task">Mã loại công việc (tùy chọn)</FieldLabel>
-              <Input
-                id="assignment-task"
-                type="number"
-                min="1"
-                value={input.taskTypeId}
-                onChange={(e) => change('taskTypeId', e.target.value)}
-              />
-            </Field>
+            <Choice
+              id="assignment-target-id"
+              label="Đối tượng cụ thể"
+              value={input.targetId}
+              onChange={(e) => change('targetId', e.target.value)}
+              required
+            >
+              <option value="">Chọn…</option>
+              {Object.entries(targetOptions[input.targetType] ?? {}).map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </Choice>
+            <Choice
+              id="assignment-task"
+              label="Loại công việc (tùy chọn)"
+              value={input.taskTypeId}
+              onChange={(e) => change('taskTypeId', e.target.value)}
+            >
+              <option value="">Mọi công việc</option>
+              {Object.entries(taskTypes).map(([id, name]) => (
+                <option key={id} value={id}>
+                  {name}
+                </option>
+              ))}
+            </Choice>
             <Choice
               id="assignment-role"
               label="Vai trò thực hiện"
@@ -406,6 +462,7 @@ export function AssignmentPanel({ shift, staff = [] }) {
               )}
             </div>
           )}
+          <ProblemAlert problem={formFailure} />
           <div className="flex flex-wrap gap-2">
             <Button type="submit" variant="outline" disabled={busy}>
               Kiểm tra phân công
@@ -423,17 +480,20 @@ export function AssignmentPanel({ shift, staff = [] }) {
       {commands.includes('copyAssignments') && (
         <form className="flex flex-col gap-3 rounded-xl border p-4" onSubmit={copy}>
           <h3 className="type-title">Sao chép từ ca cùng phạm vi</h3>
-          <Field>
-            <FieldLabel htmlFor="source-shift">Mã ca nguồn</FieldLabel>
-            <Input
-              id="source-shift"
-              type="number"
-              required
-              min="1"
-              value={source}
-              onChange={(e) => setSource(e.target.value)}
-            />
-          </Field>
+          <Choice
+            id="source-shift"
+            label="Ca nguồn"
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            required
+          >
+            <option value="">Chọn…</option>
+            {sourceShifts.map((s) => (
+              <option key={s.id} value={s.id}>
+                {`${formatDateTime(s.startsAt)} đến ${formatDateTime(s.endsAt)}`}
+              </option>
+            ))}
+          </Choice>
           <Button type="submit" variant="outline" disabled={busy || !source}>
             Sao chép phân công
           </Button>

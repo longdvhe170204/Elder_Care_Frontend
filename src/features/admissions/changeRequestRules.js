@@ -280,7 +280,7 @@ export function withCompanions(types, currentType, previousNewType, nextNewType)
   return [...kept, ...after.filter((t) => !kept.includes(t))]
 }
 
-// Loại dịch vụ thêm được qua loại thay đổi Dịch vụ (FR-043k, Q-425, R21), theo thứ tự hiện trên form
+// Loại dịch vụ thêm được qua loại thay đổi Dịch vụ (FR-043k, Q-426, R21), theo thứ tự hiện trên form
 export const REGISTRABLE_SERVICE_GROUPS = [
   ['REHABILITATION', 'Phục hồi chức năng'],
   ['ACTIVITY', 'Hoạt động'],

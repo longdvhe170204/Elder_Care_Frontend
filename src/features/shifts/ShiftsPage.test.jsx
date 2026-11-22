@@ -214,3 +214,28 @@ it('FR_054_nguoiChiCoQuyenXem_chiTaiCaCuaMinh_vaKhongCoNutGhi', async () => {
   expect(screen.queryByRole('button', { name: 'Xem trước công bố' })).not.toBeInTheDocument()
   expect(api.calls('GET', '/shift-schedules')).toHaveLength(0)
 })
+
+// D13 (DESIGN.md mục 8): phạm vi lịch, người phụ trách ca ghi bằng tên, không ghi #mã
+it('D13_phamViLichVaNguoiPhuTrachGhiBangTen', async () => {
+  api.on(
+    'GET',
+    '/shift-schedules',
+    json(200, [
+      {
+        id: 7,
+        month: '2026-11',
+        scopeType: 'FLOOR',
+        scopeId: 5,
+        status: 'PUBLISHED',
+        version: 2,
+        shifts: [{ ...SHIFT, status: 'PUBLISHED', leadStaffId: 10 }],
+      },
+    ]),
+  )
+  api.on('GET', '/floors', json(200, [{ id: 5, code: 'T5', name: 'Tầng 5' }]))
+  api.on('GET', '/areas', json(200, []))
+  render(<ShiftsPage initialMonth="2026-11" />)
+  expect(await screen.findByRole('option', { name: 'Tầng 5, Đã công bố' })).toBeInTheDocument()
+  expect(await screen.findByRole('cell', { name: /phụ trách \[Nhân viên kiểm thử\]/ })).toBeInTheDocument()
+  expect(screen.queryByText(/#5|#10/)).toBeNull()
+})

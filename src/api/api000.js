@@ -36,7 +36,7 @@ export const postApprovalRequestsByIdApprove = (params) => request('POST', '/app
 /** Từ chối (FR-034, FR-036, FR-040) */
 export const postApprovalRequestsByIdReject = (params) => request('POST', '/approval-requests/{id}/reject', params)
 
-/** Trả về nháp (Chờ duyệt → Nháp), bắt buộc lý do; chỉ loại yêu cầu cho phép (FR-041a (1), Q-418) (FR-041a) */
+/** Trả về nháp (Chờ duyệt → Nháp), bắt buộc lý do; chỉ loại yêu cầu cho phép (FR-041a (1), Q-419) (FR-041a) */
 export const postApprovalRequestsByIdReturnToDraft = (params) => request('POST', '/approval-requests/{id}/return-to-draft', params)
 
 /** Hủy (Nháp/Chờ duyệt bởi người yêu cầu; Đã duyệt bởi người có quyền duyệt) (FR-031, BR-M15-08) */

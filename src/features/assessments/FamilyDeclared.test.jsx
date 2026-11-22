@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { clearChoice, typeChoice } from '@/test/choiceTray'
 import { AssessmentTab } from './AssessmentTab'
 import { FamilyDeclaredList } from './FamilyDeclared'
 
@@ -26,7 +27,9 @@ const ENTRY = {
 }
 
 describe('Gia đình khai', () => {
-  it('Hành chính: không tải lịch sử đánh giá; thêm mục có nguồn rồi lưu thay toàn bộ danh sách', async () => {
+  // Phương án B "bảng theo chủ đề" (chủ dự án chọn 2026-11-21): năm chủ đề là năm dòng cố định, mỗi dòng ô chọn nhanh và
+  // nguồn; "Thêm nguồn khác" thêm dòng cho cùng chủ đề; lưu một lần, chỉ gửi dòng có nội dung (lệnh thay toàn bộ danh sách)
+  it('B_bangTheoChuDe_luuMotLan_chiGuiDongCoNoiDung', async () => {
     api.on('GET', '/residents/5/initial-assessment/family-declared', problem(404, 'NO_DRAFT'))
     api.on(
       'PUT',
@@ -42,12 +45,12 @@ describe('Gia đình khai', () => {
     )
 
     const section = await screen.findByRole('region', { name: 'Gia đình khai' })
-    expect(within(section).getByText('Chưa có thông tin gia đình khai.')).toBeInTheDocument()
-    fireEvent.change(within(section).getByLabelText('Chủ đề'), { target: { value: 'KNOWN_RISKS' } })
-    fireEvent.change(within(section).getByLabelText('Nội dung'), { target: { value: 'Từng ngã hai lần năm nay' } })
-    fireEvent.click(within(section).getByRole('radio', { name: 'Người thân' }))
-    fireEvent.change(within(section).getByLabelText('Mã người thân'), { target: { value: '31' } })
-    fireEvent.click(within(section).getByRole('button', { name: 'Thêm mục' }))
+    for (const topic of ['Tình trạng chung', 'Vận động', 'Tự chăm sóc', 'Nhận thức', 'Nguy cơ đã biết'])
+      expect(within(section).getByRole('group', { name: topic })).toBeInTheDocument()
+    const risks = within(section).getByRole('group', { name: 'Nguy cơ đã biết' })
+    typeChoice('Nguy cơ đã biết', 'Từng ngã hai lần năm nay', risks)
+    fireEvent.click(within(risks).getByRole('radio', { name: 'Người thân' }))
+    fireEvent.change(within(risks).getByLabelText('Mã người thân'), { target: { value: '31' } })
     fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
 
     await waitFor(() => expect(api.calls('PUT', '/residents/5/initial-assessment/family-declared')).toHaveLength(1))
@@ -64,7 +67,27 @@ describe('Gia đình khai', () => {
     expect(await within(section).findByText('Tự khai, chưa được Bác sĩ kiểm chứng')).toBeInTheDocument()
   })
 
-  it('nội dung trống thì báo tại ô, không thêm mục', async () => {
+  it('B_themNguonKhac_choCungChuDe_vaMucDaLuuHienTrongDong', async () => {
+    api.on('GET', '/residents/5/initial-assessment/family-declared', json(200, { assessmentId: 9, entries: [ENTRY] }))
+    render(
+      <AssessmentTab
+        residentId={5}
+        residentStatus="ADMISSION_IN_PROGRESS"
+        allowedCommands={['RECORD_FAMILY_DECLARED']}
+      />,
+    )
+    const section = await screen.findByRole('region', { name: 'Gia đình khai' })
+    const risks = within(section).getByRole('group', { name: 'Nguy cơ đã biết' })
+    expect(await within(risks).findByRole('button', { name: 'Bỏ Từng ngã hai lần năm nay' })).toBeInTheDocument()
+    expect(within(risks).getByLabelText('Mã người thân')).toHaveValue('31')
+    fireEvent.click(within(risks).getByRole('button', { name: 'Thêm nguồn khác' }))
+    expect(within(risks).getByRole('button', { name: 'Nguy cơ đã biết, nguồn thứ 2' })).toBeInTheDocument()
+    fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
+    expect(await within(section).findByText('Chưa có thay đổi để lưu.')).toBeInTheDocument()
+  })
+
+  // F7: nguồn Người thân chưa nhập mã thì báo tại dòng, không gửi, không báo "Đã lưu"
+  it('F7_nguonNguoiThanChuaNhapMa_baoTaiDong_khongGui', async () => {
     api.on('GET', '/residents/5/initial-assessment/family-declared', problem(404, 'NO_DRAFT'))
     render(
       <AssessmentTab
@@ -74,8 +97,18 @@ describe('Gia đình khai', () => {
       />,
     )
     const section = await screen.findByRole('region', { name: 'Gia đình khai' })
-    fireEvent.click(within(section).getByRole('button', { name: 'Thêm mục' }))
-    expect(within(section).getByText('Nhập nội dung')).toBeInTheDocument()
+    const cognition = within(section).getByRole('group', { name: 'Nhận thức' })
+    typeChoice('Nhận thức', 'Hay quên uống thuốc', cognition)
+    fireEvent.click(within(cognition).getByRole('radio', { name: 'Người thân' }))
+    fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
+    expect(await within(cognition).findByText('Nhập mã người thân')).toBeInTheDocument()
+    expect(within(section).queryByText(/Đã lưu/)).toBeNull()
+    expect(api.calls('PUT', '/residents/5/initial-assessment/family-declared')).toHaveLength(0)
+
+    clearChoice(cognition)
+    fireEvent.click(within(cognition).getByRole('radio', { name: 'Người cao tuổi' }))
+    fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
+    expect(await within(section).findByText('Chưa có thay đổi để lưu.')).toBeInTheDocument()
   })
 
   it('danh sách chỉ đọc cho Bác sĩ: chủ đề, nội dung, nguồn, nhãn tự khai', () => {

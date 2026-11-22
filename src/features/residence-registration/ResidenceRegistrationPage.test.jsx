@@ -20,7 +20,7 @@ const TASKS = [
     taskType: 'OVERDUE',
     dueAt: '2026-10-01T16:59:59Z',
     registrationId: 7,
-    allowedCommands: ['record-submitted'],
+    allowedCommands: ['record-accepted'],
   },
   { residentId: 3, fullName: 'Phạm Văn Xóa', taskType: 'TO_DEREGISTER', registrationId: 8, allowedCommands: ['record-deregistered'] },
 ]

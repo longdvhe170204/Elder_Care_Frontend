@@ -171,7 +171,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
     run(postApprovalRequestsByIdReject, { comment }, 'comment')
   }
 
-  // Trả về nháp để người lập sửa, bắt buộc lý do (000 FR-041a, Q-418); dùng ô Ý kiến làm lý do
+  // Trả về nháp để người lập sửa, bắt buộc lý do (000 FR-041a, Q-419); dùng ô Ý kiến làm lý do
   function returnToDraft() {
     if (!comment.trim()) {
       setErrors({ comment: 'Nhập lý do trả về nháp' })

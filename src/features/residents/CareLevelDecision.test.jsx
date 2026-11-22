@@ -5,7 +5,7 @@ import { PermissionsProvider } from '@/common/permissions/permissions'
 import { NotificationDetail } from '@/common/notifications/NotificationDetail'
 import { CareLevelDecision } from './CareLevelDecision'
 
-// 001 FR-036b (Q-423; plan-bf08 W7, W14): gia đình không đồng ý đổi mức thì Hành chính ghi giữ mức cũ (kèm thỏa thuận lựa
+// 001 FR-036b (Q-424; plan-bf08 W7, W14): gia đình không đồng ý đổi mức thì Hành chính ghi giữ mức cũ (kèm thỏa thuận lựa
 // chọn có rủi ro đang hiệu lực, ngày xem lại) hoặc rời viện. W12: thông báo nguồn hồ sơ người cao tuổi, yêu cầu thay đổi
 // lưu trú mở thẳng màn tương ứng.
 

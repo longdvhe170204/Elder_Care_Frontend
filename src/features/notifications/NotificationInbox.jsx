@@ -46,7 +46,8 @@ const isOpenUrgent = (n) => n.level === 'URGENT' && !n.acknowledgedAt
 export function NotificationInbox({ openedKey, onOpen, onClose }) {
   const [filter, setFilter] = useState({ level: '', unread: false, eventType: '', residentId: '' })
   const [state, setState] = useState({ status: 'loading', items: [], nextCursor: null })
-  const [eventTypes, setEventTypes] = useState([])
+  // Loại sự kiện đã gặp, ghi bằng tiêu đề thông báo thay cho mã (DESIGN.md mục 8, D9)
+  const [eventTypes, setEventTypes] = useState({})
   const [residents, setResidents] = useState(null)
   const [announcement, setAnnouncement] = useState('')
   const [paused, setPaused] = useState(false)
@@ -69,7 +70,16 @@ export function NotificationInbox({ openedKey, onOpen, onClose }) {
         unreadCount: data.unreadCount,
         urgentCount: data.unacknowledgedUrgentCount,
       }))
-      setEventTypes((known) => [...new Set([...known, ...data.items.map((n) => n.eventType).filter(Boolean)])].sort())
+      setEventTypes((known) => ({
+        // Giữ tiêu đề gặp đầu tiên của mỗi loại để nhãn không đổi qua các lần tải
+        ...Object.fromEntries(
+          data.items
+            .filter((n) => n.eventType)
+            .toReversed()
+            .map((n) => [n.eventType, n.title || n.eventType]),
+        ),
+        ...known,
+      }))
     } catch {
       setState({ status: 'error', items: [], nextCursor: null })
     }
@@ -255,11 +265,13 @@ export function NotificationInbox({ openedKey, onOpen, onClose }) {
               className={SELECT_CLASS}
             >
               <option value="">Tất cả</option>
-              {eventTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
+              {Object.entries(eventTypes)
+                .sort(([, a], [, b]) => a.localeCompare(b, 'vi'))
+                .map(([type, title]) => (
+                  <option key={type} value={type}>
+                    {title}
+                  </option>
+                ))}
             </select>
           </Field>
           {residents && (
@@ -405,7 +417,10 @@ function ReminderItem({ reminder: r, onOpen }) {
             {`Gọi ${person.fullName}`}
           </Button>
           {person.phoneNumber ? (
-            <a href={`tel:${person.phoneNumber}`} className="type-label tabular-nums underline-offset-4 hover:underline">
+            <a
+              href={`tel:${person.phoneNumber}`}
+              className="type-label tabular-nums underline-offset-4 hover:underline"
+            >
               {person.phoneNumber}
             </a>
           ) : (
@@ -478,7 +493,6 @@ function NotificationRow({ notification: n, selected, onOpen, status }) {
             {n.title}
           </Button>
         </div>
-        <span className="type-caption text-muted-foreground">{n.eventType}</span>
       </div>
       <div className="flex items-center gap-3">
         <span className="type-body-sm tabular-nums">{n.sentAt ? formatDateTime(n.sentAt) : ''}</span>

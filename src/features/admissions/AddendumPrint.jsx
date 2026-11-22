@@ -8,7 +8,7 @@ import { problemOf } from '@/common/problem'
 import { ChangeContent } from './ChangeParts'
 import { ADDENDUM_STATUS, addendumNoText } from './changeRequestRules'
 
-// Bản in phụ lục hợp đồng cho người đại diện ký (004 FR-043d, Q-419; W3): người cao tuổi, hợp đồng, số phụ lục, giá trị
+// Bản in phụ lục hợp đồng cho người đại diện ký (004 FR-043d, Q-420; W3): người cao tuổi, hợp đồng, số phụ lục, giá trị
 // trước, sau, đơn giá, ngày hiệu lực dự kiến, chỗ ký hai bên. In bằng trình duyệt (window.print); phần nút không in.
 export function AddendumPrint({ id, onNavigate = () => {} }) {
   const [request, setRequest] = useState(null)

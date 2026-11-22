@@ -824,7 +824,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 là thay đổi nhỏ.
               </FieldDescription>
               {(() => {
-                // FR-043k (Q-425): dòng đang có (mọi loại) để bớt; chỉ 4 loại để thêm, nhóm theo loại
+                // FR-043k (Q-426): dòng đang có (mọi loại) để bớt; chỉ 4 loại để thêm, nhóm theo loại
                 const { removable, addGroups } = serviceChoices(catalog, contract?.services)
                 const row = (s) => {
                   const line = lineOf(s.id)

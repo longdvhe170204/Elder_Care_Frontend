@@ -8,7 +8,7 @@ import { PrnPanel } from './PrnPanel'
 import { recordDoses } from './doseRound'
 import { newPrescriptionBody } from './prescriptionView'
 
-// Sửa BF-07 (Q-426 → Q-436): Hoãn, Nhận liều, chỉ số đo trước khi dùng, đã dùng muộn bằng đính chính, thuốc gia đình gửi,
+// Sửa BF-07 (Q-427 → Q-437): Hoãn, Nhận liều, chỉ số đo trước khi dùng, đã dùng muộn bằng đính chính, thuốc gia đình gửi,
 // hiệu quả PRN, mức quan trọng và chỉ số của đơn.
 
 let api

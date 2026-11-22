@@ -3,10 +3,33 @@ import { Button } from '@/components/ui/button'
 import { CareField, CareCheck } from './CareField'
 import { CARE_ROLES, FREQUENCIES, IMPORTANCE, RESULT_TYPES } from './carePlanLabels'
 
+// Ô bắt buộc kiểm trước khi gửi, báo bằng chữ tại ô thay cho bong bóng của trình duyệt (DESIGN.md 7.4, D14)
+const blank = (value) => value == null || String(value).trim() === ''
+const belowOne = (value) => blank(value) || Number(value) < 1
+function rowErrors(row) {
+  const errors = {}
+  if (blank(row.taskTypeId)) errors.taskTypeId = 'Chọn loại công việc.'
+  if (blank(row.content)) errors.content = 'Nhập nội dung.'
+  if (blank(row.frequencyType)) errors.frequencyType = 'Chọn tần suất.'
+  if (row.frequencyType === 'EVERY_N_HOURS') {
+    if (belowOne(row.intervalHours)) errors.intervalHours = 'Nhập số giờ giữa hai lần.'
+    if (blank(row.startsAt)) errors.startsAt = 'Nhập giờ bắt đầu.'
+  }
+  if (row.frequencyType === 'TIMES_PER_DAY' && belowOne(row.timesPerDay)) errors.timesPerDay = 'Nhập số lần trong ngày.'
+  if (blank(row.performerRole)) errors.performerRole = 'Chọn vai trò thực hiện.'
+  if (blank(row.resultType)) errors.resultType = 'Chọn kết quả cần ghi.'
+  if (blank(row.importance)) errors.importance = 'Chọn mức quan trọng.'
+  return errors
+}
+
 export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
   const [rows, setRows] = useState(() => items.map((row) => ({ ...row, timesText: (row.times ?? []).join(', ') })))
-  const set = (index, key, value) =>
+  const [errors, setErrors] = useState([])
+  const errorOf = (index, key) => errors[index]?.[key]
+  const set = (index, key, value) => {
     setRows((all) => all.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
+    setErrors((all) => all.map((e, i) => (i === index && e ? { ...e, [key]: undefined } : e)))
+  }
   function selectType(index, value) {
     const type = taskTypes.find((row) => String(row.id) === value)
     setRows((all) =>
@@ -26,6 +49,9 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
   }
   function submit(event) {
     event.preventDefault()
+    const found = rows.map(rowErrors)
+    setErrors(found)
+    if (found.some((e) => Object.keys(e).length > 0)) return
     onSave(
       rows.map(({ timesText, ...row }) => ({
         ...row,
@@ -46,7 +72,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
     )
   }
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <h3 className="type-title">Mục công việc</h3>
       {rows.map((row, index) => (
         <fieldset
@@ -58,7 +84,11 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
           <CareField
             label={`Loại công việc ${index + 1}`}
             value={row.taskTypeId}
-            onChange={(value) => selectType(index, value)}
+            onChange={(value) => {
+              selectType(index, value)
+              setErrors((all) => all.map((e, i) => (i === index ? {} : e)))
+            }}
+            error={errorOf(index, 'taskTypeId')}
             options={Object.fromEntries(
               taskTypes
                 .filter((type) => type.status === 'ACTIVE' && type.group !== 'MEDICATION')
@@ -73,6 +103,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
             type="textarea"
             maxLength={1000}
             required
+            error={errorOf(index, 'content')}
           />
           <div className="grid gap-4 sm:grid-cols-2">
             <CareField
@@ -81,6 +112,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
               onChange={(value) => set(index, 'frequencyType', value)}
               options={FREQUENCIES}
               required
+              error={errorOf(index, 'frequencyType')}
             />
             {row.frequencyType === 'EVERY_N_HOURS' && (
               <CareField
@@ -90,6 +122,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
                 type="number"
                 min={1}
                 required
+                error={errorOf(index, 'intervalHours')}
               />
             )}
             {row.frequencyType === 'TIMES_PER_DAY' && (
@@ -100,6 +133,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
                 type="number"
                 min={1}
                 required
+                error={errorOf(index, 'timesPerDay')}
               />
             )}
             <CareField
@@ -108,6 +142,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
               onChange={(value) => set(index, 'startsAt', value)}
               type="time"
               required={row.frequencyType === 'EVERY_N_HOURS'}
+              error={errorOf(index, 'startsAt')}
             />
             <CareField
               label={`Các mốc giờ mục ${index + 1} (cách nhau bằng dấu phẩy)`}
@@ -134,6 +169,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
               onChange={(value) => set(index, 'performerRole', value)}
               options={CARE_ROLES}
               required
+              error={errorOf(index, 'performerRole')}
             />
             <CareField
               label={`Kết quả cần ghi mục ${index + 1}`}
@@ -141,6 +177,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
               onChange={(value) => set(index, 'resultType', value)}
               options={RESULT_TYPES}
               required
+              error={errorOf(index, 'resultType')}
             />
             <CareField
               label={`Mức quan trọng mục ${index + 1}`}
@@ -148,6 +185,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
               onChange={(value) => set(index, 'importance', value)}
               options={IMPORTANCE}
               required
+              error={errorOf(index, 'importance')}
             />
             <CareField
               label={`Mục tiêu nước mục ${index + 1} (ml/ngày)`}

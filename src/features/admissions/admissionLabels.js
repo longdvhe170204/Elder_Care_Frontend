@@ -17,14 +17,14 @@ export const CARE_LEVELS = [
 export const APPLICATION_STATUS = {
   IN_PROGRESS: 'Đang tiếp nhận',
   WAITING: 'Chờ giường',
-  ADMITTED: 'Đã vào',
+  ADMITTED: 'Đã tiếp nhận',
   CANCELLED: 'Đã hủy',
 }
 
 export const WAITING_STATUS = {
   WAITING: 'Đang chờ',
   CONTACTED: 'Đã liên hệ',
-  ADMITTED: 'Đã vào',
+  ADMITTED: 'Đã tiếp nhận',
   DECLINED: 'Từ chối',
   WAITING_CANCELLED: 'Đã hủy chờ',
 }

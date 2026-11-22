@@ -9,7 +9,7 @@ import { getStaff } from '@/api/api008'
 import { getFloorsByFloorAreaIdTemporaryNurses, postFloorsByFloorAreaIdTemporaryNurses } from '@/api/api006'
 import { hhmm } from './doseRoundView'
 
-// Chỉ định Điều dưỡng tầng khác phụ trách tạm (spec 006 BR-M07-31, Q-435): khi tầng không có Điều dưỡng nào có ca, Quản lý
+// Chỉ định Điều dưỡng tầng khác phụ trách tạm (spec 006 BR-M07-31, Q-436): khi tầng không có Điều dưỡng nào có ca, Quản lý
 // viện chọn một Điều dưỡng đang có ca ở tầng khác; người đó xác nhận được liều của tầng như Điều dưỡng có ca tại tầng,
 // quyền hết khi hết ca của tầng. Backend kiểm tầng không có Điều dưỡng, tầng có ca, Điều dưỡng đang có ca.
 

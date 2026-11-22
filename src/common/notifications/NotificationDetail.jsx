@@ -92,7 +92,9 @@ export function NotificationDetail({
     <div className="flex flex-col gap-5 type-body-sm">
       <div className="flex flex-col gap-1">
         <Title className="type-title">{n.title}</Title>
-        <Description className="type-body-sm text-muted-foreground">{n.eventType}</Description>
+        <Description className="type-body-sm text-muted-foreground">
+          Nội dung hiện theo quyền hiện hành của bạn.
+        </Description>
       </div>
       <div className="flex flex-wrap gap-2">
         <StatusBadge status={label(LEVEL_LABELS, n.level)} />
@@ -109,8 +111,6 @@ export function NotificationDetail({
             <dd className="tabular-nums">{formatDateTime(n.acknowledgedAt)}</dd>
           </>
         )}
-        <dt className="text-muted-foreground">Bản ghi nguồn</dt>
-        <dd>{n.sourceRecord ? `${n.sourceRecord.type} ${n.sourceRecord.id}` : 'Không có'}</dd>
       </dl>
 
       {n.identityOnly && (

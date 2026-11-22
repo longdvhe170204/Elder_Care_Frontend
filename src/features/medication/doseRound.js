@@ -1,5 +1,6 @@
 import { postCorrectionsByRecordTypeByOriginalRecordId } from '@/api/api000'
 import { getMeShifts } from '@/api/api008'
+import { addDays } from '@/features/activities/sessionView'
 import { getResidentsById } from '@/api/api001'
 import { getResidentsByResidentIdLocation } from '@/api/api003'
 import {
@@ -24,7 +25,7 @@ export const todayVN = (now = new Date()) => TODAY.format(now)
 async function currentShift(now) {
   try {
     const day = todayVN(now)
-    const { data } = await getMeShifts({ query: { from: day, to: day } })
+    const { data } = await getMeShifts({ query: { from: day, to: addDays(day, 1) } })
     const shift = (data ?? []).find((s) => new Date(s.startsAt) <= now && now <= new Date(s.endsAt))
     return shift ? { start: hhmm(shift.startsAt), end: hhmm(shift.endsAt) } : null
   } catch {
@@ -71,7 +72,7 @@ export async function recordLateDose(dose, time, reason, key, now = new Date()) 
   return status === 202 ? 'pending' : 'saved'
 }
 
-// Nhận liều trước khi soạn thuốc, tự hết sau 15 phút; bỏ nhận (BR-M07-26, Q-427)
+// Nhận liều trước khi soạn thuốc, tự hết sau 15 phút; bỏ nhận (BR-M07-26, Q-428)
 export const claimDose = (doseKey) =>
   postMedicationDosesByDoseKeyClaim({ path: { doseKey }, headers: { 'Idempotency-Key': crypto.randomUUID() } })
 export const releaseDose = (doseKey) =>
