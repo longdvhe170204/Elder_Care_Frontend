@@ -82,7 +82,6 @@ async function enterRow(dialog) {
   fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
   fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
   fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
-  fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'NORMAL' } })
   fireEvent.change(within(row).getByLabelText('Phân công'), { target: { value: '22' } })
   fireEvent.change(within(row).getByLabelText('Nội dung (không bắt buộc)'), { target: { value: 'Nội dung tự nhập' } })
   return row
@@ -332,19 +331,20 @@ it('FR_023_canCuTuDoiChieuLoaiVaGio_khongCoOChon', async () => {
   expect(await within(row).findByRole('option', { name: '[Nhân viên kiểm thử] · Nhân viên chăm sóc' })).toHaveValue('22')
 })
 
-it('FR_017_thieuTruongHoacLechMucKeHoach_baoTruocKhiGui', async () => {
+it('FR_017_thieuTruong_baoTruocKhiGui_mucTheoMucKeHoachKhongCoOChon', async () => {
   view()
   const dialog = await openBatch()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm dòng' }))
   fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
   const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
   expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chưa lưu lô công việc')
-  expect(within(row).getByText('Chọn mức quan trọng.')).toBeInTheDocument()
+  expect(within(row).getByText('Chọn loại công việc.')).toBeInTheDocument()
+  expect(within(row).getByText('Nhập giờ dự kiến.')).toBeInTheDocument()
   fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
   fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
   fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
-  fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'IMPORTANT' } })
-  expect(within(row).getByText('Mục kế hoạch yêu cầu mức Thường.')).toBeInTheDocument()
+  expect(within(row).queryByRole('combobox', { name: 'Mức quan trọng' })).not.toBeInTheDocument()
+  expect(within(row).getByText('theo mục kế hoạch')).toBeInTheDocument()
   expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
 })
 
@@ -360,9 +360,13 @@ it('FR_023_phatSinhKhongGuiIdCanCu_viecChungKhongGanNguoi', async () => {
   expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
   fireEvent.click(within(row).getByLabelText('Lập là việc phát sinh, không theo nguồn nào'))
   fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  expect(await within(row).findByText('Chọn mức quan trọng của việc này.')).toBeInTheDocument()
+  fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'MANDATORY' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
   await waitFor(() => expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(1))
   const body = JSON.parse(api.calls('POST', '/shifts/5/care-tasks/plan')[0][1].body)[0]
   expect(body.basis).toEqual({ type: 'AD_HOC' })
+  expect(body.importance).toBe('MANDATORY')
   expect(body.performerId).toBeUndefined()
   expect(body.shared).toBe(true)
 })

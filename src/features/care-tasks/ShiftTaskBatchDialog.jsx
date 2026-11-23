@@ -65,14 +65,27 @@ function resolve(row, resident, shift) {
   return { ...match, basis: row.adHoc ? 'AD_HOC' : '' }
 }
 
+// Mức quan trọng theo căn cứ (FR-017 sửa 2026-11-23): mục kế hoạch thì lấy mức của mục (Bác sĩ đã duyệt); nguồn khác
+// thì lấy mức mặc định của loại công việc; chỉ việc phát sinh (hoặc loại chưa có mức mặc định) người lập mới chọn.
+function importanceOf(row, resident, shift, typeById) {
+  const fallback = typeById[row.taskTypeId]?.defaultImportance
+  const basis = row.residentId === 'FLOOR' ? row.basis : row.residentId && row.taskTypeId && row.time ? resolve(row, resident, shift) : null
+  if (row.residentId !== 'FLOOR' && basis?.plan) return { value: basis.plan.importance, from: 'theo mục kế hoạch' }
+  const code = row.residentId === 'FLOOR' ? basis : basis?.basis
+  if (code === 'AD_HOC' || (code && !fallback)) return { choose: true, value: row.importance }
+  if (code) return { value: fallback, from: 'mặc định của loại công việc' }
+  return { value: null }
+}
+
 // Lỗi kiểm ở máy trước khi gửi: thiếu trường thì backend không đọc được lô (400), lệch mục kế hoạch thì bị từ chối
-function checkRow(row, resident, shift) {
+function checkRow(row, resident, shift, typeById) {
   const errors = {}
   const floor = row.residentId === 'FLOOR'
   if (!row.residentId) errors.resident = 'Chọn người cao tuổi hoặc Cả tầng.'
   if (!row.taskTypeId) errors.type = 'Chọn loại công việc.'
   if (!row.time) errors.time = 'Nhập giờ dự kiến.'
-  if (!row.importance) errors.importance = 'Chọn mức quan trọng.'
+  const level = importanceOf(row, resident, shift, typeById)
+  if (level.choose && !level.value) errors.importance = 'Chọn mức quan trọng của việc này.'
   if (!row.performer) errors.performer = 'Chọn người thực hiện hoặc Việc chung của tầng.'
   if (floor) {
     if (!row.basis) errors.basis = 'Chọn căn cứ của việc cấp ca.'
@@ -80,8 +93,6 @@ function checkRow(row, resident, shift) {
   }
   if (!row.residentId || !row.taskTypeId || !row.time) return errors
   const found = resolve(row, resident, shift)
-  if (found.plan && row.importance && row.importance !== found.plan.importance)
-    errors.importance = `Mục kế hoạch yêu cầu mức ${IMPORTANCE[found.plan.importance] || found.plan.importance}.`
   if (!found.basis)
     errors.basis = found.sources.length
       ? 'Chọn nguồn của công việc.'
@@ -116,6 +127,7 @@ export function ShiftTaskBatchDialog({
   const summary = useRef(null)
   const shift = source?.shift
   const residentsById = Object.fromEntries((source?.residents ?? []).map((r) => [String(r.residentId), r]))
+  const typeById = Object.fromEntries(types.map((t) => [String(t.id), t]))
 
   // Tên nhân viên cho ô Phân công: dữ liệu ca chỉ có mã nhân viên
   const staffKey = [
@@ -141,7 +153,7 @@ export function ShiftTaskBatchDialog({
     }
   }, [open, staffKey])
 
-  const localErrors = (r) => (checked ? checkRow(r, residentsById[r.residentId], shift) : {})
+  const localErrors = (r) => (checked ? checkRow(r, residentsById[r.residentId], shift, typeById) : {})
   const failing = rows
     .map((r, index) => ({ row: index + 1, local: localErrors(r) }))
     .filter((e) => Object.keys(e.local).length)
@@ -208,7 +220,7 @@ export function ShiftTaskBatchDialog({
   async function submit() {
     if (!rows.length || busy) return
     setChecked(true)
-    const invalid = rows.findIndex((r) => Object.keys(checkRow(r, residentsById[r.residentId], shift)).length)
+    const invalid = rows.findIndex((r) => Object.keys(checkRow(r, residentsById[r.residentId], shift, typeById)).length)
     if (invalid >= 0) {
       setActiveKey(rows[invalid].key)
       setRowErrors([])
@@ -228,7 +240,7 @@ export function ShiftTaskBatchDialog({
         basis: id ? { type, id: Number(id) } : { type },
         content: r.content || undefined,
         plannedAt: plannedAtOf(shift, r.time),
-        importance: r.importance,
+        importance: importanceOf(r, residentsById[r.residentId], shift, typeById).value,
         performerId: shared ? undefined : Number(r.performer),
         shared,
       }
@@ -364,6 +376,7 @@ export function ShiftTaskBatchDialog({
                 ['SHARED', 'Việc chung của tầng'],
               ]
               const set = (field) => (value) => update(r.key, field, value)
+              const level = importanceOf(r, current, shift, typeById)
               return (
                 <fieldset
                   key={r.key}
@@ -426,17 +439,33 @@ export function ShiftTaskBatchDialog({
                         />
                       )}
                     </RowField>
-                    <RowField label="Mức quan trọng" error={errors.importance}>
-                      {(p) => (
-                        <Select
-                          {...p}
-                          required
-                          options={Object.entries(IMPORTANCE)}
-                          value={r.importance}
-                          onChange={set('importance')}
-                        />
-                      )}
-                    </RowField>
+                    {level.choose ? (
+                      <RowField label="Mức quan trọng" error={errors.importance}>
+                        {(p) => (
+                          <Select
+                            {...p}
+                            required
+                            options={Object.entries(IMPORTANCE)}
+                            value={r.importance}
+                            onChange={set('importance')}
+                          />
+                        )}
+                      </RowField>
+                    ) : (
+                      <div className="flex min-w-0 flex-col gap-2">
+                        <span className="type-label">Mức quan trọng</span>
+                        <p className="flex min-h-11 flex-col justify-center type-body-sm">
+                          {level.value ? (
+                            <>
+                              <span className="type-label">{IMPORTANCE[level.value] || level.value}</span>
+                              <span className="text-muted-foreground">{level.from}</span>
+                            </>
+                          ) : (
+                            <span className="text-muted-foreground">Theo căn cứ, hiện khi đã có loại và giờ</span>
+                          )}
+                        </p>
+                      </div>
+                    )}
                     <RowField label="Phân công" error={errors.performer}>
                       {(p) => (
                         <Select
