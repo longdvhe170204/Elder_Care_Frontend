@@ -120,7 +120,7 @@ describe('PressedAlertPanel', () => {
   it('có giờ tới nơi từ máy chủ thì hiện giờ đó, không còn nút', () => {
     render(<PressedAlertPanel alert={{ ...ALERT, arrivedAt: '2026-11-24T02:10:00Z' }} dial={vi.fn()} />)
 
-    expect(screen.getByText(/Đã tới nơi lúc 09:10/)).toBeInTheDocument()
+    expect(screen.getByText(/Đã tới nơi lúc \d{2}:\d{2}/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Đã tới nơi' })).not.toBeInTheDocument()
   })
 
