@@ -151,6 +151,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   const [shiftMembers, setShiftMembers] = useState([])
   const [floorName, setFloorName] = useState('')
   const [residents, setResidents] = useState([])
+  const [residentsReady, setResidentsReady] = useState(false)
   const [types, setTypes] = useState([])
   const [staff, setStaff] = useState([])
   const [rows, setRows] = useState([])
@@ -172,11 +173,15 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   useEffect(() => {
     if (status !== 'ready' || !view) return
     let current = true
-    Promise.all([getTaskTypes(), getResidents()])
-      .then(([catalog, people]) => {
+    // Tải riêng từng danh mục để danh mục nhanh không phải chờ danh sách hồ sơ (khoảng 1–2 giây)
+    getTaskTypes()
+      .then(({ data }) => current && setTypes(data.filter((t) => t.status === 'ACTIVE')))
+      .catch((error) => current && setFailure(problemOf(error)))
+    getResidents()
+      .then((people) => {
         if (!current) return
-        setTypes(catalog.data.filter((t) => t.status === 'ACTIVE'))
         setResidents(people.data.items)
+        setResidentsReady(true)
         // Mở từ thông báo: người đó chưa có ở trang hồ sơ đầu thì tải riêng để hiện tên
         if (focusResidentId && !people.data.items.some((r) => r.id === focusResidentId))
           getResidentsById({ path: { id: focusResidentId } })
@@ -184,7 +189,9 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
             .catch(() => {})
       })
       .catch((error) => {
-        if (current) setFailure(problemOf(error))
+        if (!current) return
+        setResidentsReady(true)
+        setFailure(problemOf(error))
       })
     // Danh sách người làm cho bộ lọc; không tải được thì bộ lọc chỉ có "tất cả"
     getStaff({ query: { status: 'WORKING' } })
@@ -274,10 +281,10 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     }
   }, [status, view, shiftId, initialShiftId])
 
-  // Tên người cao tuổi trong ca chưa có ở trang hồ sơ đầu: tải riêng từng hồ sơ còn thiếu
+  // Tên người cao tuổi trong ca chưa có ở trang hồ sơ đầu: tải riêng từng hồ sơ còn thiếu, sau khi trang đầu đã về
   const known = residents.map((r) => r.id).join(',')
   useEffect(() => {
-    if (!source) return
+    if (!source || !residentsReady) return
     const have = new Set(known.split(',').filter(Boolean).map(Number))
     const missing = source.residents.map((r) => r.residentId).filter((id) => !have.has(id))
     if (!missing.length) return
@@ -290,7 +297,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     return () => {
       current = false
     }
-  }, [source, known])
+  }, [source, known, residentsReady])
 
   // Gửi lô xong: về trang đầu, bỏ lọc để thấy ngay các việc vừa lập (lịch sử xếp việc lập gần nhất trước)
   async function saved(created, count) {
