@@ -89,6 +89,28 @@ async function openResident() {
 describe('BelongingsPage (013 T011, US1)', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  // Hoàn thiện BF-14 (2026-11-23): mở từ thông báo đi thẳng tới đồ của người cao tuổi
+  it('FR_032_moTuThongBao_residentIdVaBelongingId_moThangChiTietDo', async () => {
+    const api = mockRoutes()
+    api.on('GET', '/me/permissions', json(200, [{ function: 'BELONGINGS', operation: 'VIEW' }]))
+    api.on('GET', '/belongings/types', json(200, TYPES))
+    api.on('GET', '/belongings/condition-levels', json(200, []))
+    api.on('GET', '/belongings/storage-locations', json(200, [{ id: 21, name: 'Kho tầng 2', status: 'ACTIVE' }]))
+    api.on('GET', '/residents', json(200, { items: [LAN], nextCursor: null }))
+    api.on('GET', '/residents/7', json(200, LAN))
+    api.on('GET', '/residents/7/belongings', json(200, [PHONE]))
+    api.on('GET', '/belongings/90', json(200, { belonging: PHONE, handovers: [] }))
+    render(
+      <PermissionsProvider>
+        <BelongingsPage role="OFFICE_STAFF" residentId={7} belongingId={90} />
+      </PermissionsProvider>,
+    )
+    const dialog = await screen.findByRole('dialog')
+    await waitFor(() => expect(dialog).toHaveTextContent('Điện thoại Nokia'))
+    // Khung chi tiết đang mở nên phần còn lại của trang ẩn khỏi cây trợ năng
+    expect(screen.getByRole('heading', { name: 'Đồ gửi của Nguyễn Thị Lan', hidden: true })).toBeInTheDocument()
+  })
+
   it('FR_011_chonNguoiCaoTuoi_danhSachConGiu_chonNguoiKhacThiDoiHoSoVaDongKhungChiTiet', async () => {
     const minh = { id: 8, profileCode: 'NCT-0008', personalInfo: { fullName: 'Lê Văn Minh' } }
     const api = setup(undefined, [LAN, minh])
@@ -231,7 +253,8 @@ describe('BelongingsPage (013 T011, US1)', () => {
     api.on('POST', '/self-custody-consents/55/withdraw', json(200, {}))
     await openResident()
     fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết Điện thoại Nokia' }))
-    expect(await screen.findByText(/Có hiệu lực, người đại diện #33/)).toBeInTheDocument()
+    // Hoàn thiện BF-14: nêu tên người đại diện; chưa đọc được danh sách người thân thì "người thân mã …"
+    expect(await screen.findByText(/Có hiệu lực, người đại diện người thân mã 33/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi đồng ý cho tự giữ' })).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Rút đồng ý' }))
     fireEvent.change(screen.getByLabelText('Lý do rút đồng ý'), { target: { value: 'Người nhà đổi ý' } })

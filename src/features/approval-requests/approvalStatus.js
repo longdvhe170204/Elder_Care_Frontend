@@ -14,6 +14,7 @@ export const STATUS_LABELS = {
 export const TYPE_LABELS = {
   'M15.CORRECTION': 'Đính chính',
   'M02.RESIDENCY_CHANGE': 'Điều chỉnh hợp đồng',
+  'M12.UNCLAIMED_BELONGING_DISPOSAL': 'Xử lý đồ không người nhận',
 }
 
 export const ACTION_LABELS = {

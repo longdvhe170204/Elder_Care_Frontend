@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   getBelongingInventoryChecks,
   getBelongingInventoryChecksById,
+  getResidentsById,
+  getResidentsByResidentIdBelongings,
   postBelongingInventoryChecks,
   postBelongingInventoryChecksByIdByCommand,
 } from '@/api'
@@ -34,6 +36,38 @@ const RESULTS = [
 ]
 const RESULT_LABELS = { ...Object.fromEntries(RESULTS.map((r) => [r.value, r.label])), DROPPED: 'Đã rời vị trí' }
 
+// Mô tả đồ và họ tên người cao tuổi của các dòng phiếu (phiếu chỉ có mã; hoàn thiện BF-14, 2026-11-23). Không đọc được
+// thì giữ mã.
+function useLineNames(lines) {
+  const [names, setNames] = useState({ belongings: {}, residents: {} })
+  const residentIds = [...new Set((lines ?? []).map((l) => l.residentId))].sort().join(',')
+  useEffect(() => {
+    if (!residentIds) return
+    let alive = true
+    for (const residentId of residentIds.split(',').map(Number)) {
+      getResidentsById({ path: { id: residentId } }).then(
+        ({ data }) =>
+          alive &&
+          setNames((n) => ({ ...n, residents: { ...n.residents, [residentId]: data?.personalInfo?.fullName } })),
+        () => {},
+      )
+      getResidentsByResidentIdBelongings({ path: { residentId } }).then(
+        ({ data }) =>
+          alive &&
+          setNames((n) => ({
+            ...n,
+            belongings: { ...n.belongings, ...Object.fromEntries((data ?? []).map((b) => [b.id, b.description])) },
+          })),
+        () => {},
+      )
+    }
+    return () => {
+      alive = false
+    }
+  }, [residentIds])
+  return names
+}
+
 function CheckDetail({ checkId, catalogs, onChanged }) {
   const [check, setCheck] = useState(null)
   const [failure, setFailure] = useState(null)
@@ -58,6 +92,8 @@ function CheckDetail({ checkId, catalogs, onChanged }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- tải phiếu khi mở
     load()
   }, [load])
+
+  const names = useLineNames(check?.content?.lines)
 
   if (!check) return failure ? <ProblemAlert problem={failure} /> : <Skeleton className="h-24 w-full" />
   const waiting = check.status === 'WAITING_CHECK'
@@ -132,7 +168,9 @@ function CheckDetail({ checkId, catalogs, onChanged }) {
         {check.content.lines.map((l) => (
           <li key={l.belongingId} className="flex flex-col gap-2 rounded-lg border p-3">
             <span className="type-label">
-              Đồ #{l.belongingId}, người cao tuổi #{l.residentId}, số lượng lúc lập {l.amountAtCreation}
+              {names.belongings[l.belongingId] ?? `Đồ #${l.belongingId}`},{' '}
+              {names.residents[l.residentId] ?? `người cao tuổi #${l.residentId}`}, số lượng lúc lập{' '}
+              {l.amountAtCreation}
             </span>
             {waiting ? (
               <>
@@ -283,9 +321,9 @@ function CheckDetail({ checkId, catalogs, onChanged }) {
   )
 }
 
-export function InventoryChecks({ catalogs }) {
+export function InventoryChecks({ catalogs, initialCheckId = null }) {
   const [state, setState] = useState({ status: 'loading' })
-  const [opened, setOpened] = useState(null)
+  const [opened, setOpened] = useState(initialCheckId)
   const [notice, setNotice] = useState('')
   const [failure, setFailure] = useState(null)
 

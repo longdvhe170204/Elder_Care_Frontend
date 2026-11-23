@@ -8,6 +8,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
 import { LEVEL_LABELS, PART_LABELS, STATUS_LABELS, label } from './notificationLabels'
+import { SOURCE_TARGETS } from './sourceTargets'
 
 // Khung chi tiết thông báo (009 T035; FR-034, FR-036; DESIGN.md 2.2, `notification-inbox`). Mở là ghi xem lần đầu
 // (backend); nội dung theo quyền hiện hành: phần đã hết quyền thay bằng dòng khóa, không lộ nội dung. Bản ghi nguồn chỉ
@@ -153,6 +154,21 @@ export function NotificationDetail({
           }}
         >
           {SOURCE_PAGES[n.sourceRecord.type][2]}
+        </Button>
+      )}
+      {onNavigate && n.sourceRecord?.canOpen && SOURCE_TARGETS[n.sourceRecord.type] && (
+        <Button
+          variant="outline"
+          className="self-start"
+          disabled={busy}
+          onClick={() =>
+            SOURCE_TARGETS[n.sourceRecord.type].resolve(n.sourceRecord.id).then(
+              ([page, params]) => onNavigate(page, params),
+              (error) => setFailure(problemOf(error)),
+            )
+          }
+        >
+          {SOURCE_TARGETS[n.sourceRecord.type].label}
         </Button>
       )}
       <ProblemAlert problem={failure} />

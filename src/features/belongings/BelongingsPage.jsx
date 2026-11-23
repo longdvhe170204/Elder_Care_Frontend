@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getResidents, getResidentsByResidentIdBelongings } from '@/api'
+import { getResidents, getResidentsById, getResidentsByResidentIdBelongings } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
@@ -148,10 +148,10 @@ function BelongingTable({ items, catalogs, opened, onOpen }) {
 // Đồ còn trả được (data-model 013 mục 3: Trả từ Đang giữ, Đang được sử dụng, Hư hỏng)
 const RETURNABLE = ['HELD', 'IN_USE', 'DAMAGED']
 
-function ResidentBelongings({ resident, catalogs, role }) {
+function ResidentBelongings({ resident, catalogs, role, initialBelongingId = null }) {
   const { can } = usePermissions()
   const [state, setState] = useState({ status: 'loading', items: [] })
-  const [opened, setOpened] = useState(null)
+  const [opened, setOpened] = useState(initialBelongingId)
   const [intake, setIntake] = useState(false)
   const [returning, setReturning] = useState(false)
   const [ending, setEnding] = useState(false)
@@ -304,10 +304,23 @@ const TABS = [
   { value: 'inventory', label: 'Kiểm kê', roles: ['OFFICE_STAFF', 'NURSING_HOME_MANAGER'] },
 ]
 
-export function BelongingsPage({ role }) {
+// residentId, belongingId, tab, checkId: mở từ thông báo (NotificationDetail; hoàn thiện BF-14, 2026-11-23)
+export function BelongingsPage({ role, residentId, belongingId, tab: initialTab, checkId }) {
   const catalogs = useBelongingCatalogs()
   const [resident, setResident] = useState(null)
-  const [tab, setTab] = useState('resident')
+  const [tab, setTab] = useState(initialTab === 'inventory' ? 'inventory' : 'resident')
+
+  useEffect(() => {
+    if (!residentId) return
+    let alive = true
+    getResidentsById({ path: { id: Number(residentId) } }).then(
+      ({ data }) => alive && setResident(data),
+      () => {},
+    )
+    return () => {
+      alive = false
+    }
+  }, [residentId])
 
   return (
     <div className="flex flex-col gap-5">
@@ -338,10 +351,16 @@ export function BelongingsPage({ role }) {
         </Card>
       )}
       {tab === 'resident' && resident && (
-        <ResidentBelongings key={resident.id} resident={resident} catalogs={catalogs} role={role} />
+        <ResidentBelongings
+          key={resident.id}
+          resident={resident}
+          catalogs={catalogs}
+          role={role}
+          initialBelongingId={Number(resident.id) === Number(residentId) && belongingId ? Number(belongingId) : null}
+        />
       )}
       {tab === 'held' && <HeldBelongings catalogs={catalogs} />}
-      {tab === 'inventory' && <InventoryChecks catalogs={catalogs} />}
+      {tab === 'inventory' && <InventoryChecks catalogs={catalogs} initialCheckId={checkId ? Number(checkId) : null} />}
     </div>
   )
 }

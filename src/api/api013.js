@@ -36,6 +36,9 @@ export const getBelongingsById = (params) => request('GET', '/belongings/{id}', 
 /** Lệnh bàn giao trên một hoặc nhiều đồ (FR-008, FR-011, FR-011b, FR-012, FR-013, FR-014, FR-015, FR-015a, FR-021, FR-024, BR-M12-01, BR-M12-02, BR-M12-05, BR-M12-06) */
 export const postBelongingsHandovers = (params) => request('POST', '/belongings/handovers', params)
 
+/** Đồ và người cao tuổi của một bản ghi bàn giao, để mở đồ từ thông báo có nguồn là bản ghi bàn giao (bổ sung 2026-11-23, test luồng BF-14) (FR-011, FR-032) */
+export const getBelongingsHandoversById = (params) => request('GET', '/belongings/handovers/{id}', params)
+
 /** Liên kết sự cố ghi sau với bản ghi Báo thất lạc / Ghi hư hỏng (một lần) (FR-021, FR-024) */
 export const postBelongingsHandoversByIdLinkIncident = (params) => request('POST', '/belongings/handovers/{id}/link-incident', params)
 

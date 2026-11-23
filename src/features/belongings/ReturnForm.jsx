@@ -8,8 +8,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
-import { FilesField, SelectField } from './BelongingFields'
+import { FilesField, MemberField, SelectField } from './BelongingFields'
 import { activeOptions, confirmationFit, pickLabel } from './belongingLabels'
+import { useFamilyContacts } from './useFamilyContacts'
 import { ReturnConfirmation } from './ReturnConfirmation'
 import { useOpenConfirmations } from './useOpenConfirmations'
 
@@ -60,6 +61,12 @@ export function ReturnForm({
   const key = useRef(crypto.randomUUID())
   const set = (name) => (value) => setV((s) => ({ ...s, [name]: value }))
   const setItem = (id, patch) => setChosen((c) => ({ ...c, [id]: { ...c[id], ...patch } }))
+  const contacts = useFamilyContacts(residentId)
+  // Chọn người thân thì điền sẵn họ tên theo hồ sơ (vẫn sửa được nếu giấy tờ ghi khác)
+  function chooseFamily(familyMemberId) {
+    const member = contacts.members.find((m) => String(m.id) === familyMemberId)
+    setV((s) => ({ ...s, familyMemberId, ...(member && !s.fullName && { fullName: member.fullName }) }))
+  }
   // FR-020: tình trạng lúc tiếp nhận để so với lúc trả; không đọc được thì bỏ qua, lệnh trả vẫn làm được
   function toggle(id, on) {
     setItem(id, { on })
@@ -125,7 +132,7 @@ export function ReturnForm({
       if (isValuable(b) && !chosen[b.id].photos?.length) e[`photo-${b.id}`] = 'Chọn ảnh tình trạng của đồ có giá trị.'
     }
     if (!v.type) e.type = 'Chọn người nhận.'
-    if (v.type === 'FAMILY_MEMBER' && !/^[1-9]\d*$/.test(v.familyMemberId)) e.familyMemberId = 'Nhập mã người thân.'
+    if (v.type === 'FAMILY_MEMBER' && !/^[1-9]\d*$/.test(v.familyMemberId)) e.familyMemberId = 'Chọn người thân nhận.'
     if (['FAMILY_MEMBER', 'OTHER_PERSON'].includes(v.type) && !v.fullName.trim()) e.fullName = 'Nhập họ tên người nhận.'
     if (v.type === 'RESIDENT') {
       if (signature.length === 0 && !v.noSignatureReason.trim())
@@ -261,18 +268,16 @@ export function ReturnForm({
           </p>
         )}
         {v.type === 'FAMILY_MEMBER' && (
-          <Field data-invalid={!!errors.familyMemberId || undefined}>
-            <FieldLabel htmlFor="return-family">Mã người thân</FieldLabel>
-            <Input
-              id="return-family"
-              inputMode="numeric"
-              className="h-11"
-              value={v.familyMemberId}
-              onChange={(e) => set('familyMemberId')(e.target.value)}
-              aria-invalid={!!errors.familyMemberId || undefined}
-            />
-            {errors.familyMemberId && <FieldError>{errors.familyMemberId}</FieldError>}
-          </Field>
+          <MemberField
+            id="return-family"
+            label="Người thân nhận"
+            fallbackLabel="Mã người thân"
+            contacts={contacts}
+            filter={(m) => m.representative || m.pickupAllowed}
+            value={v.familyMemberId}
+            onChange={chooseFamily}
+            error={errors.familyMemberId}
+          />
         )}
         {['FAMILY_MEMBER', 'OTHER_PERSON'].includes(v.type) && (
           <>
