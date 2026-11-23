@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from 'react'
-import { BellIcon } from 'lucide-react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { BellIcon, SearchIcon } from 'lucide-react'
 import {
   getCareTasks,
   getFloorsById,
@@ -15,16 +15,16 @@ import {
 } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { usePermissions } from '@/common/permissions/permissions'
 import { ShiftSourceDialog } from './ShiftSourceDialog'
 import { ShiftTaskBatchDialog } from './ShiftTaskBatchDialog'
-import { STATUSES, dateOf, formatDate, nextDate, shiftLabel, timeOf } from './shiftPlanning'
+import { dateOf, formatDate, nextDate, shiftLabel, timeOf } from './shiftPlanning'
 
 const PAGE_SIZE = 10
 const NO_FILTER = { residentId: '', taskTypeId: '', performerId: '' }
@@ -46,6 +46,78 @@ function pageItems(current, pages) {
     .filter((n) => n >= 1 && n <= pages)
     .sort((a, b) => a - b)
   return shown.flatMap((n, i) => (i && n - shown[i - 1] > 1 ? [`gap-${n}`, n] : [n]))
+}
+
+// Tìm người cao tuổi theo tên: gõ tên thì gợi ý hồ sơ khớp; khớp đúng một người hoặc chọn một gợi ý thì lọc theo người đó
+function ResidentSearch({ onPick }) {
+  const [text, setText] = useState('')
+  const [query, setQuery] = useState('')
+  const [chosen, setChosen] = useState(null)
+  const [results, setResults] = useState(null)
+  const listId = useId()
+  const hintId = useId()
+  useEffect(() => {
+    if (!query) return
+    let current = true
+    const timer = setTimeout(() => {
+      getResidents({ query: { q: query } })
+        .then(({ data }) => current && setResults(data.items))
+        .catch(() => current && setResults([]))
+    }, 300)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [query])
+  const found = query ? (results ?? []) : []
+  const label = (r) => `${r.personalInfo?.fullName} · ${r.profileCode}`
+  const picked = chosen ?? (found.length === 1 ? found[0] : null)
+  const pickedId = query && picked ? String(picked.id) : ''
+  useEffect(() => {
+    onPick(pickedId)
+  }, [pickedId, onPick])
+  const hint = !query || !results
+    ? ''
+    : !found.length
+      ? 'Không tìm thấy người cao tuổi.'
+      : !picked
+        ? `Có ${found.length} người khớp, chọn một trong gợi ý.`
+        : ''
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <InputGroup className="h-11 bg-popover">
+        <InputGroupAddon>
+          <SearchIcon aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
+          type="search"
+          aria-label="Tìm người cao tuổi theo tên"
+          aria-describedby={hint ? hintId : undefined}
+          placeholder="Tìm theo tên người cao tuổi"
+          list={listId}
+          value={text}
+          onChange={(e) => {
+            const value = e.target.value
+            // Chọn một gợi ý: giữ người đó, không tìm lại theo chuỗi "tên · mã hồ sơ"
+            const match = found.find((r) => label(r) === value)
+            setText(value)
+            setChosen(match ?? null)
+            if (!match) setQuery(value.trim())
+          }}
+        />
+      </InputGroup>
+      <datalist id={listId}>
+        {found.map((r) => (
+          <option key={r.id} value={label(r)} />
+        ))}
+      </datalist>
+      {hint && (
+        <p id={hintId} className="type-caption text-muted-foreground">
+          {hint}
+        </p>
+      )}
+    </div>
+  )
 }
 
 function FilterSelect({ label, value, options, onChange }) {
@@ -237,6 +309,12 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     }
   }
 
+  // Lọc theo người cao tuổi tìm được theo tên; đổi người thì về trang đầu
+  const pickResident = useCallback((residentId) => {
+    setFilter((old) => (old.residentId === residentId ? old : { ...old, residentId }))
+    setPage(0)
+  }, [])
+
   if (status === 'ready' && !view) return <PermissionDeniedState label="Lập công việc của ca" />
   const people = Object.fromEntries(
     residents.map((r) => [r.id, r.personalInfo?.fullName || `Người cao tuổi · mã ${r.id}`]),
@@ -312,13 +390,8 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
         </div>
       )}
       <section aria-label="Lọc công việc đã lập" className="rounded-xl border bg-card p-4">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
-          <FilterSelect
-            label="Người cao tuổi"
-            value={filter.residentId}
-            options={residents.map((r) => [String(r.id), people[r.id]])}
-            onChange={setFilterOf('residentId')}
-          />
+        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
+          <ResidentSearch key={revision} onPick={pickResident} />
           <FilterSelect
             label="Công việc"
             value={filter.taskTypeId}
@@ -364,7 +437,6 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
                 <TableHead>Công việc</TableHead>
                 <TableHead>Ngày, giờ</TableHead>
                 <TableHead>Người làm</TableHead>
-                <TableHead>Trạng thái</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -381,9 +453,6 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
                     {formatDate(dateOf(t.plannedAt))} {timeOf(t.plannedAt)}
                   </TableCell>
                   <TableCell>{t.performer || 'Việc chung của tầng'}</TableCell>
-                  <TableCell>
-                    <StatusBadge status={STATUSES[t.status]} />
-                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>

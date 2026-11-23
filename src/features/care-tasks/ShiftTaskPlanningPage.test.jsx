@@ -158,7 +158,12 @@ it('FR_017_locTheoNguoiCaoTuoiCongViecNguoiLam_guiLenMayChu', async () => {
   api.on('GET', '/staff', json(200, [{ id: 22, fullName: '[Nhân viên kiểm thử]' }]))
   view()
   await screen.findByText('Chưa có công việc đã lập.')
-  fireEvent.change(await screen.findByLabelText('Người cao tuổi'), { target: { value: '77' } })
+  fireEvent.change(screen.getByLabelText('Tìm người cao tuổi theo tên'), {
+    target: { value: 'kiểm thử' },
+  })
+  await waitFor(() =>
+    expect(new URL(api.calls('GET', '/residents').at(-1)[0], 'http://localhost').searchParams.get('q')).toBe('kiểm thử'),
+  )
   fireEvent.change(screen.getByLabelText('Công việc'), { target: { value: '9' } })
   await screen.findByRole('option', { name: '[Nhân viên kiểm thử]' })
   fireEvent.change(screen.getByLabelText('Người làm'), { target: { value: '22' } })
@@ -172,6 +177,33 @@ it('FR_017_locTheoNguoiCaoTuoiCongViecNguoiLam_guiLenMayChu', async () => {
     ])
   })
   expect(await screen.findByText('Không có công việc khớp bộ lọc.')).toBeInTheDocument()
+})
+
+it('FR_017_timNguoiCaoTuoiTheoTen_nhieuNguoiKhopThiChoChon', async () => {
+  api.on(
+    'GET',
+    '/residents',
+    json(200, {
+      items: [
+        { id: 77, profileCode: 'HS-77', personalInfo: { fullName: '[Họ tên kiểm thử]' } },
+        { id: 78, profileCode: 'HS-78', personalInfo: { fullName: '[Họ tên kiểm thử 2]' } },
+      ],
+      nextCursor: null,
+    }),
+  )
+  view()
+  await screen.findByText('Chưa có công việc đã lập.')
+  const search = screen.getByLabelText('Tìm người cao tuổi theo tên')
+  fireEvent.change(search, { target: { value: 'kiểm' } })
+  expect(await screen.findByText('Có 2 người khớp, chọn một trong gợi ý.')).toBeInTheDocument()
+  expect(api.calls('GET', '/care-tasks').some(([u]) => u.includes('residentId'))).toBe(false)
+  fireEvent.change(search, { target: { value: '[Họ tên kiểm thử 2] · HS-78' } })
+  await waitFor(() =>
+    expect(new URL(api.calls('GET', '/care-tasks').at(-1)[0], 'http://localhost').searchParams.get('residentId')).toBe(
+      '78',
+    ),
+  )
+  expect(screen.queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
 })
 
 it('FR_017_doiChieuNguon_chiDeXem', async () => {
