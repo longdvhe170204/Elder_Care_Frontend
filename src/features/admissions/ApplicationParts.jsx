@@ -10,22 +10,16 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
+import { ChoiceTray } from '@/common/ChoiceTray'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { APPLICATION_NEEDS } from '@/common/quickChoices'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
-import {
-  CARE_LEVELS,
-  OPINIONS,
-  OPINION_SOURCES,
-  RESIDENCE_TYPES,
-  labelOf,
-  newKey,
-} from './admissionLabels'
+import { CARE_LEVELS, OPINIONS, OPINION_SOURCES, RESIDENCE_TYPES, labelOf, newKey } from './admissionLabels'
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 
 // Khung chi tiết và form của lượt đăng ký tiếp nhận (004 T019; FR-001, FR-003, FR-004, FR-004a, FR-005). Danh sách điều
 // kiện tiếp nhận (a) → (f) tách khỏi ý kiến của người cao tuổi về việc vào ở: ý kiến không là điều kiện (Q-356).
-
 
 export function OpinionBlock({ opinions }) {
   if (!opinions.length) return <p className="type-body-sm text-muted-foreground">Chưa ghi ý kiến về việc vào ở.</p>
@@ -197,94 +191,96 @@ export function ApplicationForm({
 
   return (
     <>
-        <SheetTitle>{editing ? 'Cập nhật đăng ký tiếp nhận' : 'Lập đăng ký tiếp nhận'}</SheetTitle>
-        <SheetDescription>
-          Người cao tuổi phải đang ở trạng thái Đang tiếp nhận; mỗi người một lượt đang mở.
-        </SheetDescription>
-        {notice && <div className="mt-4">{notice}</div>}
-        <FieldGroup className="mt-4">
-          {editing ? (
-            <Info label="Người cao tuổi">{`Mã ${application.residentId}`}</Info>
-          ) : presetResidentId != null ? (
-            <Info label="Người cao tuổi">{residentName ?? `Mã ${presetResidentId}`}</Info>
-          ) : (
-            <ResidentSelect
-              id="application-resident"
-              statuses={['ADMISSION_IN_PROGRESS']}
-              value={residentId}
-              onChange={setResidentId}
-              error={shown('resident')}
-              onFailure={(e) => setFailure(problemOf(e))}
-            />
-          )}
-          <Field data-invalid={!!shown('date') || undefined}>
-            <FieldLabel htmlFor="application-date">Ngày đăng ký</FieldLabel>
-            <Input
-              id="application-date"
-              type="date"
-              className="h-11"
-              value={applicationDate}
-              aria-invalid={!!shown('date') || undefined}
-              onChange={(e) => setApplicationDate(e.target.value)}
-            />
-            {shown('date') && <FieldError>{shown('date')}</FieldError>}
-          </Field>
-          <Choices
-            label="Loại lưu trú mong muốn"
-            options={RESIDENCE_TYPES}
-            value={type}
-            onChange={setType}
-            error={shown('type')}
+      <SheetTitle>{editing ? 'Cập nhật đăng ký tiếp nhận' : 'Lập đăng ký tiếp nhận'}</SheetTitle>
+      <SheetDescription>
+        Người cao tuổi phải đang ở trạng thái Đang tiếp nhận; mỗi người một lượt đang mở.
+      </SheetDescription>
+      {notice && <div className="mt-4">{notice}</div>}
+      <FieldGroup className="mt-4">
+        {editing ? (
+          <Info label="Người cao tuổi">{`Mã ${application.residentId}`}</Info>
+        ) : presetResidentId != null ? (
+          <Info label="Người cao tuổi">{residentName ?? `Mã ${presetResidentId}`}</Info>
+        ) : (
+          <ResidentSelect
+            id="application-resident"
+            statuses={['ADMISSION_IN_PROGRESS']}
+            value={residentId}
+            onChange={setResidentId}
+            error={shown('resident')}
+            onFailure={(e) => setFailure(problemOf(e))}
           />
-          <Choices
-            label="Mức chăm sóc dự kiến"
-            options={CARE_LEVELS}
-            value={level}
-            onChange={setLevel}
-            error={shown('level')}
+        )}
+        <Field data-invalid={!!shown('date') || undefined}>
+          <FieldLabel htmlFor="application-date">Ngày đăng ký</FieldLabel>
+          <Input
+            id="application-date"
+            type="date"
+            className="h-11"
+            value={applicationDate}
+            aria-invalid={!!shown('date') || undefined}
+            onChange={(e) => setApplicationDate(e.target.value)}
           />
-          <Field>
-            <FieldLabel htmlFor="application-desired">Ngày vào dự kiến</FieldLabel>
-            <Input
-              id="application-desired"
-              type="date"
-              className="h-11"
-              value={desiredDate}
-              onChange={(e) => setDesiredDate(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="application-contact">Người liên hệ</FieldLabel>
-            <Input
-              id="application-contact"
-              className="h-11"
-              value={contact}
-              onChange={(e) => setContact(e.target.value)}
-            />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="application-needs">Nhu cầu</FieldLabel>
-            <Textarea id="application-needs" rows={2} value={needs} onChange={(e) => setNeeds(e.target.value)} />
-          </Field>
-          <Field>
-            <FieldLabel htmlFor="application-note">Ghi chú</FieldLabel>
-            <Textarea id="application-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
-          </Field>
-          {editing && (
-            <ReasonField id="application-reason" value={reason} onChange={setReason} error={shown('reason')} />
-          )}
-        </FieldGroup>
-        <div className="mt-4">
-          <ProblemAlert problem={failure} />
-        </div>
-        <div className="mt-4 flex justify-end gap-2">
-          <Button variant="ghost" className="h-11" onClick={onClose}>
-            Đóng
-          </Button>
-          <Button className="h-11" disabled={busy || (editing && !etag)} onClick={save}>
-            Lưu đăng ký
-          </Button>
-        </div>
+          {shown('date') && <FieldError>{shown('date')}</FieldError>}
+        </Field>
+        <Choices
+          label="Loại lưu trú mong muốn"
+          options={RESIDENCE_TYPES}
+          value={type}
+          onChange={setType}
+          error={shown('type')}
+        />
+        <Choices
+          label="Mức chăm sóc dự kiến"
+          options={CARE_LEVELS}
+          value={level}
+          onChange={setLevel}
+          error={shown('level')}
+        />
+        <Field>
+          <FieldLabel htmlFor="application-desired">Ngày vào dự kiến</FieldLabel>
+          <Input
+            id="application-desired"
+            type="date"
+            className="h-11"
+            value={desiredDate}
+            onChange={(e) => setDesiredDate(e.target.value)}
+          />
+        </Field>
+        <Field>
+          <FieldLabel htmlFor="application-contact">Người liên hệ</FieldLabel>
+          <Input
+            id="application-contact"
+            className="h-11"
+            value={contact}
+            onChange={(e) => setContact(e.target.value)}
+          />
+        </Field>
+        <ChoiceTray
+          id="application-needs"
+          label="Nhu cầu"
+          options={APPLICATION_NEEDS}
+          multiple
+          value={needs}
+          onChange={setNeeds}
+        />
+        <Field>
+          <FieldLabel htmlFor="application-note">Ghi chú</FieldLabel>
+          <Textarea id="application-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+        </Field>
+        {editing && <ReasonField id="application-reason" value={reason} onChange={setReason} error={shown('reason')} />}
+      </FieldGroup>
+      <div className="mt-4">
+        <ProblemAlert problem={failure} />
+      </div>
+      <div className="mt-4 flex justify-end gap-2">
+        <Button variant="ghost" className="h-11" onClick={onClose}>
+          Đóng
+        </Button>
+        <Button className="h-11" disabled={busy || (editing && !etag)} onClick={save}>
+          Lưu đăng ký
+        </Button>
+      </div>
     </>
   )
 }

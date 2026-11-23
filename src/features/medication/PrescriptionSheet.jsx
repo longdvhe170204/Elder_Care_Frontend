@@ -12,6 +12,7 @@ import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { todayVN } from './doseRound'
 import { IssueConfirmations } from './IssueConfirmations'
+import { MEASUREMENTS } from './measurements'
 import { checkPrescription, createPrescription, idempotencyKeys } from './prescriptions'
 import { DAY_LABELS, newPrescriptionBody, parseSlots } from './prescriptionView'
 
@@ -52,6 +53,9 @@ function PrescriptionForm({ onOpenChange, residentId, resident, medications, isD
     prescriberName: '',
     prescribedAt: todayVN(),
     instructionNote: '',
+    timeCriticality: 'NORMAL',
+    requiredMeasurements: [],
+    indication: '',
     confirmations: {},
   })
   const [check, setCheck] = useState(null)
@@ -69,6 +73,7 @@ function PrescriptionForm({ onOpenChange, residentId, resident, medications, isD
     if (form.prescriptionType === 'PRN') {
       if (!(Number(form.minIntervalMinutes) >= 1) || !(Number(form.maxDosesPer24h) >= 1))
         return 'Nhập khoảng cách tối thiểu (phút) và số lần tối đa trong 24 giờ, mỗi giá trị từ 1'
+      if (!form.indication.trim()) return 'Nhập chỉ định dùng thuốc khi cần (ví dụ đau, sốt)'
     } else if (form.frequencyType === 'TIMED_SLOTS') {
       if (!parseSlots(form.timedSlots)) return 'Nhập các mốc giờ dạng HH:mm, cách nhau bằng dấu phẩy'
     } else if (form.frequencyType === 'DAYS_OF_WEEK') {
@@ -256,6 +261,49 @@ function PrescriptionForm({ onOpenChange, residentId, resident, medications, isD
                 <FieldLabel htmlFor="max24hInput">Số lần tối đa trong 24 giờ</FieldLabel>
                 <Input id="max24hInput" type="number" min="1" value={form.maxDosesPer24h} onChange={(e) => set({ maxDosesPer24h: e.target.value })} className="h-11" />
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-3 rounded-lg border bg-card p-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="type-label">Mức quan trọng về thời gian</span>
+            {[
+              ['NORMAL', 'Thường'],
+              ['CRITICAL', 'Quan trọng'],
+            ].map(([value, label]) => (
+              <label key={value} className="flex cursor-pointer items-center gap-1.5 type-body-sm">
+                <input type="radio" name="timeCriticality" value={value} checked={form.timeCriticality === value} onChange={() => set({ timeCriticality: value })} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <p className="type-caption text-muted-foreground">
+            Quan trọng (ví dụ insulin, thuốc Parkinson, thuốc chống đông): liều Trễ quá 15 phút là Bỏ lỡ và báo ngay Trưởng tầng, Bác sĩ trực.
+          </p>
+          <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <legend className="pb-1 type-label">Chỉ số phải đo trước khi dùng (nếu có)</legend>
+            {MEASUREMENTS.map((m) => (
+              <label key={m.code} className="flex cursor-pointer items-center gap-1.5 type-body-sm">
+                <input
+                  type="checkbox"
+                  checked={form.requiredMeasurements.includes(m.code)}
+                  onChange={(e) =>
+                    set({
+                      requiredMeasurements: e.target.checked
+                        ? [...form.requiredMeasurements, m.code]
+                        : form.requiredMeasurements.filter((c) => c !== m.code),
+                    })
+                  }
+                />
+                {m.label}
+              </label>
+            ))}
+          </fieldset>
+          {form.prescriptionType === 'PRN' && (
+            <div className="flex flex-col gap-1.5">
+              <FieldLabel htmlFor="indicationInput">Chỉ định dùng thuốc khi cần</FieldLabel>
+              <Input id="indicationInput" value={form.indication} onChange={(e) => set({ indication: e.target.value })} placeholder="Ví dụ: đau, sốt trên 38,5 °C" className="h-11" />
             </div>
           )}
         </div>

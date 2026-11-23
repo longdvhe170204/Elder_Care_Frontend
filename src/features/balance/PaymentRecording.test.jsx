@@ -20,7 +20,8 @@ let api
 beforeEach(() => {
   api = mockRoutes()
   api.on('GET', '/balances/by-payment-code', json(200, BALANCE))
-  api.on('GET', '/residents/41', json(200, { id: 41, fullName: 'Nguyễn Thị Lan' }))
+  // Hồ sơ đúng dạng api-001: họ tên nằm trong personalInfo
+  api.on('GET', '/residents/41', json(200, { id: 41, personalInfo: { fullName: 'Nguyễn Thị Lan' } }))
 })
 
 afterEach(() => {

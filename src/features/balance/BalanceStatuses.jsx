@@ -109,7 +109,7 @@ export function BalanceStatuses() {
       const entries = await Promise.all(
         data.map((r) =>
           getResidentsById({ path: { id: r.residentId } })
-            .then(({ data: p }) => [r.residentId, p?.fullName])
+            .then(({ data: p }) => [r.residentId, p?.personalInfo?.fullName])
             .catch(() => [r.residentId, null]),
         ),
       )

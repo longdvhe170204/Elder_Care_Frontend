@@ -16,7 +16,8 @@ import { formatDateTime } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
-import { FilesField, SelectField } from './BelongingFields'
+import { FilesField, MemberField, SelectField } from './BelongingFields'
+import { memberName, useFamilyContacts } from './useFamilyContacts'
 import { CHANNEL_OPTIONS, CONFIRMATION_LABELS, nowLocal, pickLabel, toOffsetIso } from './belongingLabels'
 
 // Xác nhận người nhận khác của một người cao tuổi (013 T019; FR-017 → FR-017b, BR-M12-04; api-013 /recipient-
@@ -35,6 +36,7 @@ const OPEN = ['PENDING_CONFIRMATION', 'EFFECTIVE']
 // trả, khóa không sửa ở đây) và `embedded` (khung div, nút thường: không lồng <form> trong form trả); `onCreated(id)` nhận
 // mã xác nhận vừa lập (backend trả {id}, api-013 chưa khai schema của 201, như lập phiếu kiểm kê).
 export function CreateForm({ residentId, belongings, locationName, onDone, initial, embedded = false, onCreated }) {
+  const contacts = useFamilyContacts(residentId)
   const [v, setV] = useState({ name: initial?.name ?? '', document: initial?.document ?? '', representativeId: '' })
   const [isResident, setIsResident] = useState(initial?.isResident ?? false)
   const [ids, setIds] = useState(initial?.belongingIds ?? [])
@@ -54,7 +56,7 @@ export function CreateForm({ residentId, belongings, locationName, onDone, initi
     if (!v.name.trim()) e.name = 'Nhập họ tên người nhận.'
     if (!v.document.trim()) e.document = 'Nhập giấy tờ của người nhận.'
     if (ids.length === 0) e.ids = 'Chọn ít nhất một đồ.'
-    if (form.length > 0 && !/^[1-9]\d*$/.test(v.representativeId)) e.representativeId = 'Nhập mã người đại diện đã ký.'
+    if (form.length > 0 && !/^[1-9]\d*$/.test(v.representativeId)) e.representativeId = 'Chọn người đại diện đã ký.'
     setErrors(e)
     setFailure(null)
     if (Object.keys(e).length > 0) return
@@ -151,17 +153,16 @@ export function CreateForm({ residentId, belongings, locationName, onDone, initi
           hint="Có bản ký thì yêu cầu Hiệu lực ngay."
         />
         {form.length > 0 && (
-          <Field data-invalid={!!errors.representativeId || undefined}>
-            <FieldLabel htmlFor="rc-representative">Mã người đại diện đã ký</FieldLabel>
-            <Input
-              id="rc-representative"
-              inputMode="numeric"
-              className="h-11"
-              value={v.representativeId}
-              onChange={set('representativeId')}
-            />
-            {errors.representativeId && <FieldError>{errors.representativeId}</FieldError>}
-          </Field>
+          <MemberField
+            id="rc-representative"
+            label="Người đại diện đã ký"
+            fallbackLabel="Mã người đại diện đã ký"
+            contacts={contacts}
+            filter={(m) => m.representative}
+            value={v.representativeId}
+            onChange={(representativeId) => setV((s) => ({ ...s, representativeId }))}
+            error={errors.representativeId}
+          />
         )}
       </FieldGroup>
       <ProblemAlert problem={failure} />
@@ -178,7 +179,7 @@ export function CreateForm({ residentId, belongings, locationName, onDone, initi
   )
 }
 
-function ContactForm({ confirmation, onDone }) {
+function ContactForm({ confirmation, contacts, onDone }) {
   const [v, setV] = useState({ familyMemberId: '', channel: '', at: nowLocal(), result: '' })
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
@@ -187,7 +188,7 @@ function ContactForm({ confirmation, onDone }) {
   async function submit(event) {
     event.preventDefault()
     const e = {}
-    if (!/^[1-9]\d*$/.test(v.familyMemberId)) e.familyMemberId = 'Nhập mã người đại diện.'
+    if (!/^[1-9]\d*$/.test(v.familyMemberId)) e.familyMemberId = 'Chọn người đại diện.'
     if (!v.channel) e.channel = 'Chọn kênh liên hệ.'
     if (!v.result.trim()) e.result = 'Nhập kết quả liên hệ.'
     setErrors(e)
@@ -212,17 +213,16 @@ function ContactForm({ confirmation, onDone }) {
 
   return (
     <form className="flex flex-col gap-3" onSubmit={submit} noValidate>
-      <Field data-invalid={!!errors.familyMemberId || undefined}>
-        <FieldLabel htmlFor={`ce-member-${confirmation.id}`}>Mã người đại diện đã liên hệ</FieldLabel>
-        <Input
-          id={`ce-member-${confirmation.id}`}
-          inputMode="numeric"
-          className="h-11"
-          value={v.familyMemberId}
-          onChange={(e) => setV((s) => ({ ...s, familyMemberId: e.target.value }))}
-        />
-        {errors.familyMemberId && <FieldError>{errors.familyMemberId}</FieldError>}
-      </Field>
+      <MemberField
+        id={`ce-member-${confirmation.id}`}
+        label="Người đại diện đã liên hệ"
+        fallbackLabel="Mã người đại diện đã liên hệ"
+        contacts={contacts}
+        filter={(m) => m.representative}
+        value={v.familyMemberId}
+        onChange={(familyMemberId) => setV((s) => ({ ...s, familyMemberId }))}
+        error={errors.familyMemberId}
+      />
       <SelectField
         id={`ce-channel-${confirmation.id}`}
         label="Kênh liên hệ"
@@ -322,6 +322,7 @@ function CommandForm({ confirmation, command, onDone }) {
 // refreshKey: màn cha tăng sau khi lệnh trả thành công (xác nhận đã dùng chuyển Đã dùng), để tải lại danh sách
 export function RecipientConfirmations({ residentId, belongings, locationName, role, refreshKey = 0 }) {
   const { can } = usePermissions()
+  const contacts = useFamilyContacts(residentId)
   const [state, setState] = useState({ status: 'loading', items: [] })
   const [creating, setCreating] = useState(false)
   const [open, setOpen] = useState(null)
@@ -348,7 +349,8 @@ export function RecipientConfirmations({ residentId, belongings, locationName, r
     load()
   }
 
-  const canUpdate = can('BELONGINGS', 'UPDATE')
+  // Lập, ghi liên hệ, hủy chỉ Hành chính (backend requireOffice, Q-153); Điều dưỡng có quyền sửa đồ gửi nhưng không làm
+  const canUpdate = can('BELONGINGS', 'UPDATE') && role === 'OFFICE_STAFF'
   const manager = role === 'NURSING_HOME_MANAGER'
   const toggle = (id, action) => setOpen(open?.id === id && open.action === action ? null : { id, action })
 
@@ -365,7 +367,9 @@ export function RecipientConfirmations({ residentId, belongings, locationName, r
       <div role="status" className="type-body-sm text-success-foreground">
         {notice}
       </div>
-      {creating && <CreateForm residentId={residentId} belongings={belongings} locationName={locationName} onDone={done} />}
+      {creating && (
+        <CreateForm residentId={residentId} belongings={belongings} locationName={locationName} onDone={done} />
+      )}
       {state.status === 'error' && <ProblemAlert problem={state.problem} />}
       {state.status === 'ready' && state.items.length === 0 && (
         <p className="type-body-sm text-muted-foreground">Chưa có yêu cầu xác nhận người nhận khác.</p>
@@ -381,6 +385,19 @@ export function RecipientConfirmations({ residentId, belongings, locationName, r
               Mã {c.id}, giấy tờ {c.recipientIdDocument}, {c.belongingIds.length} đồ
               {c.expiresAt && `, hết hạn ${formatDateTime(c.expiresAt)}`}
             </span>
+            {c.contactAttempts?.length > 0 && (
+              <ul
+                className="flex flex-col gap-1 type-body-sm text-muted-foreground"
+                aria-label={`Các lần liên hệ người đại diện của ${c.recipientName}`}
+              >
+                {c.contactAttempts.map((a, i) => (
+                  <li key={i}>
+                    {formatDateTime(a.at)}, {CHANNEL_OPTIONS.find((o) => o.value === a.channel)?.label ?? a.channel},{' '}
+                    {memberName(contacts.members, a.familyMemberId)}: {a.result}
+                  </li>
+                ))}
+              </ul>
+            )}
             {OPEN.includes(c.status) && (
               <div className="flex flex-wrap gap-2">
                 {canUpdate && c.status === 'PENDING_CONFIRMATION' && (
@@ -418,7 +435,9 @@ export function RecipientConfirmations({ residentId, belongings, locationName, r
                 )}
               </div>
             )}
-            {open?.id === c.id && open.action === 'contact' && <ContactForm confirmation={c} onDone={done} />}
+            {open?.id === c.id && open.action === 'contact' && (
+              <ContactForm confirmation={c} contacts={contacts} onDone={done} />
+            )}
             {open?.id === c.id && open.action !== 'contact' && (
               <CommandForm confirmation={c} command={open.action} onDone={done} />
             )}

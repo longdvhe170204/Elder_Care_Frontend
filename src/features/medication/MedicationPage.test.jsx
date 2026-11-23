@@ -46,6 +46,14 @@ describe('MedicationPage', () => {
     expect(screen.getByText('P201')).toBeTruthy()
   })
 
+  it('API_008_caHienTaiGuiToLaNgaySauFrom', async () => {
+    render(<MedicationPage role="NURSING_STAFF" />)
+    await waitFor(() => expect(api.calls('GET', '/me/shifts').length).toBeGreaterThan(0))
+    const url = new URL(api.calls('GET', '/me/shifts')[0][0], 'http://x')
+    const from = new Date(url.searchParams.get('from') + 'T00:00:00Z')
+    expect(new Date(url.searchParams.get('to') + 'T00:00:00Z') - from).toBe(86400000)
+  })
+
   it('DESIGN_6_7_lieuTre_hienOReDaiCanLamNgay_theKhongCoVienDo', async () => {
     const { container } = render(<MedicationPage role="NURSING_STAFF" />)
     expect(await screen.findByRole('region', { name: 'Cần làm ngay' })).toBeTruthy()
@@ -86,7 +94,11 @@ describe('MedicationPage', () => {
   })
 
   it('006_T072_cheDoDoiChieuThuoc_chonNguoi_hienPhieuCuaNguoiDo', async () => {
-    api.on('GET', '/residents', json(200, { items: [{ id: 9, profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }] }))
+    api.on(
+      'GET',
+      '/residents',
+      json(200, { items: [{ id: 9, profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }] }),
+    )
     api.on('GET', '/residents/9/prescriptions', json(200, []))
     api.on('GET', '/medications', json(200, []))
     api.on('GET', '/residents/9/initial-health-record', json(200, {}))
@@ -98,8 +110,31 @@ describe('MedicationPage', () => {
   })
 
   it('006_T074_donChoDoiChieu_nutMoChuyenSangDoiChieuDungNguoi', async () => {
-    api.on('GET', '/residents', json(200, { items: [{ id: 9, profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }] }))
-    api.on('GET', '/residents/9/prescriptions', json(200, [{ id: 7, residentId: 9, medicationId: 1, dosage: 1, route: 'Uống', prescriptionType: 'PERIODIC', frequency: { type: 'TIMED_SLOTS', timedSlots: ['08:00'] }, startedAt: '2026-11-01T01:00:00Z', status: 'SUSPENDED', suspensionReason: 'RECONCILIATION_PENDING', prescriber: { type: 'INTERNAL' }, allowedCommands: [] }]))
+    api.on(
+      'GET',
+      '/residents',
+      json(200, { items: [{ id: 9, profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }] }),
+    )
+    api.on(
+      'GET',
+      '/residents/9/prescriptions',
+      json(200, [
+        {
+          id: 7,
+          residentId: 9,
+          medicationId: 1,
+          dosage: 1,
+          route: 'Uống',
+          prescriptionType: 'PERIODIC',
+          frequency: { type: 'TIMED_SLOTS', timedSlots: ['08:00'] },
+          startedAt: '2026-11-01T01:00:00Z',
+          status: 'SUSPENDED',
+          suspensionReason: 'RECONCILIATION_PENDING',
+          prescriber: { type: 'INTERNAL' },
+          allowedCommands: [],
+        },
+      ]),
+    )
     api.on('GET', '/medications', json(200, []))
     api.on('GET', '/residents/9/initial-health-record', json(200, {}))
     api.on('GET', '/residents/9/medication-reconciliations', json(200, []))
@@ -113,11 +148,27 @@ describe('MedicationPage', () => {
 
   it('006_T078_danhSachCanDoiChieu_bamTenMoPhieuNguoiDo_quaHanDungTruoc', async () => {
     api.on('GET', '/residents', json(200, { items: [] }))
-    api.on('GET', '/medication-reconciliation-worklist', json(200, [
-      { residentId: 9, reconciliationId: 4, status: 'OPEN', reason: 'HOSPITAL_RETURN', deadlineAt: '2026-11-08T05:00:00Z', overdue: true, awaitingPrescriptionCount: 2 },
-      { residentId: 11, awaitingPrescriptionCount: 1, overdue: false },
-    ]))
-    api.on('GET', '/residents/11', json(200, { id: 11, personalInfo: { fullName: 'Lê Văn Bình' }, activeHealthItems: [] }))
+    api.on(
+      'GET',
+      '/medication-reconciliation-worklist',
+      json(200, [
+        {
+          residentId: 9,
+          reconciliationId: 4,
+          status: 'OPEN',
+          reason: 'HOSPITAL_RETURN',
+          deadlineAt: '2026-11-08T05:00:00Z',
+          overdue: true,
+          awaitingPrescriptionCount: 2,
+        },
+        { residentId: 11, awaitingPrescriptionCount: 1, overdue: false },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/residents/11',
+      json(200, { id: 11, personalInfo: { fullName: 'Lê Văn Bình' }, activeHealthItems: [] }),
+    )
     api.on('GET', '/residents/9/prescriptions', json(200, []))
     api.on('GET', '/medications', json(200, []))
     api.on('GET', '/residents/9/initial-health-record', json(200, {}))
@@ -125,7 +176,9 @@ describe('MedicationPage', () => {
     render(<MedicationPage role="NURSING_STAFF" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Đối chiếu thuốc' }))
     const strip = await screen.findByRole('region', { name: 'Cần đối chiếu' })
-    const names = within(strip).getAllByRole('button').map((b) => b.textContent)
+    const names = within(strip)
+      .getAllByRole('button')
+      .map((b) => b.textContent)
     expect(names).toEqual(['Trần Thị Mai, quá hạn', 'Lê Văn Bình, chưa lập phiếu'])
     fireEvent.click(within(strip).getByRole('button', { name: 'Trần Thị Mai, quá hạn' }))
     expect(await screen.findByText('Trần Thị Mai chưa có phiếu đối chiếu thuốc.')).toBeTruthy()

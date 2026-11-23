@@ -42,8 +42,9 @@ function permissions(keys) {
 beforeEach(() => {
   api = mockRoutes()
   api.on('GET', '/balance-statuses', json(200, ROWS))
-  api.on('GET', '/residents/41', json(200, { id: 41, fullName: 'Nguyễn Thị Lan' }))
-  api.on('GET', '/residents/42', json(200, { id: 42, fullName: 'Trần Văn Minh' }))
+  // Hồ sơ đúng dạng api-001: họ tên nằm trong personalInfo
+  api.on('GET', '/residents/41', json(200, { id: 41, personalInfo: { fullName: 'Nguyễn Thị Lan' } }))
+  api.on('GET', '/residents/42', json(200, { id: 42, personalInfo: { fullName: 'Trần Văn Minh' } }))
 })
 
 afterEach(() => {

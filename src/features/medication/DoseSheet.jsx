@@ -6,16 +6,21 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AllergyNote } from '@/common/CareNotes'
+import { ProblemAlert } from '@/common/ProblemAlert'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
+import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
+import { claimDose, releaseDose } from './doseRound'
+import { hhmm, POSTPONE } from './doseRoundView'
 import { DoseTags } from './DoseTags'
+import { isNumber, measurementLabel, measurementUnit } from './measurements'
 import { minutes, windowOf } from './medicationTime'
 
 // Khung xác nhận liều (DESIGN.md 7.2 detail-panel, form ghi nhận; spec 006 FR-021, FR-026, FR-029 → FR-032, FR-044).
 // Mỗi liều chọn kết quả riêng và lưu thành bản ghi riêng; mỗi liều chỉ xác nhận một lần (BR-M07-12).
 // Bản mẫu: kiểm tra trên màn chỉ để hiện lỗi tại ô; kiểm tra thật (giấy phép, phân công, trực tuyến) do backend.
 
-const RESULTS = ['Đã dùng', 'Từ chối', 'Không thực hiện']
+const RESULTS = ['Đã dùng', POSTPONE, 'Từ chối', 'Không thực hiện']
 const OPEN = ['Đến giờ', 'Trễ']
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
 
@@ -24,10 +29,62 @@ function errorsOf(dose, entry, now) {
   const e = {}
   if (entry.result === 'Đã dùng') {
     if (!HHMM.test(entry.time) || entry.time > now) e.time = `Nhập giờ dạng HH:mm, không sau ${now}`
+    // BR-M07-26: đơn yêu cầu đo chỉ số trước khi dùng thì phải nhập đủ mới ghi được Đã dùng
+    const missing = (dose.measurements ?? []).filter((code) => !isNumber(entry.measure?.[code]))
+    if (missing.length > 0) e.measure = `Nhập chỉ số đo trước khi dùng: ${missing.map(measurementLabel).join(', ')}`
   } else if (!entry.reason.trim()) {
-    e.reason = entry.result === 'Từ chối' ? 'Nhập lý do người cao tuổi từ chối' : 'Nhập lý do không thực hiện'
+    e.reason =
+      entry.result === 'Từ chối'
+        ? 'Nhập lý do người cao tuổi từ chối'
+        : entry.result === POSTPONE
+          ? 'Nhập lý do hoãn có chủ đích'
+          : 'Nhập lý do không thực hiện'
   }
   return e
+}
+
+// Nhận liều (BR-M07-26): người nhận giữ liều tới khi hết hạn (15 phút) hoặc bỏ nhận; người khác chưa xác nhận được.
+function ClaimBar({ dose }) {
+  const [claimUntil, setClaimUntil] = useState(null)
+  const [problem, setProblem] = useState(null)
+  const [busy, setBusy] = useState(false)
+  async function run(action) {
+    setBusy(true)
+    setProblem(null)
+    try {
+      const { data } = await action(dose.id)
+      setClaimUntil(data?.claimExpiresAt ? hhmm(data.claimExpiresAt) : null)
+    } catch (error) {
+      setProblem(problemOf(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+  const others = !claimUntil && dose.claimedBy && dose.claimExpiresAt
+  return (
+    <div className="flex flex-col gap-1.5">
+      <ProblemAlert problem={problem} />
+      <div className="flex flex-wrap items-center gap-2">
+        {claimUntil ? (
+          <>
+            <span className="type-caption text-muted-foreground tabular-nums">Bạn đã nhận liều đến {claimUntil}</span>
+            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => run(releaseDose)}>
+              Bỏ nhận
+            </Button>
+          </>
+        ) : (
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => run(claimDose)}>
+            Nhận liều
+          </Button>
+        )}
+        {others && (
+          <span className="type-caption text-muted-foreground tabular-nums">
+            Tài khoản mã {dose.claimedBy} đang nhận liều đến {hhmm(dose.claimExpiresAt)}
+          </span>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function DoseForm({ dose, entry, onChange, errors }) {
@@ -45,12 +102,16 @@ function DoseForm({ dose, entry, onChange, errors }) {
           {dose.drug}, {dose.dose}, {dose.route}
         </span>
         <DoseTags dose={dose} />
+        {dose.postponed && (
+          <span className="type-caption text-muted-foreground">Đã hoãn: {dose.postponedReason}. Hoãn không đổi mốc Bỏ lỡ.</span>
+        )}
       </div>
+      <ClaimBar dose={dose} />
       <ToggleGroup
         variant="outline"
         value={entry.result ? [entry.result] : []}
         onValueChange={(n) => onChange({ result: n[0] ?? '' })}
-        className="grid w-full grid-cols-3"
+        className="grid w-full grid-cols-2 sm:grid-cols-4"
         aria-label={`Kết quả liều ${dose.drug}`}
       >
         {RESULTS.map((r) => (
@@ -96,10 +157,40 @@ function DoseForm({ dose, entry, onChange, errors }) {
               <FieldError>{errors.time}</FieldError>
             ) : (
               <FieldDescription>
-                {late ? 'Sau cửa sổ: liều được ghi "dùng trễ".' : 'Giờ 24h, không sau thời điểm ghi.'}
+                {late ? 'Sau cửa sổ: liều được ghi "đã dùng muộn" kèm giờ thực tế.' : 'Giờ 24h, không sau thời điểm ghi.'}
               </FieldDescription>
             )}
           </Field>
+          {(dose.measurements ?? []).length > 0 && (
+            <Field data-invalid={(errors.measure && true) || undefined}>
+              <FieldLabel>Chỉ số đo trước khi dùng</FieldLabel>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {dose.measurements.map((code) => (
+                  <div key={code} className="flex items-center gap-2">
+                    <label htmlFor={`measure-${dose.id}-${code}`} className="w-36 shrink-0 type-body-sm">
+                      {measurementLabel(code)}
+                    </label>
+                    <Input
+                      id={`measure-${dose.id}-${code}`}
+                      inputMode="decimal"
+                      value={entry.measure?.[code] ?? ''}
+                      onChange={(e) => onChange({ measure: { ...entry.measure, [code]: e.target.value } })}
+                      aria-invalid={(errors.measure && true) || undefined}
+                      className="h-11 w-24 tabular-nums"
+                    />
+                    <span className="type-caption text-muted-foreground">{measurementUnit(code)}</span>
+                  </div>
+                ))}
+              </div>
+              {errors.measure ? (
+                <FieldError>{errors.measure}</FieldError>
+              ) : (
+                <FieldDescription>
+                  Đơn yêu cầu đo trước khi dùng. Hệ thống không quyết định dùng hay không theo chỉ số; cần thì hoãn và báo Bác sĩ.
+                </FieldDescription>
+              )}
+            </Field>
+          )}
           <Field>
             <FieldLabel htmlFor={`reaction-${dose.id}`}>Phản ứng sau dùng</FieldLabel>
             <Textarea
@@ -115,7 +206,7 @@ function DoseForm({ dose, entry, onChange, errors }) {
         </>
       )}
 
-      {(entry.result === 'Từ chối' || entry.result === 'Không thực hiện') && (
+      {(entry.result === 'Từ chối' || entry.result === 'Không thực hiện' || entry.result === POSTPONE) && (
         <Field data-invalid={(errors.reason && true) || undefined}>
           <FieldLabel htmlFor={`reason-${dose.id}`}>Lý do</FieldLabel>
           <Textarea
@@ -141,7 +232,7 @@ function SheetBody({ group, now, onSave }) {
   const open = group.doses.filter((d) => OPEN.includes(d.status))
   const [entries, setEntries] = useState(() =>
     Object.fromEntries(
-      open.map((d) => [d.id, { result: '', time: now, reaction: '', reason: '', key: crypto.randomUUID() }]),
+      open.map((d) => [d.id, { result: '', time: now, reaction: '', reason: '', measure: {}, key: crypto.randomUUID() }]),
     ),
   )
   const [submitted, setSubmitted] = useState(false)

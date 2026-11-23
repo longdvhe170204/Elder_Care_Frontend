@@ -6,6 +6,7 @@ import {
   postApprovalRequestsByIdApprove,
   postApprovalRequestsByIdCancel,
   postApprovalRequestsByIdReject,
+  postApprovalRequestsByIdReturnToDraft,
   postApprovalRequestsByIdSubmit,
 } from '@/api'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,10 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { formatDate, formatDateTime } from '@/common/dateTime'
+import { ChangeContent } from '@/features/admissions/ChangeParts'
+import { DisposalContent } from '@/features/belongings/DisposalContent'
 import { ACTION_LABELS, actorLabel, statusLabel, typeLabel } from './approvalStatus'
+import { useRequestSubject } from './requestSubject'
 
 // Chi tiết một yêu cầu phê duyệt (000 T097; US5; FR-031 → FR-040). Nút theo `allowedCommands` backend trả;
 // backend vẫn kiểm mọi lệnh. Ý kiến bắt buộc khi từ chối; tự duyệt thiếu ý kiến thì backend trả 422, báo tại ô.
@@ -87,6 +91,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
+  const subject = useRequestSubject(state.request?.content)
 
   // Tải lại sau 409/412 giữ nguyên khung, không hiện trạng thái đang tải
   const load = useCallback(
@@ -128,7 +133,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
 
   const { request, etag } = state
   const allowed = request.allowedCommands ?? []
-  const canDecide = allowed.includes('approve') || allowed.includes('reject')
+  const canDecide = allowed.includes('approve') || allowed.includes('reject') || allowed.includes('return-to-draft')
 
   async function run(command, body, field) {
     setFailure(null)
@@ -167,6 +172,15 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
     run(postApprovalRequestsByIdReject, { comment }, 'comment')
   }
 
+  // Trả về nháp để người lập sửa, bắt buộc lý do (000 FR-041a, Q-419); dùng ô Ý kiến làm lý do
+  function returnToDraft() {
+    if (!comment.trim()) {
+      setErrors({ comment: 'Nhập lý do trả về nháp' })
+      return
+    }
+    run(postApprovalRequestsByIdReturnToDraft, { reason: comment }, 'comment')
+  }
+
   function cancel() {
     if (!cancelReason.trim()) {
       setErrors({ cancelReason: 'Nhập lý do hủy' })
@@ -190,6 +204,18 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
       </div>
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
+        {subject?.residentName && (
+          <>
+            <dt className="text-muted-foreground">Người cao tuổi</dt>
+            <dd>{subject.residentName}</dd>
+          </>
+        )}
+        {subject?.contractNumber && (
+          <>
+            <dt className="text-muted-foreground">Hợp đồng</dt>
+            <dd className="tabular-nums">{subject.contractNumber}</dd>
+          </>
+        )}
         <dt className="text-muted-foreground">Người yêu cầu</dt>
         <dd>{actorLabel(request.requester)}</dd>
         <dt className="text-muted-foreground">Lập lúc</dt>
@@ -215,17 +241,28 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
         )}
       </dl>
 
-      {content.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <h3 className="type-caption text-muted-foreground">Nội dung</h3>
-          <ul className="flex flex-col gap-1">
-            {content.map(([field, value]) => (
-              <li key={field} className="break-words">
-                <span className="text-muted-foreground">{field}:</span> <span>{valueText(value)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {request.type === 'M02.RESIDENCY_CHANGE' ? (
+        <>
+          <ChangeContent
+            content={{ ...request.content, residentId: subject?.residentId ?? request.content?.residentId }}
+            headingClassName="type-caption text-muted-foreground"
+          />
+        </>
+      ) : request.type === 'M12.UNCLAIMED_BELONGING_DISPOSAL' ? (
+        <DisposalContent content={request.content ?? {}} />
+      ) : (
+        content.length > 0 && (
+          <section className="flex flex-col gap-2">
+            <h3 className="type-caption text-muted-foreground">Nội dung</h3>
+            <ul className="flex flex-col gap-1">
+              {content.map(([field, value]) => (
+                <li key={field} className="break-words">
+                  <span className="text-muted-foreground">{field}:</span> <span>{valueText(value)}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )
       )}
 
       <ProblemAlert problem={failure} />
@@ -245,7 +282,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
             {errors.comment ? (
               <FieldError>{errors.comment}</FieldError>
             ) : (
-              <FieldDescription>Bắt buộc khi từ chối, hoặc khi duyệt yêu cầu do chính mình lập.</FieldDescription>
+              <FieldDescription>Bắt buộc khi từ chối, trả về nháp, hoặc khi duyệt yêu cầu do chính mình lập.</FieldDescription>
             )}
           </Field>
           <div className="flex flex-wrap gap-2">
@@ -257,6 +294,11 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
             {allowed.includes('reject') && (
               <Button variant="outline" className="h-11" disabled={busy} onClick={reject}>
                 Từ chối
+              </Button>
+            )}
+            {allowed.includes('return-to-draft') && (
+              <Button variant="outline" className="h-11" disabled={busy} onClick={returnToDraft}>
+                Trả về nháp
               </Button>
             )}
           </div>

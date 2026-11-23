@@ -75,25 +75,58 @@ function renderPage(onNavigate = vi.fn()) {
   return onNavigate
 }
 
+// Danh sách bước gập dưới "Việc tiếp theo" (phương án B, 2026-11-21): mở ra trước khi kiểm từng bước
+async function openSteps() {
+  fireEvent.click(await screen.findByRole('button', { name: /Xem tất cả các bước/ }))
+  return screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+}
+
 describe('AdmissionWorkspacePage', () => {
-  it('đầu màn có họ tên, không có thanh tiến độ', async () => {
+  // Phương án B (chủ dự án chọn 2026-11-21, thay yêu cầu 2026-11-18 bỏ thanh "x / 8 bước"): thanh tiến độ bốn giai đoạn
+  it('B_dauMan_thanhTienDoBonGiaiDoan_phuDeKhongDungChamGiua', async () => {
     renderPage()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Tiếp nhận Lê Thị Cúc' })).toBeTruthy()
-    // Chủ dự án yêu cầu 2026-11-18: bỏ thanh "x / 8 bước đã xong" ở đầu màn
-    expect(screen.queryByText(/bước đã xong/)).toBeNull()
-    expect(screen.queryByRole('progressbar')).toBeNull()
+    const progress = screen.getByRole('list', { name: 'Tiến độ tiếp nhận' })
+    expect(within(progress).getAllByRole('listitem')).toHaveLength(4)
+    expect(within(progress).getByText('Hồ sơ, 4 trên 4 bước xong')).toBeInTheDocument()
+    expect(screen.queryByText(/·/)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Danh sách đăng ký' })).toBeNull()
+  })
+
+  it('B_viecTiepTheo_motNutChinh_vaViecDangChoNguoiKhacGhiVaiTro', async () => {
+    renderPage()
+
+    const next = await screen.findByRole('region', { name: 'Việc tiếp theo của bạn' })
+    expect(within(next).getByRole('heading', { name: 'Hợp đồng' })).toBeInTheDocument()
+    expect(within(next).getByRole('button', { name: 'Lập hợp đồng' })).toBeInTheDocument()
+    const waiting = screen.getByRole('region', { name: 'Đang chờ người khác' })
+    expect(within(waiting).getByText('Đặt cọc')).toBeInTheDocument()
+    expect(within(waiting).getByText('Kế toán')).toBeInTheDocument()
+  })
+
+  it('B_danhSachBuocGapLai_moRaThiThay_nhanXongChuaXong', async () => {
+    renderPage()
+
+    const toggle = await screen.findByRole('button', { name: /Xem tất cả các bước/ })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('list', { name: 'Các bước tiếp nhận' })).toBeNull()
+    const steps = await openSteps()
+    expect(within(within(steps).getByRole('listitem', { name: 'Hợp đồng' })).getByText('Chưa xong')).toBeTruthy()
+    expect(within(within(steps).getByRole('listitem', { name: 'Phân bổ giường' })).getByText('Xong')).toBeTruthy()
+    const consent = within(steps).getByRole('listitem', { name: 'Bản đồng ý chia sẻ dữ liệu' })
+    expect(within(consent).getByText('Xong')).toBeTruthy()
   })
 
   it('các bước chia theo giai đoạn, mỗi bước mang trạng thái của điều kiện tương ứng', async () => {
     renderPage()
 
-    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const steps = await openSteps()
     expect(within(steps).getByText('Giường, hợp đồng, đặt cọc')).toBeTruthy()
     const contract = within(steps).getByRole('listitem', { name: /Hợp đồng/ })
-    expect(within(contract).getByText('Chưa đạt')).toBeTruthy()
+    expect(within(contract).getByText('Chưa xong')).toBeTruthy()
     const bed = within(steps).getByRole('listitem', { name: /Phân bổ giường/ })
-    expect(within(bed).getByText('Đạt')).toBeTruthy()
+    expect(within(bed).getByText('Xong')).toBeTruthy()
   })
 
   // Dòng chưa đạt mang mã của module sở hữu (001, 003, 012), không phải mã cố định ADM_A, ADM_D, ADM_F của dòng đạt
@@ -104,7 +137,12 @@ describe('AdmissionWorkspacePage', () => {
       json(200, {
         ...CONDITIONS,
         conditions: [
-          { code: 'INITIAL_ASSESSMENT_NOT_CONFIRMED', name: 'Chưa có đánh giá đầu vào', status: 'NOT_MET', module: 'M01' },
+          {
+            code: 'INITIAL_ASSESSMENT_NOT_CONFIRMED',
+            name: 'Chưa có đánh giá đầu vào',
+            status: 'NOT_MET',
+            module: 'M01',
+          },
           { code: 'ADM_B_CONTRACT', name: 'Hợp đồng Hiệu lực', status: 'MET', module: 'M02' },
           { code: 'ADM_C_DEPOSIT', name: 'Đặt cọc', status: 'MET', module: 'M11' },
           { code: 'RESERVED_BED_NOT_READY', name: 'Giường đặt trước chưa sẵn sàng', status: 'NOT_MET', module: 'M03' },
@@ -115,10 +153,10 @@ describe('AdmissionWorkspacePage', () => {
     )
     renderPage()
 
-    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const steps = await openSteps()
     for (const name of [/Đánh giá đầu vào/, /Phân bổ giường/, /Người thân/]) {
       const step = within(steps).getByRole('listitem', { name })
-      expect(within(step).getByText('Chưa đạt')).toBeTruthy()
+      expect(within(step).getByText('Chưa xong')).toBeTruthy()
       expect(within(step).queryByText('Chưa có dữ liệu')).toBeNull()
     }
   })
@@ -127,7 +165,7 @@ describe('AdmissionWorkspacePage', () => {
     renderPage()
 
     const panel = await screen.findByRole('region', { name: 'Điều kiện Hoàn tất tiếp nhận' })
-    expect(within(panel).getByText('Còn 2 điều kiện chưa đạt')).toBeTruthy()
+    expect(within(panel).getByText('Còn 2 điều kiện chưa xong')).toBeTruthy()
     expect(within(panel).getByText(/Đồng ý/)).toBeTruthy()
     expect(within(panel).getByRole('button', { name: 'Hoàn tất tiếp nhận' })).toBeTruthy()
     expect(within(panel).getByText('Chưa ghi ý kiến của người cao tuổi về việc vào ở')).toBeTruthy()
@@ -141,6 +179,7 @@ describe('AdmissionWorkspacePage', () => {
     ['Hoàn tất tiếp nhận', 'Trạng thái: Lê Thị Cúc'],
   ])('004_T114_buoc_%s_moDungPhanCuaHoSo', async (button, heading) => {
     renderPage()
+    if (button !== 'Hoàn tất tiếp nhận') await openSteps()
 
     fireEvent.click(await screen.findByRole('button', { name: button }))
     expect(await screen.findByRole('heading', { name: heading })).toBeTruthy()
@@ -152,6 +191,7 @@ describe('AdmissionWorkspacePage', () => {
     'buoc_%s_dongPhan_veThangHoSoTiepNhan',
     async (button) => {
       renderPage()
+      if (button !== 'Hoàn tất tiếp nhận') await openSteps()
 
       fireEvent.click(await screen.findByRole('button', { name: button }))
       const dialog = await screen.findByRole('dialog')
@@ -160,7 +200,7 @@ describe('AdmissionWorkspacePage', () => {
 
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(screen.queryByText('Các phần của hồ sơ')).toBeNull()
-      expect(screen.getByRole('list', { name: 'Các bước tiếp nhận' })).toBeTruthy()
+      expect(screen.getByRole('heading', { level: 1, name: 'Tiếp nhận Lê Thị Cúc' })).toBeTruthy()
     },
   )
 
@@ -168,7 +208,7 @@ describe('AdmissionWorkspacePage', () => {
   it('khongCoNhomHoanTatTiepNhan_trongCacBuoc', async () => {
     renderPage()
 
-    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const steps = await openSteps()
     expect(within(steps).queryByText('Hoàn tất tiếp nhận')).toBeNull()
     expect(within(steps).queryByText(/Phiếu đối chiếu thuốc/)).toBeNull()
     expect(within(steps).queryByRole('button', { name: 'Mở Trạng thái' })).toBeNull()
@@ -178,7 +218,7 @@ describe('AdmissionWorkspacePage', () => {
   it('cacBuoc_khongGhiVaiTroNguoiLam', async () => {
     renderPage()
 
-    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const steps = await openSteps()
     for (const who of ['Hành chính', 'Kế toán', 'Bác sĩ', 'Bác sĩ, Điều dưỡng']) {
       expect(within(steps).queryByText(who)).toBeNull()
     }
@@ -210,6 +250,7 @@ describe('AdmissionWorkspacePage', () => {
     )
     api.on('POST', '/admission-applications/7/admission-opinion', json(201, { id: 2, opinion: 'AGREE' }))
     renderPage()
+    await openSteps()
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi ý kiến' }))
     const dialog = await screen.findByRole('dialog')
@@ -226,34 +267,53 @@ describe('AdmissionWorkspacePage', () => {
     const onNavigate = renderPage()
 
     expect(await screen.findByRole('button', { name: 'Lập hợp đồng' })).toBeTruthy()
+    await openSteps()
     fireEvent.click(screen.getByRole('button', { name: 'Mở Người thân và quyền' }))
     expect(onNavigate).toHaveBeenCalledWith('family-members')
-    fireEvent.click(screen.getByRole('button', { name: 'Mở Số dư, thu chi' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xem tiền cọc' }))
     expect(onNavigate).toHaveBeenCalledWith('balance', { residentId: 5 })
   })
 
-  it('lượt đã đóng (Đã vào): không hỏi điều kiện (backend trả 409), màn vẫn mở và ghi lượt đã đóng', async () => {
-    api.on('GET', '/admission-applications/7', json(200, { ...APPLICATION, status: 'ADMITTED' }, { ETag: '"3"' }))
+  it('F10_F11_luotDaDong_ghiDaTiepNhan_yKienTuLuotDangKy_dongDieuKienKhongConKiem', async () => {
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'VIEW' },
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'UPDATE' },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/admission-applications/7',
+      json(
+        200,
+        { ...APPLICATION, status: 'ADMITTED', admissionOpinion: [CONDITIONS.admissionOpinion] },
+        { ETag: '"3"' },
+      ),
+    )
     renderPage()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Tiếp nhận Lê Thị Cúc' })).toBeTruthy()
-    expect(screen.getByText('Lượt đăng ký đã đóng (Đã vào), không còn danh sách điều kiện.')).toBeTruthy()
+    await openSteps()
+    expect(screen.getByText('Lượt đăng ký đã đóng (Đã tiếp nhận), không còn danh sách điều kiện.')).toBeTruthy()
+    expect(
+      within(screen.getByRole('listitem', { name: 'Ý kiến của người cao tuổi về việc vào ở' })).getByText('Xong'),
+    ).toBeTruthy()
+    expect(screen.queryByText('Chưa có dữ liệu')).toBeNull()
+    expect(screen.queryByText('Chưa ghi ý kiến về việc vào ở.')).toBeNull()
+    expect(within(screen.getByRole('listitem', { name: 'Hợp đồng' })).getByText('Không còn kiểm')).toBeTruthy()
+    // Ý kiến chỉ ghi được khi lượt đang mở (api-004 admission-opinion)
+    expect(screen.queryByRole('button', { name: 'Ghi ý kiến' })).toBeNull()
     expect(api.calls('GET', '/admission-applications/7/admission-conditions')).toHaveLength(0)
     expect(screen.queryByText(/điều kiện chưa đạt/)).toBeNull()
-  })
-
-  it('quay lại danh sách đăng ký tiếp nhận', async () => {
-    const onNavigate = renderPage()
-
-    fireEvent.click(await screen.findByRole('button', { name: 'Danh sách đăng ký' }))
-    expect(onNavigate).toHaveBeenCalledWith('admission-applications')
   })
 
   // Audit luồng tiếp nhận 2026-11-18 (điểm nhỏ): bước Phân bổ giường chỉ có nút khi điều kiện Chưa đạt, kèm lối sang
   // Danh sách chờ (BF-01 bước 7b); đã có giường hoặc bán trú thì không có nút
   it('audit_buocGiuong_daDat_khongCoNut', async () => {
     renderPage()
-    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const steps = await openSteps()
     const bed = within(steps).getByRole('listitem', { name: /Phân bổ giường/ })
     expect(within(bed).queryByRole('button', { name: 'Phân bổ giường' })).toBeNull()
   })
@@ -265,12 +325,14 @@ describe('AdmissionWorkspacePage', () => {
       json(200, {
         ...CONDITIONS,
         conditions: CONDITIONS.conditions.map((c) =>
-          c.code === 'ADM_D_BED' ? { code: 'RESERVED_BED_NOT_READY', name: 'Chưa phân bổ giường', status: 'NOT_MET', module: 'M03' } : c,
+          c.code === 'ADM_D_BED'
+            ? { code: 'RESERVED_BED_NOT_READY', name: 'Chưa phân bổ giường', status: 'NOT_MET', module: 'M03' }
+            : c,
         ),
       }),
     )
     const onNavigate = renderPage()
-    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const steps = await openSteps()
     const bed = within(steps).getByRole('listitem', { name: /Phân bổ giường/ })
     expect(within(bed).getByRole('button', { name: 'Phân bổ giường' })).toBeTruthy()
     fireEvent.click(within(bed).getByRole('button', { name: 'Mở Danh sách chờ' }))
@@ -280,24 +342,41 @@ describe('AdmissionWorkspacePage', () => {
   // Đặt cọc: mở màn Số dư, thu chi chọn sẵn người cao tuổi này
   it('audit_datCoc_moSoDuChonSanNguoiCaoTuoi', async () => {
     const onNavigate = renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Mở Số dư, thu chi' }))
+    await openSteps()
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem tiền cọc' }))
     expect(onNavigate).toHaveBeenCalledWith('balance', { residentId: 5 })
   })
 
   // Sửa hợp đồng nháp ngay trên màn, không chuyển sang màn Hợp đồng
   it('audit_suaHopDong_moFormTrenMan', async () => {
-    api.on('GET', '/contracts', json(200, [
-      { id: 3, residentId: 5, status: 'DRAFT', residenceType: 'LONG_TERM_RESIDENTIAL', startDate: '2026-11-20', careLevel: 'REGULAR', allowedCommands: ['update'] },
-    ]))
+    api.on(
+      'GET',
+      '/contracts',
+      json(200, [
+        {
+          id: 3,
+          residentId: 5,
+          status: 'DRAFT',
+          residenceType: 'LONG_TERM_RESIDENTIAL',
+          startDate: '2026-11-20',
+          careLevel: 'REGULAR',
+          allowedCommands: ['update'],
+        },
+      ]),
+    )
     api.on('GET', '/contracts/3', json(200, { id: 3, residentId: 5, status: 'DRAFT' }, { ETag: '"1"' }))
     api.on('GET', '/contracts/3/deposit', json(200, { status: 'NOT_SATISFIED' }))
     api.on('GET', '/contracts/3/addenda', json(200, []))
     api.on('GET', '/contracts/3/non-standard-terms', json(200, []))
     api.on('GET', '/services', json(200, []))
-    api.on('GET', '/me/permissions', json(200, [
-      { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'VIEW' },
-      { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'UPDATE' },
-    ]))
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'VIEW' },
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'UPDATE' },
+      ]),
+    )
     const onNavigate = renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Mở hợp đồng' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Sửa nội dung' }))
@@ -305,11 +384,70 @@ describe('AdmissionWorkspacePage', () => {
     expect(onNavigate).not.toHaveBeenCalledWith('contracts')
   })
 
+  // Phương án C "liền sau hợp đồng" (chủ dự án chọn 2026-11-21): lưu hợp đồng nháp nội trú xong mở ngay khung chọn giường,
+  // ngày vào lấy từ hợp đồng (chủ dự án xác nhận không vi phạm Q-307), bỏ qua được bằng "Để sau"
+  it('C_luuHopDongNoiTru_moNgayChonGiuong_ngayVaoTuHopDong', async () => {
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'ADMISSION_CONTRACT_DEPOSIT', operation: 'CREATE' },
+        { function: 'BED_ALLOCATION', operation: 'CREATE' },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/admission-applications/7/admission-conditions',
+      json(200, {
+        ...CONDITIONS,
+        conditions: CONDITIONS.conditions.map((c) =>
+          c.code === 'ADM_D_BED'
+            ? { code: 'RESERVED_BED_NOT_READY', name: 'Chưa phân bổ giường', status: 'NOT_MET', module: 'M03' }
+            : c,
+        ),
+      }),
+    )
+    api.on('GET', '/services', json(200, []))
+    api.on('GET', '/room-types', json(200, [{ id: 1, name: 'Phòng đôi', servesLongTerm: true, status: 'ACTIVE' }]))
+    api.on('GET', '/bed-allocations/suitable-beds', json(200, []))
+    api.on(
+      'POST',
+      '/contracts',
+      json(201, {
+        contract: {
+          id: 9,
+          residentId: 5,
+          residenceType: 'LONG_TERM_RESIDENTIAL',
+          startDate: '2026-11-25',
+          roomTypeId: 1,
+        },
+      }),
+    )
+    renderPage()
+    await openSteps()
+    fireEvent.click(screen.getAllByRole('button', { name: 'Lập hợp đồng' })[0])
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Nội trú dài hạn' }))
+    fireEvent.change(within(dialog).getByLabelText('Ngày bắt đầu'), { target: { value: '2026-11-25' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tiếp' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Thường xuyên' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Theo tháng' }))
+    const select = within(dialog).getByRole('combobox', { name: 'Loại phòng' })
+    await within(select).findByRole('option', { name: 'Phòng đôi' })
+    fireEvent.change(select, { target: { value: '1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tiếp' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
+
+    expect(await screen.findByRole('heading', { name: 'Chọn giường cho hợp đồng vừa lập' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Ngày bắt đầu dự kiến')).toHaveValue('25/11/2026')
+    expect(screen.getByRole('button', { name: 'Để sau' })).toBeInTheDocument()
+  })
+
   // Không tải được hợp đồng thì báo, không hiện nút Lập hợp đồng như khi chưa có hợp đồng
   it('audit_taiHopDongLoi_khongHienLapHopDong', async () => {
     api.on('GET', '/contracts', problem(500, 'INTERNAL'))
     renderPage()
-    const steps = await screen.findByRole('list', { name: 'Các bước tiếp nhận' })
+    const steps = await openSteps()
     const contract = within(steps).getByRole('listitem', { name: /Hợp đồng/ })
     expect(within(contract).queryByRole('button', { name: 'Lập hợp đồng' })).toBeNull()
     expect(within(contract).getByText('Không tải được hợp đồng')).toBeTruthy()

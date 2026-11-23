@@ -28,8 +28,11 @@ export const DECISIONS = {
   ADD_NEW: 'Thêm mới',
 }
 
-// Dòng Thay đổi liều, Thêm mới tạo đơn khi phiếu được xác nhận nên phải có đơn mới (FR-035, FR-036)
-export const NEEDS_PRESCRIPTION = ['CHANGE_DOSE', 'ADD_NEW']
+// Dòng tạo đơn khi phiếu được xác nhận nên phải có đơn: Thay đổi liều, Thêm mới, và Tiếp tục thuốc của đơn ra viện hoặc
+// thuốc đang dùng khi tiếp nhận (chưa có đơn trong hệ thống; FR-034a, FR-036, User Story 4 kịch bản 10)
+export const needsPrescription = (item) =>
+  ['CHANGE_DOSE', 'ADD_NEW'].includes(item.decision) ||
+  (item.decision === 'CONTINUE' && !!item.source && item.source !== 'CURRENT_PRESCRIPTION')
 
 const WORKING = ['OPEN', 'PENDING_CONFIRMATION']
 const newest = (list) => [...list].sort((a, b) => b.id - a.id)[0] ?? null
@@ -54,7 +57,7 @@ export function itemErrors(items) {
     }
     if (!item.decision) errors.decision = 'Chọn quyết định'
     else if (item.decision === 'DISCONTINUE' && blank(item.reason)) errors.reason = 'Nhập lý do ngừng'
-    else if (NEEDS_PRESCRIPTION.includes(item.decision) && !item.newPrescription)
+    else if (needsPrescription(item) && !item.newPrescription)
       errors.newPrescription = 'Lập đơn mới cho dòng này'
     return errors
   })
@@ -70,7 +73,7 @@ export function itemsBody(items) {
       : { medicationDescription: item.medicationDescription.trim() }),
     decision: item.decision,
     ...(!blank(item.reason) && { reason: item.reason.trim() }),
-    ...(NEEDS_PRESCRIPTION.includes(item.decision) &&
+    ...(needsPrescription(item) &&
       item.newPrescription && { newPrescription: item.newPrescription }),
   }))
 }

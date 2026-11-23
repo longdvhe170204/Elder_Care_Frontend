@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ChevronDown } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -9,7 +10,6 @@ import { NowStrip } from '@/common/NowStrip'
 import { ClockAside, PageHeader } from '@/common/PageHeader'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { getResidentsById } from '@/api/api001'
 import { cn } from '@/lib/utils'
@@ -18,12 +18,15 @@ import { DoseTags } from './DoseTags'
 import { loadDoseRound, recordDoses } from './doseRound'
 import { hhmm } from './doseRoundView'
 import { windowOf } from './medicationTime'
+import { FamilyMedicationPanel } from './FamilyMedicationPanel'
+import { LateDoseSheet } from './LateDoseSheet'
 import { PrescriptionPanel } from './PrescriptionPanel'
 import { PrnPanel } from './PrnPanel'
 import { ReconciliationPanel } from './ReconciliationPanel'
 import { listWorklist } from './reconciliationApi'
 import { STATUS as RECONCILIATION_STATUS } from './reconciliationView'
 import { ResidentPicker } from './ResidentPicker'
+import { TemporaryNursePanel } from './TemporaryNursePanel'
 
 // Màn Phát thuốc (M14; spec 006 User Story 2, 6), theo DESIGN.md 5.1: lưới thẻ theo giờ dự kiến, mỗi thẻ là một
 // người cao tuổi trong giờ đó. Liều theo lịch đọc từ GET /medication-doses/rounds, ghi bằng administer, refuse, skip
@@ -33,8 +36,30 @@ import { ResidentPicker } from './ResidentPicker'
 // về từ bệnh viện, theo yêu cầu chuyên môn, hoặc phiếu tiếp nhận (lối vào duy nhất trên web, chủ dự án 2026-11-18).
 
 const RECORD_ROLE = 'NURSING_STAFF'
+const MANAGER_ROLE = 'NURSING_HOME_MANAGER'
 const OPEN = ['Đến giờ', 'Trễ']
 const FILTERS = ['Tất cả', 'Trễ', 'Đến giờ', 'Chưa đến giờ', 'Đã xong']
+
+// Nhãn trạng thái liều trên thẻ: nền đặc, chữ in đậm (Trễ, Bỏ lỡ đỏ; Đến giờ vàng nâu; Đã dùng, Đã xong xanh lá; còn lại xám).
+// text-card: trắng ở chế độ sáng, xanh đêm ở chế độ tối (nền tông sáng).
+const DOSE_TONE = {
+  'Trễ': 'bg-destructive',
+  'Bỏ lỡ': 'bg-destructive',
+  'Đến giờ': 'bg-warning-foreground',
+  'Đã dùng': 'bg-success-foreground',
+  'Đã xong': 'bg-success-foreground',
+}
+
+function DoseStatus({ status }) {
+  return (
+    <Badge
+      variant="secondary"
+      className={cn('h-6 px-2.5 text-xs font-bold text-card shadow-sm', DOSE_TONE[status] ?? 'bg-muted-foreground')}
+    >
+      {status}
+    </Badge>
+  )
+}
 
 // Trạng thái của thẻ theo liều gấp nhất trong thẻ
 function groupStatus(doses) {
@@ -55,27 +80,27 @@ function groupsOf(doses, residents) {
   return [...map.values()].map((g) => ({ ...g, status: groupStatus(g.doses) }))
 }
 
-function DoseCard({ group, canRecord, onOpen }) {
+function DoseCard({ group, canRecord, onOpen, onLate }) {
   const late = group.status === 'Trễ'
   const done = group.status === 'Đã xong'
   const r = group.resident
   const showRecord = canRecord && group.doses.some((d) => OPEN.includes(d.status))
   return (
-    <Card className="gap-3">
-      <CardHeader className="flex flex-row items-center gap-2.5">
+    <Card className="gap-3 shadow-sm transition-shadow duration-200 hover:shadow-md">
+      <CardHeader className="flex flex-row items-center gap-2.5 border-b pb-3">
         <ResidentAvatar name={r.name} code={r.code} initials={r.initials} />
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className={cn('truncate type-label', done && 'text-muted-foreground')}>{r.name}</span>
-          <span className="type-caption text-muted-foreground tabular-nums">{r.room === '—' ? 'Bán trú' : r.room}</span>
+          <span className={cn('truncate type-card-title', done ? 'text-muted-foreground' : 'text-primary')}>{r.name}</span>
+          <span className="type-caption font-medium text-muted-foreground tabular-nums">{r.room === '—' ? 'Bán trú' : r.room}</span>
         </div>
-        <StatusBadge status={group.status} />
+        <DoseStatus status={group.status} />
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         {/* Dị ứng hiện trên mọi thẻ thuốc (chủ dự án duyệt 2026-10-18) */}
         {!done && <AllergyNote allergies={r.allergies} />}
-        <ul className="flex flex-col">
+        <ul className="flex flex-col gap-2">
           {group.doses.map((d) => (
-            <li key={d.id} className="flex flex-col gap-1.5 border-t py-2 first:border-t-0 first:pt-0">
+            <li key={d.id} className="flex flex-col gap-1.5 rounded-lg bg-muted/50 px-3 py-2.5">
               <div className="flex items-start justify-between gap-2">
                 <span className={cn('type-card-title', done && 'text-muted-foreground')}>
                   {d.drug}
@@ -83,16 +108,34 @@ function DoseCard({ group, canRecord, onOpen }) {
                     {d.dose}, {d.route}
                   </span>
                 </span>
-                {d.status !== group.status && <StatusBadge status={d.status} />}
+                {d.status !== group.status && <DoseStatus status={d.status} />}
               </div>
               {!done && <DoseTags dose={d} />}
               {(d.result || d.note) && <span className="type-caption text-muted-foreground">{d.result ?? d.note}</span>}
             </li>
           ))}
         </ul>
+        {onLate &&
+          group.doses
+            .filter((d) => d.status === 'Bỏ lỡ' && d.resultId)
+            .map((d) => (
+              <div
+                key={d.id}
+                className="flex items-center justify-between gap-2 rounded-lg bg-warning px-3 py-2 text-warning-foreground ring-1 ring-warning-foreground/30"
+              >
+                <span className="type-body-sm">{d.drug} đã Bỏ lỡ</span>
+                <Button variant="outline" size="sm" onClick={() => onLate(d)}>
+                  Ghi đã dùng muộn
+                </Button>
+              </div>
+            ))}
         {showRecord && (
           <div className="mt-auto flex justify-end border-t pt-3">
-            <Button variant={late ? 'default' : 'tonal'} onClick={() => onOpen(group)}>
+            <Button
+              variant={late ? 'default' : 'tonal'}
+              className="px-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              onClick={() => onOpen(group)}
+            >
               Phát thuốc
             </Button>
           </div>
@@ -105,17 +148,19 @@ function DoseCard({ group, canRecord, onOpen }) {
 function Section({ label, sub, count, defaultOpen, urgent, current, children }) {
   return (
     <Collapsible defaultOpen={defaultOpen} className="flex flex-col gap-3">
-      <CollapsibleTrigger className="group flex min-h-11 w-fit items-center gap-2 rounded-full pr-2">
+      <CollapsibleTrigger className="group flex min-h-11 w-fit items-center gap-2 rounded-full pl-1 pr-3 transition-colors duration-200 hover:bg-card">
         <ChevronDown
           className="size-5 -rotate-90 text-foreground transition-transform group-data-[panel-open]:rotate-0"
           aria-hidden="true"
         />
-        <span className={cn('type-title tabular-nums', current && 'text-accent-foreground')}>{label}</span>
+        <span className={cn('type-title tabular-nums', current ? 'text-accent-foreground' : 'text-primary')}>{label}</span>
         {sub && <span className="type-caption text-foreground tabular-nums">{sub}</span>}
         <span
           className={cn(
             'rounded-full px-2 type-caption tabular-nums',
-            urgent ? 'bg-destructive-subtle text-destructive' : 'bg-card text-muted-foreground',
+            urgent
+              ? 'bg-destructive font-bold text-card shadow-sm'
+              : 'bg-primary/10 font-semibold text-primary ring-1 ring-primary/20',
           )}
         >
           {count}
@@ -207,6 +252,7 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
   const [problem, setProblem] = useState(null)
   const [clock, setClock] = useState(() => hhmm(new Date()))
   const [opening, setOpening] = useState(null)
+  const [lating, setLating] = useState(null)
   const [announcement, setAnnouncement] = useState('')
   // Người đang chọn ở chế độ Đối chiếu thuốc; tab Đơn thuốc chuyển sang đúng người khi có đơn chờ đối chiếu (006 T074)
   const [reconciling, setReconciling] = useState(() => (residentId ? { id: Number(residentId) } : null))
@@ -286,6 +332,14 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
             <ToggleGroupItem value="reconciliation" className="h-11 px-4">
               Đối chiếu thuốc
             </ToggleGroupItem>
+            <ToggleGroupItem value="family" className="h-11 px-4">
+              Thuốc gia đình gửi
+            </ToggleGroupItem>
+            {role === MANAGER_ROLE && (
+              <ToggleGroupItem value="temporary" className="h-11 px-4">
+                Phụ trách tạm
+              </ToggleGroupItem>
+            )}
           </ToggleGroup>
           {mode === 'scheduled' && (
             <ToggleGroup
@@ -325,12 +379,16 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
 
       <ProblemAlert problem={problem} />
 
-      <p role="status" aria-live="polite" className="empty:hidden rounded-xl border bg-card px-4 py-3 type-body-sm">
+      <p role="status" aria-live="polite" className="empty:hidden rounded-xl border border-l-4 border-l-primary bg-card px-4 py-3 type-body-sm shadow-sm">
         {announcement}
       </p>
 
       {mode === 'prn' ? (
         <PrnPanel canRecord={canRecord} now={shift.now} onSaved={setAnnouncement} />
+      ) : mode === 'family' ? (
+        <FamilyMedicationPanel canRecord={canRecord} onSaved={setAnnouncement} />
+      ) : mode === 'temporary' ? (
+        <TemporaryNursePanel onSaved={setAnnouncement} />
       ) : mode === 'reconciliation' ? (
         <ReconciliationMode
           resident={reconciling}
@@ -349,7 +407,7 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
           }}
         />
       ) : !round ? (
-        !problem && <p className="rounded-xl border bg-card px-4 py-3 type-body-sm">Đang tải vòng phát thuốc…</p>
+        !problem && <p className="rounded-xl border bg-card px-4 py-3 type-body-sm shadow-sm">Đang tải vòng phát thuốc…</p>
       ) : (
         <div className="flex flex-col gap-6">
           {times.map((t) => {
@@ -368,7 +426,7 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
                 defaultOpen={inSlot.some((g) => OPEN.includes(g.status))}
               >
                 {inSlot.map((g) => (
-                  <DoseCard key={g.key} group={g} canRecord={canRecord} onOpen={setOpening} />
+                  <DoseCard key={g.key} group={g} canRecord={canRecord} onOpen={setOpening} onLate={canRecord ? setLating : undefined} />
                 ))}
               </Section>
             )
@@ -376,13 +434,23 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
           {done.length > 0 && (
             <Section label="Đã xong" count={done.length} defaultOpen={false}>
               {done.map((g) => (
-                <DoseCard key={g.key} group={g} canRecord={false} onOpen={setOpening} />
+                <DoseCard key={g.key} group={g} canRecord={false} onOpen={setOpening} onLate={canRecord ? setLating : undefined} />
               ))}
             </Section>
           )}
         </div>
       )}
 
+      <LateDoseSheet
+        dose={lating}
+        now={shift.now}
+        onClose={() => setLating(null)}
+        onSaved={async (message) => {
+          setLating(null)
+          setAnnouncement(message)
+          await reload()
+        }}
+      />
       <DoseSheet group={opening} now={shift.now} onOpenChange={(open) => !open && setOpening(null)} onSave={save} />
     </div>
   )

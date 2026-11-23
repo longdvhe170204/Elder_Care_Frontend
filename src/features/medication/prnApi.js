@@ -4,6 +4,7 @@ import {
   getPrescriptionsByIdPrnAdministrations,
   getResidentsByResidentIdPrescriptions,
   postPrescriptionsByIdPrnAdministrations,
+  postPrescriptionsByIdPrnAdministrationsByPrnIdEffectiveness,
 } from '@/api/api006'
 import { todayVN } from './doseRound'
 import { prnOrderView } from './prnView'
@@ -32,6 +33,14 @@ export async function loadPrnOrders(residentId, now = new Date()) {
     }),
   )
 }
+
+// Hiệu quả sau khi dùng (BR-M07-04, Q-432): mỗi lần dùng một lần ghi; sau 60 phút chưa ghi thì hệ thống nhắc
+export const recordEffectiveness = (order, prnId, text, key) =>
+  postPrescriptionsByIdPrnAdministrationsByPrnIdEffectiveness({
+    path: { id: order.id, prnId },
+    headers: { 'Idempotency-Key': key },
+    body: { effectiveness: text.trim() },
+  })
 
 // entry: { time: 'HH:mm', reason, reaction, key }; liều ghi bằng liều của đơn (không vượt liều đơn)
 export async function recordPrn(order, entry, now = new Date()) {

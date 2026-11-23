@@ -90,12 +90,57 @@ describe('LiveNotificationsPage', () => {
     expect(JSON.parse(init.body)).toEqual({ reason: 'Không quen người này' })
   })
 
+  it('FR_015_nguoiDaiDien_thayYeuCauThayDoiQuyenChoXacNhan_xacNhanDuoc', async () => {
+    serve(notification({ eventType: 'COST_FINALIZED', title: 'Bảng chi phí tháng 10 đã chốt', sourceRecord: null }))
+    api.on(
+      'GET',
+      '/right-change-requests',
+      json(200, [
+        {
+          id: 4,
+          residentId: 9,
+          type: 'RIGHT',
+          relationshipId: 30,
+          right: 'VIEW_COSTS',
+          newValue: true,
+          reason: 'Gia đình muốn xem chi phí',
+          status: 'PENDING_CONFIRMATION',
+          source: 'COUNTER',
+        },
+      ]),
+    )
+    api.on('POST', '/right-change-requests/4/confirm', json(200, {}))
+    render(<LiveNotificationsPage viewer={{ ...viewer, residentId: 9 }} />)
+
+    expect(await screen.findByText('Bật quyền Xem chi phí cho người thân')).toBeInTheDocument()
+    expect(screen.getByText('Lý do: Gia đình muốn xem chi phí')).toBeInTheDocument()
+    const [call] = api.calls('GET', '/right-change-requests')
+    expect(call[0]).toContain('residentId=9')
+    expect(call[0]).toContain('status=PENDING_CONFIRMATION')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận yêu cầu' }))
+    await waitFor(() => expect(api.calls('POST', '/right-change-requests/4/confirm')).toHaveLength(1))
+    expect(api.calls('POST', '/right-change-requests/4/confirm')[0][1].headers['Idempotency-Key']).toMatch(
+      /^[0-9a-f-]{36}$/,
+    )
+    expect(await screen.findByText('Đã xác nhận yêu cầu.')).toBeInTheDocument()
+  })
+
+  it('FR_015_khongPhaiNguoiDaiDien_khongTaiYeuCau', async () => {
+    serve(notification({ eventType: 'COST_FINALIZED', title: 'Bảng chi phí tháng 10 đã chốt', sourceRecord: null }))
+    render(<LiveNotificationsPage viewer={{ name: 'Lê M', representative: false, residentId: 9 }} />)
+
+    await screen.findByRole('button', { name: 'Bảng chi phí tháng 10 đã chốt' })
+    expect(api.calls('GET', '/right-change-requests')).toHaveLength(0)
+    expect(screen.queryByText('Chờ bạn quyết định')).not.toBeInTheDocument()
+  })
+
   it('FR_034_thongBaoNguonKhac_khongCoNutMoYeuCau', async () => {
     serve(notification({ eventType: 'COST_FINALIZED', title: 'Bảng chi phí tháng 10 đã chốt', sourceRecord: null }))
     render(<LiveNotificationsPage viewer={viewer} />)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Bảng chi phí tháng 10 đã chốt' }))
-    expect(await screen.findByText('Bản ghi nguồn')).toBeInTheDocument()
+    expect(await screen.findByText('Nội dung hiện theo quyền hiện hành của bạn.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Xem yêu cầu xác nhận' })).toBeNull()
   })
 })

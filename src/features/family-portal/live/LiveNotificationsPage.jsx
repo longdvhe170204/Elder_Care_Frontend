@@ -13,6 +13,7 @@ import { formatDateTime } from '@/common/dateTime'
 import { NotificationDetail } from '@/common/notifications/NotificationDetail'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
+import { PendingRightChanges } from './PendingRightChanges'
 import { RecipientConfirmation } from './RecipientConfirmation'
 
 // P6 Thông báo của cổng người thân, bản đọc API (009 FR-033, FR-034, FR-026): cùng bố cục với bản mẫu NotificationsPage.
@@ -29,7 +30,7 @@ const confirmationIdOf = (n) => {
   return Number.isInteger(id) ? id : null
 }
 
-export function LiveNotificationsPage() {
+export function LiveNotificationsPage({ viewer }) {
   const [state, setState] = useState({ status: 'loading', items: [] })
   const [opened, setOpened] = useState(null)
   const [announcement, setAnnouncement] = useState('')
@@ -79,6 +80,7 @@ export function LiveNotificationsPage() {
       <p aria-live="polite" className="sr-only">
         {announcement}
       </p>
+      {viewer?.representative && viewer.residentId && <PendingRightChanges residentId={viewer.residentId} />}
 
       {state.status === 'loading' && (
         <div aria-busy="true" className="flex flex-col gap-2 rounded-xl border bg-card p-4">

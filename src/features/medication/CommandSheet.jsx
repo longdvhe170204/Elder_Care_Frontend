@@ -6,12 +6,14 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
+import { todayVN } from './doseRound'
 import { idempotencyKeys, runPrescriptionCommand } from './prescriptions'
 
 // Lệnh tạm dừng, tiếp tục, ngừng, gia hạn đơn (FR-011, FR-015, FR-017; BR-M07-07, BR-M07-08): bắt buộc lý do, gửi Idempotency-Key; lỗi 409 hiện trong khung.
 const COPY = {
   SUSPEND: { title: 'Tạm dừng đơn', action: 'Xác nhận tạm dừng đơn' },
   RESUME: { title: 'Tiếp tục đơn', action: 'Xác nhận tiếp tục đơn' },
+  RESUME_TEMPORARILY: { title: 'Tiếp tục tạm đơn Quan trọng', action: 'Xác nhận tiếp tục tạm' },
   DISCONTINUE: { title: 'Ngừng đơn', action: 'Xác nhận ngừng đơn' },
   EXTEND: { title: 'Gia hạn đơn', action: 'Xác nhận gia hạn đơn' },
 }
@@ -30,6 +32,10 @@ function CommandForm({ target, onClose, onDone }) {
   const [noEnd, setNoEnd] = useState(false)
   const extend = command === 'EXTEND'
   const extendInvalid = extend && !noEnd && !endedAt
+  // Tiếp tục tạm (BR-M07-28): căn cứ bắt buộc là giấy ra viện (BR-M07-16)
+  const temp = command === 'RESUME_TEMPORARILY'
+  const [basis, setBasis] = useState({ facilityName: '', prescriberName: '', prescribedDate: todayVN() })
+  const tempInvalid = temp && (!basis.facilityName.trim() || !basis.prescriberName.trim() || !basis.prescribedDate)
   const [problem, setProblem] = useState(null)
   const [saving, setSaving] = useState(false)
   const keyFor = useRef(idempotencyKeys()).current
@@ -37,11 +43,22 @@ function CommandForm({ target, onClose, onDone }) {
   async function submit(event) {
     event.preventDefault()
     setSubmitted(true)
-    if (!reason.trim() || extendInvalid) return
+    if (!reason.trim() || extendInvalid || tempInvalid) return
     setSaving(true)
     setProblem(null)
     try {
-      const extra = extend ? { newEndedAt: noEnd ? null : endedAt } : {}
+      const extra = extend
+        ? { newEndedAt: noEnd ? null : endedAt }
+        : temp
+          ? {
+              externalBasis: {
+                basisType: 'DISCHARGE_PAPER',
+                facilityName: basis.facilityName.trim(),
+                prescriberName: basis.prescriberName.trim(),
+                prescribedDate: basis.prescribedDate,
+              },
+            }
+          : {}
       await runPrescriptionCommand(command, prescription.id, reason, keyFor({ command, reason: reason.trim(), extra }), extra)
       await onDone(command, prescription)
     } catch (error) {
@@ -74,6 +91,27 @@ function CommandForm({ target, onClose, onDone }) {
                 </label>
                 {submitted && extendInvalid && <FieldError>Chọn ngày kết thúc mới hoặc bỏ ngày kết thúc</FieldError>}
               </Field>
+            )}
+            {temp && (
+              <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
+                <legend className="px-1 type-label">Giấy ra viện (căn cứ bắt buộc)</legend>
+                <Field data-invalid={(submitted && !basis.facilityName.trim()) || undefined}>
+                  <FieldLabel htmlFor="basis-facility">Bệnh viện</FieldLabel>
+                  <Input id="basis-facility" value={basis.facilityName} onChange={(e) => setBasis({ ...basis, facilityName: e.target.value })} className="h-11" />
+                </Field>
+                <Field data-invalid={(submitted && !basis.prescriberName.trim()) || undefined}>
+                  <FieldLabel htmlFor="basis-prescriber">Người ký giấy ra viện</FieldLabel>
+                  <Input id="basis-prescriber" value={basis.prescriberName} onChange={(e) => setBasis({ ...basis, prescriberName: e.target.value })} className="h-11" />
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="basis-date">Ngày ra viện</FieldLabel>
+                  <Input id="basis-date" type="date" max={todayVN()} value={basis.prescribedDate} onChange={(e) => setBasis({ ...basis, prescribedDate: e.target.value })} className="h-11 w-fit" />
+                </Field>
+                {submitted && tempInvalid && <FieldError>Nhập bệnh viện, người ký và ngày ra viện</FieldError>}
+                <p className="type-caption text-muted-foreground">
+                  Đơn chạy tạm tới khi phiếu đối chiếu được xác nhận. Đơn nội bộ chỉ Bác sĩ có quyền kê đơn làm được.
+                </p>
+              </fieldset>
             )}
             <Field data-invalid={(submitted && !reason.trim()) || undefined}>
               <FieldLabel htmlFor="command-reason">Lý do</FieldLabel>

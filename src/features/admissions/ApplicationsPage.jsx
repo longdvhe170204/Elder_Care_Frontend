@@ -14,7 +14,6 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { APPLICATION_STATUS, CARE_LEVELS, RESIDENCE_TYPES, labelOf } from './admissionLabels'
 import { PROFILE_CREATORS } from '../residents/residentLabels'
-import { ApplicationSheet } from './ApplicationParts'
 import { NewAdmissionSheet } from './NewAdmissionSheet'
 
 // Đăng ký tiếp nhận (004 T019; US1, FR-001, FR-003 → FR-006): bảng lượt đăng ký lọc theo trạng thái kèm số đếm (G1 duyệt
@@ -24,7 +23,7 @@ import { NewAdmissionSheet } from './NewAdmissionSheet'
 const FILTERS = [
   ['IN_PROGRESS', 'Đang tiếp nhận'],
   ['WAITING', 'Chờ giường'],
-  ['ADMITTED', 'Đã vào'],
+  ['ADMITTED', 'Đã tiếp nhận'],
   ['CANCELLED', 'Đã hủy'],
 ]
 
@@ -90,24 +89,19 @@ export function ApplicationsPage({ role, onNavigate = () => {} } = {}) {
         subtitle="Lượt đăng ký của người cao tuổi đang được tiếp nhận; điều kiện tiếp nhận kiểm theo từng lượt."
         aside={
           can('ADMISSION_CONTRACT_DEPOSIT', 'CREATE') && (
-            <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="h-11" onClick={() => setSheet({})}>
-                Lập đăng ký
-              </Button>
-              {PROFILE_CREATORS.includes(role) && (
-                <Button className="h-11" onClick={() => setSheet({ kind: 'new' })}>
-                  Tiếp nhận mới
-                </Button>
-              )}
-            </div>
+            // Một nút (nhóm A BF-01 phương án B, 2026-11-21): khung tìm hồ sơ có sẵn trước, không thấy thì tạo hồ sơ mới
+            <Button className="h-11" onClick={() => setSheet({ kind: 'new' })}>
+              Lập đăng ký
+            </Button>
           )
         }
       />
       {sheet?.kind === 'new' && (
-        <NewAdmissionSheet onClose={() => setSheet(null)} onDone={opened} />
-      )}
-      {sheet && sheet.kind !== 'new' && (
-        <ApplicationSheet application={sheet.application} onClose={() => setSheet(null)} onDone={opened} />
+        <NewAdmissionSheet
+          canCreateProfile={PROFILE_CREATORS.includes(role)}
+          onClose={() => setSheet(null)}
+          onDone={opened}
+        />
       )}
       <ToggleGroup
         variant="filter"

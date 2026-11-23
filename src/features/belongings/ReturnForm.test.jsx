@@ -59,6 +59,50 @@ describe('ReturnForm (013 T019, US3)', () => {
     })
   })
 
+  // Hoàn thiện BF-14 (2026-11-23): chọn người thân nhận theo tên (người đại diện, người được phép đón), điền sẵn họ tên
+  it('FR_016_chonNguoiThanNhanTheoTen_dienSanHoTen', async () => {
+    const api = mockRoutes()
+    api.on(
+      'GET',
+      '/residents/7/relationships',
+      json(200, [
+        { id: 1, familyMember: { id: 33, fullName: 'Trần Văn Bình' }, representative: true, rights: {} },
+        {
+          id: 2,
+          familyMember: { id: 34, fullName: 'Lê Thị Đón' },
+          representative: false,
+          rights: { PICKUP_ALLOWED: { enabled: true, effective: true } },
+        },
+        { id: 3, familyMember: { id: 35, fullName: 'Ngô Văn Khác' }, representative: false, rights: {} },
+      ]),
+    )
+    renderForm()
+    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'FAMILY_MEMBER' } })
+    const select = await screen.findByLabelText('Người thân nhận')
+    expect(within(select).queryByRole('option', { name: /Ngô Văn Khác/ })).not.toBeInTheDocument()
+    fireEvent.change(select, { target: { value: '34' } })
+    expect(screen.getByLabelText('Họ tên người nhận')).toHaveValue('Lê Thị Đón')
+  })
+
+  // Test luồng BF-14 2026-11-23 (FR-020): người trả so được tình trạng lúc trả với lúc tiếp nhận
+  it('FR_020_chonDo_hienTinhTrangLucTiepNhan', async () => {
+    const api = mockRoutes()
+    api.on(
+      'GET',
+      '/belongings/90',
+      json(200, {
+        belonging: ITEMS[0],
+        handovers: [
+          { id: 1, kind: 'INTAKE', conditionLevelId: 11, conditionDescription: 'Màn hình trầy nhẹ', photoFileIds: [] },
+          { id: 2, kind: 'TRANSFER_CUSTODY', conditionLevelId: null, photoFileIds: [] },
+        ],
+      }),
+    )
+    renderForm()
+    pick('Điện thoại Nokia')
+    expect(await screen.findByText('Lúc tiếp nhận: Nguyên vẹn, Màn hình trầy nhẹ')).toBeInTheDocument()
+  })
+
   it('FR_008_traDoCoGiaTri_batBuocAnhTinhTrang_vaGuiPhotoFileIds', async () => {
     const api = mockRoutes()
     api.on('POST', '/files', json(201, { fileId: 710 }))

@@ -33,9 +33,7 @@ import {
 
 const COMMAND_BUTTONS = [
   { command: COMMANDS.CONFIRM_LOCAL, form: 'confirm-local', label: 'Xác nhận thường trú cùng xã/phường' },
-  { command: COMMANDS.SUBMITTED, form: 'submitted', label: 'Ghi đã nộp' },
-  { command: COMMANDS.ACCEPTED, form: 'result', label: 'Ghi kết quả' },
-  { command: COMMANDS.REJECTED, form: 'result', label: 'Ghi kết quả' },
+  { command: COMMANDS.ACCEPTED, form: 'accepted', label: 'Ghi đã tiếp nhận' },
   { command: COMMANDS.DEREGISTERED, form: 'deregistered', label: 'Ghi đã khai báo xóa' },
 ]
 
@@ -70,7 +68,6 @@ function Submissions({ submissions }) {
 function RegistrationCard({ registration, canUpdate, openForm, onOpenForm, onCloseForm, onDone, onCorrect }) {
   const [evidenceProblem, setEvidenceProblem] = useState(null)
   const allowed = canUpdate ? (registration.allowedCommands ?? []) : []
-  // Ghi chấp nhận và từ chối dùng chung một form "Ghi kết quả"
   const buttons = []
   for (const b of COMMAND_BUTTONS) {
     if (allowed.includes(b.command) && !buttons.some((x) => x.form === b.form)) buttons.push(b)

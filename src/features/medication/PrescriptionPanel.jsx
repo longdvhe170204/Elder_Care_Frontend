@@ -11,6 +11,7 @@ import { hhmm } from './doseRoundView'
 import { ChangeDosageSheet } from './ChangeDosageSheet'
 import { CommandSheet } from './CommandSheet'
 import { PrescriptionSheet } from './PrescriptionSheet'
+import { measurementLabel } from './measurements'
 import { loadPrescriptionBoard } from './prescriptions'
 import { STATUS_FILTERS } from './prescriptionView'
 import { ResidentPicker } from './ResidentPicker'
@@ -22,6 +23,7 @@ import { ResidentPicker } from './ResidentPicker'
 const COMMAND_BUTTONS = [
   { command: 'SUSPEND', label: 'Tạm dừng', Icon: Pause },
   { command: 'RESUME', label: 'Tiếp tục', Icon: Play },
+  { command: 'RESUME_TEMPORARILY', label: 'Tiếp tục tạm', Icon: Play },
   { command: 'DISCONTINUE', label: 'Ngừng', Icon: XCircle },
   { command: 'EXTEND', label: 'Gia hạn', Icon: CalendarPlus },
 ]
@@ -115,7 +117,10 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {prescriptions.map((p) => {
-          const buttons = isDoctor ? COMMAND_BUTTONS.filter((b) => p.allowedCommands.includes(b.command)) : []
+          // Tiếp tục tạm (BR-M07-28): Điều dưỡng cũng làm được với đơn bên ngoài, backend kiểm đơn nội bộ chỉ Bác sĩ (Q-413)
+          const buttons = COMMAND_BUTTONS.filter(
+            (b) => p.allowedCommands.includes(b.command) && (isDoctor || b.command === 'RESUME_TEMPORARILY'),
+          )
           const canChange = isDoctor && p.allowedCommands.includes('CHANGE_DOSE')
           return (
             <Card key={p.id} className="flex flex-col justify-between overflow-hidden">
@@ -142,6 +147,16 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
                   </span>
                 )}
                 {p.awaitingReconciliation && <span className="type-label text-warning-foreground">Chờ đối chiếu thuốc</span>}
+                {p.critical && <Badge variant="outline">Quan trọng về thời gian</Badge>}
+                {p.measurements.length > 0 && (
+                  <span className="type-caption text-muted-foreground">
+                    Đo trước khi dùng: {p.measurements.map(measurementLabel).join(', ')}
+                  </span>
+                )}
+                {p.indication && <span className="type-caption text-muted-foreground">Chỉ định: {p.indication}</span>}
+                {p.tempResumed && (
+                  <span className="type-caption text-muted-foreground">Đang Tiếp tục tạm theo giấy ra viện, chờ phiếu đối chiếu</span>
+                )}
                 {p.noMedicationAvailable && <span className="type-caption text-muted-foreground">Chưa có thuốc để phát (FR-009)</span>}
 
                 <div className="flex flex-col gap-1.5 rounded-lg border bg-muted/30 p-2.5 type-caption">
@@ -220,7 +235,7 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
         onClose={() => setCommanding(null)}
         onDone={async (command, p) => {
           setCommanding(null)
-          await saved(`Đã ${{ SUSPEND: 'tạm dừng', RESUME: 'tiếp tục', DISCONTINUE: 'ngừng', EXTEND: 'gia hạn' }[command]} đơn #${p.id} (${p.drug}).`)
+          await saved(`Đã ${{ SUSPEND: 'tạm dừng', RESUME: 'tiếp tục', RESUME_TEMPORARILY: 'tiếp tục tạm', DISCONTINUE: 'ngừng', EXTEND: 'gia hạn' }[command]} đơn #${p.id} (${p.drug}).`)
         }}
       />
     </div>

@@ -52,6 +52,7 @@ import { ApplicationsPage } from '@/features/admissions/ApplicationsPage'
 import { WaitingListPage } from '@/features/admissions/WaitingListPage'
 import { ContractsPage } from '@/features/admissions/ContractsPage'
 import { ChangeRequestsPage } from '@/features/admissions/ChangeRequestsPage'
+import { AddendumPrint } from '@/features/admissions/AddendumPrint'
 import { AbsencesPage } from '@/features/admissions/AbsencesPage'
 import { EndingsPage } from '@/features/admissions/EndingsPage'
 import { DeathsPage } from '@/features/admissions/DeathsPage'
@@ -117,6 +118,7 @@ const PAGES = {
   'waiting-list': WaitingListPage,
   contracts: ContractsPage,
   'residency-changes': ChangeRequestsPage,
+  'addendum-print': AddendumPrint,
   absences: AbsencesPage,
   'residency-endings': EndingsPage,
   deaths: DeathsPage,
@@ -134,11 +136,15 @@ const PAGES = {
 const BUILT = new Set(Object.keys(PAGES))
 
 // Màn con không có mục menu riêng: quyền mở và mục được chọn trên menu theo màn cha
-const PARENT_PAGE = { 'admission-workspace': 'admission-applications' }
+const PARENT_PAGE = { 'admission-workspace': 'admission-applications', 'addendum-print': 'residency-changes' }
 const menuPageOf = (page) => PARENT_PAGE[page] ?? page
 
 // Tên màn cho nút "Quay lại <tên màn>": màn có mục menu lấy tên mục; màn con, màn tài khoản ghi ở đây
-const PAGE_LABELS = { 'admission-workspace': 'Hồ sơ tiếp nhận', [ACCOUNT_PAGE]: 'Tài khoản của tôi' }
+const PAGE_LABELS = {
+  'admission-workspace': 'Hồ sơ tiếp nhận',
+  'addendum-print': 'In phụ lục',
+  [ACCOUNT_PAGE]: 'Tài khoản của tôi',
+}
 const MAX_TRAIL = 20
 
 function pageLabel(page) {
@@ -214,12 +220,23 @@ function App() {
       .catch((error) => {
         if (cancelled) return
         // Backend trả 401 (chưa đăng nhập) thì vào màn đăng nhập; không gọi được backend thì giữ bản mẫu
-        if (error instanceof ApiError && error.status === 401) window.location.assign('/login')
+        // Giữ hash của màn đích để đăng nhập xong về đúng màn
+        if (error instanceof ApiError && error.status === 401) window.location.assign(`/login${window.location.hash}`)
         else setChecking(false)
       })
     return () => {
       cancelled = true
     }
+  }, [])
+
+  // Dán đường dẫn #… khi app đang mở thì trình duyệt chỉ đổi hash, không tải lại: mở màn theo hash mới
+  useEffect(() => {
+    const open = () => {
+      setPage(pageFromUrl())
+      setParams(paramsFromUrl())
+    }
+    window.addEventListener('hashchange', open)
+    return () => window.removeEventListener('hashchange', open)
   }, [])
 
   async function logout() {

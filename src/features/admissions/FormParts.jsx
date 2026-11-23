@@ -3,6 +3,7 @@ import { getResidents } from '@/api'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ChoiceTray } from '@/common/ChoiceTray'
 import { SELECT } from './admissionLabels'
 
 // Thành phần form dùng chung trong features/admissions (004): chọn một trong vài giá trị, dòng thông tin, ô lý do,
@@ -39,18 +40,27 @@ export function Info({ label, children }) {
   )
 }
 
-export function ReasonField({ id, value, onChange, error, label = 'Lý do' }) {
+// options: danh sách lựa chọn nhanh (ChoiceTray, một lựa chọn kèm "Khác"); không truyền thì là ô gõ tự do như cũ
+export function ReasonField({ id, value, onChange, error, label = 'Lý do', showCount = false, options }) {
+  if (options)
+    return (
+      <Field data-invalid={!!error || undefined}>
+        <ChoiceTray id={id} label={label} options={options} value={value} onChange={onChange} invalid={!!error} />
+        {error && <FieldError>{error}</FieldError>}
+      </Field>
+    )
   return (
     <Field data-invalid={!!error || undefined}>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Textarea
         id={id}
-        rows={2}
+        rows={showCount ? 4 : 2}
         maxLength={2000}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!error || undefined}
       />
+      {showCount && <span className="self-end type-caption tabular-nums text-muted-foreground">{`${value.length} / 2000`}</span>}
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )

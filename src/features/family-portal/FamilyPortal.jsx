@@ -3,7 +3,7 @@ import { ApiError, getFamilyPortalResidents, getMe, postAuthLogout } from '@/api
 import { Bell, CalendarCheck, House, LogOut, Menu, UserRound } from 'lucide-react'
 import { SessionGuard } from '@/common/SessionGuard'
 import { LeafMark } from '@/common/layout/AppShell'
-import { DEMO_PORTAL_CONFIRMATIONS, DEMO_PORTAL_NOTIFICATIONS, DEMO_PORTAL_VIEWER } from '@/common/demoData'
+import { DEMO_PORTAL_CONFIRMATIONS, DEMO_PORTAL_NOTIFICATIONS, DEMO_PORTAL_VIEWER, DEMO_RESIDENTS } from '@/common/demoData'
 import { cn } from '@/lib/utils'
 import { AccountPage } from './AccountPage'
 import { CareSchedulePage, LiveCareSchedulePage } from './CareSchedulePage'
@@ -225,7 +225,7 @@ export function FamilyPortal({ onExit, belongings }) {
 
       <div id="main-content" tabIndex={-1} className="outline-none">
         {page === 'home' ? (
-          <HomePage onNavigate={navigate} />
+          <HomePage onNavigate={navigate} residentName={session ? viewer.residentName : DEMO_RESIDENTS[0].name} />
         ) : (
           <main className="mx-auto flex max-w-[960px] flex-col gap-4 px-4 py-6 sm:px-8 md:py-8">
             <Page viewer={viewer} onNavigate={navigate} onExit={onExit} belongings={belongings} />

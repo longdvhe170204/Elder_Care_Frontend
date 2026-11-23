@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { json, mockRoutes } from '@/test/fetchRoutes'
 import { AppShell } from './AppShell'
 
 // Khung chung (DESIGN.md 5, 10): dưới 768px thanh trên gọn (nút mở menu, tên màn, ảnh đại diện vai trò), menu mở
@@ -28,6 +29,20 @@ function shell(props = {}) {
 }
 
 describe('AppShell', () => {
+  it('đăng nhập thật thì mục Thông báo có số chưa xem; bản mẫu không gọi API', async () => {
+    const api = mockRoutes()
+    api.on('GET', '/me/notifications', json(200, { unreadCount: 3, unacknowledgedUrgentCount: 0, items: [] }))
+    shell({ role: 'NURSING_HOME_MANAGER', session: { accountId: 1, fullName: 'Nguyễn Minh Quân' } })
+    expect((await screen.findAllByRole('button', { name: 'Thông báo, 3 chưa xem' })).length).toBeGreaterThan(0)
+    expect(api.calls('GET', '/me/notifications')[0][0]).toContain('unread=true')
+    cleanup()
+
+    const demo = mockRoutes()
+    shell({ role: 'NURSING_HOME_MANAGER' })
+    expect(screen.getAllByRole('button', { name: 'Thông báo' }).length).toBeGreaterThan(0)
+    expect(demo.calls('GET', '/me/notifications')).toHaveLength(0)
+  })
+
   it('thanh trên có nút mở menu và tên màn đang mở', () => {
     shell()
     const bar = screen.getByRole('banner')
@@ -69,13 +84,11 @@ describe('AppShell', () => {
     const sidebar = screen.getByRole('navigation', { name: 'Menu chính' })
     const primary = within(sidebar).getByRole('region', { name: 'Việc chính' })
 
-    expect(within(primary).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Checklist ca',
-      'Phát thuốc',
-      'Cảnh báo',
-      'Kế hoạch chăm sóc',
-      'Bàn giao ca',
-    ])
+    expect(
+      within(primary)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['Checklist ca', 'Phát thuốc', 'Cảnh báo', 'Kế hoạch chăm sóc', 'Bàn giao ca'])
     expect(within(primary).getByRole('button', { name: 'Phát thuốc' })).toHaveAttribute('aria-current', 'page')
     expect(within(sidebar).queryByRole('button', { name: 'Việc chính' })).toBeNull()
   })

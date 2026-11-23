@@ -63,6 +63,6 @@ it('FR_022_explicitResidentSelectionOpensUnselectedBedForm', async () => {
   fireEvent.change(screen.getByLabelText('Tìm người cao tuổi'), { target: { value: 'NCT12' } })
   fireEvent.click(screen.getByRole('button', { name: 'Tìm hồ sơ' }))
   fireEvent.click(await screen.findByRole('button', { name: 'Chọn NCT12' }))
-  expect(await screen.findByRole('combobox', { name: 'Giường phù hợp' })).toHaveValue('')
   expect(await screen.findByText('Chưa có giường phù hợp tại thời điểm này.')).toBeInTheDocument()
+  expect(screen.queryAllByRole('radio').some((r) => r.checked)).toBe(false)
 })

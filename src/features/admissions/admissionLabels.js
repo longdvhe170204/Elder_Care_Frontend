@@ -1,4 +1,4 @@
-import { formatDateTime } from '@/common/dateTime'
+import { formatDate, formatDateTime } from '@/common/dateTime'
 
 // Nhãn tiếng Việt của enum feature 004 (api-004; glossary mục 10; thuật ngữ nghiep-vu.md mục 2.4).
 
@@ -17,14 +17,14 @@ export const CARE_LEVELS = [
 export const APPLICATION_STATUS = {
   IN_PROGRESS: 'Đang tiếp nhận',
   WAITING: 'Chờ giường',
-  ADMITTED: 'Đã vào',
+  ADMITTED: 'Đã tiếp nhận',
   CANCELLED: 'Đã hủy',
 }
 
 export const WAITING_STATUS = {
   WAITING: 'Đang chờ',
   CONTACTED: 'Đã liên hệ',
-  ADMITTED: 'Đã vào',
+  ADMITTED: 'Đã tiếp nhận',
   DECLINED: 'Từ chối',
   WAITING_CANCELLED: 'Đã hủy chờ',
 }
@@ -117,6 +117,7 @@ export const REQUEST_STATUS = {
   APPLY_FAILED: 'Áp dụng không thành',
   REJECTED: 'Từ chối',
   CANCELLED: 'Đã hủy',
+  SUPERSEDED: 'Đã thay thế',
 }
 
 export const ADDENDUM_STATUS = {
@@ -175,6 +176,35 @@ export function labelOf(options, code) {
 // Ô datetime-local là giờ Việt Nam (không đổi giờ theo mùa)
 export function vietnamIso(local) {
   return local ? `${local}:00+07:00` : ''
+}
+
+// Giá trị của một loại thay đổi lưu trú thành chữ: trước, sau của yêu cầu và của phụ lục (giường lưu bedId hoặc newBedId)
+export function changeValueText(type, value) {
+  if (!value) return '—'
+  switch (type) {
+    case 'RESIDENCE_TYPE':
+      return labelOf(RESIDENCE_TYPES, value.residenceType)
+    case 'CARE_LEVEL':
+      return labelOf(CARE_LEVELS, value.careLevel)
+    case 'DURATION':
+      return value.endDate ? formatDate(value.endDate) : '—'
+    case 'BED': {
+      const bed = value.newBedId ?? value.bedId
+      return bed ? `Giường mã ${bed}` : '—'
+    }
+    case 'SERVICE':
+      return `${(value.services ?? []).length} dịch vụ`
+    default:
+      return `${(value.arrivalSchedule ?? []).length} dòng lịch`
+  }
+}
+
+// Khoản trong "ảnh hưởng chi phí" của yêu cầu thay đổi lưu trú (FR-038): CARE_SERVICE, RESIDENCY_FEE, SERVICE:<mã dịch vụ>
+export function costItemLabel(item) {
+  if (item === 'CARE_SERVICE') return 'Dịch vụ chăm sóc'
+  if (item === 'RESIDENCY_FEE') return 'Phí lưu trú'
+  if (item?.startsWith('SERVICE:')) return `Dịch vụ mã ${item.slice('SERVICE:'.length)}`
+  return item
 }
 
 export function money(value) {

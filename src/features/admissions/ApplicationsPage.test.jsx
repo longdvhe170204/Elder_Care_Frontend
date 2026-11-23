@@ -54,11 +54,43 @@ beforeEach(() => {
   api.on(
     'GET',
     '/residents',
-    json(200, { items: [{ id: 9, profileCode: 'NCT-0009', personalInfo: { fullName: 'Phạm Thị Mai' } }] }),
+    json(200, {
+      items: [
+        { id: 9, profileCode: 'NCT-0009', status: 'ADMISSION_IN_PROGRESS', personalInfo: { fullName: 'Phạm Thị Mai' } },
+        { id: 10, profileCode: 'NCT-0010', status: 'IN_RESIDENCE', personalInfo: { fullName: 'Phạm Văn Long' } },
+      ],
+    }),
   )
 })
 
+// Nhóm A BF-01 phương án B (chủ dự án chọn 2026-11-21): một nút "Lập đăng ký"; khung tìm hồ sơ có sẵn trước, chọn người
+// Đang tiếp nhận thì sang form đăng ký của người đó, không thấy thì "Tạo hồ sơ mới" (tránh tạo trùng hồ sơ)
+async function findResident(text = 'Phạm') {
+  fireEvent.click(await screen.findByRole('button', { name: 'Lập đăng ký' }))
+  const dialog = await screen.findByRole('dialog')
+  fireEvent.change(within(dialog).getByLabelText('Họ tên, mã hồ sơ hoặc số giấy tờ'), { target: { value: text } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Tìm' }))
+  return dialog
+}
+
+async function pickMai() {
+  const dialog = await findResident()
+  fireEvent.click(await within(dialog).findByRole('button', { name: /Phạm Thị Mai/ }))
+  return screen.findByRole('dialog')
+}
+
 describe('ApplicationsPage', () => {
+  it('B_motNutLapDangKy_timTruoc_nguoiKhongDangTiepNhanKhongChonDuoc', async () => {
+    renderPage()
+    expect(screen.queryByRole('button', { name: 'Tiếp nhận mới' })).toBeNull()
+    const dialog = await findResident()
+    expect(await within(dialog).findByRole('button', { name: /Phạm Thị Mai/ })).toBeEnabled()
+    expect(within(dialog).getByRole('button', { name: /Phạm Văn Long/ })).toBeDisabled()
+    expect(within(dialog).getByText(/Đang lưu trú, không lập đăng ký được/)).toBeInTheDocument()
+    expect(new URL(api.calls('GET', '/residents').at(-1)[0], 'http://x').searchParams.get('q')).toBe('Phạm')
+    expect(within(dialog).getByRole('button', { name: 'Tạo hồ sơ mới' })).toBeInTheDocument()
+  })
+
   it('FR_006_bangLuotDangKy_locTheoTrangThaiKemSoDem', async () => {
     renderPage()
 
@@ -82,15 +114,13 @@ describe('ApplicationsPage', () => {
   it('FR_001_lapDangKy_thieuTruong_baoTaiO_vaThanhCongThiTaiLaiDanhSach', async () => {
     api.on('POST', '/admission-applications', json(201, OPEN))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập đăng ký' }))
+    const dialog = await pickMai()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu đăng ký' }))
-    expect(await screen.findByText('Chọn người cao tuổi')).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu đăng ký' }))
+    expect(await within(dialog).findByText('Nhập ngày đăng ký')).toBeInTheDocument()
+    expect(within(dialog).getByText('Phạm Thị Mai')).toBeInTheDocument()
     expect(api.calls('POST', '/admission-applications')).toHaveLength(0)
 
-    const dialog = screen.getByRole('dialog')
-    await within(dialog).findByRole('option', { name: 'Phạm Thị Mai (NCT-0009)' })
-    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '9' } })
     fireEvent.change(within(dialog).getByLabelText('Ngày đăng ký'), { target: { value: '2026-11-06' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Nội trú dài hạn' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Thường xuyên' }))
@@ -109,10 +139,7 @@ describe('ApplicationsPage', () => {
   it('FR_001_409DaCoLuotDangKy_hienLoiTrongKhung', async () => {
     api.on('POST', '/admission-applications', problem(409, 'APPLICATION_ALREADY_EXISTS'))
     renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập đăng ký' }))
-    const dialog = screen.getByRole('dialog')
-    await within(dialog).findByRole('option', { name: 'Phạm Thị Mai (NCT-0009)' })
-    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '9' } })
+    const dialog = await pickMai()
     fireEvent.change(within(dialog).getByLabelText('Ngày đăng ký'), { target: { value: '2026-11-06' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Bán trú' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cơ bản' }))
@@ -136,7 +163,8 @@ describe('ApplicationsPage', () => {
     const onNavigate = vi.fn()
     renderPage(onNavigate)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận mới' }))
+    const search = await findResident('Đỗ Thị Hoa')
+    fireEvent.click(await within(search).findByRole('button', { name: 'Tạo hồ sơ mới' }))
     const dialog = await screen.findByRole('dialog')
     fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: 'Đỗ Thị Hoa' } })
     fireEvent.change(within(dialog).getByLabelText('Ngày sinh'), { target: { value: '1944-03-02' } })
@@ -164,10 +192,7 @@ describe('ApplicationsPage', () => {
     api.on('POST', '/admission-applications', json(201, { ...OPEN, id: 32, residentId: 9 }))
     const onNavigate = vi.fn()
     renderPage(onNavigate)
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập đăng ký' }))
-    const dialog = screen.getByRole('dialog')
-    await within(dialog).findByRole('option', { name: 'Phạm Thị Mai (NCT-0009)' })
-    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '9' } })
+    const dialog = await pickMai()
     fireEvent.change(within(dialog).getByLabelText('Ngày đăng ký'), { target: { value: '2026-11-06' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Bán trú' }))
     fireEvent.click(within(dialog).getByRole('button', { name: 'Cơ bản' }))

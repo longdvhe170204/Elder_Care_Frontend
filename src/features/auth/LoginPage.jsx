@@ -125,7 +125,11 @@ export function LoginPage({ onNavigate = goTo }) {
           <PortalCard title="Đăng nhập">
             {resetDone && <p role="status">Đã đặt mật khẩu mới. Đăng nhập bằng mật khẩu mới.</p>}
             <LoginForm
-              onLoggedIn={(data) => onNavigate(homeOf({ ...data.user, mustChangePassword: data.mustChangePassword }))}
+              onLoggedIn={(data) => {
+                const home = homeOf({ ...data.user, mustChangePassword: data.mustChangePassword })
+                // Màn đích (#…) mang theo từ đường dẫn đã mở trước khi đăng nhập
+                onNavigate(home === '/' ? `/${window.location.hash}` : home)
+              }}
             />
             {resetAvailable && (
               <Button

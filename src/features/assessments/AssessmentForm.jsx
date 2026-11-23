@@ -16,11 +16,12 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { ChoiceTray } from '@/common/ChoiceTray'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { ASSESSMENT_BASIS, ASSESSMENT_DISCARD_REASONS, CARE_NOTES } from '@/common/quickChoices'
 import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { HEALTH_RECORD_FIELDS, HEALTH_TYPE_LABELS, HEALTH_TYPE_ORDER } from '../residents/healthLabels'
@@ -74,7 +75,7 @@ function effectOf({ type, residentStatus, currentLevel, level }) {
     return `${chosen} sẽ trở thành mức chăm sóc hiện hành ngay khi xác nhận.`
   }
   if (currentLevel !== level) {
-    return `Mức hiện hành (${CARE_LEVEL_LABELS[currentLevel] ?? 'chưa có'}) giữ nguyên. Hành chính được báo lập yêu cầu thay đổi lưu trú loại đổi mức sang ${chosen}; yêu cầu đổi mức chưa kết thúc của người này chuyển sang Được thay thế.`
+    return `Mức hiện hành (${CARE_LEVEL_LABELS[currentLevel] ?? 'chưa có'}) giữ nguyên. Hành chính được báo lập yêu cầu điều chỉnh hợp đồng loại đổi mức sang ${chosen}; yêu cầu đổi mức chưa kết thúc của người này chuyển sang Được thay thế.`
   }
   return 'Mức chăm sóc không đổi. Yêu cầu đổi mức chưa kết thúc của người này (nếu có) chuyển sang Được thay thế.'
 }
@@ -322,16 +323,13 @@ export function AssessmentForm({
       <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <form onSubmit={save} noValidate className="flex flex-col gap-4">
           <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="assessment-basis">Căn cứ, lý do</FieldLabel>
-              <Input
-                id="assessment-basis"
-                value={form.basis}
-                onChange={set('basis')}
-                maxLength={1000}
-                className="h-10"
-              />
-            </Field>
+            <ChoiceTray
+              id="assessment-basis"
+              label="Căn cứ, lý do"
+              options={ASSESSMENT_BASIS}
+              value={form.basis}
+              onChange={(value) => set('basis')({ target: { value } })}
+            />
 
             <Field data-invalid={!!fieldErrors.comment || undefined}>
               <FieldLabel htmlFor="assessment-comment">Nhận xét đánh giá (bắt buộc khi xác nhận)</FieldLabel>
@@ -349,13 +347,13 @@ export function AssessmentForm({
             </Field>
 
             <Field>
-              <FieldLabel htmlFor="assessment-care-note">Lưu ý chăm sóc (hiện trên thẻ người cao tuổi)</FieldLabel>
-              <Textarea
+              <ChoiceTray
                 id="assessment-care-note"
-                rows={2}
-                maxLength={NOTE_MAX}
+                label="Lưu ý chăm sóc (hiện trên thẻ người cao tuổi)"
+                options={CARE_NOTES}
+                multiple
                 value={form.careNote}
-                onChange={set('careNote')}
+                onChange={(value) => set('careNote')({ target: { value } })}
               />
               <FieldDescription className="tabular-nums">
                 {form.careNote.length}/{NOTE_MAX} ký tự
@@ -383,7 +381,7 @@ export function AssessmentForm({
               <FieldDescription>
                 Mức này chưa áp dụng cho tới khi Bác sĩ xác nhận.
                 {!isInitial && residentStatus !== 'ADMISSION_IN_PROGRESS'
-                  ? ' Người cao tuổi đã lưu trú: mức hiện hành chỉ đổi theo yêu cầu thay đổi lưu trú.'
+                  ? ' Người cao tuổi đã lưu trú: mức hiện hành chỉ đổi theo yêu cầu điều chỉnh hợp đồng.'
                   : ''}
               </FieldDescription>
               {fieldErrors.careLevel && <FieldError>{fieldErrors.careLevel}</FieldError>}
@@ -462,13 +460,13 @@ export function AssessmentForm({
           {discarding && (
             <div className="flex flex-col gap-2 rounded-lg border p-3">
               <Field data-invalid={!!discardError || undefined}>
-                <FieldLabel htmlFor="assessment-discard-reason">Lý do hủy nháp</FieldLabel>
-                <Textarea
+                <ChoiceTray
                   id="assessment-discard-reason"
-                  rows={2}
+                  label="Lý do hủy nháp"
+                  options={ASSESSMENT_DISCARD_REASONS}
                   value={discardReason}
-                  onChange={(event) => setDiscardReason(event.target.value)}
-                  aria-invalid={!!discardError || undefined}
+                  onChange={setDiscardReason}
+                  invalid={!!discardError}
                 />
                 {discardError && <FieldError>{discardError}</FieldError>}
               </Field>

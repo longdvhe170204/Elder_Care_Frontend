@@ -1,7 +1,6 @@
 import { cva } from 'class-variance-authority'
 import { ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { DEMO_RESIDENTS } from '@/common/demoData'
 
 // Trang chủ cổng người thân sau khi đăng nhập (DESIGN.md 2.1, 2.3): giới thiệu viện trước (01 → 05), rồi mới
 // tới cách Elder_Care giúp gia đình đồng hành. Mọi điều nêu ở đây lấy từ nghiệp vụ; điều chưa có trong nghiệp
@@ -119,8 +118,8 @@ const FAMILY = [
   { title: 'Trao đổi khi có vấn đề', text: 'Gửi góp ý, hỏi đáp hoặc khiếu nại; mỗi phản hồi có người phụ trách và thời hạn trả lời.' },
 ]
 
-export function HomePage({ onNavigate }) {
-  const resident = DEMO_RESIDENTS[0]
+// residentName: họ tên người cao tuổi của phiên (bản mẫu thì tên mẫu); chưa có thì nút không kèm tên
+export function HomePage({ onNavigate, residentName }) {
   return (
     <div className="bg-landing-ivory text-foreground">
       <section aria-labelledby="hero-title" className="bg-landing-sky px-4 pt-14 pb-16 sm:px-8 md:pt-20 md:pb-24">
@@ -135,7 +134,7 @@ export function HomePage({ onNavigate }) {
             </p>
             <div className="flex flex-wrap gap-3">
               <Button size="lg" onClick={() => onNavigate('today')}>
-                Xem thông tin của {resident.name}
+                {residentName ? `Xem thông tin của ${residentName}` : 'Xem thông tin hôm nay'}
               </Button>
               <Button size="lg" variant="outline" className="border-primary" nativeButton={false} render={<a href="#living-space" />}>
                 Tìm hiểu về viện

@@ -27,7 +27,7 @@ const toSubmit = {
   dueAt: '2026-11-10T16:59:59Z',
   status: 'TO_SUBMIT',
   localPermanentResident: false,
-  allowedCommands: ['confirm-local-permanent-resident', 'record-submitted'],
+  allowedCommands: ['confirm-local-permanent-resident', 'record-accepted'],
   submissions: [],
 }
 const rejectedBefore = {
@@ -83,8 +83,8 @@ describe('RegistrationDetail (018)', () => {
     expect(await screen.findByText('Đăng ký tạm trú')).toBeInTheDocument()
     expect(screen.getByText('Cần khai báo')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Xác nhận thường trú cùng xã/phường' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Ghi đã nộp' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Ghi kết quả' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Ghi đã tiếp nhận' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ghi đã nộp' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi đã khai báo xóa' })).not.toBeInTheDocument()
     // Khai báo cũ (Được thay thế) thu gọn, không có nút lệnh
     expect(screen.getByRole('button', { name: /Khai báo cũ \(1\)/ })).toBeInTheDocument()
@@ -113,7 +113,7 @@ describe('RegistrationDetail (018)', () => {
   it('FR_009_chiCoQuyenXem_anMoiNutLenh_vaNutLap', async () => {
     setup(VIEW_ONLY, [toSubmit])
     expect(await screen.findByText('Cần khai báo')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Ghi đã nộp' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ghi đã tiếp nhận' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Lập khai báo' })).not.toBeInTheDocument()
   })
 
@@ -187,10 +187,11 @@ describe('RegistrationDetail (018)', () => {
     expect(within(form).getByLabelText('Bằng chứng đã khai báo xóa')).toBeInTheDocument()
   })
 
-  it('K3_ghiKetQua_chiHienKhiDaNop_moForm', async () => {
-    const submitted = { ...toSubmit, status: 'SUBMITTED', allowedCommands: ['record-accepted', 'record-rejected'] }
+  it('Q414_khaiBaoDaNopCu_vanGhiDaTiepNhan_moForm', async () => {
+    const submitted = { ...toSubmit, status: 'SUBMITTED', allowedCommands: ['record-accepted'] }
     setup(PERMS, [submitted])
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả' }))
-    expect(await screen.findByRole('form', { name: 'Ghi kết quả' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi đã tiếp nhận' }))
+    const form = await screen.findByRole('form', { name: 'Ghi đã tiếp nhận' })
+    expect(within(form).getByLabelText('Ảnh bằng chứng đã tiếp nhận')).toBeInTheDocument()
   })
 })

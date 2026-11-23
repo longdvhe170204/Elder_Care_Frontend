@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { typeChoice } from '@/test/choiceTray'
 import { AssessmentTab } from './AssessmentTab'
 
 // 001 T042 (US3; FR-024 → FR-029, FR-033, FR-036): tab Đánh giá trong khung chi tiết hồ sơ. Điều dưỡng lập và sửa nháp,
@@ -261,7 +262,7 @@ describe('AssessmentTab', () => {
     expect(await screen.findByText('Nhập lý do hủy nháp')).toBeInTheDocument()
     expect(api.calls('POST', '/assessments/7/discard-draft')).toHaveLength(0)
 
-    fireEvent.change(screen.getByLabelText('Lý do hủy nháp'), { target: { value: 'Nhập nhầm' } })
+    typeChoice('Lý do hủy nháp', 'Nhập nhầm')
     fireEvent.click(screen.getByRole('button', { name: 'Hủy bản nháp này' }))
     await waitFor(() => expect(api.calls('POST', '/assessments/7/discard-draft')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/assessments/7/discard-draft')[0][1].body)).toEqual({ reason: 'Nhập nhầm' })
