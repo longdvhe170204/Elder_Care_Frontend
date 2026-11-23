@@ -104,7 +104,7 @@ export const CHANGE_TYPES = [
   ['CARE_LEVEL', 'Mức chăm sóc'],
   ['SERVICE', 'Dịch vụ'],
   ['DURATION', 'Thời hạn'],
-  ['BED', 'Giường'],
+  ['BED', 'Loại phòng'],
   ['ARRIVAL_SCHEDULE', 'Lịch đến'],
 ]
 

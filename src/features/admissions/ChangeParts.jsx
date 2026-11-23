@@ -4,6 +4,8 @@ import {
   getApprovalRequestsById,
   getBeds,
   getContracts,
+  getRoomTypes,
+  getRooms,
   getResidents,
   getResidentsById,
   getResidentsByIdAssessments,
@@ -442,6 +444,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [names, setNames] = useState({})
   const [catalog, setCatalog] = useState([])
   const [emptyBeds, setEmptyBeds] = useState(null)
+  // Loại phòng của từng phòng (GET /rooms, /room-types): loại thay đổi "Loại phòng" (mã BED) chỉ dùng khi đổi sang loại
+  // phòng khác (FR-043l, R22); null là chưa tải, {} là không đọc được (khi đó không lọc, backend vẫn kiểm)
+  const [roomTypeOf, setRoomTypeOf] = useState(null)
+  const [roomTypes, setRoomTypes] = useState([])
+  const [newRoomTypeId, setNewRoomTypeId] = useState(null)
   // Phụ lục 27: trong những người lập được yêu cầu, chỉ Bác sĩ không xem được hợp đồng; Bác sĩ chọn người cao tuổi và chỉ
   // lập yêu cầu đổi mức chăm sóc (FR-039). Hành chính xác nhận với người đại diện, kèm bằng chứng (2026-11-20)
   const { status: permissionStatus, can } = usePermissions()
@@ -489,7 +496,8 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const activeTypes = seesContracts ? types : ['CARE_LEVEL']
   const wantsBed = activeTypes.includes('BED')
 
-  // Giường mới chọn trong các giường đang Trống (bảng giường api-003); chỉ tải khi chọn loại Giường
+  // Giường mới chọn trong các giường đang Trống (bảng giường api-003), lọc theo loại phòng mới; chỉ tải khi chọn loại
+  // thay đổi Loại phòng
   useEffect(() => {
     if (!wantsBed || emptyBeds !== null) return
     getBeds({ query: { status: ['EMPTY'] } })
@@ -498,6 +506,15 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         setEmptyBeds([])
         setFailure(problemOf(e))
       })
+    Promise.all([getRooms({ query: {} }), getRoomTypes({ query: {} })])
+      .then(([rooms, types]) => {
+        const names = Object.fromEntries((types.data ?? []).map((t) => [t.id, t.name]))
+        setRoomTypes(types.data ?? [])
+        setRoomTypeOf(
+          Object.fromEntries((rooms.data ?? []).map((r) => [r.id, { id: r.roomTypeId, name: names[r.roomTypeId] }])),
+        )
+      })
+      .catch(() => setRoomTypeOf({}))
   }, [wantsBed, emptyBeds])
 
   const contract = contracts.find((c) => String(c.id) === contractId)
@@ -505,6 +522,17 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   // Dấu thuộc gói theo hợp đồng hiện hành (R19): chỉ dòng có trong hợp đồng mang dấu thuộc gói
   const inPackageIds = new Set((contract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
   const subjectId = contract?.residentId ?? (residentId ? Number(residentId) : null)
+
+  // Loại phòng (FR-043l, R22): chỉ các loại phòng khác loại phòng của hợp đồng và còn giường trống; chuyển sang giường cùng
+  // loại phòng dùng Chuyển giường trực tiếp (7.4), không lập yêu cầu
+  const knowsRoomTypes = !!roomTypeOf && Object.keys(roomTypeOf).length > 0
+  const roomTypeOfBed = (bed) => roomTypeOf?.[bed?.location?.roomId]?.id ?? null
+  const currentRoomTypeId = contract?.roomTypeId ?? null
+  const otherRoomTypes = roomTypes.filter(
+    (t) => t.id !== currentRoomTypeId && (emptyBeds ?? []).some((b) => roomTypeOfBed(b) === t.id),
+  )
+  const chosenRoomTypeId =
+    newRoomTypeId ?? (value.newBedId ? roomTypeOfBed((emptyBeds ?? []).find((b) => b.id === value.newBedId)) : null)
 
   useEffect(() => {
     let live = true
@@ -555,6 +583,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const errors = {
     contract: seesContracts ? !contractId && 'Chọn hợp đồng' : !residentId && 'Chọn người cao tuổi',
     ...changeErrors,
+    newRoomTypeId: activeTypes.includes('BED') && knowsRoomTypes && !chosenRoomTypeId && 'Chọn loại phòng mới',
     reason: !reason.trim() && 'Nhập lý do',
   }
   const shown = (key) => (submitted ? errors[key] || null : null)
@@ -562,10 +591,13 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     ? requiredCompanions(contract?.residenceType, value.residenceType)
     : []
   // Sửa nháp: giường đã chọn có thể không còn Trống, vẫn hiện để không mất giá trị
+  const candidateBeds = knowsRoomTypes
+    ? (emptyBeds ?? []).filter((b) => chosenRoomTypeId && roomTypeOfBed(b) === chosenRoomTypeId)
+    : (emptyBeds ?? [])
   const bedOptions =
     value.newBedId && emptyBeds && !emptyBeds.some((b) => b.id === value.newBedId)
-      ? [{ id: value.newBedId, location: { label: `Giường mã ${value.newBedId} (không còn trống)` } }, ...emptyBeds]
-      : (emptyBeds ?? [])
+      ? [{ id: value.newBedId, location: { label: `Giường mã ${value.newBedId} (không còn trống)` } }, ...candidateBeds]
+      : candidateBeds
 
   async function save() {
     setSubmitted(true)
@@ -780,9 +812,37 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               {shown('endDate') && <FieldError>{shown('endDate')}</FieldError>}
             </Field>
           )}
+          {activeTypes.includes('BED') && knowsRoomTypes && (
+            <Field data-invalid={!!shown('newRoomTypeId') || undefined}>
+              <FieldLabel htmlFor="change-room-type">Loại phòng mới</FieldLabel>
+              <select
+                id="change-room-type"
+                className={SELECT}
+                value={chosenRoomTypeId ?? ''}
+                onChange={(e) => {
+                  setNewRoomTypeId(e.target.value === '' ? null : Number(e.target.value))
+                  set({ newBedId: undefined })
+                }}
+              >
+                <option value="">
+                  {otherRoomTypes.length ? 'Chọn loại phòng khác loại phòng hiện tại' : 'Không có loại phòng khác còn giường trống'}
+                </option>
+                {otherRoomTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <FieldDescription>
+                Chỉ dùng khi đổi sang loại phòng khác (đổi phí lưu trú, phải ký phụ lục). Chuyển sang giường khác cùng loại
+                phòng thì dùng Chuyển giường trực tiếp ở màn Giường, không cần lập yêu cầu.
+              </FieldDescription>
+              {shown('newRoomTypeId') && <FieldError>{shown('newRoomTypeId')}</FieldError>}
+            </Field>
+          )}
           {activeTypes.includes('BED') && (
             <Field data-invalid={!!shown('newBedId') || undefined}>
-              <FieldLabel htmlFor="change-bed">Giường mới</FieldLabel>
+              <FieldLabel htmlFor="change-bed">{knowsRoomTypes ? 'Giường trong loại phòng mới' : 'Giường mới'}</FieldLabel>
               <select
                 id="change-bed"
                 className={SELECT}
@@ -792,9 +852,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 <option value="">
                   {emptyBeds === null
                     ? 'Đang tải…'
-                    : bedOptions.length
-                      ? 'Chọn giường đang trống'
-                      : 'Không có giường trống'}
+                    : knowsRoomTypes && !chosenRoomTypeId
+                      ? 'Chọn loại phòng mới trước'
+                      : bedOptions.length
+                        ? 'Chọn giường đang trống'
+                        : 'Không có giường trống'}
                 </option>
                 {bedOptions.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -802,7 +864,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
-              <FieldDescription>Giường phải còn trống và hợp mức chăm sóc lúc duyệt; kiểm khi duyệt.</FieldDescription>
+              <FieldDescription>
+                Giữ trước giường này tới ngày hiệu lực; giường phải còn trống và hợp mức chăm sóc lúc duyệt.
+              </FieldDescription>
               {shown('newBedId') && <FieldError>{shown('newBedId')}</FieldError>}
             </Field>
           )}

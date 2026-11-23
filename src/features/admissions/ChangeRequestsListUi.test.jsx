@@ -113,7 +113,7 @@ describe('ChangeRequestsPage: danh sách', () => {
     await openDoneTab()
     await screen.findByText('Yêu cầu mã 11')
     fireEvent.click(screen.getByRole('button', { name: 'Lọc' }))
-    fireEvent.click(within(screen.getByRole('group', { name: 'Lọc theo loại thay đổi' })).getByRole('button', { name: 'Giường' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Lọc theo loại thay đổi' })).getByRole('button', { name: 'Loại phòng' }))
     expect(screen.queryByText('Yêu cầu mã 11')).not.toBeInTheDocument()
     expect(screen.getByText('Yêu cầu mã 10')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Ngày hiệu lực'), { target: { value: '2026-11-20' } })
