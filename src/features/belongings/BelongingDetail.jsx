@@ -109,6 +109,16 @@ function HistoryEntry({ entry, onFailure, canLink, onLinked }) {
   )
 }
 
+// Mức tình trạng của bản ghi bàn giao gần nhất có ghi mức, để form bàn giao hiện chênh lệch (FR-015)
+function lastLevelId(handovers) {
+  const withLevel = handovers.filter((h) => h.conditionLevelId != null)
+  const latest = withLevel.reduce(
+    (a, h) => (!a || h.occurredAt > a.occurredAt || (h.occurredAt === a.occurredAt && h.id > a.id) ? h : a),
+    null,
+  )
+  return latest?.conditionLevelId
+}
+
 export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Description }) {
   const { can } = usePermissions()
   const [state, setState] = useState({ status: 'loading' })
@@ -210,6 +220,7 @@ export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Descr
             levels={catalogs.levels}
             locations={catalogs.locations}
             valuable={!!type?.valuable}
+            lastLevelId={lastLevelId(state.handovers)}
             onDone={done}
           />
         </section>

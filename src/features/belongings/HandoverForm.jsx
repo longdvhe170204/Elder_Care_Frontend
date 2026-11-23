@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { postBelongingsHandovers } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -54,7 +54,17 @@ function needsPhoto(type, handling, valuable) {
   return t === 'RECORD_DAMAGE' || (valuable && t === 'FOUND')
 }
 
-export function HandoverForm({ belonging, levels, locations, valuable = false, onDone }) {
+// Mức tình trạng xấu hơn bản ghi gần nhất (thứ tự lớn hơn) thì phải chọn xử lý (FR-015); trừ khi lệnh đã là Ghi hư hỏng
+function conditionGap(levels, lastLevelId, levelId, type) {
+  const last = levels.find((l) => l.id === lastLevelId)
+  const chosen = levels.find((l) => String(l.id) === levelId)
+  if (!last || !chosen || type === 'RECORD_DAMAGE') return null
+  return chosen.order > last.order ? { from: last.name, to: chosen.name } : null
+}
+
+// `lastLevelId`: mức tình trạng của bản ghi bàn giao gần nhất có ghi mức (để hiện chênh lệch, FR-015); không có thì ô
+// xử lý chênh lệch hiện khi chọn mức như trước, backend vẫn kiểm
+export function HandoverForm({ belonging, levels, locations, valuable = false, lastLevelId, onDone }) {
   const [v, setV] = useState({
     type: '',
     quantity: '',
@@ -70,6 +80,7 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
     incidentId: '',
     incidentLevel: '',
     incidentDescription: '',
+    incidentLowerLevelReason: '',
   })
   const [holderAbsent, setHolderAbsent] = useState(false)
   const [photos, setPhotos] = useState([])
@@ -78,6 +89,10 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
   const [busy, setBusy] = useState(false)
   const key = useRef(crypto.randomUUID())
   const set = (name) => (value) => setV((s) => ({ ...s, [name]: value }))
+  const gap = conditionGap(levels, lastLevelId, v.levelId, v.type)
+  const showHandling = lastLevelId != null ? !!gap : !!v.levelId
+  // Loại sự cố đồ gửi mặc định Trung bình (007 FR-042, V007_13): chọn Nhẹ phải ghi lý do
+  const lowerLevel = v.incident === 'NEW' && v.incidentLevel === 'LOW'
 
   // Vị trí gửi đi: ô đã chọn, không thì vị trí hiện tại của đồ khi lệnh đưa đồ về Đang giữ hoặc Hư hỏng
   const locationId = () =>
@@ -93,6 +108,9 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
     if (v.quantity && !(Number(v.quantity) > 0)) e.quantity = 'Số lượng phải lớn hơn 0.'
     if (v.counted && !(Number(v.counted) >= 0)) e.counted = 'Số đếm được không âm.'
     if (v.incident === 'NEW' && !v.incidentLevel) e.incidentLevel = 'Chọn mức sự cố.'
+    if (INCIDENT_COMMANDS.includes(v.type) && lowerLevel && !v.incidentLowerLevelReason.trim())
+      e.incidentLowerLevelReason = 'Nhập lý do chọn mức thấp hơn mặc định.'
+    if (gap && !v.handling) e.handling = 'Chọn cách xử lý chênh lệch tình trạng.'
     if (v.incident === 'LINK' && !/^[1-9]\d*$/.test(v.incidentId)) e.incidentId = 'Nhập mã sự cố.'
     if (needsLocation(v.type, v.handling, belonging.status) && !locationId())
       e.storageLocationId = 'Chọn vị trí lưu giữ.'
@@ -127,6 +145,7 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
                 method: 'NEW',
                 level: v.incidentLevel,
                 ...(v.incidentDescription.trim() && { description: v.incidentDescription.trim() }),
+                ...(lowerLevel && { lowerLevelReason: v.incidentLowerLevelReason.trim() }),
               }
       await postBelongingsHandovers({
         headers: { 'Idempotency-Key': key.current },
@@ -137,7 +156,7 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
           ...(v.reason.trim() && { reason: v.reason.trim() }),
           ...(v.recipientStaffId && { recipientStaffId: Number(v.recipientStaffId) }),
           ...(locationId() && { storageLocationId: Number(locationId()) }),
-          ...(v.handling && { conditionHandling: v.handling }),
+          ...(showHandling && v.handling && { conditionHandling: v.handling }),
           ...(holderAbsent && HOLDER_ABSENT_COMMANDS.includes(v.type) && { holderAbsent: true }),
         },
       })
@@ -197,7 +216,7 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
           id="handover-level"
           label="Mức tình trạng lúc bàn giao"
           value={v.levelId}
-          onChange={set('levelId')}
+          onChange={(levelId) => setV((s) => ({ ...s, levelId, handling: '' }))}
           options={activeOptions([...levels].sort((a, b) => a.order - b.order))}
           placeholder="Không đổi"
         />
@@ -212,16 +231,27 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
                 onChange={(e) => set('conditionDescription')(e.target.value)}
               />
             </Field>
-            <SelectField
-              id="handover-handling"
-              label="Xử lý chênh lệch tình trạng"
-              value={v.handling}
-              onChange={set('handling')}
-              options={HANDLING_OPTIONS}
-              error={errors.handling}
-              placeholder="Không có chênh lệch"
-              hint="Chọn khi tình trạng xấu hơn lần bàn giao trước."
-            />
+            {gap && (
+              <p role="status" className="type-body-sm text-warning-foreground">
+                Xấu hơn lần bàn giao trước: {gap.from} → {gap.to}.
+              </p>
+            )}
+            {showHandling && (
+              <SelectField
+                id="handover-handling"
+                label="Xử lý chênh lệch tình trạng"
+                value={v.handling}
+                onChange={set('handling')}
+                options={HANDLING_OPTIONS}
+                error={errors.handling}
+                placeholder={gap ? 'Chọn…' : 'Không có chênh lệch'}
+                hint={
+                  gap
+                    ? 'Ghi nhận chênh lệch (không thông báo) hoặc chuyển thành Ghi hư hỏng.'
+                    : 'Chọn khi tình trạng xấu hơn lần bàn giao trước.'
+                }
+              />
+            )}
           </>
         )}
         {v.type !== 'GIVE_FOR_USE' && (
@@ -314,6 +344,21 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, o
                   options={LEVEL_OPTIONS}
                   error={errors.incidentLevel}
                 />
+                {lowerLevel && (
+                  <Field data-invalid={!!errors.incidentLowerLevelReason || undefined}>
+                    <FieldLabel htmlFor="handover-incident-lower-reason">Lý do chọn mức thấp hơn mặc định</FieldLabel>
+                    <Textarea
+                      id="handover-incident-lower-reason"
+                      rows={2}
+                      maxLength={2000}
+                      value={v.incidentLowerLevelReason}
+                      onChange={(e) => set('incidentLowerLevelReason')(e.target.value)}
+                      aria-invalid={!!errors.incidentLowerLevelReason || undefined}
+                    />
+                    <FieldDescription>Sự cố đồ gửi mặc định mức Trung bình; chọn Nhẹ cần ghi lý do.</FieldDescription>
+                    {errors.incidentLowerLevelReason && <FieldError>{errors.incidentLowerLevelReason}</FieldError>}
+                  </Field>
+                )}
                 <Field>
                   <FieldLabel htmlFor="handover-incident-description">Mô tả sự cố (trống thì dùng lý do)</FieldLabel>
                   <Textarea
