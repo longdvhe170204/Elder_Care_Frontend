@@ -322,12 +322,21 @@ export function InventoryChecks({ catalogs }) {
   if (state.status === 'error') return <ProblemAlert problem={state.problem} />
 
   const checkOf = (id) => state.checks.find((c) => c.id === id)
+  // FR-028c: hạn theo ngày giờ Việt Nam; hôm nay sau hạn là quá hạn (như InventoryPeriod.overdueOn của backend)
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
+  const overdue = !!state.dueDate && today > state.dueDate
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
         <h2 className="type-title">
           Kỳ {state.periodCode}, hạn hoàn thành {formatDate(state.dueDate)}
         </h2>
+        {overdue && (
+          <p className="flex flex-wrap items-center gap-2 type-body-sm">
+            <StatusBadge status="Kỳ đã quá hạn" />
+            Vị trí chưa lập phiếu và phiếu chưa hoàn thành được nhắc mỗi ngày; phiếu lập bây giờ mang dấu trễ hạn.
+          </p>
+        )}
         <div role="status" className="type-body-sm text-success-foreground">
           {notice}
         </div>
@@ -355,6 +364,8 @@ export function InventoryChecks({ catalogs }) {
                         <StatusBadge status={CHECK_STATUS[check.status] ?? check.status} />
                         {check.late && <StatusBadge status="Trễ hạn" />}
                       </span>
+                    ) : overdue ? (
+                      'Chưa lập, quá hạn'
                     ) : (
                       'Chưa lập'
                     )}

@@ -25,7 +25,14 @@ const METHODS = [
   { value: 'DESTROY', label: 'Tiêu hủy' },
   { value: 'TRANSFER_TO_AUTHORITY', label: 'Chuyển cơ quan có thẩm quyền' },
 ]
-const POST_DEATH = { NOT_STARTED: 'Chưa làm', IN_PROGRESS: 'Đang làm', COMPLETED: 'Hoàn thành' }
+// Trạng thái mục việc sau qua đời của 004 (PostDeathItemStatus); hai mã cũ giữ cho dữ liệu đã có
+const POST_DEATH = {
+  NOT_COMPLETED: 'Chưa hoàn thành',
+  COMPLETED: 'Hoàn thành',
+  NOT_APPLICABLE: 'Không áp dụng',
+  NOT_STARTED: 'Chưa làm',
+  IN_PROGRESS: 'Đang làm',
+}
 const DISPOSABLE = ['HELD', 'DAMAGED']
 const emptyAttempt = () => ({ familyMemberId: '', channel: '', at: nowLocal(), result: '' })
 
@@ -209,6 +216,7 @@ function BelongingLines({ items, catalogs }) {
       {items.map((b) => (
         <li key={b.id} className="type-body-sm">
           {b.description}, {catalogs.typeName(b.typeId)}, {amountText(b)}, {statusLabel(b.status)}
+          {b.storageLocationId && `, ${catalogs.locationName(b.storageLocationId)}`}
         </li>
       ))}
     </ul>

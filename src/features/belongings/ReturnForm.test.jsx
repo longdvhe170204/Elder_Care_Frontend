@@ -59,6 +59,25 @@ describe('ReturnForm (013 T019, US3)', () => {
     })
   })
 
+  // Test luồng BF-14 2026-11-23 (FR-020): người trả so được tình trạng lúc trả với lúc tiếp nhận
+  it('FR_020_chonDo_hienTinhTrangLucTiepNhan', async () => {
+    const api = mockRoutes()
+    api.on(
+      'GET',
+      '/belongings/90',
+      json(200, {
+        belonging: ITEMS[0],
+        handovers: [
+          { id: 1, kind: 'INTAKE', conditionLevelId: 11, conditionDescription: 'Màn hình trầy nhẹ', photoFileIds: [] },
+          { id: 2, kind: 'TRANSFER_CUSTODY', conditionLevelId: null, photoFileIds: [] },
+        ],
+      }),
+    )
+    renderForm()
+    pick('Điện thoại Nokia')
+    expect(await screen.findByText('Lúc tiếp nhận: Nguyên vẹn, Màn hình trầy nhẹ')).toBeInTheDocument()
+  })
+
   it('FR_008_traDoCoGiaTri_batBuocAnhTinhTrang_vaGuiPhotoFileIds', async () => {
     const api = mockRoutes()
     api.on('POST', '/files', json(201, { fileId: 710 }))

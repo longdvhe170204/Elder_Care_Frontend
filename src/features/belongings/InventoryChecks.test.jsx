@@ -47,6 +47,31 @@ function setup() {
 describe('InventoryChecks (013 T026, BR-M12-07)', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  // Test luồng BF-14 2026-11-23 (FR-028c): kỳ đã quá hạn thì màn báo, vị trí chưa lập phiếu ghi quá hạn
+  it('FR_028c_kyQuaHan_baoTrenMan_viTriChuaLapGhiQuaHan', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-23T03:00:00Z'))
+    try {
+      setup()
+      expect(await screen.findByText('Kỳ đã quá hạn')).toBeInTheDocument()
+      expect(screen.getByText('Chưa lập, quá hạn')).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('FR_028c_chuaToiHan_khongBaoQuaHan', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-11-04T03:00:00Z'))
+    try {
+      setup()
+      expect(await screen.findByText('Chưa lập')).toBeInTheDocument()
+      expect(screen.queryByText('Kỳ đã quá hạn')).not.toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('FR_028a_kyHienTai_viTriCoDoCoGiaTri_khongGoiY', async () => {
     setup()
     expect(await screen.findByText(/Kỳ 2026-11/)).toBeInTheDocument()

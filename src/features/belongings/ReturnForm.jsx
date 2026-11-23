@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { postBelongingsReturns } from '@/api'
+import { getBelongingsById, postBelongingsReturns } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -60,6 +60,17 @@ export function ReturnForm({
   const key = useRef(crypto.randomUUID())
   const set = (name) => (value) => setV((s) => ({ ...s, [name]: value }))
   const setItem = (id, patch) => setChosen((c) => ({ ...c, [id]: { ...c[id], ...patch } }))
+  // FR-020: tình trạng lúc tiếp nhận để so với lúc trả; không đọc được thì bỏ qua, lệnh trả vẫn làm được
+  function toggle(id, on) {
+    setItem(id, { on })
+    if (!on || chosen[id]?.intake !== undefined) return
+    getBelongingsById({ path: { id } }).then(
+      ({ data }) => setItem(id, { intake: data.handovers.find((h) => h.kind === 'INTAKE') ?? null }),
+      () => setItem(id, { intake: null }),
+    )
+  }
+  const intakeText = (h) =>
+    h && [levels.find((l) => l.id === h.conditionLevelId)?.name, h.conditionDescription].filter(Boolean).join(', ')
   const selected = belongings.filter((b) => chosen[b.id]?.on)
   const levelOptions = activeOptions([...levels].sort((a, b) => a.order - b.order))
 
@@ -186,11 +197,14 @@ export function ReturnForm({
               <label className="flex min-h-10 cursor-pointer items-center gap-2">
                 <Checkbox
                   checked={!!chosen[b.id]?.on}
-                  onCheckedChange={(on) => setItem(b.id, { on })}
+                  onCheckedChange={(on) => toggle(b.id, on)}
                   aria-label={`Trả ${b.description}, mã ${b.id}`}
                 />
                 <span className="type-body-sm">{pickLabel(b, locationName)}</span>
               </label>
+              {chosen[b.id]?.on && intakeText(chosen[b.id].intake) && (
+                <p className="type-body-sm text-muted-foreground">Lúc tiếp nhận: {intakeText(chosen[b.id].intake)}</p>
+              )}
               {chosen[b.id]?.on && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field>

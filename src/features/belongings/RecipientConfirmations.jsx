@@ -348,7 +348,8 @@ export function RecipientConfirmations({ residentId, belongings, locationName, r
     load()
   }
 
-  const canUpdate = can('BELONGINGS', 'UPDATE')
+  // Lập, ghi liên hệ, hủy chỉ Hành chính (backend requireOffice, Q-153); Điều dưỡng có quyền sửa đồ gửi nhưng không làm
+  const canUpdate = can('BELONGINGS', 'UPDATE') && role === 'OFFICE_STAFF'
   const manager = role === 'NURSING_HOME_MANAGER'
   const toggle = (id, action) => setOpen(open?.id === id && open.action === action ? null : { id, action })
 
@@ -381,6 +382,19 @@ export function RecipientConfirmations({ residentId, belongings, locationName, r
               Mã {c.id}, giấy tờ {c.recipientIdDocument}, {c.belongingIds.length} đồ
               {c.expiresAt && `, hết hạn ${formatDateTime(c.expiresAt)}`}
             </span>
+            {c.contactAttempts?.length > 0 && (
+              <ul
+                className="flex flex-col gap-1 type-body-sm text-muted-foreground"
+                aria-label={`Các lần liên hệ người đại diện của ${c.recipientName}`}
+              >
+                {c.contactAttempts.map((a, i) => (
+                  <li key={i}>
+                    {formatDateTime(a.at)}, {CHANNEL_OPTIONS.find((o) => o.value === a.channel)?.label ?? a.channel},
+                    người đại diện mã {a.familyMemberId}: {a.result}
+                  </li>
+                ))}
+              </ul>
+            )}
             {OPEN.includes(c.status) && (
               <div className="flex flex-wrap gap-2">
                 {canUpdate && c.status === 'PENDING_CONFIRMATION' && (
