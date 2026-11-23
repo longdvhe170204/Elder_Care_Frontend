@@ -26,6 +26,16 @@ import { confirmationState, displayStatus } from './changeRequestRules'
 
 // Bộ lọc "Chờ ký": yêu cầu Đã duyệt mà phụ lục chưa có bản ký (FR-043d), để Hành chính làm theo danh sách (W10)
 const awaitingSignature = (r) => r.status === 'APPROVED' && r.addendum?.status === 'PENDING_SIGNATURE'
+// Mỗi trang 10 yêu cầu; ô tìm khớp cả họ tên người cao tuổi (không phân biệt dấu, hoa thường)
+const PAGE_SIZE = 10
+const plain = (text) =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+
 const FILTERS = [
   ['DRAFT', 'Nháp', (r) => r.status === 'DRAFT'],
   ['PENDING_APPROVAL', 'Chờ duyệt', (r) => r.status === 'PENDING_APPROVAL'],
@@ -44,6 +54,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   const [confirming, setConfirming] = useState(null)
   const [announcement, setAnnouncement] = useState('')
   const [query, setQuery] = useState('')
+  const [page, setPage] = useState(0)
   const [dateFilter, setDateFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState([])
   const [filterOpen, setFilterOpen] = useState(false)
@@ -112,16 +123,26 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   if (failure?.status === 403) return <PermissionDeniedState label="Yêu cầu điều chỉnh hợp đồng" />
 
   const matcherOf = (key) => FILTERS.find(([k]) => k === key)[2]
-  // Ô tìm khớp mã yêu cầu hoặc mã hợp đồng; bộ lọc theo loại thay đổi và ngày hiệu lực (chỉ lọc trên danh sách đã tải)
+  // Ô tìm khớp họ tên người cao tuổi, mã yêu cầu hoặc mã hợp đồng; bộ lọc theo loại thay đổi và ngày hiệu lực (chỉ lọc trên danh sách đã tải)
   const term = query.trim()
+  const plainTerm = plain(term)
   const rows = (requests ?? [])
     .filter(matcherOf(filter))
-    .filter((r) => !term || `${r.approvalRequestId} ${r.contractId}`.includes(term))
+    .filter(
+      (r) =>
+        !term ||
+        `${r.approvalRequestId} ${r.contractId}`.includes(term) ||
+        plain(residentNames[r.residentId]).includes(plainTerm),
+    )
     .filter((r) => typeFilter.length === 0 || r.changeTypes.some((t) => typeFilter.includes(t)))
     .filter((r) => !dateFilter || r.requestedEffectiveDate === dateFilter)
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE))
+  const current = Math.min(page, pages - 1)
+  const from = current * PAGE_SIZE
+  const pageRows = rows.slice(from, from + PAGE_SIZE)
   const openedId = shown?.request.approvalRequestId
   const toggleTypeFilter = (code) =>
-    setTypeFilter((t) => (t.includes(code) ? t.filter((x) => x !== code) : [...t, code]))
+    (setPage(0), setTypeFilter((t) => (t.includes(code) ? t.filter((x) => x !== code) : [...t, code])))
 
   return (
     <DetailLayout
@@ -182,7 +203,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
         variant="filter"
         size="lg"
         value={[filter]}
-        onValueChange={(n) => n[0] && setFilter(n[0])}
+        onValueChange={(n) => n[0] && (setPage(0), setFilter(n[0]))}
         aria-label="Lọc yêu cầu theo trạng thái"
       >
         {FILTERS.map(([key, label, matches]) => (
@@ -210,10 +231,10 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
             <Input
               type="search"
               className="h-11 rounded-full pl-9"
-              placeholder="Tìm theo mã yêu cầu, mã hợp đồng..."
-              aria-label="Tìm theo mã yêu cầu, mã hợp đồng"
+              placeholder="Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng..."
+              aria-label="Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => (setPage(0), setQuery(e.target.value))}
             />
           </div>
           <Button
@@ -231,7 +252,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
             className="h-11 w-44 rounded-full"
             aria-label="Ngày hiệu lực"
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value)}
+            onChange={(e) => (setPage(0), setDateFilter(e.target.value))}
           />
           {can('RESIDENCY_CHANGE_REQUEST', 'CREATE') && (
             <Button
@@ -284,7 +305,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {rows.map((r, i) => {
+              {pageRows.map((r, i) => {
                 const status = displayStatus(r, REQUEST_STATUS)
                 const confirmation = r.status === 'DRAFT' ? confirmationState(r) : null
                 const residentName = residentNames[r.residentId]
@@ -298,7 +319,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
                         : 'hover:bg-accent/50'
                     }
                   >
-                    <TableCell className="pl-4 tabular-nums text-muted-foreground">{i + 1}</TableCell>
+                    <TableCell className="pl-4 tabular-nums text-muted-foreground">{from + i + 1}</TableCell>
                     <TableCell className="whitespace-normal">
                       <button
                         type="button"
@@ -378,6 +399,32 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
               })}
             </TableBody>
           </Table>
+        )}
+        {pages > 1 && (
+          <nav
+            aria-label="Phân trang yêu cầu điều chỉnh hợp đồng"
+            className="flex flex-wrap items-center justify-between gap-3 border-t p-4"
+          >
+            <span className="type-caption tabular-nums text-muted-foreground">
+              {from + 1}–{Math.min(from + PAGE_SIZE, rows.length)} trên {rows.length} yêu cầu
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" className="h-11" disabled={current === 0} onClick={() => setPage(current - 1)}>
+                Trước
+              </Button>
+              <span className="type-caption tabular-nums">
+                Trang {current + 1} / {pages}
+              </span>
+              <Button
+                variant="outline"
+                className="h-11"
+                disabled={current >= pages - 1}
+                onClick={() => setPage(current + 1)}
+              >
+                Sau
+              </Button>
+            </div>
+          </nav>
         )}
       </Card>
     </DetailLayout>
