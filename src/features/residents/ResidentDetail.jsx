@@ -16,6 +16,8 @@ import { AssessmentTab } from '../assessments/AssessmentTab'
 import { CARE_LEVEL_LABELS, RESIDENCE_TYPE_LABELS } from '../assessments/assessmentLabels'
 import { ConsentTab } from '../consents/ConsentTab'
 import { StatusTab } from '../status/StatusTab'
+import { CriticalCareSection } from '../critical-care/CriticalCareSection'
+import { FINAL_STATUSES } from '../wishes/wishLabels'
 import { WishTab } from '../wishes/WishTab'
 import { HealthTab } from './HealthTab'
 import { GENDER_LABELS, ID_DOCUMENT_LABELS, STATUS_LABELS } from './residentLabels'
@@ -118,11 +120,21 @@ function PartContent({ part, residentId, profile, onChanged }) {
     )
   if (part === 'status')
     return (
-      <StatusTab residentId={residentId} status={profile.status} allowedCommands={allowedCommands} onChanged={onChanged} />
+      <StatusTab
+        residentId={residentId}
+        status={profile.status}
+        allowedCommands={allowedCommands}
+        onChanged={onChanged}
+      />
     )
   if (part === 'consent')
     return (
-      <ConsentTab residentId={residentId} status={profile.status} allowedCommands={allowedCommands} onChanged={onChanged} />
+      <ConsentTab
+        residentId={residentId}
+        status={profile.status}
+        allowedCommands={allowedCommands}
+        onChanged={onChanged}
+      />
     )
   if (part === 'wishes')
     return (
@@ -171,7 +183,9 @@ export function ResidentPartSheet({ residentId, part, onClose, onChanged }) {
           <SheetTitle className="type-title">
             {profile ? `${label}: ${profile.personalInfo?.fullName}` : label}
           </SheetTitle>
-          <SheetDescription>{profile?.profileCode ?? (failure ? 'Không mở được hồ sơ' : 'Đang tải hồ sơ')}</SheetDescription>
+          <SheetDescription>
+            {profile?.profileCode ?? (failure ? 'Không mở được hồ sơ' : 'Đang tải hồ sơ')}
+          </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 overflow-y-auto px-4 pb-6">
           <ProblemAlert problem={failure} />
@@ -339,7 +353,9 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
             <ResidentPhoto id={profile.id} name={info.fullName} photoFileId={info.photoFileId} />
             <div className="flex min-w-0 flex-col gap-1">
               <Title className="type-title">{info.fullName}</Title>
-              <Description className="type-caption text-muted-foreground tabular-nums">{profile.profileCode}</Description>
+              <Description className="type-caption text-muted-foreground tabular-nums">
+                {profile.profileCode}
+              </Description>
               <span className="flex flex-wrap items-baseline gap-x-2">
                 <StatusBadge status={STATUS_LABELS[profile.status] ?? profile.status} />
                 {profile.statusSince && (
@@ -440,6 +456,8 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
               ))}
             </div>
           </Section>
+
+          {!FINAL_STATUSES.includes(profile.status) && <CriticalCareSection residentId={profile.id} />}
 
           {canUpdate && (
             <Button type="button" className="h-11 self-start" aria-haspopup="dialog" onClick={startEditing}>
@@ -571,7 +589,13 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
                       </Field>
                       <Field>
                         <FieldLabel htmlFor="edit-email">Thư điện tử</FieldLabel>
-                        <Input id="edit-email" type="email" value={form.email} onChange={set('email')} className="h-10" />
+                        <Input
+                          id="edit-email"
+                          type="email"
+                          value={form.email}
+                          onChange={set('email')}
+                          className="h-10"
+                        />
                       </Field>
                     </div>
                     <Field>

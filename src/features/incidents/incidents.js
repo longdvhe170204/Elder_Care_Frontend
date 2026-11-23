@@ -1,10 +1,11 @@
 import { getResidents, getResidentsById } from '@/api/api001'
-import { getFloors } from '@/api/api003'
 import {
   getAlerts,
+  getIncidentFloors,
   getIncidentTypes,
   getIncidents,
   getIncidentsById,
+  getIncidentsByIdFollowUpTasks,
   getProgressionTypes,
   postIncidents,
   postIncidentsByIdAssignHandler,
@@ -18,7 +19,7 @@ import {
   postIncidentsByIdReceive,
   postIncidentsByIdReopen,
 } from '@/api/api007'
-import { residentName } from './incidentView'
+import { isOpen, residentName } from './incidentView'
 
 // Đọc và ghi sự cố qua client sinh từ hợp đồng (api-007 incidents, incident-types, progression-types; api-001 Profile,
 // danh sách người cao tuổi). Danh mục hoặc hồ sơ không đọc được thì màn ghi tên chung, không chặn danh sách.
@@ -28,13 +29,15 @@ export async function loadIncidentBoard() {
   const ids = [...new Set(incidents.data.map((i) => i.content?.residentId).filter((id) => id != null))]
   const profiles = await Promise.allSettled(ids.map((id) => getResidentsById({ path: { id } })))
   const names = {}
+  const statuses = {}
   ids.forEach((id, i) => {
-    if (profiles[i].status === 'fulfilled') names[id] = residentName(profiles[i].value.data)
+    if (profiles[i].status !== 'fulfilled') return
+    names[id] = residentName(profiles[i].value.data)
+    statuses[id] = profiles[i].value.data?.status
   })
-  return { incidents: incidents.data, types: types.data ?? [], names }
+  return { incidents: incidents.data, types: types.data ?? [], names, statuses }
 }
 
-// Cảnh báo đã chuyển thành sự cố này (nếu có và người xem xem được cảnh báo); không đọc được thì không hiện liên kết
 // Trạng thái hiện tại của người cao tuổi (api-001) để báo vì sao chưa chuyển viện được; không đọc được thì trả null
 export async function loadResidentStatus(residentId) {
   try {
@@ -45,10 +48,30 @@ export async function loadResidentStatus(residentId) {
   }
 }
 
-export async function loadSourceAlert(incidentId) {
+export async function loadLinkedAlerts(incidentId) {
   try {
     const { data } = await getAlerts({})
-    return (data ?? []).find((a) => a.incidentId === incidentId) ?? null
+    return (data ?? []).filter((a) => a.incidentId === incidentId)
+  } catch {
+    return []
+  }
+}
+
+// Sự cố đang mở của một người cao tuổi, để chọn gắn cảnh báo cùng vụ; không đọc được thì coi như không có
+export async function loadOpenIncidents(residentId) {
+  try {
+    const { data } = await getIncidents({ query: { residentId } })
+    return (data ?? []).filter(isOpen)
+  } catch {
+    return []
+  }
+}
+
+// Việc tiếp theo của sự cố (FR-045b); null khi không đọc được để màn ẩn khối, không báo sai là chưa có việc
+export async function loadFollowUps(id) {
+  try {
+    const { data } = await getIncidentsByIdFollowUpTasks({ path: { id } })
+    return data ?? []
   } catch {
     return null
   }
@@ -63,8 +86,8 @@ export async function loadIncident(id) {
 }
 
 export async function loadFloorChoices() {
-  const { data } = await getFloors({})
-  return (data ?? []).filter((f) => f.status !== 'INACTIVE').map((f) => ({ id: f.id, name: f.name }))
+  const { data } = await getIncidentFloors({})
+  return data ?? []
 }
 
 export async function loadResidentChoices() {

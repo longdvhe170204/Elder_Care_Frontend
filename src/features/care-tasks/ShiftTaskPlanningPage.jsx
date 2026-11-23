@@ -26,6 +26,7 @@ const BASIS = {
   MEAL: 'Bữa ăn',
   ACTIVITY_SESSION: 'Buổi hoạt động',
   POST_FALL_MONITORING: 'Theo dõi sau ngã',
+  INCIDENT_FOLLOW_UP: 'Việc tiếp theo của sự cố',
   CONTACT_MONITORING: 'Theo dõi tiếp xúc',
   WATER_INTAKE_ALERT: 'Cảnh báo uống nước',
   SHIFT_START_CHECK: 'Kiểm tra đầu ca',

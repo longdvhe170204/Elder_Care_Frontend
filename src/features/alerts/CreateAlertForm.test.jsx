@@ -43,7 +43,7 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals())
 
-describe('CreateAlertSheet', () => {
+describe('CreateAlertForm', () => {
   it('FR_026_nutTaoCanhBao_chiHienKhiCoQuyenTaoCanhBao', async () => {
     permissions(['VIEW'])
     renderPage()
@@ -56,7 +56,7 @@ describe('CreateAlertSheet', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo cảnh báo' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
-    fireEvent.change(screen.getByLabelText('Loại sự cố'), { target: { value: '1' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Té ngã' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu cảnh báo' }))
     expect(await screen.findByText('Nhập mô tả cảnh báo')).toBeTruthy()
     expect(api.calls('POST', '/alerts')).toHaveLength(0)
@@ -68,7 +68,7 @@ describe('CreateAlertSheet', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo cảnh báo' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
-    fireEvent.change(screen.getByLabelText('Loại sự cố'), { target: { value: '1' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Té ngã' }))
     fireEvent.click(screen.getByRole('button', { name: 'Trung bình' }))
     fireEvent.change(screen.getByLabelText('Mô tả cảnh báo'), { target: { value: '  Bà An hay quên uống nước  ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu cảnh báo' }))
@@ -85,13 +85,32 @@ describe('CreateAlertSheet', () => {
     await waitFor(() => expect(api.calls('GET', '/alerts').length).toBeGreaterThan(1))
   })
 
+  it('FR_026_taoCanhBao_moLaiSauKhiLuu_formTrong_khongGiuNguoiVaLoaiLanTruoc', async () => {
+    permissions(['VIEW', 'CREATE'])
+    api.on('POST', '/alerts', json(201, CREATED))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo cảnh báo' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Té ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Nhẹ' }))
+    fireEvent.change(screen.getByLabelText('Mô tả cảnh báo'), { target: { value: 'Lần một' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu cảnh báo' }))
+    await screen.findByText('Đã tạo cảnh báo cho Trần Thị Mai.')
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo cảnh báo' }))
+    expect(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    expect(screen.queryByRole('button', { name: 'Đổi loại' })).toBeNull()
+    fireEvent.click(await screen.findByRole('button', { name: 'Té ngã' }))
+    expect(screen.getByLabelText('Mô tả cảnh báo').value).toBe('')
+  })
+
   it('FR_028_taoCanhBao_cungNguoiCungLoai_baoDaGopVaoCanhBaoDangMo', async () => {
     permissions(['VIEW', 'CREATE'])
     api.on('POST', '/alerts', json(201, { ...CREATED, merged: true, occurrenceCount: 3 }))
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo cảnh báo' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
-    fireEvent.change(screen.getByLabelText('Loại sự cố'), { target: { value: '1' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Té ngã' }))
     fireEvent.click(screen.getByRole('button', { name: 'Nhẹ' }))
     fireEvent.change(screen.getByLabelText('Mô tả cảnh báo'), { target: { value: 'Lại quên uống nước' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu cảnh báo' }))
@@ -106,7 +125,7 @@ describe('CreateAlertSheet', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo cảnh báo' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
-    fireEvent.change(screen.getByLabelText('Loại sự cố'), { target: { value: '1' } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Té ngã' }))
     fireEvent.click(screen.getByRole('button', { name: 'Nhẹ' }))
     fireEvent.change(screen.getByLabelText('Mô tả cảnh báo'), { target: { value: 'Thử' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu cảnh báo' }))

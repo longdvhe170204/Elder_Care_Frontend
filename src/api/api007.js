@@ -114,6 +114,12 @@ export const postIncidents = (params) => request('POST', '/incidents', params)
 /** Hồ sơ sự cố (nội dung, diễn biến, đổi mức, người xử lý, người được thông báo từ 009, allowedCommands[]) (FR-040, FR-048b) */
 export const getIncidentsById = (params) => request('GET', '/incidents/{id}', params)
 
+/** Việc tiếp theo của sự cố và kết quả (công việc 005 có căn cứ INCIDENT_FOLLOW_UP, POST_FALL_MONITORING của sự cố) (FR-045b) */
+export const getIncidentsByIdFollowUpTasks = (params) => request('GET', '/incidents/{id}/follow-up-tasks', params)
+
+/** Tầng chọn được khi ghi sự cố cơ sở vật chất, gửi yêu cầu hỗ trợ (tầng đang trực trước, rồi các tầng đang có ca) (FR-040, FR-047i) */
+export const getIncidentFloors = (params) => request('GET', '/incident-floors', params)
+
 /** Tiếp nhận xử lý (Mới → Đang xử lý) (FR-044, FR-045) */
 export const postIncidentsByIdReceive = (params) => request('POST', '/incidents/{id}/receive', params)
 
@@ -266,6 +272,9 @@ export const postCall115AttemptsByIdResult = (params) => request('POST', '/call-
 
 /** Thông tin hiện ở màn lệnh Chuyển viện (nguyện vọng khi điều trị, nguyện vọng cuối đời, người liên hệ chính); không gợi ý cơ sở (FR-049) */
 export const getIncidentsByIdTransferOutInfo = (params) => request('GET', '/incidents/{id}/transfer-out/info', params)
+
+/** Nhân viên đang trong ca ở tầng của người cao tuổi, để chọn người bàn giao cho lệnh Chuyển viện (Điều dưỡng, Bác sĩ) (FR-049) */
+export const getResidentsByResidentIdHandoverStaff = (params) => request('GET', '/residents/{residentId}/handover-staff', params)
 
 /** Tải phiếu tóm tắt chuyển viện PDF đã lưu (đúng file đã dựng trong lệnh) (FR-050h, BR-M05-32) */
 export const getTransferSummariesByIdDocument = (params) => request('GET', '/transfer-summaries/{id}/document', params)

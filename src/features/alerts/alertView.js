@@ -33,10 +33,15 @@ const TYPE_LABEL = {
   DIET_ALLERGY_CONFLICT: 'Xung đột dị ứng với chế độ ăn',
   CRITICAL_CONDITION: 'Tình trạng nguy kịch',
   RESIDENT_HELP_REQUEST: 'Người cao tuổi bấm nút SOS',
-  STAFF_ASSIST_REQUEST: 'Nhân viên bấm nút hỗ trợ khẩn cấp',
+  STAFF_ASSIST_REQUEST: 'Nhân viên cần hỗ trợ',
 }
 
-const ORIGIN_LABEL = { SYSTEM: 'Hệ thống', MANUAL: 'Nhân viên tạo', SOS: 'Nút SOS', ASSIST_BUTTON: 'Nút hỗ trợ' }
+const ORIGIN_LABEL = {
+  SYSTEM: 'Hệ thống',
+  MANUAL: 'Nhân viên tạo',
+  SOS: 'Người cao tuổi bấm SOS',
+  ASSIST_BUTTON: 'Nhân viên gọi hỗ trợ',
+}
 
 // Cảnh báo thủ công mang mã loại sự cố: tên lấy từ danh mục loại sự cố (api-007), nạp khi tải danh sách hoặc chi tiết
 let incidentTypeNames = {}
@@ -74,6 +79,11 @@ export function statusTone(alert) {
 
 export function isUrgent(alert) {
   return isOpen(alert) && (alert.level === 'CRITICAL' || alert.maxEscalationReached)
+}
+
+// Việc gấp còn chờ người nhận: lên dải "Cần làm ngay"; đã có người tiếp nhận thì nằm ở nhóm Đang được xử lý
+export function needsReceiver(alert) {
+  return isUrgent(alert) && ['NEW', 'ESCALATED'].includes(alert.status)
 }
 
 // Khẩn cấp trước, rồi leo thang tối đa, rồi mới nhất trước (DESIGN.md 7.2 alert-card)

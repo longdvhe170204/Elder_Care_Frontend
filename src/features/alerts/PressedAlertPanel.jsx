@@ -53,6 +53,8 @@ export function PressedAlertPanel({ alert, onChanged, dial }) {
     ['Người bấm', alert.pressedBy],
     ['Loại sự việc', EVENT[alert.eventType]],
     ['Nơi đã chọn', PLACE[alert.chosenPlace]],
+    ['Ghi rõ nơi', alert.placeNote],
+    ['Tầng', alert.floorName],
   ].filter(([, value]) => value)
 
   return (

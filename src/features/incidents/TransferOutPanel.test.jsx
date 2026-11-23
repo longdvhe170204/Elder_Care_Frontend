@@ -62,6 +62,27 @@ describe('TransferOutPanel', () => {
     expect(await screen.findByRole('button', { name: 'Tải bản tóm tắt' })).toBeTruthy()
   })
 
+  it('FR_050h_nguyenVongKhongGuiMacDinh_tichThiGuiIncludeWishes', async () => {
+    render(<TransferOutPanel incidentId={11} onDone={() => {}} onCancel={() => {}} />)
+    await screen.findByRole('option', { name: 'Trần Thu Hà' })
+    fill()
+    fireEvent.click(screen.getByRole('button', { name: 'Đã hỏi' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển viện' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents/11/transfer-out')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents/11/transfer-out')[0][1].body).includeWishes).toBeUndefined()
+  })
+
+  it('FR_050h_tichGuiKemNguyenVong_guiIncludeWishesTrue', async () => {
+    render(<TransferOutPanel incidentId={11} onDone={() => {}} onCancel={() => {}} />)
+    await screen.findByRole('option', { name: 'Trần Thu Hà' })
+    fill()
+    fireEvent.click(screen.getByRole('button', { name: 'Đã hỏi' }))
+    fireEvent.click(screen.getByLabelText('Gửi kèm nguyện vọng liên quan đến ca này'))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận chuyển viện' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents/11/transfer-out')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents/11/transfer-out')[0][1].body).includeWishes).toBe(true)
+  })
+
   it('Q_384_suCoKhanCap_khongBatLyDo', async () => {
     api.on('GET', '/incidents/11/transfer-out/info', json(200, { ...INFO, isEmergency: true }))
     render(<TransferOutPanel incidentId={11} onDone={() => {}} onCancel={() => {}} />)

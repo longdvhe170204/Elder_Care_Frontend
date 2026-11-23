@@ -11,7 +11,7 @@ import { runIncidentCommand } from './incidents'
 // Thẻ thông tin khẩn cấp của sự cố Khẩn cấp đang mở (007 FR-047a, FR-048): nhận dạng, dị ứng, thuốc đang dùng, bệnh nền,
 // người liên hệ chính, nguyện vọng cuối đời Hiệu lực (hoặc "chưa có"). Người xem đủ thẻ bấm "Xác nhận đã đối chiếu nguyện
 // vọng" (FR-048a, BR-M05-13; mỗi sự cố một lần, trước khi ghi biện pháp hồi sức). Người không có quyền xem sức khỏe chỉ
-// nhận phần nhận dạng; không tải được thì ẩn khối này.
+// nhận phần nhận dạng; không tải được thì ẩn khối này. children (Gọi 115) nằm cùng thẻ, luôn hiện kể cả khi không có thẻ.
 
 function itemText(item) {
   const named = item.name ?? item.substanceName ?? item.medicationName ?? item.title ?? item.description
@@ -31,7 +31,7 @@ function List({ label, items }) {
   )
 }
 
-export function EmergencyCardPanel({ incidentId }) {
+export function EmergencyCardPanel({ incidentId, children = null }) {
   const [card, setCard] = useState(undefined)
   const [checked, setChecked] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -62,34 +62,34 @@ export function EmergencyCardPanel({ incidentId }) {
     }
   }
 
-  if (card === undefined) return <Skeleton className="h-24 w-full" />
-  if (card === null) return null
+  if (!card) {
+    return (
+      <>
+        {card === undefined && <Skeleton className="h-24 w-full" />}
+        {children}
+      </>
+    )
+  }
   const who = card.identification
   const wish = card.endOfLifeWish
   const hasWish = wish && !wish.notRecorded
   return (
     <section
       aria-label="Thẻ thông tin khẩn cấp"
-      className="flex flex-col gap-2 rounded-lg border border-destructive/40 p-3"
+      className="flex flex-col gap-3 rounded-xl border border-destructive/40 bg-card p-4"
     >
-      <h3 className="type-card-title text-destructive">Thông tin khẩn cấp</h3>
-      <dl className="grid gap-2 sm:grid-cols-2">
+      <h2 className="type-title text-destructive">Thông tin khẩn cấp</h2>
+      <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
         {who && (
           <div className="flex flex-col">
             <dt className="type-caption text-muted-foreground">Người cao tuổi</dt>
             <dd className="type-body-sm">
-              {[
-                who.fullName,
-                who.dateOfBirth && formatDate(who.dateOfBirth),
-                who.roomBed && `phòng/giường ${who.roomBed}`,
-              ]
-                .filter(Boolean)
-                .join(', ')}
+              {[who.fullName, who.dateOfBirth && formatDate(who.dateOfBirth), who.roomBed].filter(Boolean).join(', ')}
             </dd>
           </div>
         )}
         {wish && (
-          <div className="flex flex-col sm:col-span-2">
+          <div className="flex flex-col">
             <dt className="type-caption text-muted-foreground">Nguyện vọng cuối đời</dt>
             <dd className="type-body-sm">
               {hasWish ? (
@@ -136,6 +136,7 @@ export function EmergencyCardPanel({ incidentId }) {
       {card.unavailable?.length > 0 && (
         <p className="type-caption text-muted-foreground">Chưa có dữ liệu: {card.unavailable.join(', ')}</p>
       )}
+      {children}
     </section>
   )
 }
