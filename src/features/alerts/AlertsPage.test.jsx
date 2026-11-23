@@ -310,10 +310,11 @@ describe('AlertsPage', () => {
     }
     api.on('GET', '/alerts', json(200, [assist]))
     api.on('GET', '/alerts/3', json(200, assist))
+    // Tìm trong toàn viện (đề xuất 2026-11-23): gõ tên rồi chọn; nơi xảy ra điền sẵn từ yêu cầu
     api.on(
       'GET',
-      '/residents',
-      json(200, { items: [{ id: 9, profileCode: 'HS-0009', personalInfo: { fullName: 'Trần Thị Mai' } }] }),
+      '/incident-residents',
+      json(200, [{ id: 9, fullName: 'Trần Thị Mai', profileCode: 'HS-0009', roomName: 'P101', floorName: 'Tầng 1' }]),
     )
     api.on('GET', '/incidents', json(200, []))
     api.on('POST', '/alerts/3/convert-to-incident', json(201, { id: 31 }))
@@ -321,13 +322,16 @@ describe('AlertsPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: /^Chi tiết/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Chuyển thành sự cố' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Té ngã' }))
+    expect(screen.getByLabelText(/Nơi xảy ra/).value).toBe('Tầng 1')
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và chuyển sự cố' }))
     expect(await screen.findByText('Chọn người cao tuổi của yêu cầu này')).toBeTruthy()
-    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    fireEvent.change(screen.getByLabelText('Tìm người cao tuổi theo tên hoặc mã'), { target: { value: 'mai' } })
+    fireEvent.click(await screen.findByRole('button', { name: /Trần Thị Mai/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và chuyển sự cố' }))
     await waitFor(() => expect(api.calls('POST', '/alerts/3/convert-to-incident')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/alerts/3/convert-to-incident')[0][1].body)).toEqual({
       incidentTypeId: 1,
+      location: 'Tầng 1',
       residentId: 9,
     })
   })
@@ -446,5 +450,68 @@ describe('AlertsPage', () => {
     // Chỉ mã người cao tuổi đi vào URL, không có họ tên
     expect(onNavigate).toHaveBeenCalledWith('medication', { mode: 'reconciliation', residentId: 9 })
     expect(screen.getAllByRole('button', { name: /Mở đối chiếu thuốc/ })).toHaveLength(1)
+  })
+
+  // Đề xuất 2026-11-23 (A duyệt qua Đức Anh): người nhận khác bấm "Tôi đến giúp", người tiếp nhận vẫn lo chính
+  it('FR_047i_toiDenGiup_baoDangToiPhu', async () => {
+    const assist = {
+      ...ALERT_MEDIUM,
+      id: 5,
+      residentId: null,
+      type: 'STAFF_ASSIST_REQUEST',
+      origin: 'ASSIST_BUTTON',
+      level: 'CRITICAL',
+      status: 'RECEIVED',
+      assignee: 'Trần Thu Hà',
+      floorName: 'Tầng 2',
+      allowedCommands: ['join-help'],
+    }
+    api.on('GET', '/alerts', json(200, [assist]))
+    api.on('GET', '/alerts/5', json(200, assist))
+    api.on('POST', '/alerts/5/join-help', json(200, {}))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    fireEvent.click(await screen.findByRole('button', { name: /^Chi tiết/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Tôi đến giúp/ }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/5/join-help')).toHaveLength(1))
+  })
+
+  // Đóng yêu cầu ghi Ngã: nhắc nên ghi sự cố; chuyển thì điền sẵn loại, nơi, mô tả và thêm người đã đến giúp
+  it('FR_047i_dongYeuCauNga_nhacGhiSuCo_chuyenThiDienSan', async () => {
+    const assist = {
+      ...ALERT_IN_PROGRESS,
+      id: 6,
+      type: 'STAFF_ASSIST_REQUEST',
+      origin: 'ASSIST_BUTTON',
+      level: 'CRITICAL',
+      eventType: 'FALL',
+      chosenPlace: 'CORRIDOR',
+      placeNote: 'gần phòng 201',
+      floorName: 'Tầng 2',
+      helpers: ['Lê Minh'],
+      allowedCommands: ['close', 'convert-to-incident'],
+    }
+    api.on('GET', '/alerts', json(200, [assist]))
+    api.on('GET', '/alerts/6', json(200, assist))
+    api.on('GET', '/incidents', json(200, []))
+    api.on('POST', '/alerts/6/convert-to-incident', json(201, { id: 61 }))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    fireEvent.click(await screen.findByRole('button', { name: /^Chi tiết/ }))
+    fireEvent.click(await screen.findByRole('button', { name: /Đóng cảnh báo/ }))
+    const note = await screen.findByRole('note')
+    expect(note.textContent).toMatch(/thường phải ghi sự cố/)
+    fireEvent.click(within(note).getByRole('button', { name: 'Chuyển thành sự cố' }))
+    expect(await screen.findByLabelText(/Nơi xảy ra/)).toHaveProperty('value', 'Tầng 2, Hành lang, gần phòng 201')
+    expect(screen.getByLabelText(/Mô tả/)).toHaveProperty('value', 'Ngã, gần phòng 201')
+    expect(screen.getByText('Thêm Lê Minh vào người tham gia xử lý')).toBeTruthy()
+    await waitFor(() => expect(api.calls('GET', '/incident-types').length).toBeGreaterThan(0))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và chuyển sự cố' }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/6/convert-to-incident')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/alerts/6/convert-to-incident')[0][1].body)).toEqual({
+      incidentTypeId: 1,
+      description: 'Ngã, gần phòng 201',
+      location: 'Tầng 2, Hành lang, gần phòng 201',
+      residentId: undefined,
+      addHelpers: true,
+    })
   })
 })

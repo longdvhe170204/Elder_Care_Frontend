@@ -1,6 +1,7 @@
 import { getResidents, getResidentsById } from '@/api/api001'
 import {
   getAlerts,
+  getAlertsById,
   getIncidentFloors,
   getIncidentTypes,
   getIncidents,
@@ -48,10 +49,22 @@ export async function loadResidentStatus(residentId) {
   }
 }
 
+// Cảnh báo đã chuyển thành hoặc gắn vào sự cố; cảnh báo từ nút SOS, nút hỗ trợ đọc thêm chi tiết (người bấm, ai tới, ai
+// đến giúp) để sự cố ghi rõ bắt đầu từ đâu
 export async function loadLinkedAlerts(incidentId) {
   try {
     const { data } = await getAlerts({})
-    return (data ?? []).filter((a) => a.incidentId === incidentId)
+    const linked = (data ?? []).filter((a) => a.incidentId === incidentId)
+    return await Promise.all(
+      linked.map((a) =>
+        ['SOS', 'ASSIST_BUTTON'].includes(a.origin)
+          ? getAlertsById({ path: { id: a.id } }).then(
+              ({ data: detail }) => detail ?? a,
+              () => a,
+            )
+          : a,
+      ),
+    )
   } catch {
     return []
   }

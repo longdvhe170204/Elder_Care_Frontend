@@ -48,14 +48,17 @@ export function PressedAlertPanel({ alert, onChanged, dial }) {
     }
   }
 
+  const helpers = alert.helpers ?? []
   const facts = [
     ['Nguồn', ORIGIN[alert.origin]],
-    ['Người bấm', alert.pressedBy],
+    ['Người bấm', alert.pressedBy && (alert.senderOffShift ? `${alert.pressedBy} (ngoài ca)` : alert.pressedBy)],
     ['Loại sự việc', EVENT[alert.eventType]],
     ['Nơi đã chọn', PLACE[alert.chosenPlace]],
     ['Ghi rõ nơi', alert.placeNote],
-    ['Tầng', alert.floorName],
+    ['Tầng', alert.origin === 'ASSIST_BUTTON' ? (alert.floorName ?? 'Khu vực chung') : alert.floorName],
+    ['Đang đến giúp', helpers.length > 0 ? helpers.join(', ') : null],
   ].filter(([, value]) => value)
+  const messages = alert.senderMessages ?? []
 
   return (
     <section aria-label="Cảnh báo khẩn cấp" className="flex flex-col gap-4">
@@ -68,6 +71,18 @@ export function PressedAlertPanel({ alert, onChanged, dial }) {
             </div>
           ))}
         </dl>
+      )}
+      {messages.length > 0 && (
+        <section aria-label="Người gửi nhắn" className="flex flex-col gap-2 border-t pt-3">
+          <h3 className="type-caption text-muted-foreground">Người gửi nhắn</h3>
+          <ol className="flex flex-col gap-2 border-l-2 pl-3 type-body-sm">
+            {messages.map((m) => (
+              <li key={`${m.at}:${m.text}`}>
+                <span className="text-muted-foreground tabular-nums">{timeFormat.format(new Date(m.at))}</span> {m.text}
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
       {(alert.origin === 'SOS' || alert.origin === 'ASSIST_BUTTON') && (
         <AlertLocation location={alert.latestLocation} />

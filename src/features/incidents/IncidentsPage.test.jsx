@@ -173,6 +173,34 @@ describe('IncidentsPage', () => {
     expect(screen.queryByRole('button', { name: 'Mở xử lý nguy kịch' })).toBeNull()
   })
 
+  // Đề xuất 2026-11-23: sự cố ghi rõ bắt đầu từ yêu cầu hỗ trợ của ai, ai tới lúc nào, ai đến giúp
+  it('FR_047i_suCoTuYeuCauHoTro_ghiRoBatDauTuDau', async () => {
+    const assist = (id, incidentId) => ({
+      id,
+      incidentId,
+      type: 'STAFF_ASSIST_REQUEST',
+      origin: 'ASSIST_BUTTON',
+      level: 'CRITICAL',
+      status: 'CONVERTED_TO_INCIDENT',
+      firstAt: '2026-11-23T10:20:00Z',
+      latestAt: '2026-11-23T10:20:00Z',
+    })
+    api.on('GET', '/alerts', json(200, [assist(70, 11), assist(71, 12)]))
+    const detail = {
+      pressedBy: 'Vũ Văn Cường',
+      assignee: 'Trần Thu Hà',
+      arrivedAt: '2026-11-23T10:22:00Z',
+      helpers: ['Lê Minh'],
+    }
+    api.on('GET', '/alerts/70', json(200, { ...assist(70, 11), ...detail }))
+    api.on('GET', '/alerts/71', json(200, { ...assist(71, 12), ...detail }))
+    render(<IncidentsPage />)
+    const list = await rows()
+    fireEvent.click(within(list[0]).getByRole('button'))
+    expect(await screen.findByText(/Bắt đầu từ yêu cầu hỗ trợ của Vũ Văn Cường lúc/)).toBeTruthy()
+    expect(screen.getByText(/Trần Thu Hà tới lúc .*; Lê Minh đến giúp\./)).toBeTruthy()
+  })
+
   it('FR_050a_chiTietSuCo_khongCoCanhBaoNguyKich_khongHienGi', async () => {
     api.on('GET', '/alerts', json(200, []))
     render(<IncidentsPage />)

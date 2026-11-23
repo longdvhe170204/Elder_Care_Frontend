@@ -147,6 +147,21 @@ const CHANNEL_TEXT = {
   CALL: 'cuộc gọi',
 }
 
+// Sự cố bắt đầu từ đâu: yêu cầu hỗ trợ, nút SOS ghi rõ ai gọi, ai tới, ai đến giúp; cảnh báo khác ghi loại, mức
+function linkedAlertText(alert, typeName) {
+  const helpers = alert.helpers?.length ? `; ${alert.helpers.join(', ')} đến giúp` : ''
+  const arrived = alert.arrivedAt
+    ? `, ${alert.assignee ?? 'người tiếp nhận'} tới lúc ${formatDateTime(alert.arrivedAt)}`
+    : ''
+  if (alert.origin === 'ASSIST_BUTTON') {
+    return `Bắt đầu từ yêu cầu hỗ trợ${alert.pressedBy ? ` của ${alert.pressedBy}` : ''} lúc ${formatDateTime(alert.firstAt)}${arrived}${helpers}.`
+  }
+  if (alert.origin === 'SOS') {
+    return `Bắt đầu từ nút SOS của người cao tuổi lúc ${formatDateTime(alert.firstAt)}${arrived}${helpers}.`
+  }
+  return `Phát sinh từ cảnh báo ${typeName}, mức ${LEVEL_LABEL[alert.level]?.toLowerCase()}, ${formatDateTime(alert.firstAt)}.`
+}
+
 function NotifiedSection({ recipients }) {
   const rows = RECIPIENT_GROUPS.map(([prefix, label]) => {
     const group = recipients.filter((r) => String(r.recipient).startsWith(`${prefix}:`))
@@ -654,7 +669,10 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
             <CaseLink
               key={alert.id}
               label={`Cảnh báo liên kết ${alert.id}`}
-              text={`Phát sinh từ cảnh báo ${types.find((t) => t.code === alert.type)?.name ?? alertTypeLabel(alert.type)}, mức ${LEVEL_LABEL[alert.level]?.toLowerCase()}, ${formatDateTime(alert.firstAt)}.`}
+              text={linkedAlertText(
+                alert,
+                types.find((t) => t.code === alert.type)?.name ?? alertTypeLabel(alert.type),
+              )}
               action="Mở cảnh báo gốc"
               onOpen={onNavigate && (() => onNavigate('alerts', { alertId: alert.id }))}
             />

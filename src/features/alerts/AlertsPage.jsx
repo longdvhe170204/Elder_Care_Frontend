@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CircleCheck, ClipboardCheck, FilePlus, Gauge, Hand, Play, Plus, Siren, UserPlus } from 'lucide-react'
+import {
+  CircleCheck,
+  ClipboardCheck,
+  FilePlus,
+  Gauge,
+  Hand,
+  HandHelping,
+  Play,
+  Plus,
+  Siren,
+  UserPlus,
+} from 'lucide-react'
 import { getCareTasksById } from '@/api/api005'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -22,7 +35,7 @@ import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { StaffSelectField } from '@/common/StaffSelectField'
 import { CriticalCareSection } from '@/features/critical-care/CriticalCareSection'
-import { FilterTabs, ResidentChoices } from '@/features/incidents/CaseFormParts'
+import { FilterTabs } from '@/features/incidents/CaseFormParts'
 import {
   CaseBadge,
   CaseBlock,
@@ -36,18 +49,12 @@ import {
 import { IncidentTypeIcon, IncidentTypePicker } from '@/features/incidents/IncidentTypePicker'
 import { STATUS_LABEL as INCIDENT_STATUS } from '@/features/incidents/incidentView'
 import { loadOpenIncidents } from '@/features/incidents/incidents'
-import { AssistButton, AssistStatus } from './AssistRequest'
+import { AssistButton, AssistSenderBlock, AssistStatus, ResidentSearch } from './AssistRequest'
+import { EVENT_INCIDENT_TYPE, EVENT_LABEL, PLACE_LABEL } from './assistView'
 import { Call115Panel } from './Call115Panel'
 import { CreateAlertForm } from './CreateAlertForm'
 import { PressedAlertPanel } from './PressedAlertPanel'
-import {
-  loadAlert,
-  loadAlertBoard,
-  loadIncidentTypes,
-  loadResidentChoices,
-  receiveCreatedIncident,
-  runAlertCommand,
-} from './alerts'
+import { loadAlert, loadAlertBoard, loadIncidentTypes, receiveCreatedIncident, runAlertCommand } from './alerts'
 import {
   LEVEL_LABEL,
   LEVEL_ORDER,
@@ -172,6 +179,10 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
 
 // Chi tiết ở khung phải (cảnh báo nguy kịch mở cả trang): việc cần làm trước, thông tin sau; lệnh cần nhập kết quả hoặc lý do (Đóng, Đổi mức) mở hộp
 const CRITICAL_CLOSE_MIN = 10
+// Màn tự hỏi lại để thấy cảnh báo mới, cảnh báo vừa được người khác đóng mà không phải tải lại trang
+const REFRESH_MS = 15000
+// Yêu cầu hỗ trợ ghi Ngã hoặc Ngừng tim, ngất: thường phải ghi sự cố để theo dõi, nhắc khi đóng (chỉ nhắc, không chặn)
+const FOLLOW_UP_EVENTS = ['FALL', 'CARDIAC_ARREST_OR_FAINTING']
 const STEP_OF = { NEW: 0, ESCALATED: 0, RECEIVED: 1, IN_PROGRESS: 2 }
 const DIALOG_TITLE = {
   close: 'Đóng cảnh báo?',
@@ -186,7 +197,7 @@ const DIALOG_HINT = {
   'change-level': 'Vẫn là cảnh báo, chưa tạo sự cố.',
 }
 
-function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
+function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate }) {
   const [alert, setAlert] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
@@ -199,9 +210,9 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
   const [blocked, setBlocked] = useState(null)
   const [openIncidents, setOpenIncidents] = useState([])
   const [target, setTarget] = useState(null)
-  const [residents, setResidents] = useState(null)
-  const [residentQuery, setResidentQuery] = useState('')
-  const [residentId, setResidentId] = useState(null)
+  const [picked, setPicked] = useState(null)
+  const [location, setLocation] = useState('')
+  const [addHelpers, setAddHelpers] = useState(true)
   const { can } = usePermissions()
   const [initialResponse, setInitialResponse] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -226,6 +237,19 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
     }
   }, [id])
 
+  // Lần hỏi lại của màn: cập nhật trạng thái, người đến giúp, tin nhắn mà không tính là thao tác của người dùng
+  useEffect(() => {
+    if (!tick) return undefined
+    let cancelled = false
+    loadAlert(id, { background: true }).then(
+      (data) => !cancelled && setAlert(data),
+      () => {},
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [id, tick])
+
   if (!alert) {
     return problem ? <ProblemAlert problem={problem} /> : <Skeleton className="h-40 w-full" />
   }
@@ -239,6 +263,10 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
   const pressed = ['SOS', 'ASSIST_BUTTON'].includes(alert.origin)
   const waiting = alert.acknowledgementDeadline && ['NEW', 'ESCALATED'].includes(alert.status)
   const linkedIncidentId = createdIncidentId ?? alert.incidentId ?? null
+  const mine = alert.pressedByMe === true
+  const helpers = alert.helpers ?? []
+  const residentId = picked?.id ?? null
+  const followUpEvent = FOLLOW_UP_EVENTS.includes(alert.eventType)
   // Người xử lý (không phải Quản lý viện): tiếp nhận xong thường xử lý ngay nên một ô làm cả hai lệnh
   const handler = commands.includes('activate-emergency')
   const emergencyFirst = handler && alert.level === 'CRITICAL'
@@ -272,6 +300,13 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
         disabled: busy,
         onSelect: () => quick('receive', 'Đã tiếp nhận cảnh báo'),
       },
+    commands.includes('join-help') && {
+      icon: HandHelping,
+      label: 'Tôi đến giúp',
+      hint: 'Báo bạn đang tới phụ; người tiếp nhận vẫn lo chính.',
+      disabled: busy,
+      onSelect: () => quick('join-help', 'Đã báo bạn đến giúp'),
+    },
     commands.includes('start-handling') && {
       icon: Play,
       label: 'Bắt đầu xử lý',
@@ -331,24 +366,28 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
   function openConvert(next) {
     setMode(next)
     setTarget(null)
-    // Cảnh báo thủ công mang mã loại sự cố: chọn sẵn đúng loại đó để chỉ còn bấm lưu (ưu tiên thời gian xử lý)
+    setAddHelpers(true)
+    // Yêu cầu hỗ trợ: điền sẵn nơi xảy ra và mô tả từ những gì người gửi đã chọn; người chuyển sửa được
+    setLocation([alert.floorName, PLACE_LABEL[alert.chosenPlace], alert.placeNote].filter(Boolean).join(', '))
+    if (pressed) setText([EVENT_LABEL[alert.eventType], alert.placeNote].filter(Boolean).join(', '))
+    // Cảnh báo thủ công mang mã loại sự cố: chọn sẵn đúng loại đó; yêu cầu hỗ trợ chọn theo "Chuyện gì" để chỉ còn bấm lưu
     loadIncidentTypes().then(
       (types) => {
         setIncidentTypes(types)
-        const same = types.find((t) => t.code === alert.type)
+        const code = types.some((t) => t.code === alert.type) ? alert.type : EVENT_INCIDENT_TYPE[alert.eventType]
+        const same = types.find((t) => t.code === code)
         if (same) setTypeId(String(same.id))
       },
       (error) => setProblem(problemOf(error)),
     )
     if (alert.residentId != null) loadOpenIncidents(alert.residentId).then(setOpenIncidents)
-    else loadResidentChoices().then(setResidents, () => setResidents([]))
   }
 
   function pickResident(value) {
-    setResidentId(value)
+    setPicked(value)
     setTarget(null)
     setOpenIncidents([])
-    if (value != null) loadOpenIncidents(value).then(setOpenIncidents)
+    if (value != null) loadOpenIncidents(value.id).then(setOpenIncidents)
   }
 
   // Cảnh báo Khẩn cấp (và Kích hoạt khẩn cấp) chỉ gắn được vào sự cố Khẩn cấp: sự cố mức thấp hơn chưa báo người (FR-029)
@@ -398,16 +437,19 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
     setSubmitted(true)
     if (converting) {
       if (needsResident || needsTarget || (!linking && !typeId)) return
+      const helping = helpers.length > 0 ? { addHelpers } : {}
       await convert(
         mode,
         linking
-          ? { existingIncidentId: target }
+          ? { existingIncidentId: target, ...helping }
           : {
               incidentTypeId: Number(typeId),
               ...(text.trim() && { description: text.trim() }),
               ...(initialResponse.trim() && { initialResponse: initialResponse.trim() }),
+              ...(location.trim() && { location: location.trim() }),
               ...(residentId != null && { residentId }),
               ...(target === 'new' && { createDespiteOpen: true }),
+              ...helping,
             },
       )
       return
@@ -554,24 +596,8 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
             )}
             {converting && alert.residentId == null && (
               <Field data-invalid={(submitted && needsResident) || undefined}>
-                <FieldLabel>Người cao tuổi</FieldLabel>
-                {residentId != null ? (
-                  <span className="flex flex-wrap items-center gap-3 type-label">
-                    {residents?.find((r) => r.id === residentId)?.name}
-                    <Button type="button" variant="ghost" className="h-11" onClick={() => pickResident(null)}>
-                      Đổi người
-                    </Button>
-                  </span>
-                ) : residents ? (
-                  <ResidentChoices
-                    residents={residents}
-                    query={residentQuery}
-                    onQuery={setResidentQuery}
-                    onPick={pickResident}
-                  />
-                ) : (
-                  <Skeleton className="h-16 w-full" />
-                )}
+                <FieldLabel htmlFor="alert-resident-search">Người cao tuổi</FieldLabel>
+                <ResidentSearch id="alert-resident-search" picked={picked} onPick={pickResident} />
                 {submitted && needsResident && <FieldError>Chọn người cao tuổi của yêu cầu này</FieldError>}
               </Field>
             )}
@@ -619,6 +645,24 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
             )}
             {converting && !linking && (
               <Field>
+                <FieldLabel htmlFor="alert-location">Nơi xảy ra (không bắt buộc)</FieldLabel>
+                <Input
+                  id="alert-location"
+                  className="h-11"
+                  maxLength={500}
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                />
+              </Field>
+            )}
+            {converting && helpers.length > 0 && (
+              <label className="flex min-h-11 cursor-pointer items-center gap-2">
+                <Checkbox checked={addHelpers} onCheckedChange={(on) => setAddHelpers(on === true)} />
+                <span className="type-body-sm">Thêm {helpers.join(', ')} vào người tham gia xử lý</span>
+              </label>
+            )}
+            {converting && !linking && (
+              <Field>
                 <FieldLabel htmlFor="alert-initial-response">Xử lý ban đầu (không bắt buộc)</FieldLabel>
                 <Textarea
                   id="alert-initial-response"
@@ -629,7 +673,28 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
                 />
               </Field>
             )}
-            {criticalClose && (
+            {mode === 'close' && followUpEvent && (
+              <Alert role="note" variant="attention" className="gap-3 p-4">
+                <p>
+                  Yêu cầu này ghi "{EVENT_LABEL[alert.eventType]}". Sự việc như vậy thường phải ghi sự cố để theo dõi
+                  sau, kể cả khi cụ có vẻ không sao.
+                </p>
+                {commands.includes('convert-to-incident') && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-11 self-start text-foreground"
+                    onClick={() => {
+                      closeMode()
+                      openConvert('convert-to-incident')
+                    }}
+                  >
+                    Chuyển thành sự cố
+                  </Button>
+                )}
+              </Alert>
+            )}
+            {criticalClose && !followUpEvent && (
               <Alert role="note" variant="attention">
                 Cảnh báo Khẩn cấp thường cần bấm "Kích hoạt khẩn cấp" hoặc "Chuyển thành sự cố". Chỉ đóng khi đã xác
                 nhận không phải tình huống khẩn cấp thật.
@@ -685,6 +750,16 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
           </form>
         </CaseDialog>
       )}
+      {mine && isOpen(alert) && (
+        <AssistSenderBlock
+          alert={alert}
+          onChanged={async (message) => {
+            await reload()
+            onChanged(message, name)
+          }}
+          onDone={(message) => onDone(message, name)}
+        />
+      )}
       {pressed && (
         <Card>
           <CardContent>
@@ -701,7 +776,7 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
         />
       )}
       <div className="grid items-start gap-5 @3xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <CaseBlock title={isOpen(alert) ? 'Việc cần làm' : 'Kết quả'}>
+        <CaseBlock title={!isOpen(alert) ? 'Kết quả' : mine ? 'Khi xử lý xong' : 'Việc cần làm'}>
           {linkedIncidentId != null && (
             <>
               <p className="type-body">
@@ -718,14 +793,18 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
             </>
           )}
           <CaseChoices items={steps} />
-          {handler && isOpen(alert) && !commands.includes('convert-to-incident') && (
+          {handler && !mine && isOpen(alert) && !commands.includes('convert-to-incident') && (
             <p className="type-body-sm text-muted-foreground">
               "Chuyển thành sự cố" và "Đóng cảnh báo" hiện ra sau khi bắt đầu xử lý.
             </p>
           )}
           {steps.length === 0 && linkedIncidentId == null && (
             <p className="type-body-sm text-muted-foreground">
-              {isOpen(alert) ? 'Bạn chỉ xem được cảnh báo này.' : 'Cảnh báo đã đóng.'}
+              {!isOpen(alert)
+                ? 'Cảnh báo đã đóng.'
+                : mine
+                  ? 'Người tới nơi sẽ ghi kết quả. Bạn vẫn bổ sung, nhắn thêm được ở khối trên.'
+                  : 'Bạn chỉ xem được cảnh báo này.'}
             </p>
           )}
           {taskSource && isOpen(alert) && onNavigate && can('TASK_CHECKLIST', 'CONFIRM') && (
@@ -744,6 +823,8 @@ function AlertDetail({ id, name, Title, onDone, onChanged, onNavigate }) {
             rows={[
               ['Mô tả', alert.description || undefined, true],
               ['Phụ trách', alert.assignee ?? 'Chưa ai nhận'],
+              ['Kết quả', !isOpen(alert) ? alert.resolution || undefined : undefined, true],
+              ['Người đóng', !isOpen(alert) ? alert.closedBy || undefined : undefined],
               ['Hạn tiếp nhận', waiting ? formatDateTime(alert.acknowledgementDeadline) : undefined],
               ['Nguồn', originLabel(alert.origin)],
               ['Tầng', alert.floorName || undefined],
@@ -800,6 +881,7 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
   const [announcement, setAnnouncement] = useState('')
   const [creating, setCreating] = useState(false)
   const [assist, setAssist] = useState(null)
+  const [tick, setTick] = useState(0)
   const { can } = usePermissions()
 
   const load = useCallback(async () => {
@@ -824,6 +906,21 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     )
     return () => {
       cancelled = true
+    }
+  }, [])
+
+  // Tự làm mới mỗi REFRESH_MS và khi quay lại tab: cảnh báo mới, cảnh báo người khác vừa đóng hiện ra không cần tải lại
+  useEffect(() => {
+    const refresh = () => {
+      loadAlertBoard({ background: true }).then(setBoard, () => {})
+      setTick((n) => n + 1)
+    }
+    const timer = setInterval(refresh, REFRESH_MS)
+    const onVisible = () => document.visibilityState === 'visible' && refresh()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', onVisible)
     }
   }, [])
 
@@ -887,7 +984,8 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     await load()
   }
 
-  const opened = alerts.find((a) => a.id === openId)
+  // Yêu cầu hỗ trợ của chính người gửi có thể nằm ngoài danh sách (đã đổi sang tầng khác phạm vi): vẫn mở theo mã
+  const opened = alerts.find((a) => a.id === openId) ?? (openId != null && board ? { id: openId } : undefined)
   function open(id) {
     setAnnouncement('')
     setOpenId(id)
@@ -901,6 +999,7 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     <AlertDetail
       key={opened.id}
       id={opened.id}
+      tick={tick}
       name={nameOf(opened)}
       onDone={done}
       onChanged={changed}
@@ -939,6 +1038,7 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
           <AlertDetail
             key={opened.id}
             id={opened.id}
+            tick={tick}
             name={nameOf(opened)}
             Title={Title}
             onDone={done}
@@ -955,11 +1055,17 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
           <div className="flex flex-wrap gap-2">
             {can('EMERGENCY_ASSIST_BUTTON', 'CREATE') && (
               <AssistButton
-                onSent={(data, detailProblem) => {
+                openAssists={alerts.filter((a) => a.type === 'STAFF_ASSIST_REQUEST' && isOpen(a) && !a.pressedByMe)}
+                onSent={(data) => {
                   setAssist(data)
                   setAnnouncement('Đã gửi yêu cầu hỗ trợ.')
-                  if (detailProblem) setProblem(detailProblem)
                   load()
+                }}
+                onOpenAlert={open}
+                onJoined={(id) => {
+                  setAnnouncement('Đã báo bạn đến giúp.')
+                  load()
+                  setOpenId(id)
                 }}
               />
             )}
@@ -1003,7 +1109,13 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
         </div>
       </PageHeader>
       {can('EMERGENCY_ASSIST_BUTTON', 'CREATE') && (
-        <AssistStatus key={assist?.pressId ?? 'current'} sent={assist} onOpen={open} />
+        <AssistStatus
+          key={assist?.pressId ?? 'current'}
+          sent={assist}
+          onOpen={open}
+          onEnded={load}
+          onNavigate={onNavigate}
+        />
       )}
       {/* DESIGN.md 5, 7.2: cảnh báo gấp chưa ai tiếp nhận nổi lên ở dải này, thẻ không thêm viền đỏ */}
       <NowStrip

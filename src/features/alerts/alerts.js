@@ -9,6 +9,7 @@ import {
   postAlertsByIdChangeLevel,
   postAlertsByIdClose,
   postAlertsByIdConvertToIncident,
+  postAlertsByIdJoinHelp,
   postAlertsByIdReceive,
   postAlertsByIdStartHandling,
   postIncidentsByIdReceive,
@@ -18,11 +19,17 @@ import { residentName, setIncidentTypeNames } from './alertView'
 // Đọc và ghi cảnh báo qua client sinh từ hợp đồng (api-007 alerts; api-001 Profile cho họ tên). Hồ sơ không đọc được
 // thì ghi "Người cao tuổi", không chặn danh sách; danh sách lỗi thì ném lỗi cho màn.
 
-export async function loadAlertBoard() {
-  const [{ data }, types] = await Promise.all([getAlerts({}), getIncidentTypes({}).catch(() => ({ data: [] }))])
+// background: lần hỏi lại tự động của màn, không tính là thao tác của người dùng (không gia hạn phiên)
+const quiet = (options) => (options?.background ? { headers: { 'X-Background-Refresh': 'true' } } : {})
+
+export async function loadAlertBoard(options) {
+  const [{ data }, types] = await Promise.all([
+    getAlerts(quiet(options)),
+    getIncidentTypes(quiet(options)).catch(() => ({ data: [] })),
+  ])
   setIncidentTypeNames(types.data)
   const ids = [...new Set(data.map((a) => a.residentId).filter((id) => id != null))]
-  const profiles = await Promise.allSettled(ids.map((id) => getResidentsById({ path: { id } })))
+  const profiles = await Promise.allSettled(ids.map((id) => getResidentsById({ path: { id }, ...quiet(options) })))
   const names = {}
   ids.forEach((id, i) => {
     if (profiles[i].status === 'fulfilled') names[id] = residentName(profiles[i].value.data)
@@ -57,10 +64,10 @@ export async function createAlert(body) {
   return data
 }
 
-export async function loadAlert(id) {
+export async function loadAlert(id, options) {
   const [{ data }, types] = await Promise.all([
-    getAlertsById({ path: { id } }),
-    getIncidentTypes({}).catch(() => ({ data: [] })),
+    getAlertsById({ path: { id }, ...quiet(options) }),
+    getIncidentTypes(quiet(options)).catch(() => ({ data: [] })),
   ])
   setIncidentTypeNames(types.data)
   return data
@@ -74,6 +81,7 @@ const COMMANDS = {
   'change-level': postAlertsByIdChangeLevel,
   'convert-to-incident': postAlertsByIdConvertToIncident,
   'activate-emergency': postAlertsByIdActivateEmergency,
+  'join-help': postAlertsByIdJoinHelp,
 }
 
 export function runAlertCommand(id, command, body) {
