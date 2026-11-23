@@ -77,6 +77,17 @@ export function statusTone(alert) {
   return 'neutral'
 }
 
+// Ai lo cảnh báo, nói rõ đã nhận hay chưa: "Phụ trách" cũ bị hiểu là đã có người nhận (góp ý test demo 2026-11-23)
+export function handlerText(alert) {
+  if (alert.status === 'CONVERTED_TO_INCIDENT' && alert.incidentId != null) return `Đã thành sự cố SC-${alert.incidentId}`
+  if (['NEW', 'ESCALATED'].includes(alert.status)) {
+    if (alert.pressedByMe) return 'Bạn gửi, đang chờ người khác nhận'
+    return alert.assignee ? `Chờ ${alert.assignee} nhận` : 'Chưa giao ai, người đang trực nhận được'
+  }
+  if (isOpen(alert)) return `Đang xử lý: ${alert.assignee ?? 'chưa rõ người'}`
+  return alert.assignee ? `Người xử lý: ${alert.assignee}` : 'Không có người xử lý'
+}
+
 export function isUrgent(alert) {
   return isOpen(alert) && (alert.level === 'CRITICAL' || alert.maxEscalationReached)
 }

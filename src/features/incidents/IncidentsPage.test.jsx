@@ -275,8 +275,10 @@ describe('IncidentsPage', () => {
     expect(await screen.findByText('Đã gọi điều dưỡng')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Ghi diễn biến' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu diễn biến' }))
-    expect(await screen.findByText('Chọn loại diễn biến')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Gọi hỗ trợ' }))
+    expect(await screen.findByText('Chọn nhóm diễn biến')).toBeTruthy()
+    // Nhóm chỉ có một loại thì chọn sẵn loại đó
+    fireEvent.click(screen.getByRole('radio', { name: /^Gọi, báo tin/ }))
+    expect(screen.getByRole('button', { name: 'Gọi hỗ trợ' })).toHaveAttribute('aria-pressed', 'true')
     fireEvent.change(screen.getByLabelText('Nội dung'), { target: { value: 'Đã báo bác sĩ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu diễn biến' }))
     await waitFor(() => expect(api.calls('POST', '/incidents/12/progressions')).toHaveLength(1))
@@ -292,6 +294,10 @@ describe('IncidentsPage', () => {
     fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
     expect(await screen.findByText(/Cần thêm diễn biến đánh giá và xử lý/)).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Chuyển theo dõi' })).toBeDisabled()
+    // Danh sách điều kiện có nút ghi đúng nhóm còn thiếu
+    expect(screen.getByText('1 diễn biến đánh giá: chưa có')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi đánh giá' }))
+    expect(screen.getByRole('radio', { name: /^Đánh giá/ })).toHaveAttribute('aria-checked', 'true')
   })
 
   it('FR_045_ghiDienBien_chiaNhomDeChonNhanh', async () => {
@@ -299,9 +305,12 @@ describe('IncidentsPage', () => {
     const list = await rows()
     fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi diễn biến' }))
-    expect(screen.getByRole('region', { name: 'Đánh giá' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'Xử lý' })).toBeTruthy()
-    expect(screen.getByRole('region', { name: 'Gọi, báo tin' })).toBeTruthy()
+    // Chọn nhóm trước, mỗi nhóm nói rõ đã có hay còn thiếu cho Chuyển theo dõi
+    expect(screen.getByRole('radio', { name: /^Đánh giá.*Còn thiếu để Chuyển theo dõi/ })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /^Xử lý/ })).toBeTruthy()
+    expect(screen.getByRole('radio', { name: /^Gọi, báo tin/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('radio', { name: /^Đánh giá/ }))
+    expect(screen.getByRole('region', { name: 'Loại trong nhóm Đánh giá' })).toBeTruthy()
   })
 
   it('FR_045_dongSuCo_canKetQua_409HienDieuKien', async () => {
@@ -646,6 +655,7 @@ describe('IncidentsPage', () => {
     fireEvent.click(within(list[0]).getByRole('button', { name: /Trần Thị Mai/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi diễn biến' }))
     expect(screen.queryByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeNull()
+    fireEvent.click(screen.getByRole('radio', { name: /^Xử lý/ }))
     fireEvent.click(screen.getByRole('button', { name: /Cấp cứu hồi sức/ }))
     expect(screen.getByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeTruthy()
   })

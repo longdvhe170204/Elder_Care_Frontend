@@ -33,11 +33,12 @@ import { OpinionBlock } from '../admissions/ApplicationParts'
 import { OPEN_STATUSES } from '../admissions/admissionLabels'
 import {
   BASIS_KINDS,
-  COMMAND_EFFECTS,
   COMMAND_LABELS,
   COMMAND_ORDER,
   FINAL_STATUSES,
   HISTORY_COMMAND_LABELS,
+  commandEffect,
+  reasonField,
 } from './statusLabels'
 
 // Tab "Trạng thái" trong khung chi tiết hồ sơ (001 T052; US4; FR-044 → FR-047b; bố cục do B giao cho Claude quyết định
@@ -163,7 +164,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
   async function submit(event) {
     event.preventDefault()
     const next = {}
-    if (!reason.trim()) next.reason = 'Nhập lý do của lệnh'
+    if (!reason.trim()) next.reason = reasonField(command, status).error
     if (command === 'TRANSFER_OUT') {
       const kind = BASIS_KINDS.find((k) => k.value === basisKind)
       const value = basisText.trim()
@@ -198,7 +199,8 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
       if (fileMessage) {
         setErrors(command === 'RECORD_DEATH' ? { evidence: fileMessage } : { documents: fileMessage })
       } else if (error instanceof ApiError && error.status === 422) {
-        if (problem.errorCode === 'REASON_REQUIRED') setErrors({ reason: problem.detail || 'Nhập lý do của lệnh' })
+        if (problem.errorCode === 'REASON_REQUIRED')
+          setErrors({ reason: problem.detail || reasonField(command, status).error })
         else if (problem.errorCode === 'BASIS_REQUIRED') setErrors({ basis: 'Chọn và nhập căn cứ chuyển viện' })
         else if (problem.errorCode === 'EVIDENCE_REQUIRED') {
           setErrors({ evidence: 'Phải kèm giấy tờ bằng chứng khi Hành chính ghi nhận qua đời ngoài viện' })
@@ -223,7 +225,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
       className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
     >
       <h3 className="type-card-title">{label}</h3>
-      <p className="type-body-sm text-muted-foreground">{COMMAND_EFFECTS[command]}</p>
+      <p className="type-body-sm text-muted-foreground">{commandEffect(command, status)}</p>
 
       {command === 'COMPLETE_ADMISSION' && <AdmissionOpinion residentId={residentId} />}
 
@@ -242,7 +244,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
         {STATUS_COMMAND_REASONS[command] ? (
           <ChoiceTray
             id={`status-reason-${command}`}
-            label="Lý do của lệnh (bắt buộc)"
+            label={reasonField(command, status).label}
             options={STATUS_COMMAND_REASONS[command]}
             value={reason}
             onChange={setReason}
@@ -250,10 +252,11 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
           />
         ) : (
           <>
-            <FieldLabel htmlFor={`status-reason-${command}`}>Lý do của lệnh (bắt buộc)</FieldLabel>
+            <FieldLabel htmlFor={`status-reason-${command}`}>{reasonField(command, status).label}</FieldLabel>
             <Textarea
               id={`status-reason-${command}`}
               rows={3}
+              placeholder={reasonField(command, status).placeholder}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               aria-invalid={!!errors.reason || undefined}

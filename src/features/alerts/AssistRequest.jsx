@@ -410,6 +410,8 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
       : openAssists.filter((a) =>
           floor === COMMON || floor === '' ? a.floorAreaId == null : String(a.floorAreaId) === floor,
         )
+  // Người cao tuổi vừa chọn đang có yêu cầu hỗ trợ khác chưa đóng: có thể cùng vụ, báo đến giúp yêu cầu kia
+  const sameResident = resident ? openAssists.filter((a) => a.residentId === resident.id && a.id !== sent?.alertId) : []
   const suggestFloor =
     resident?.floorAreaId != null &&
     String(resident.floorAreaId) !== floor &&
@@ -472,6 +474,30 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
             <p className="type-body-sm">
               {a.floorName ?? 'Khu vực chung'} đang có yêu cầu hỗ trợ chưa đóng, gửi lúc{' '}
               {TIME.format(new Date(a.firstAt))}. Nếu cùng vụ, báo bạn đến giúp thay vì gửi thêm.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" className="h-11" disabled={busy} onClick={() => joinHelp(a.id)}>
+                Tôi đến giúp
+              </Button>
+              {onOpenAlert && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="h-11 text-foreground"
+                  onClick={() => onOpenAlert(a.id)}
+                >
+                  Xem yêu cầu đó
+                </Button>
+              )}
+            </div>
+          </Alert>
+        ))}
+
+        {sameResident.map((a) => (
+          <Alert key={`resident-${a.id}`} variant="attention" className="gap-3 p-4">
+            <p className="type-body-sm">
+              {resident.fullName} đang có yêu cầu hỗ trợ khác chưa đóng, gửi lúc {TIME.format(new Date(a.firstAt))}. Nếu
+              cùng vụ, báo bạn đến giúp yêu cầu đó{sent ? ' rồi rút yêu cầu của bạn' : ' thay vì gửi thêm'}.
             </p>
             <div className="flex flex-wrap gap-2">
               <Button type="button" className="h-11" disabled={busy} onClick={() => joinHelp(a.id)}>
@@ -567,9 +593,16 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
             </Button>
           </div>
         ) : (
-          <Button type="button" variant="ghost" className="h-11 self-start" disabled={busy} onClick={onClose}>
-            Hủy
-          </Button>
+          // Gửi ở cả cuối hộp: điền xong không phải cuộn lên đầu (góp ý test demo 2026-11-23)
+          <div className="flex flex-wrap gap-2">
+            <Button type="submit" className="h-11" disabled={busy}>
+              <HandHelping aria-hidden="true" />
+              Gửi
+            </Button>
+            <Button type="button" variant="ghost" className="h-11" disabled={busy} onClick={onClose}>
+              Hủy
+            </Button>
+          </div>
         )}
       </form>
     </CaseDialog>

@@ -67,6 +67,7 @@ import {
   statusLabel,
   statusTone,
   typeLabel,
+  handlerText,
 } from './alertView'
 
 // Màn Cảnh báo (spec 007 User Story 3, FR-027 → FR-036; T031 phần web): danh sách theo phạm vi đọc từ api-007
@@ -125,15 +126,9 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
         {waiting ? (
           <span className={cn(urgent && 'text-destructive')}>
             Hạn tiếp nhận {formatDateTime(alert.acknowledgementDeadline)}
-            {alert.assignee && `, phụ trách: ${alert.assignee}`}
           </span>
-        ) : (
-          <span>
-            {alert.incidentId != null
-              ? `Đã thành sự cố SC-${alert.incidentId}`
-              : `Phụ trách: ${alert.assignee ?? 'chưa ai nhận'}`}
-          </span>
-        )}
+        ) : null}
+        <span>{handlerText(alert)}</span>
       </div>
       <div className="flex flex-wrap items-center gap-2 @lg:col-start-2 @lg:row-start-1 @lg:justify-end @4xl:col-start-3">
         {commands.includes('receive') && (
@@ -639,7 +634,17 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
             {converting && !linking && (
               <Field data-invalid={(submitted && !typeId) || undefined}>
                 <FieldLabel>Loại sự cố</FieldLabel>
-                <IncidentTypePicker types={incidentTypes} value={typeId} onChange={setTypeId} />
+                <IncidentTypePicker
+                  types={incidentTypes}
+                  value={typeId}
+                  onChange={setTypeId}
+                  showDefaultLevel={false}
+                />
+                <p className="type-caption text-muted-foreground">
+                  {mode === 'activate-emergency'
+                    ? 'Sự cố sẽ ở mức Khẩn cấp.'
+                    : `Sự cố sẽ ở mức ${LEVEL_LABEL[alert.level]}, theo mức của cảnh báo. Cần đổi thì dùng Đổi mức ở sự cố.`}
+                </p>
                 {submitted && !typeId && <FieldError>Chọn loại sự cố</FieldError>}
               </Field>
             )}
@@ -755,7 +760,8 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
           alert={alert}
           onChanged={async (message) => {
             await reload()
-            onChanged(message, name)
+            // Bổ sung có thể vừa gắn người cao tuổi: tên đang có là tên cũ
+            onChanged(message, null)
           }}
           onDone={(message) => onDone(message, name)}
         />
@@ -822,7 +828,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
           <CaseFacts
             rows={[
               ['Mô tả', alert.description || undefined, true],
-              ['Phụ trách', alert.assignee ?? 'Chưa ai nhận'],
+              ['Người xử lý', handlerText(alert)],
               ['Kết quả', !isOpen(alert) ? alert.resolution || undefined : undefined, true],
               ['Người đóng', !isOpen(alert) ? alert.closedBy || undefined : undefined],
               ['Hạn tiếp nhận', waiting ? formatDateTime(alert.acknowledgementDeadline) : undefined],
@@ -978,9 +984,10 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     await load()
   }
 
+  // Không có tên (bổ sung vừa đổi người cao tuổi, tên cũ đã lỗi thời) thì chỉ báo việc đã làm
   async function changed(message, name) {
     const alert = alerts.find((a) => a.id === openId)
-    setAnnouncement(`${message}: ${typeLabel(alert?.type)}, ${name}.`)
+    setAnnouncement(name ? `${message}: ${typeLabel(alert?.type)}, ${name}.` : `${message}.`)
     await load()
   }
 

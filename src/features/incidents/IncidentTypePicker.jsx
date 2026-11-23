@@ -88,7 +88,8 @@ export function IncidentTypeIcon({ code, className }) {
 
 // Chọn loại sự cố bằng ô biểu tượng kèm tên (dùng chung cho Ghi nhận sự cố, Tạo cảnh báo, Chuyển thành sự cố): chọn xong
 // thu gọn thành một dòng, "Đổi loại" mở lại lưới. Loại đã ngừng dùng không hiện.
-export function IncidentTypePicker({ types, value, onChange }) {
+// showDefaultLevel = false khi mức của sự cố không theo loại (chuyển từ cảnh báo lấy mức của cảnh báo)
+export function IncidentTypePicker({ types, value, onChange, showDefaultLevel = true }) {
   const usable = types.filter((t) => t.active !== false && t.status !== 'INACTIVE')
   const picked = usable.find((t) => String(t.id) === value)
 
@@ -98,7 +99,7 @@ export function IncidentTypePicker({ types, value, onChange }) {
         <IncidentTypeIcon code={picked.code} className="size-9" />
         <span className="flex-1 type-label">
           {picked.name}
-          {picked.defaultLevel && (
+          {showDefaultLevel && picked.defaultLevel && (
             <span className="ml-2 type-caption font-normal text-muted-foreground">
               mặc định {LEVEL_LABEL[picked.defaultLevel].toLowerCase()}
             </span>

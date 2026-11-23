@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
+import { cn } from 'cn'
 import {
   Ambulance,
+  Circle,
   CircleCheck,
   ClipboardCheck,
   Eye,
@@ -31,6 +33,7 @@ import { problemOf } from '@/common/problem'
 import { Call115Panel } from '@/features/alerts/Call115Panel'
 import { typeLabel as alertTypeLabel } from '@/features/alerts/alertView'
 import { CriticalNotice } from '@/features/critical-care/CriticalNotice'
+import { ResidentCallReminders } from '@/features/notifications/ResidentCallReminders'
 import { FilterTabs, LevelChoices, ResidentChoices } from './CaseFormParts'
 import {
   CaseAction,
@@ -226,6 +229,21 @@ const PROGRESSION_SECTIONS = [
 ]
 const KNOWN_GROUPS = ['EVALUATION', 'ACTION', 'NOTIFICATION', 'MONITORING']
 const GROUP_LABEL = { EVALUATION: 'đánh giá', ACTION: 'xử lý' }
+// Câu giải thích từng nhóm để người ghi chọn đúng nhóm (đánh giá là nhận định, xử lý là việc đã làm)
+const GROUP_HINT = {
+  EVALUATION: 'Nhận định tình trạng: khám thấy gì, đau ở đâu, chỉ số',
+  ACTION: 'Việc đã làm cho người cao tuổi: sơ cứu, thuốc, chăm sóc',
+  NOTIFICATION: 'Đã gọi ai, báo cho ai',
+  MONITORING: 'Theo dõi tiếp sau xử lý',
+  OTHER: 'Việc không thuộc các nhóm trên',
+}
+const GROUP_PLACEHOLDER = {
+  EVALUATION: 'Ví dụ: Đau hông trái, chân trái ngắn, nghi gãy xương',
+  ACTION: 'Ví dụ: Chườm lạnh hông trái, cho nằm nghỉ, kê gối',
+  NOTIFICATION: 'Ví dụ: Đã gọi người nhà lúc 9:20, báo cụ ngã',
+}
+const inGroupOf = (group) => (t) => (group === 'OTHER' ? !KNOWN_GROUPS.includes(t.group) : t.group === group)
+const pickableTypes = (types) => types.filter((t) => t.status !== 'INACTIVE' && t.group !== 'SYSTEM')
 
 // Nhóm diễn biến còn thiếu để Chuyển theo dõi (cần ít nhất một đánh giá và một xử lý)
 function missingMonitoringGroups(incident, progressionTypes) {
@@ -234,11 +252,13 @@ function missingMonitoringGroups(incident, progressionTypes) {
   return ['EVALUATION', 'ACTION'].filter((g) => !recorded.has(g))
 }
 
-// Chọn loại diễn biến theo nhóm Đánh giá, Xử lý, Gọi báo tin, Theo dõi: mắt dừng ở đúng nhóm cần, không đọc cả dãy dài.
-// Nhóm còn thiếu cho "Chuyển theo dõi" được đánh dấu; loại hồi sức nằm riêng dưới Xử lý vì cần xác nhận nguyện vọng.
-function ProgressionPicker({ types, value, onChange, missing, emergency }) {
+// Chọn nhóm trước (Đánh giá, Xử lý, Gọi báo tin, …), mỗi nhóm có câu giải thích và dấu đã có hoặc còn thiếu cho
+// "Chuyển theo dõi"; rồi chọn loại trong nhóm. Nhóm chỉ có một loại thì chọn sẵn. Loại hồi sức nằm riêng dưới Xử lý vì cần
+// xác nhận nguyện vọng.
+function ProgressionPicker({ types, group, onGroup, value, onChange, missing, emergency }) {
   const [showResuscitation, setShowResuscitation] = useState(false)
-  const active = types.filter((t) => t.status !== 'INACTIVE' && t.group !== 'SYSTEM')
+  const active = pickableTypes(types)
+  const groups = PROGRESSION_SECTIONS.filter(([g]) => active.some(inGroupOf(g)))
   const chip = (t) => (
     <Button
       key={t.id}
@@ -251,48 +271,95 @@ function ProgressionPicker({ types, value, onChange, missing, emergency }) {
       {t.name}
     </Button>
   )
+  const inGroup = group ? active.filter(inGroupOf(group)) : []
+  const plain = inGroup
+    .filter((t) => !t.resuscitation)
+    .toSorted((a, b) => Number(isOtherType(a)) - Number(isOtherType(b)))
+  const resuscitation = inGroup.filter((t) => t.resuscitation)
+  const groupName = PROGRESSION_SECTIONS.find(([g]) => g === group)?.[1]
   return (
     <div className="flex flex-col gap-3">
-      {PROGRESSION_SECTIONS.map(([group, label]) => {
-        const inGroup = active.filter((t) => (group === 'OTHER' ? !KNOWN_GROUPS.includes(t.group) : t.group === group))
-        if (inGroup.length === 0) return null
-        const plain = inGroup
-          .filter((t) => !t.resuscitation)
-          .toSorted((a, b) => Number(isOtherType(a)) - Number(isOtherType(b)))
-        const resuscitation = inGroup.filter((t) => t.resuscitation)
-        return (
-          <section key={group} aria-label={label} className="flex flex-col gap-1.5">
-            <h4 className="type-caption text-muted-foreground">
-              {label}
-              {missing.includes(group) && ' (cần ít nhất 1 mục để Chuyển theo dõi)'}
-            </h4>
-            {plain.length > 0 && <div className="flex flex-wrap gap-2">{plain.map(chip)}</div>}
-            {resuscitation.length > 0 && emergency && (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="h-11 self-start"
-                  aria-expanded={showResuscitation}
-                  onClick={() => setShowResuscitation((v) => !v)}
-                >
-                  {showResuscitation ? 'Ẩn cấp cứu hồi sức' : 'Cấp cứu hồi sức (chỉ khi ngừng tim, ngừng thở)'}
-                </Button>
-                {(showResuscitation || resuscitation.some((t) => String(t.id) === value)) && (
-                  <div className="flex flex-wrap gap-2">{resuscitation.map(chip)}</div>
+      <div role="radiogroup" aria-label="Nhóm diễn biến" className="grid gap-2 sm:grid-cols-2">
+        {groups.map(([g, label]) => {
+          const needed = ['EVALUATION', 'ACTION'].includes(g)
+          const selected = group === g
+          return (
+            <button
+              key={g}
+              type="button"
+              role="radio"
+              aria-checked={selected}
+              onClick={() => onGroup(g)}
+              className={cn(
+                'flex min-h-16 flex-col items-start gap-0.5 rounded-lg border px-4 py-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+                selected ? 'border-primary bg-primary/10' : 'hover:bg-muted',
+              )}
+            >
+              <span className="flex w-full flex-wrap items-baseline justify-between gap-x-2">
+                <span className="type-label">{label}</span>
+                {needed && (
+                  <span
+                    className={cn(
+                      'type-caption',
+                      missing.includes(g) ? 'text-warning-foreground' : 'text-success-foreground',
+                    )}
+                  >
+                    {missing.includes(g) ? 'Còn thiếu để Chuyển theo dõi' : 'Đã có'}
+                  </span>
                 )}
-              </>
-            )}
-          </section>
-        )
-      })}
+              </span>
+              <span className="type-caption text-muted-foreground">{GROUP_HINT[g]}</span>
+            </button>
+          )
+        })}
+      </div>
+      {group && (
+        <section aria-label={`Loại trong nhóm ${groupName}`} className="flex flex-col gap-1.5">
+          {plain.length > 0 && <div className="flex flex-wrap gap-2">{plain.map(chip)}</div>}
+          {resuscitation.length > 0 && emergency && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 self-start"
+                aria-expanded={showResuscitation}
+                onClick={() => setShowResuscitation((v) => !v)}
+              >
+                {showResuscitation ? 'Ẩn cấp cứu hồi sức' : 'Cấp cứu hồi sức (chỉ khi ngừng tim, ngừng thở)'}
+              </Button>
+              {(showResuscitation || resuscitation.some((t) => String(t.id) === value)) && (
+                <div className="flex flex-wrap gap-2">{resuscitation.map(chip)}</div>
+              )}
+            </>
+          )}
+        </section>
+      )}
     </div>
   )
 }
 
-function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode, busy, onSubmit, onCancel }) {
+// Nhóm chỉ có một loại thường dùng (không tính hồi sức) thì chọn sẵn loại đó
+function onlyTypeOf(types, group) {
+  const plain = pickableTypes(types)
+    .filter(inGroupOf(group))
+    .filter((t) => !t.resuscitation)
+  return plain.length === 1 ? String(plain[0].id) : ''
+}
+
+function CommandForm({
+  mode,
+  incident,
+  progressionTypes,
+  missingGroups,
+  typeCode,
+  busy,
+  onSubmit,
+  onCancel,
+  initialGroup = null,
+}) {
   const [text, setText] = useState('')
-  const [choice, setChoice] = useState('')
+  const [group, setGroup] = useState(initialGroup)
+  const [choice, setChoice] = useState(() => (initialGroup ? onlyTypeOf(progressionTypes, initialGroup) : ''))
   const [outcome, setOutcome] = useState('')
   const [assignee, setAssignee] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -345,15 +412,22 @@ function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode
       )}
       {mode === 'progressions' && (
         <Field data-invalid={(submitted && choiceMissing) || undefined}>
-          <FieldLabel>Loại diễn biến</FieldLabel>
+          <FieldLabel>Bạn ghi gì?</FieldLabel>
           <ProgressionPicker
             types={progressionTypes}
+            group={group}
+            onGroup={(next) => {
+              setGroup(next)
+              setChoice(onlyTypeOf(progressionTypes, next))
+            }}
             value={choice}
             onChange={setChoice}
             missing={missingGroups}
             emergency={incident.level === 'CRITICAL'}
           />
-          {submitted && choiceMissing && <FieldError>Chọn loại diễn biến</FieldError>}
+          {submitted && choiceMissing && (
+            <FieldError>{group ? 'Chọn loại diễn biến' : 'Chọn nhóm diễn biến'}</FieldError>
+          )}
         </Field>
       )}
       {mode === 'change-level' && (
@@ -380,6 +454,7 @@ function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode
           id="incident-command-text"
           rows={3}
           maxLength={2000}
+          placeholder={mode === 'progressions' ? GROUP_PLACEHOLDER[group] : undefined}
           value={text}
           onChange={(e) => setText(e.target.value)}
           aria-invalid={(submitted && textMissing) || undefined}
@@ -415,6 +490,38 @@ function CommandForm({ mode, incident, progressionTypes, missingGroups, typeCode
   )
 }
 
+// Điều kiện "Chuyển theo dõi" (BR-M05-20): một diễn biến đánh giá và một diễn biến xử lý; nhóm thiếu có nút ghi đúng nhóm
+function MonitoringChecklist({ missing, canWrite, onWrite }) {
+  return (
+    <div className="flex flex-col gap-2 border-t pt-3">
+      <p className="type-body-sm text-muted-foreground">Để Chuyển theo dõi cần:</p>
+      <ul className="flex flex-col gap-2">
+        {['EVALUATION', 'ACTION'].map((g) => {
+          const lacking = missing.includes(g)
+          const label = PROGRESSION_SECTIONS.find(([x]) => x === g)[1].toLowerCase()
+          return (
+            <li key={g} className="flex flex-wrap items-center gap-x-3 gap-y-1 type-body-sm">
+              {lacking ? (
+                <Circle aria-hidden="true" className="size-4 text-warning-foreground" />
+              ) : (
+                <CircleCheck aria-hidden="true" className="size-4 text-success-foreground" />
+              )}
+              <span>
+                1 diễn biến {label}: {lacking ? 'chưa có' : 'đã có'}
+              </span>
+              {lacking && canWrite && (
+                <Button type="button" variant="outline" className="h-11" onClick={() => onWrite(g)}>
+                  Ghi {label}
+                </Button>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
 function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const [state, setState] = useState(null)
   const [linkedAlerts, setLinkedAlerts] = useState([])
@@ -423,7 +530,12 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const [residentStatus, setResidentStatus] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
+  const [progressionStart, setProgressionStart] = useState(null)
   const [busy, setBusy] = useState(false)
+  function openProgression(group = null) {
+    setProgressionStart(group)
+    setMode('progressions')
+  }
 
   // Trạng thái người cao tuổi, tải lại mỗi khi sự cố được tải lại (sau chuyển viện thì khóa nút Chuyển viện)
   const residentIdForStatus = state?.incident?.content?.residentId ?? null
@@ -481,7 +593,15 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   }
 
   const missingGroups = missingMonitoringGroups(incident, progressionTypes)
-  const transferredNote = (incident.progressions ?? []).find((p) => p.typeCode === 'TRANSFERRED_OUT') ?? null
+  const transferredNote = (incident.progressions ?? []).findLast((p) => p.typeCode === 'TRANSFERRED_OUT') ?? null
+  // Diễn biến hệ thống khi người cao tuổi được Ghi nhận trở về sau lần chuyển viện này (đề xuất 2026-11-23 lượt 3)
+  const returnedNote =
+    transferredNote &&
+    ((incident.progressions ?? []).findLast(
+      (p) => p.typeCode === 'RETURNED_FROM_HOSPITAL' && p.occurredAt >= transferredNote.occurredAt,
+    ) ??
+      null)
+  const atHospital = transferredNote && !returnedNote && residentStatus === 'HOSPITALIZED'
   const transferOffered =
     ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
     incident.content?.residentId != null &&
@@ -511,8 +631,9 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
 
   const commandForm = (
     <CommandForm
-      key={mode}
+      key={`${mode}-${progressionStart ?? ''}`}
       mode={mode}
+      initialGroup={mode === 'progressions' ? progressionStart : null}
       incident={incident}
       progressionTypes={progressionTypes}
       missingGroups={missingGroups}
@@ -571,15 +692,33 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
             <CaseBadge label="Trạng thái">
               <IncidentStatus incident={incident} />
             </CaseBadge>
-            {transferredNote && <Badge variant="attention">Đã chuyển viện</Badge>}
+            {transferredNote && (
+              <Badge variant="attention">
+                {returnedNote ? 'Đã về viện' : atHospital ? 'Đang ở bệnh viện' : 'Đã chuyển viện'}
+              </Badge>
+            )}
           </>
         }
         note={
           transferredNote && (
-            <p className="type-body-sm">
-              {transferredNote.content}, lúc {formatDateTime(transferredNote.occurredAt)}. Sự cố vẫn mở để theo dõi,
-              đóng kèm kết quả khi xong.
-            </p>
+            <div className="flex flex-col gap-1 type-body-sm">
+              <p>
+                {transferredNote.content}, lúc {formatDateTime(transferredNote.occurredAt)}.
+              </p>
+              {returnedNote ? (
+                <p>
+                  Đã về viện lúc {formatDateTime(returnedNote.occurredAt)}. Việc tiếp theo: lập phiếu đối chiếu thuốc
+                  trong 4 giờ, Bác sĩ đánh giá lại trong 48 giờ; ghi diễn biến rồi chuyển theo dõi hoặc đóng sự cố.
+                </p>
+              ) : atHospital ? (
+                <p>
+                  {name} đang điều trị tại bệnh viện. Khi về, Trưởng tầng hoặc Hành chính bấm Ghi nhận trở về ở hồ sơ
+                  người cao tuổi; sự cố sẽ tự ghi lúc về. Trong lúc chờ vẫn ghi được diễn biến khi có tin từ bệnh viện.
+                </p>
+              ) : (
+                <p>Sự cố vẫn mở để theo dõi, đóng kèm kết quả khi xong.</p>
+              )}
+            </div>
           )
         }
         actions={
@@ -626,6 +765,9 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
         <EmergencyCardPanel incidentId={incident.id}>{call115}</EmergencyCardPanel>
       ) : (
         call115
+      )}
+      {content.residentId != null && isOpen(incident) && (
+        <ResidentCallReminders residentId={content.residentId} residentName={name} />
       )}
       {content.residentId != null && isOpen(incident) && <CriticalNotice residentId={content.residentId} />}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -690,6 +832,13 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
           {conclusions.length > 0 && (
             <CaseBlock title="Kết luận">
               <CaseChoices items={conclusions} />
+              {commands.includes('move-to-monitoring') && missingGroups.length > 0 && (
+                <MonitoringChecklist
+                  missing={missingGroups}
+                  canWrite={commands.includes('progressions')}
+                  onWrite={openProgression}
+                />
+              )}
             </CaseBlock>
           )}
           <FollowUpBlock
@@ -713,7 +862,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
                 icon={NotebookPen}
                 variant={commands.includes('receive') ? 'outline' : 'default'}
                 className="self-start"
-                onClick={() => setMode('progressions')}
+                onClick={() => openProgression()}
               >
                 Ghi diễn biến
               </CaseAction>

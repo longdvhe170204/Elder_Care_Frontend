@@ -30,7 +30,9 @@ const timeFormat = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '
 export function PressedAlertPanel({ alert, onChanged, dial }) {
   const commands = alert.allowedCommands ?? []
   const [arriveKey] = useState(() => crypto.randomUUID())
-  const [arrivedAt, setArrivedAt] = useState(alert.arrivedAt ?? null)
+  // Giờ tới nơi lấy từ máy chủ (alert.arrivedAt sau khi tải lại), không lấy giờ máy người dùng
+  const [justArrived, setJustArrived] = useState(false)
+  const arrivedAt = alert.arrivedAt ?? null
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState(null)
 
@@ -39,7 +41,7 @@ export function PressedAlertPanel({ alert, onChanged, dial }) {
     setProblem(null)
     try {
       await postAlertsByIdMarkArrived({ path: { id: alert.id }, headers: { 'Idempotency-Key': arriveKey } })
-      setArrivedAt(new Date().toISOString())
+      setJustArrived(true)
       onChanged?.()
     } catch (error) {
       setProblem(problemOf(error))
@@ -87,8 +89,10 @@ export function PressedAlertPanel({ alert, onChanged, dial }) {
       {(alert.origin === 'SOS' || alert.origin === 'ASSIST_BUTTON') && (
         <AlertLocation location={alert.latestLocation} />
       )}
-      {arrivedAt ? (
-        <p className="type-body-sm tabular-nums">Đã tới nơi lúc {timeFormat.format(new Date(arrivedAt))}.</p>
+      {arrivedAt || justArrived ? (
+        <p className="type-body-sm tabular-nums">
+          {arrivedAt ? `Đã tới nơi lúc ${timeFormat.format(new Date(arrivedAt))}.` : 'Đã ghi tới nơi.'}
+        </p>
       ) : (
         commands.includes('mark-arrived') && (
           <Button className="h-11 self-start" onClick={markArrived} disabled={busy}>

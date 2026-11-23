@@ -9,7 +9,7 @@ import { StaffSelectField } from '@/common/StaffSelectField'
 // nên danh sách nhân viên của 008 (chỉ người cùng ca với người xem) trả rỗng cho họ. Tầng chưa có ai trong ca hoặc không tải
 // được thì quay về danh sách của 008 kèm lời giải thích. Không có `residentId` (Giao người xử lý sự cố, dùng `valueKey` mã
 // tài khoản) thì giữ nguyên như cũ.
-function ShiftStaffSelect({ id, value, onChange, invalid, label, errorText, residentId, valueKey }) {
+function ShiftStaffSelect({ id, value, onChange, invalid, label, errorText, residentId, valueKey, onPick }) {
   const [state, setState] = useState({ status: 'loading', items: [] })
   useEffect(() => {
     let live = true
@@ -46,7 +46,10 @@ function ShiftStaffSelect({ id, value, onChange, invalid, label, errorText, resi
       <select
         id={id}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+          onChange(e.target.value)
+          onPick?.(state.items.find((s) => String(s.id) === e.target.value) ?? null)
+        }}
         aria-invalid={invalid || undefined}
         className="h-11 w-full rounded-md border border-input bg-transparent px-3"
       >
@@ -70,10 +73,11 @@ export function HandoverStaffField({
   label = 'Nhân viên bàn giao',
   errorText = 'Chọn nhân viên bàn giao',
   residentId = null,
+  onPick,
   ...rest
 }) {
   if (residentId != null && (rest.valueKey ?? 'id') === 'id') {
-    return <ShiftStaffSelect label={label} errorText={errorText} residentId={residentId} {...rest} />
+    return <ShiftStaffSelect label={label} errorText={errorText} residentId={residentId} onPick={onPick} {...rest} />
   }
   return <StaffSelectField label={label} errorText={errorText} {...rest} />
 }

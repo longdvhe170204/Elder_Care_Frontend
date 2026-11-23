@@ -112,8 +112,16 @@ describe('PressedAlertPanel', () => {
     expect(screen.getByText('Chưa có vị trí GPS.')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Đã tới nơi' }))
-    expect(await screen.findByText(/Đã tới nơi lúc/)).toBeInTheDocument()
+    // Giờ tới nơi lấy từ máy chủ sau khi tải lại, không lấy giờ máy người dùng
+    expect(await screen.findByText('Đã ghi tới nơi.')).toBeInTheDocument()
     expect(api.calls('POST', '/alerts/20/mark-arrived')).toHaveLength(1)
+  })
+
+  it('có giờ tới nơi từ máy chủ thì hiện giờ đó, không còn nút', () => {
+    render(<PressedAlertPanel alert={{ ...ALERT, arrivedAt: '2026-11-24T02:10:00Z' }} dial={vi.fn()} />)
+
+    expect(screen.getByText(/Đã tới nơi lúc 09:10/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Đã tới nơi' })).not.toBeInTheDocument()
   })
 
   it('không có lệnh thì không có nút', () => {

@@ -19,10 +19,17 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
   const [info, setInfo] = useState(null)
   const [problem, setProblem] = useState(null)
   const [unit, setUnit] = useState('')
+  // Mặc định chuyển ngay: không gửi thời điểm, máy chủ lấy giờ của hệ thống (đề xuất 2026-11-23 lượt 3)
+  const [atNow, setAtNow] = useState(true)
   const [at, setAt] = useState('')
   const [returnAt, setReturnAt] = useState('')
-  const [companion, setCompanion] = useState('')
   const [staffId, setStaffId] = useState('')
+  const [staff, setStaff] = useState(null)
+  // Người đi cùng chọn từ nhân viên bàn giao, người liên hệ chính, hoặc ghi người khác; ghép thành một dòng như cũ
+  const [withStaff, setWithStaff] = useState(true)
+  const [withContact, setWithContact] = useState(false)
+  const [withOther, setWithOther] = useState(false)
+  const [other, setOther] = useState('')
   const [reached, setReached] = useState('')
   const [reason, setReason] = useState('')
   const [includeWishes, setIncludeWishes] = useState(false)
@@ -77,10 +84,20 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
   if (!info) return problem ? <ProblemAlert problem={problem} /> : <Skeleton className="h-40 w-full" />
 
   const askFirst = info.mustAskFirst
+  const contact = info.primaryContact
+  const staffName = staff ? (staff.position ? `${staff.fullName} (${staff.position})` : staff.fullName) : null
+  const companion = [
+    withStaff && (staffName ? `${staffName}, nhân viên bàn giao` : staffId && 'Nhân viên bàn giao của viện'),
+    withContact && contact && `${contact.fullName} (người liên hệ chính)`,
+    withOther && other.trim(),
+  ]
+    .filter(Boolean)
+    .join('; ')
   const missing = {
     unit: !unit.trim(),
-    at: !at,
-    companion: !companion.trim(),
+    at: !atNow && !at,
+    companion: !companion,
+    other: withOther && !other.trim(),
     staff: !staffId,
     reached: askFirst && !reached,
     reason: askFirst && reached === 'no' && !info.isEmergency && !reason.trim(),
@@ -95,8 +112,8 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
     try {
       const body = {
         transferUnit: unit.trim(),
-        transferAt: vietnamIso(at),
-        companion: companion.trim(),
+        ...(atNow ? {} : { transferAt: vietnamIso(at) }),
+        companion,
         handoverStaffId: Number(staffId),
         ...(returnAt ? { expectedReturnAt: vietnamIso(returnAt) } : {}),
         ...(askFirst ? { requiredContactReached: reached === 'yes' } : {}),
@@ -112,8 +129,6 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
     }
   }
 
-  const contact = info.primaryContact
-
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       {contact && (
@@ -128,14 +143,31 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
           {submitted && missing.unit && <FieldError>Nhập đơn vị nhận</FieldError>}
         </Field>
         <Field data-invalid={(submitted && missing.at) || undefined}>
-          <FieldLabel htmlFor="transfer-at">Thời điểm chuyển</FieldLabel>
-          <Input id="transfer-at" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
-          {submitted && missing.at && <FieldError>Chọn thời điểm chuyển</FieldError>}
-        </Field>
-        <Field data-invalid={(submitted && missing.companion) || undefined}>
-          <FieldLabel htmlFor="transfer-companion">Người đi cùng (họ tên, quan hệ hoặc chức danh)</FieldLabel>
-          <Input id="transfer-companion" value={companion} onChange={(e) => setCompanion(e.target.value)} />
-          {submitted && missing.companion && <FieldError>Nhập người đi cùng</FieldError>}
+          <FieldLabel>Thời điểm chuyển</FieldLabel>
+          <ToggleGroup
+            variant="outline"
+            value={[atNow ? 'now' : 'pick']}
+            onValueChange={(n) => n[0] && setAtNow(n[0] === 'now')}
+            className="flex flex-wrap"
+            aria-label="Thời điểm chuyển"
+          >
+            <ToggleGroupItem value="now" className="h-11 px-4">
+              Ngay bây giờ
+            </ToggleGroupItem>
+            <ToggleGroupItem value="pick" className="h-11 px-4">
+              Chọn giờ khác
+            </ToggleGroupItem>
+          </ToggleGroup>
+          {!atNow && (
+            <Input
+              id="transfer-at"
+              type="datetime-local"
+              aria-label="Giờ chuyển"
+              value={at}
+              onChange={(e) => setAt(e.target.value)}
+            />
+          )}
+          {submitted && missing.at && <FieldError>Chọn giờ chuyển</FieldError>}
         </Field>
         <Field>
           <FieldLabel htmlFor="transfer-return">Dự kiến về (nếu có)</FieldLabel>
@@ -151,8 +183,60 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
           residentId={residentId}
           value={staffId}
           onChange={setStaffId}
+          onPick={setStaff}
           invalid={submitted && missing.staff}
         />
+        <fieldset
+          className="flex flex-col gap-2 sm:col-span-2"
+          aria-invalid={(submitted && (missing.companion || missing.other)) || undefined}
+        >
+          <legend className="type-label mb-1">Người đi cùng (chọn một hoặc nhiều)</legend>
+          <p className="type-caption text-muted-foreground">
+            Nhân viên bàn giao giao người cao tuổi và phiếu tóm tắt cho bệnh viện, thường đi cùng xe.
+          </p>
+          <label className="flex min-h-11 items-center gap-3">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={withStaff}
+              onChange={(e) => setWithStaff(e.target.checked)}
+            />
+            <span>Nhân viên bàn giao đi cùng{staffName ? `: ${staffName}` : ' (chọn ở trên)'}</span>
+          </label>
+          {contact && (
+            <label className="flex min-h-11 items-center gap-3">
+              <input
+                type="checkbox"
+                className="size-5"
+                checked={withContact}
+                onChange={(e) => setWithContact(e.target.checked)}
+              />
+              <span>
+                {contact.fullName} (người liên hệ chính){contact.phoneNumber ? `, ${contact.phoneNumber}` : ''}
+              </span>
+            </label>
+          )}
+          <label className="flex min-h-11 items-center gap-3">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={withOther}
+              onChange={(e) => setWithOther(e.target.checked)}
+            />
+            <span>Người khác</span>
+          </label>
+          {withOther && (
+            <Input
+              id="transfer-companion-other"
+              aria-label="Người đi cùng khác: họ tên, quan hệ hoặc chức danh"
+              placeholder="Họ tên, quan hệ hoặc chức danh"
+              value={other}
+              onChange={(e) => setOther(e.target.value)}
+            />
+          )}
+          {submitted && missing.other && <FieldError>Nhập người đi cùng khác</FieldError>}
+          {submitted && !missing.other && missing.companion && <FieldError>Chọn người đi cùng</FieldError>}
+        </fieldset>
         <div className="flex flex-col gap-1.5 sm:pt-7">
           <Field orientation="horizontal">
             <input
