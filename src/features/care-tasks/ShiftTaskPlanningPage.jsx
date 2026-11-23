@@ -150,6 +150,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   const [shiftTasks, setShiftTasks] = useState([])
   const [shiftMembers, setShiftMembers] = useState([])
   const [floorName, setFloorName] = useState('')
+  const [floorNames, setFloorNames] = useState({})
   const [residents, setResidents] = useState([])
   const [residentsReady, setResidentsReady] = useState(false)
   const [types, setTypes] = useState([])
@@ -228,7 +229,8 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
       ? getShiftSchedules({ query: { month: date.slice(0, 7) } }).then(({ data }) =>
           data
             .filter((s) => s.status === 'PUBLISHED')
-            .flatMap((s) => s.shifts)
+            // Ca của lịch tầng mang theo mã tầng để phân biệt các ca cùng giờ ở nhiều tầng
+            .flatMap((s) => s.shifts.map((x) => ({ ...x, floorId: s.scopeType === 'FLOOR' ? s.scopeId : null })))
             .filter((s) => s.status !== 'CANCELLED'),
         )
       : getMeShifts({ query: { from: date, to: nextDate(date) } }).then(({ data }) =>
@@ -238,7 +240,18 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
       .then((all) => {
         if (!current) return
         const list = all.filter((s) => dateOf(s.startsAt) === date)
+        list.sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt) || (a.floorId ?? 0) - (b.floorId ?? 0))
         setShifts(list)
+        const floors = [...new Set(list.map((x) => x.floorId).filter(Boolean))]
+        if (floors.length > 1)
+          Promise.allSettled(floors.map((id) => getFloorsById({ path: { id } }))).then((results) => {
+            if (!current) return
+            const names = {}
+            results.forEach((r, i) => {
+              if (r.status === 'fulfilled') names[floors[i]] = r.value.data.name
+            })
+            setFloorNames((old) => ({ ...old, ...names }))
+          })
         const chosen = pickShift(list, first.current ? target : new Date())
         first.current = false
         setShiftId(chosen ? chosen.id : '')
@@ -328,8 +341,9 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   )
   const shift = source?.shift
   const shiftOptions = initialShiftId ? (shift ? [shift] : []) : shifts
+  const manyFloors = new Set(shiftOptions.map((x) => x.floorId).filter(Boolean)).size > 1
   const subtitle = shift
-    ? [formatDate(dateOf(shift.startsAt)), floorName, shiftLabel(shift)].filter(Boolean).join(' · ')
+    ? [formatDate(dateOf(shift.startsAt)), floorName].filter(Boolean).join(' · ')
     : ''
   const focusName = focusResidentId && (people[focusResidentId] || `Người cao tuổi · mã ${focusResidentId}`)
   const focusInShift = source?.residents.some((r) => r.residentId === focusResidentId)
@@ -367,7 +381,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
         {!shiftOptions.length && <option value="">Không có ca đã công bố</option>}
         {shiftOptions.map((s) => (
           <option key={s.id} value={s.id}>
-            {shiftLabel(s)}
+            {manyFloors ? `${floorNames[s.floorId] || 'Tầng'} · ${shiftLabel(s)}` : shiftLabel(s)}
           </option>
         ))}
       </select>

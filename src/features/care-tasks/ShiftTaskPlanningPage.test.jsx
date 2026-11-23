@@ -206,6 +206,38 @@ it('FR_017_timNguoiCaoTuoiTheoTen_nhieuNguoiKhopThiChoChon', async () => {
   expect(screen.queryByRole('columnheader', { name: 'Trạng thái' })).not.toBeInTheDocument()
 })
 
+it('FR_017_caCungGioNhieuTang_ghiTenTang_tieuDeKhongLapCa', async () => {
+  api.on(
+    'GET',
+    '/me/permissions',
+    json(200, [
+      { function: 'SHIFT_TASK_PLANNING', operation: 'CREATE' },
+      { function: 'SHIFT_TASK_PLANNING', operation: 'VIEW' },
+      { function: 'SHIFT_SCHEDULE', operation: 'CREATE' },
+    ]),
+  )
+  const day = { status: 'PUBLISHED', startsAt: '2030-01-10T00:00:00Z', endsAt: '2030-01-10T11:00:00Z' }
+  api.on(
+    'GET',
+    '/shift-schedules',
+    json(200, [
+      { id: 1, scopeType: 'FLOOR', scopeId: 3, status: 'PUBLISHED', shifts: [{ ...day, id: 5 }] },
+      { id: 2, scopeType: 'FLOOR', scopeId: 4, status: 'PUBLISHED', shifts: [{ ...day, id: 6 }] },
+    ]),
+  )
+  api.on('GET', '/floors/4', json(200, { id: 4, name: 'Tầng kiểm thử 2' }))
+  view({ at: '2030-01-10T03:00:00Z' })
+  const batch = await openBatch()
+  const options = within(batch).getByLabelText('Ca đã công bố')
+  await waitFor(() =>
+    expect([...options.options].map((o) => o.textContent)).toEqual([
+      'Tầng kiểm thử · Ca 07:00–18:00',
+      'Tầng kiểm thử 2 · Ca 07:00–18:00',
+    ]),
+  )
+  expect(within(batch).getByText('01/11/2026 · Tầng kiểm thử')).toBeInTheDocument()
+})
+
 it('FR_017_doiChieuNguon_chiDeXem', async () => {
   view()
   const batch = await openBatch()
