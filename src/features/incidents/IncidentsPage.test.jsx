@@ -148,7 +148,9 @@ describe('IncidentsPage', () => {
     render(<IncidentsPage />)
     const list = await rows()
     fireEvent.click(within(list[0]).getByRole('button'))
-    fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc theo dõi sau ngã' }))
+    // Lệnh ít dùng nằm trong Thêm thao tác ở thanh chân trang
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm thao tác' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kết thúc theo dõi sau ngã' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu và kết thúc theo dõi' }))
     expect(await screen.findByText('Nhập lý do kết thúc theo dõi')).toBeTruthy()
     expect(api.calls('POST', '/incidents/11/end-post-fall-monitoring')).toHaveLength(0)
@@ -292,8 +294,9 @@ describe('IncidentsPage', () => {
     render(<IncidentsPage />)
     const list = await rows()
     fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
-    expect(await screen.findByText(/Cần thêm diễn biến đánh giá và xử lý/)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Chuyển theo dõi' })).toBeDisabled()
+    const toMonitoring = await screen.findByRole('button', { name: 'Chuyển theo dõi' })
+    expect(toMonitoring).toBeDisabled()
+    expect(toMonitoring.title).toMatch(/Cần thêm diễn biến đánh giá và xử lý/)
     // Danh sách điều kiện có nút ghi đúng nhóm còn thiếu
     expect(screen.getByText('1 diễn biến đánh giá: chưa có')).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Ghi đánh giá' }))
@@ -760,6 +763,8 @@ describe('IncidentsPage', () => {
     render(<IncidentsPage />)
     const list = await rows()
     fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
+    // Người được báo nằm trong phần Xem thêm của khối Ghi nhận
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem thêm' }))
     const section = await screen.findByRole('region', { name: 'Đã báo cho' })
     expect(section.textContent).toMatch(/Nhân viên: 2 người.*đã xem 1\/2/)
     expect(section.textContent).toMatch(/Người thân: 1 người.*đã xem 0\/1/)

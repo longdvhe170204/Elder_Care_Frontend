@@ -39,12 +39,12 @@ import { FilterTabs } from '@/features/incidents/CaseFormParts'
 import {
   CaseBadge,
   CaseBlock,
-  CaseChoices,
+  CaseActionBar,
   CaseDialog,
   CaseFacts,
   CaseHeader,
+  CaseMore,
   CasePage,
-  CaseSteps,
 } from '@/features/incidents/CasePage'
 import { IncidentTypeIcon, IncidentTypePicker } from '@/features/incidents/IncidentTypePicker'
 import { STATUS_LABEL as INCIDENT_STATUS } from '@/features/incidents/incidentView'
@@ -58,7 +58,6 @@ import { loadAlert, loadAlertBoard, loadIncidentTypes, receiveCreatedIncident, r
 import {
   LEVEL_LABEL,
   LEVEL_ORDER,
-  STATUS_LABEL,
   isOpen,
   isUrgent,
   needsReceiver,
@@ -178,7 +177,6 @@ const CRITICAL_CLOSE_MIN = 10
 const REFRESH_MS = 15000
 // Yêu cầu hỗ trợ ghi Ngã hoặc Ngừng tim, ngất: thường phải ghi sự cố để theo dõi, nhắc khi đóng (chỉ nhắc, không chặn)
 const FOLLOW_UP_EVENTS = ['FALL', 'CARDIAC_ARREST_OR_FAINTING']
-const STEP_OF = { NEW: 0, ESCALATED: 0, RECEIVED: 1, IN_PROGRESS: 2 }
 const DIALOG_TITLE = {
   close: 'Đóng cảnh báo?',
   'convert-to-incident': 'Chuyển thành sự cố?',
@@ -262,51 +260,28 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   const helpers = alert.helpers ?? []
   const residentId = picked?.id ?? null
   const followUpEvent = FOLLOW_UP_EVENTS.includes(alert.eventType)
-  // Người xử lý (không phải Quản lý viện): tiếp nhận xong thường xử lý ngay nên một ô làm cả hai lệnh
+  // Người xử lý (không phải Quản lý viện): tiếp nhận xong thường xử lý ngay nên một nút làm cả hai lệnh
   const handler = commands.includes('activate-emergency')
-  const emergencyFirst = handler && alert.level === 'CRITICAL'
-  const emergency = handler && {
-    icon: Siren,
-    label: 'Kích hoạt khẩn cấp',
-    hint: 'Tạo ngay sự cố Khẩn cấp, báo Bác sĩ trực, Trưởng tầng, người liên hệ chính.',
-    primary: emergencyFirst,
-    onSelect: () => openConvert('activate-emergency'),
-  }
-  // Nút chính: Khẩn cấp thì Kích hoạt khẩn cấp, còn lại là bước kế tiếp của trạng thái; hai cách kết thúc (chuyển sự cố, đóng)
-  // ngang nhau, người xử lý tự chọn
+  // Thanh lệnh ở chân khung (đề xuất 2026-11-24, góp ý test demo): nút chính là bước kế tiếp của trạng thái; hai cách kết
+  // thúc (chuyển sự cố, đóng) ngang nhau, người xử lý tự chọn. Kích hoạt khẩn cấp luôn thấy ở cảnh báo Khẩn cấp; lệnh ít
+  // dùng gom vào "Thêm thao tác"
   const steps = [
-    emergencyFirst && emergency,
     commands.includes('receive') && {
       icon: ClipboardCheck,
       label: handler ? 'Tiếp nhận và xử lý' : 'Tiếp nhận',
       hint: handler ? 'Báo đã nhận và bắt đầu xử lý ngay.' : 'Báo đã nhận để dừng leo thang.',
-      primary: !emergencyFirst,
+      primary: true,
       disabled: busy,
       onSelect: () =>
         handler
           ? quick(['receive', 'start-handling'], 'Đã tiếp nhận và bắt đầu xử lý')
           : quick('receive', 'Đã tiếp nhận cảnh báo'),
     },
-    commands.includes('receive') &&
-      handler && {
-        icon: Hand,
-        label: 'Chỉ tiếp nhận',
-        hint: 'Báo đã nhận để dừng leo thang, xử lý sau.',
-        disabled: busy,
-        onSelect: () => quick('receive', 'Đã tiếp nhận cảnh báo'),
-      },
-    commands.includes('join-help') && {
-      icon: HandHelping,
-      label: 'Tôi đến giúp',
-      hint: 'Báo bạn đang tới phụ; người tiếp nhận vẫn lo chính.',
-      disabled: busy,
-      onSelect: () => quick('join-help', 'Đã báo bạn đến giúp'),
-    },
     commands.includes('start-handling') && {
       icon: Play,
       label: 'Bắt đầu xử lý',
       hint: 'Chuyển sang Đang xử lý.',
-      primary: !emergencyFirst,
+      primary: true,
       disabled: busy,
       onSelect: () => quick('start-handling', 'Đã bắt đầu xử lý cảnh báo'),
     },
@@ -316,6 +291,13 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
       hint: 'Người được giao nhận thông báo.',
       primary: true,
       onSelect: () => setMode('assign'),
+    },
+    commands.includes('join-help') && {
+      icon: HandHelping,
+      label: 'Tôi đến giúp',
+      hint: 'Báo bạn đang tới phụ; người tiếp nhận vẫn lo chính.',
+      disabled: busy,
+      onSelect: () => quick('join-help', 'Đã báo bạn đến giúp'),
     },
     commands.includes('convert-to-incident') && {
       icon: FilePlus,
@@ -329,14 +311,38 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
       hint: 'Đã xử lý xong, ghi kết quả.',
       onSelect: () => setMode('close'),
     },
-    !emergencyFirst && emergency,
+    handler && {
+      icon: Siren,
+      label: 'Kích hoạt khẩn cấp',
+      hint: 'Tạo ngay sự cố Khẩn cấp, báo Bác sĩ trực, Trưởng tầng, người liên hệ chính.',
+      more: alert.level !== 'CRITICAL',
+      onSelect: () => openConvert('activate-emergency'),
+    },
+    commands.includes('receive') &&
+      handler && {
+        icon: Hand,
+        label: 'Chỉ tiếp nhận',
+        hint: 'Báo đã nhận để dừng leo thang, xử lý sau.',
+        more: true,
+        disabled: busy,
+        onSelect: () => quick('receive', 'Đã tiếp nhận cảnh báo'),
+      },
     commands.includes('change-level') && {
       icon: Gauge,
       label: 'Đổi mức',
       hint: 'Nâng hoặc hạ mức, cần lý do. Vẫn là cảnh báo.',
+      more: true,
       onSelect: () => setMode('change-level'),
     },
   ].filter(Boolean)
+  const idleText =
+    steps.length === 0 &&
+    linkedIncidentId == null &&
+    (!isOpen(alert)
+      ? 'Cảnh báo đã đóng.'
+      : mine
+        ? 'Người tới nơi sẽ ghi kết quả. Bạn vẫn bổ sung, nhắn thêm được ở khối trên.'
+        : 'Bạn chỉ xem được cảnh báo này.')
 
   function closeMode() {
     setMode(null)
@@ -509,19 +515,6 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
             </CaseBadge>
           </>
         }
-      />
-      <CaseSteps
-        steps={
-          isOpen(alert)
-            ? [
-                alert.status === 'ESCALATED' ? statusLabel(alert) : STATUS_LABEL.NEW,
-                STATUS_LABEL.RECEIVED,
-                STATUS_LABEL.IN_PROGRESS,
-                'Kết thúc',
-              ]
-            : [STATUS_LABEL.NEW, STATUS_LABEL[alert.status]]
-        }
-        current={isOpen(alert) ? STEP_OF[alert.status] : 1}
       />
       {problem && !mode && <ProblemAlert problem={problem} />}
       {blocked && (
@@ -781,84 +774,73 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
           onChanged={reload}
         />
       )}
-      <div className="grid items-start gap-5 @3xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <CaseBlock title={!isOpen(alert) ? 'Kết quả' : mine ? 'Khi xử lý xong' : 'Việc cần làm'}>
-          {linkedIncidentId != null && (
-            <>
-              <p className="type-body">
-                Đã chuyển thành sự cố <strong>SC-{linkedIncidentId}</strong>. Xử lý tiếp ở màn Sự cố.
-              </p>
-              {onNavigate && (
-                <Button
-                  className="h-11 self-start"
-                  onClick={() => onNavigate('incidents', { incidentId: linkedIncidentId })}
-                >
-                  Mở sự cố SC-{linkedIncidentId}
-                </Button>
-              )}
-            </>
-          )}
-          <CaseChoices items={steps} />
-          {handler && !mine && isOpen(alert) && !commands.includes('convert-to-incident') && (
-            <p className="type-body-sm text-muted-foreground">
-              "Chuyển thành sự cố" và "Đóng cảnh báo" hiện ra sau khi bắt đầu xử lý.
+      {linkedIncidentId != null && (
+        <Card>
+          <CardContent className="flex flex-col gap-3">
+            <p className="type-body">
+              Đã chuyển thành sự cố <strong>SC-{linkedIncidentId}</strong>. Xử lý tiếp ở màn Sự cố.
             </p>
-          )}
-          {steps.length === 0 && linkedIncidentId == null && (
-            <p className="type-body-sm text-muted-foreground">
-              {!isOpen(alert)
-                ? 'Cảnh báo đã đóng.'
-                : mine
-                  ? 'Người tới nơi sẽ ghi kết quả. Bạn vẫn bổ sung, nhắn thêm được ở khối trên.'
-                  : 'Bạn chỉ xem được cảnh báo này.'}
-            </p>
-          )}
-          {taskSource && isOpen(alert) && onNavigate && can('TASK_CHECKLIST', 'CONFIRM') && (
-            <Button variant="outline" className="h-11 self-start" onClick={openTask}>
-              Mở công việc quá hạn
-            </Button>
-          )}
-          {!pressed && commands.includes('call-115') && (
-            <div className="border-t pt-4">
-              <Call115Panel subject="alerts" id={alert.id} />
-            </div>
-          )}
-        </CaseBlock>
-        <CaseBlock title="Thông tin cảnh báo">
+            {onNavigate && (
+              <Button
+                className="h-11 self-start"
+                onClick={() => onNavigate('incidents', { incidentId: linkedIncidentId })}
+              >
+                Mở sự cố SC-{linkedIncidentId}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      )}
+      <CaseBlock title="Thông tin cảnh báo">
+        <CaseFacts
+          rows={[
+            ['Mô tả', alert.description || undefined, true],
+            ['Người xử lý', handlerText(alert)],
+            ['Kết quả', !isOpen(alert) ? alert.resolution || undefined : undefined, true],
+            ['Người đóng', !isOpen(alert) ? alert.closedBy || undefined : undefined],
+            ['Hạn tiếp nhận', waiting ? formatDateTime(alert.acknowledgementDeadline) : undefined],
+            ['Tầng', alert.floorName || undefined],
+          ]}
+        />
+        {alert.noOnDutyDoctor && <p className="type-body-sm text-destructive">Không có bác sĩ trực</p>}
+        {taskSource && isOpen(alert) && onNavigate && can('TASK_CHECKLIST', 'CONFIRM') && (
+          <Button variant="outline" className="h-11 self-start" onClick={openTask}>
+            Mở công việc quá hạn
+          </Button>
+        )}
+        {!pressed && commands.includes('call-115') && (
+          <div className="border-t pt-4">
+            <Call115Panel subject="alerts" id={alert.id} />
+          </div>
+        )}
+        {(alert.reports ?? []).length > 0 && (
+          <section aria-label="Các lần báo sau" className="flex flex-col gap-2 border-t pt-4">
+            <h3 className="type-caption text-muted-foreground">Các lần báo sau</h3>
+            <ol className="flex flex-col gap-2 border-l-2 pl-3 type-body-sm">
+              {alert.reports.map((r) => (
+                <li key={`${r.at}:${r.reportedBy}`}>
+                  <span className="text-muted-foreground tabular-nums">
+                    {formatDateTime(r.at)}
+                    {r.reportedBy && `, ${r.reportedBy}`}
+                  </span>
+                  <br />
+                  {r.description}
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
+        <CaseMore>
           <CaseFacts
             rows={[
-              ['Mô tả', alert.description || undefined, true],
-              ['Người xử lý', handlerText(alert)],
-              ['Kết quả', !isOpen(alert) ? alert.resolution || undefined : undefined, true],
-              ['Người đóng', !isOpen(alert) ? alert.closedBy || undefined : undefined],
-              ['Hạn tiếp nhận', waiting ? formatDateTime(alert.acknowledgementDeadline) : undefined],
               ['Nguồn', originLabel(alert.origin)],
-              ['Tầng', alert.floorName || undefined],
               ['Lần đầu', formatDateTime(alert.firstAt)],
               ['Lần gần nhất', alert.latestAt !== alert.firstAt ? formatDateTime(alert.latestAt) : undefined],
               ['Số lần gộp', alert.occurrenceCount > 1 ? String(alert.occurrenceCount) : undefined],
             ]}
           />
-          {alert.noOnDutyDoctor && <p className="type-body-sm text-destructive">Không có bác sĩ trực</p>}
-          {(alert.reports ?? []).length > 0 && (
-            <section aria-label="Các lần báo sau" className="flex flex-col gap-2 border-t pt-4">
-              <h3 className="type-caption text-muted-foreground">Các lần báo sau</h3>
-              <ol className="flex flex-col gap-2 border-l-2 pl-3 type-body-sm">
-                {alert.reports.map((r) => (
-                  <li key={`${r.at}:${r.reportedBy}`}>
-                    <span className="text-muted-foreground tabular-nums">
-                      {formatDateTime(r.at)}
-                      {r.reportedBy && `, ${r.reportedBy}`}
-                    </span>
-                    <br />
-                    {r.description}
-                  </li>
-                ))}
-              </ol>
-            </section>
-          )}
           {(alert.sources ?? []).length > 0 && (
-            <section aria-label="Các lần ghi nhận" className="flex flex-col gap-2 border-t pt-4">
+            <section aria-label="Các lần ghi nhận" className="flex flex-col gap-2">
               <h3 className="type-caption text-muted-foreground">Các lần ghi nhận</h3>
               <ol className="flex flex-col gap-1.5 border-l-2 pl-3 type-body-sm">
                 {alert.sources.map((s) => (
@@ -870,8 +852,12 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
               </ol>
             </section>
           )}
-        </CaseBlock>
-      </div>
+        </CaseMore>
+      </CaseBlock>
+      <CaseActionBar
+        items={steps}
+        note={idleText && <p className="type-body-sm text-muted-foreground">{idleText}</p>}
+      />
     </div>
   )
 }

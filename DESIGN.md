@@ -457,9 +457,9 @@ Chi tiết dài, có nhiều khối làm việc cùng lúc thì mở cả trang;
 | Ghi nhận sự cố, Tạo cảnh báo | Cả trang, theo bước: cột trái các bước và câu đã trả lời, cột phải câu đang trả lời; loại chọn bằng lưới biểu tượng kèm tên |
 | Lệnh ngắn (đóng, đổi mức, giao, chuyển viện, giao việc) | Hộp thoại |
 
-- Đầu trang: đường dẫn "Sự cố / SC-1" (không thêm nút trùng nút "Quay lại" của khung chung), biểu tượng loại, tên, "Mức" và "Trạng thái" có nhãn riêng, thanh tiến trình trạng thái. Đã kết thúc thì thanh chỉ hiện bước đầu và bước cuối vì API không trả lịch sử trạng thái.
-- Hai cột: trái Ghi nhận (dữ liệu đã ghi, người được báo, cảnh báo liên kết); phải Kết luận, Việc tiếp theo, Diễn biến. Nút "Ghi diễn biến" và form nằm trong khối Diễn biến.
-- Lệnh đổi trạng thái là ô có biểu tượng kèm một dòng nói rõ hậu quả; ô bị khóa nói còn thiếu gì. Trường chưa ghi gom thành một dòng "Chưa ghi: …".
+- Đầu trang: đường dẫn "Sự cố / SC-1" (không thêm nút trùng nút "Quay lại" của khung chung), biểu tượng loại, tên, "Mức" và "Trạng thái" có nhãn riêng, thanh tiến trình trạng thái. Đã kết thúc thì thanh chỉ hiện bước đầu và bước cuối vì API không trả lịch sử trạng thái. Chuyển viện, về viện chỉ là dòng trong Diễn biến; đầu trang chỉ thêm một câu việc cần làm khi đang ở bệnh viện hoặc vừa về (sửa 2026-11-24). Chi tiết cảnh báo (khung 420px) không có thanh tiến trình.
+- Hai cột (sửa 2026-11-24, góp ý test demo: quá nhiều khối, quá nhiều chữ): trái là phần cần biết để xử lý (thẻ thông tin khẩn cấp, "Cần gọi điện", Ghi nhận; giờ xảy ra, giờ tiếp nhận, xử lý ban đầu, người được báo gập vào "Xem thêm"); phải Diễn biến rồi Việc tiếp theo. Nút "Ghi diễn biến" và form nằm trong khối Diễn biến. "Cần gọi điện": người nhà hiện đủ, nhân viên chưa xác nhận gom thành một dòng, bấm mới mở danh sách.
+- Lệnh nằm ở thanh lệnh dính chân trang, với chi tiết cảnh báo là chân khung (`CaseActionBar`, sửa 2026-11-24): một nút chính theo trạng thái (Tiếp nhận; Chuyển theo dõi; Đóng sự cố), lệnh hay dùng là nút viền, lệnh ít dùng (Đổi mức, Chuyển cho người khác, Chỉ tiếp nhận, Kết thúc theo dõi sau ngã; Kích hoạt khẩn cấp khi cảnh báo chưa ở mức Khẩn cấp) gom vào "Thêm thao tác". Câu nói rõ hậu quả hiện khi rê chuột; lệnh bị khóa nói lý do bằng một dòng trên thanh hoặc danh sách điều kiện trong khối Diễn biến. Trường chưa ghi gom thành một dòng "Chưa ghi: …".
 - "Cần làm ngay" ở màn Cảnh báo chỉ gồm cảnh báo gấp chưa ai tiếp nhận.
 - SOS (người cao tuổi bấm) và Cần hỗ trợ (nhân viên gửi) khác tên, khác biểu tượng, khác nguồn.
 
@@ -831,7 +831,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
-| 6.23.0 | 2026-11-23 | Đề xuất của Đức Anh (BF-06), chờ chủ dự án duyệt: mục 5.4 hồ sơ xử lý cả trang của Sự cố, form ghi theo bước có lưới biểu tượng; chi tiết cảnh báo vẫn ở khung phải; "Cần làm ngay" của Cảnh báo chỉ gồm việc chưa ai tiếp nhận. Không thêm màu, không thêm component dùng chung |
+| 6.23.0 | 2026-11-23 | Đề xuất của Đức Anh (BF-06), chờ chủ dự án duyệt: mục 5.4 hồ sơ xử lý cả trang của Sự cố, form ghi theo bước có lưới biểu tượng; chi tiết cảnh báo vẫn ở khung phải; "Cần làm ngay" của Cảnh báo chỉ gồm việc chưa ai tiếp nhận. Sửa 2026-11-24 (góp ý test demo): thay các ô lệnh bằng thanh lệnh chân trang một nút chính, lệnh ít dùng vào "Thêm thao tác"; trái phần cần biết, phải Diễn biến; phần ít xem gập "Xem thêm". Không thêm màu, không thêm component dùng chung |
 | 6.22.2 | 2026-11-21 | Đổi tên hiển thị chức năng "Thay đổi lưu trú" thành "Điều chỉnh hợp đồng" (Q-425 của nghiep-vu.md): mục menu, tiêu đề màn, nhãn loại yêu cầu ở Yêu cầu phê duyệt, nhãn quyền; tên trong mã, đường dẫn màn (`residency-changes`) giữ nguyên. Không đổi bố cục, không thêm màu. |
 | 6.22.1 | 2026-11-21 | Chủ dự án yêu cầu khi test tay luồng thay đổi lưu trú: số thông báo chưa xem cạnh mục menu "Thông báo" (mục 5 "Menu"). Không thêm màu (dùng cặp `--sidebar-primary`, `--sidebar-primary-foreground` đã có), không đổi màn nào. |
 | 6.22.0 | 2026-11-21 | Nhóm A BF-01 (chủ dự án chọn các phương án gợi ý): thêm `family-declared-table` (Gia đình khai dạng bảng theo chủ đề, lưu một lần) và `admission-start` (một nút "Lập đăng ký", tìm hồ sơ trước, không thấy thì tạo mới) ở mục 7.2 |

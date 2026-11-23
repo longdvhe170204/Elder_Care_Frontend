@@ -37,13 +37,14 @@ import { ResidentCallReminders } from '@/features/notifications/ResidentCallRemi
 import { FilterTabs, LevelChoices, ResidentChoices } from './CaseFormParts'
 import {
   CaseAction,
+  CaseActionBar,
   CaseBadge,
   CaseBlock,
-  CaseChoices,
   CaseDialog,
   CaseFacts,
   CaseHeader,
   CaseLink,
+  CaseMore,
   CasePage,
   CaseSteps,
   CaseWizard,
@@ -647,7 +648,16 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const content = incident.content ?? {}
   const progressions = incident.progressions ?? []
   const steps = incident.status === 'CLOSED' ? ['NEW', 'CLOSED'] : STEPS
-  const conclusions = [
+  // Thanh lệnh ở chân trang (đề xuất 2026-11-24, góp ý test demo): nút chính theo trạng thái (Tiếp nhận, Chuyển theo dõi,
+  // Đóng sự cố), lệnh hay dùng là nút viền, lệnh ít dùng gom vào "Thêm thao tác"
+  const actions = [
+    commands.includes('receive') && {
+      icon: ClipboardCheck,
+      label: 'Tiếp nhận',
+      primary: true,
+      disabled: busy,
+      onSelect: () => run('receive', null, 'Đã tiếp nhận sự cố'),
+    },
     commands.includes('move-to-monitoring') && {
       icon: Eye,
       label: 'Chuyển theo dõi',
@@ -655,8 +665,31 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
         missingGroups.length === 0
           ? 'Đã có diễn biến đánh giá và xử lý, chuyển được ngay.'
           : `Cần thêm diễn biến ${missingGroups.map((g) => GROUP_LABEL[g]).join(' và ')}.`,
+      primary: true,
       disabled: busy || missingGroups.length > 0,
       onSelect: () => run('move-to-monitoring', null, 'Đã chuyển theo dõi'),
+    },
+    commands.includes('close') && {
+      icon: CircleCheck,
+      label: 'Đóng sự cố',
+      hint: 'Ghi kết quả. Đã đóng thì chỉ đính chính.',
+      primary: true,
+      onSelect: () => setMode('close'),
+    },
+    transferOffered && {
+      icon: Ambulance,
+      label: 'Chuyển viện',
+      hint: statusBlocksTransfer
+        ? `${name} ${RESIDENT_STATUS_TEXT[residentStatus] ?? 'đang ở trạng thái không cho chuyển viện'}.`
+        : undefined,
+      disabled: !canTransfer,
+      onSelect: () => setMode('transfer-out'),
+    },
+    commands.includes('join-handling') && {
+      icon: UserPlus,
+      label: 'Tham gia xử lý',
+      disabled: busy,
+      onSelect: () => run('join-handling', null, 'Đã tham gia xử lý'),
     },
     commands.includes('reopen') && {
       icon: RotateCcw,
@@ -664,16 +697,21 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       hint: 'Đưa sự cố về Đang xử lý, cần lý do.',
       onSelect: () => setMode('reopen'),
     },
-    commands.includes('close') && {
-      icon: CircleCheck,
-      label: 'Đóng sự cố',
-      hint: 'Ghi kết quả. Đã đóng thì chỉ đính chính.',
-      onSelect: () => setMode('close'),
+    commands.includes('assign-handler') && {
+      label: incident.assignee ? 'Chuyển cho người khác' : 'Giao người xử lý',
+      more: incident.assignee != null,
+      onSelect: () => setMode('assign-handler'),
+    },
+    commands.includes('change-level') && {
+      label: 'Đổi mức',
+      more: true,
+      onSelect: () => setMode('change-level'),
     },
     commands.includes('end-post-fall-monitoring') && {
       icon: ListChecks,
       label: 'Kết thúc theo dõi sau ngã',
       hint: 'Dừng lịch theo dõi sau ngã, cần lý do.',
+      more: true,
       onSelect: () => setMode('end-post-fall-monitoring'),
     },
   ].filter(Boolean)
@@ -700,167 +738,101 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
           </>
         }
         note={
-          transferredNote && (
-            <div className="flex flex-col gap-1 type-body-sm">
-              <p>
-                {transferredNote.content}, lúc {formatDateTime(transferredNote.occurredAt)}.
-              </p>
-              {returnedNote ? (
-                <p>
-                  Đã về viện lúc {formatDateTime(returnedNote.occurredAt)}. Việc tiếp theo: lập phiếu đối chiếu thuốc
-                  trong 4 giờ, Bác sĩ đánh giá lại trong 48 giờ; ghi diễn biến rồi chuyển theo dõi hoặc đóng sự cố.
-                </p>
-              ) : atHospital ? (
-                <p>
-                  {name} đang điều trị tại bệnh viện. Khi về, Trưởng tầng hoặc Hành chính bấm Ghi nhận trở về ở hồ sơ
-                  người cao tuổi; sự cố sẽ tự ghi lúc về. Trong lúc chờ vẫn ghi được diễn biến khi có tin từ bệnh viện.
-                </p>
-              ) : (
-                <p>Sự cố vẫn mở để theo dõi, đóng kèm kết quả khi xong.</p>
-              )}
-            </div>
+          // Chi tiết chuyển viện, về viện nằm trong Diễn biến; đầu trang chỉ còn việc cần làm tiếp (đề xuất 2026-11-24)
+          returnedNote && isOpen(incident) ? (
+            <p className="type-body-sm">
+              Đã về lúc {formatDateTime(returnedNote.occurredAt)}. Cần đối chiếu thuốc trong 4 giờ, Bác sĩ đánh giá lại
+              trong 48 giờ.
+            </p>
+          ) : (
+            atHospital && (
+              <p className="type-body-sm">Khi về: Ghi nhận trở về ở hồ sơ người cao tuổi, sự cố tự ghi lúc về.</p>
+            )
           )
-        }
-        actions={
-          <>
-            {commands.includes('receive') && (
-              <CaseAction
-                icon={ClipboardCheck}
-                variant="default"
-                disabled={busy}
-                onClick={() => run('receive', null, 'Đã tiếp nhận sự cố')}
-              >
-                Tiếp nhận
-              </CaseAction>
-            )}
-            {transferOffered && (
-              <CaseAction icon={Ambulance} disabled={!canTransfer} onClick={() => setMode('transfer-out')}>
-                Chuyển viện
-              </CaseAction>
-            )}
-            {commands.includes('join-handling') && (
-              <CaseAction
-                icon={UserPlus}
-                disabled={busy}
-                onClick={() => run('join-handling', null, 'Đã tham gia xử lý')}
-              >
-                Tham gia xử lý
-              </CaseAction>
-            )}
-          </>
         }
       />
       {STEPS.includes(incident.status) && (
         <CaseSteps steps={steps.map((s) => STATUS_LABEL[s])} current={steps.indexOf(incident.status)} />
       )}
-      {transferOffered && statusBlocksTransfer && (
-        <p className="type-body-sm text-muted-foreground">
-          Chưa chuyển viện được: {name}{' '}
-          {RESIDENT_STATUS_TEXT[residentStatus] ?? 'đang ở trạng thái không cho chuyển viện'}. Chỉ chuyển viện được khi
-          người cao tuổi đang lưu trú, tạm vắng hoặc đang hoạt động bên ngoài.
-        </p>
-      )}
       {problem && !inDialog && <ProblemAlert problem={problem} />}
-      {incident.level === 'CRITICAL' && isOpen(incident) ? (
-        <EmergencyCardPanel incidentId={incident.id}>{call115}</EmergencyCardPanel>
-      ) : (
-        call115
-      )}
-      {content.residentId != null && isOpen(incident) && (
-        <ResidentCallReminders residentId={content.residentId} residentName={name} />
-      )}
       {content.residentId != null && isOpen(incident) && <CriticalNotice residentId={content.residentId} />}
+      {/* Trái: cần biết để xử lý (thẻ khẩn cấp, gọi điện, ghi nhận); phải: Diễn biến (đề xuất 2026-11-24) */}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
-        <CaseBlock title="Ghi nhận">
-          <CaseFacts
-            rows={[
-              ['Mô tả', content.description ?? '', true],
-              [
-                'Xảy ra lúc',
-                content.occurredAt && content.occurredAt !== content.discoveredAt
-                  ? formatDateTime(content.occurredAt)
-                  : undefined,
-              ],
-              ['Nơi xảy ra', content.location ?? ''],
-              ['Xử lý ban đầu', content.initialResponse ?? '', true],
-              ['Người xử lý', incident.assignee ?? 'Chưa ai nhận'],
-              ['Cùng xử lý', (incident.handlers ?? []).join(', ') || undefined],
-              ['Tiếp nhận lúc', incident.receivedAt ? formatDateTime(incident.receivedAt) : undefined],
-              ['Kết quả', incident.resolution ?? undefined, true],
-            ]}
-          />
-          {incident.noOnDutyDoctor && (
-            <p className="type-body-sm text-destructive">Không có bác sĩ trực lúc ghi nhận</p>
-          )}
-          {(commands.includes('change-level') || commands.includes('assign-handler')) && (
-            <div className="flex flex-wrap gap-2">
-              {commands.includes('change-level') && (
-                <Button variant="outline" className="h-11" onClick={() => setMode('change-level')}>
-                  Đổi mức
-                </Button>
-              )}
-              {commands.includes('assign-handler') && (
-                <Button variant="outline" className="h-11" onClick={() => setMode('assign-handler')}>
-                  {incident.assignee ? 'Chuyển cho người khác' : 'Giao người xử lý'}
-                </Button>
-              )}
-            </div>
-          )}
-          <NotifiedSection recipients={incident.notifiedRecipients ?? []} />
-          {linkedAlerts.map((alert) => (
-            <CaseLink
-              key={alert.id}
-              label={`Cảnh báo liên kết ${alert.id}`}
-              text={linkedAlertText(
-                alert,
-                types.find((t) => t.code === alert.type)?.name ?? alertTypeLabel(alert.type),
-              )}
-              action="Mở cảnh báo gốc"
-              onOpen={onNavigate && (() => onNavigate('alerts', { alertId: alert.id }))}
-            />
-          ))}
-          {content.residentId != null && onNavigate && can('CARE_PLAN', 'VIEW') && (
-            <CaseLink
-              label="Kế hoạch chăm sóc"
-              text="Phòng ngừa lâu dài ghi ở kế hoạch chăm sóc."
-              action="Mở kế hoạch chăm sóc"
-              onOpen={() => onNavigate('care-plans', { residentId: content.residentId })}
-            />
-          )}
-        </CaseBlock>
         <div className="flex min-w-0 flex-col gap-5">
-          {conclusions.length > 0 && (
-            <CaseBlock title="Kết luận">
-              <CaseChoices items={conclusions} />
-              {commands.includes('move-to-monitoring') && missingGroups.length > 0 && (
-                <MonitoringChecklist
-                  missing={missingGroups}
-                  canWrite={commands.includes('progressions')}
-                  onWrite={openProgression}
-                />
-              )}
-            </CaseBlock>
+          {incident.level === 'CRITICAL' && isOpen(incident) ? (
+            <EmergencyCardPanel incidentId={incident.id}>{call115}</EmergencyCardPanel>
+          ) : (
+            call115
           )}
-          <FollowUpBlock
-            tasks={followUps}
-            open={isOpen(incident)}
-            canAdd={isOpen(incident) && content.residentId != null && can('TASK_CHECKLIST', 'CREATE')}
-            onAdd={() => setMode('follow-up')}
-            onOpenTask={
-              onNavigate &&
-              can('TASK_CHECKLIST', 'CONFIRM') &&
-              ((task) => onNavigate('care-tasks', { shiftId: task.shiftId, taskId: task.id }))
-            }
-          />
+          {content.residentId != null && isOpen(incident) && (
+            <ResidentCallReminders residentId={content.residentId} residentName={name} />
+          )}
+          <CaseBlock title="Ghi nhận">
+            <CaseFacts
+              rows={[
+                ['Mô tả', content.description ?? '', true],
+                ['Nơi xảy ra', content.location ?? ''],
+                ['Người xử lý', incident.assignee ?? 'Chưa ai nhận'],
+                ['Cùng xử lý', (incident.handlers ?? []).join(', ') || undefined],
+                ['Kết quả', incident.resolution ?? undefined, true],
+              ]}
+            />
+            {incident.noOnDutyDoctor && (
+              <p className="type-body-sm text-destructive">Không có bác sĩ trực lúc ghi nhận</p>
+            )}
+            <CaseMore>
+              <CaseFacts
+                rows={[
+                  [
+                    'Xảy ra lúc',
+                    content.occurredAt && content.occurredAt !== content.discoveredAt
+                      ? formatDateTime(content.occurredAt)
+                      : undefined,
+                  ],
+                  ['Tiếp nhận lúc', incident.receivedAt ? formatDateTime(incident.receivedAt) : undefined],
+                  ['Xử lý ban đầu', content.initialResponse ?? '', true],
+                ]}
+              />
+              <NotifiedSection recipients={incident.notifiedRecipients ?? []} />
+            </CaseMore>
+            {linkedAlerts.map((alert) => (
+              <CaseLink
+                key={alert.id}
+                label={`Cảnh báo liên kết ${alert.id}`}
+                text={linkedAlertText(
+                  alert,
+                  types.find((t) => t.code === alert.type)?.name ?? alertTypeLabel(alert.type),
+                )}
+                action="Mở cảnh báo gốc"
+                onOpen={onNavigate && (() => onNavigate('alerts', { alertId: alert.id }))}
+              />
+            ))}
+            {content.residentId != null && onNavigate && can('CARE_PLAN', 'VIEW') && (
+              <CaseLink
+                label="Kế hoạch chăm sóc"
+                text="Phòng ngừa lâu dài ghi ở kế hoạch chăm sóc."
+                action="Mở kế hoạch chăm sóc"
+                onOpen={() => onNavigate('care-plans', { residentId: content.residentId })}
+              />
+            )}
+          </CaseBlock>
+        </div>
+        <div className="flex min-w-0 flex-col gap-5">
           <CaseBlock
             title="Diễn biến"
             aside={progressions.length > 0 && `${progressions.length} lần ghi, mới nhất trước`}
           >
+            {commands.includes('move-to-monitoring') && missingGroups.length > 0 && (
+              <MonitoringChecklist
+                missing={missingGroups}
+                canWrite={commands.includes('progressions')}
+                onWrite={openProgression}
+              />
+            )}
             {commands.includes('progressions') && mode !== 'progressions' && (
               <CaseAction
                 id="write-progression"
                 icon={NotebookPen}
-                variant={commands.includes('receive') ? 'outline' : 'default'}
                 className="self-start"
                 onClick={() => openProgression()}
               >
@@ -893,8 +865,31 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
               </ol>
             )}
           </CaseBlock>
+          <FollowUpBlock
+            tasks={followUps}
+            open={isOpen(incident)}
+            canAdd={isOpen(incident) && content.residentId != null && can('TASK_CHECKLIST', 'CREATE')}
+            onAdd={() => setMode('follow-up')}
+            onOpenTask={
+              onNavigate &&
+              can('TASK_CHECKLIST', 'CONFIRM') &&
+              ((task) => onNavigate('care-tasks', { shiftId: task.shiftId, taskId: task.id }))
+            }
+          />
         </div>
       </div>
+      <CaseActionBar
+        items={actions}
+        note={
+          transferOffered &&
+          statusBlocksTransfer && (
+            <p className="type-body-sm text-muted-foreground">
+              Chưa chuyển viện được: {name}{' '}
+              {RESIDENT_STATUS_TEXT[residentStatus] ?? 'đang ở trạng thái không cho chuyển viện'}.
+            </p>
+          )
+        }
+      />
       {mode === 'follow-up' && (
         <FollowUpForm
           incidentId={incident.id}

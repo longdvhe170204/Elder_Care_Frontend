@@ -1,5 +1,5 @@
-import { useEffect, useId, useRef } from 'react'
-import { Check } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { Check, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -135,42 +135,87 @@ export function CaseAction({ icon: Icon, variant = 'outline', className, childre
   )
 }
 
-// Các lệnh đổi trạng thái hiện thành ô có biểu tượng và một dòng nói rõ việc sẽ xảy ra, không giấu trong menu. Mục là false
-// (backend không cho lệnh đó) thì bỏ qua; không còn mục nào thì không hiện gì.
-export function CaseChoices({ items }) {
+// Thanh lệnh ở chân hồ sơ (đề xuất 2026-11-24, góp ý test demo: quá nhiều ô lệnh, quá nhiều chữ): một nút chính theo trạng
+// thái, các lệnh hay dùng là nút viền, lệnh ít dùng (đổi mức, giao người, ...) gom vào "Thêm thao tác". Mục là false (backend
+// không cho lệnh) thì bỏ; không còn mục nào thì không hiện. Dòng giải thích (hint) chỉ hiện khi rê chuột (title).
+export function CaseActionBar({ items, note, className }) {
   const id = useId()
+  const [more, setMore] = useState(false)
   const shown = items.filter(Boolean)
-  if (shown.length === 0) return null
+  if (shown.length === 0 && !note) return null
+  const primary = shown.find((i) => i.primary && !i.more)
+  const main = shown.filter((i) => !i.more)
+  const extra = shown.filter((i) => i.more)
+  const button = ({ icon: Icon, label, hint, disabled, onSelect }, isPrimary) => (
+    <Button
+      key={label}
+      type="button"
+      variant={isPrimary ? 'default' : 'outline'}
+      title={hint}
+      disabled={disabled}
+      className={cn('h-11', !isPrimary && 'bg-card')}
+      onClick={onSelect}
+    >
+      {Icon && <Icon aria-hidden="true" />}
+      {label}
+    </Button>
+  )
   return (
-    <div className="grid gap-3 @md:grid-cols-2">
-      {shown.map(({ icon: Icon, label, hint, primary, disabled, onSelect }, i) => (
-        <Button
-          key={label}
-          type="button"
-          variant={primary ? 'default' : 'outline'}
-          aria-label={label}
-          aria-describedby={hint ? `${id}-${i}` : undefined}
-          disabled={disabled}
-          className="h-auto min-h-16 items-start justify-start gap-3 rounded-lg px-4 py-3 text-left whitespace-normal"
-          onClick={onSelect}
-        >
-          <Icon aria-hidden="true" className="mt-0.5 size-5" />
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="type-label">{label}</span>
-            {hint && (
-              <span
-                id={`${id}-${i}`}
-                className={cn(
-                  'type-body-sm font-normal',
-                  primary ? 'text-primary-foreground' : 'text-muted-foreground',
-                )}
-              >
-                {hint}
-              </span>
-            )}
-          </span>
-        </Button>
-      ))}
+    <div
+      role="group"
+      aria-label="Thao tác"
+      className={cn('sticky bottom-0 flex flex-col gap-3 rounded-xl border bg-card p-3', className)}
+    >
+      {note}
+      {more && extra.length > 0 && (
+        <div id={`${id}-more`} className="flex flex-wrap gap-2 border-b pb-3">
+          {extra.map((item) => button(item, false))}
+        </div>
+      )}
+      {shown.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          {primary && button(primary, true)}
+          {main.filter((i) => i !== primary).map((item) => button(item, false))}
+          {extra.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              aria-expanded={more}
+              aria-controls={`${id}-more`}
+              className="h-11"
+              onClick={() => setMore((m) => !m)}
+            >
+              Thêm thao tác
+              <ChevronDown aria-hidden="true" className={cn('transition-transform', more && 'rotate-180')} />
+            </Button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Phần ít xem của một khối (nguồn, các lần gộp, người được báo, ...): gập lại, bấm "Xem thêm" mới mở
+export function CaseMore({ label = 'Xem thêm', children }) {
+  const id = useId()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="flex flex-col gap-4">
+      {open && (
+        <div id={id} className="flex flex-col gap-4 border-t pt-4">
+          {children}
+        </div>
+      )}
+      <Button
+        type="button"
+        variant="link"
+        aria-expanded={open}
+        aria-controls={id}
+        className="h-11 self-start px-0"
+        onClick={() => setOpen((o) => !o)}
+      >
+        {open ? 'Thu gọn' : label}
+      </Button>
     </div>
   )
 }

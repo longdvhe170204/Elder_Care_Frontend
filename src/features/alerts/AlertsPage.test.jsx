@@ -158,13 +158,15 @@ describe('AlertsPage', () => {
     render(<AlertsPage role="NURSING_STAFF" />)
     const cards = await screen.findAllByRole('article')
     fireEvent.click(within(cards[2]).getByRole('button', { name: /Chi tiết/ }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Đổi mức' }))
+    // Lệnh ít dùng nằm trong Thêm thao tác ở thanh chân khung
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm thao tác' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi mức' }))
     fireEvent.click(screen.getByRole('button', { name: 'Nhẹ' }))
     fireEvent.change(screen.getByLabelText('Lý do đổi mức'), { target: { value: 'Đã đo lại' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu mức mới' }))
     expect(await screen.findByText(/Đã đổi mức sang nhẹ/)).toBeTruthy()
     // Vẫn ở khung chi tiết để làm tiếp, không về danh sách
-    expect(screen.getByRole('list', { name: 'Tiến trình' })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'Thao tác' })).toBeTruthy()
     expect(JSON.parse(api.calls('POST', '/alerts/3/change-level')[0][1].body)).toEqual({
       newLevel: 'LOW',
       reason: 'Đã đo lại',
@@ -395,7 +397,9 @@ describe('AlertsPage', () => {
     api.on('POST', '/alerts/1/activate-emergency', json(201, { incident: { id: 55 } }))
     render(<AlertsPage role="NURSING_STAFF" onNavigate={onNavigate} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết cảnh báo của Trần Thị Mai' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Kích hoạt khẩn cấp' }))
+    // Cảnh báo không phải Khẩn cấp: Kích hoạt khẩn cấp nằm trong Thêm thao tác
+    fireEvent.click(await screen.findByRole('button', { name: 'Thêm thao tác' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Kích hoạt khẩn cấp' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Lưu và kích hoạt' }))
     await waitFor(() => expect(api.calls('POST', '/alerts/1/activate-emergency')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/alerts/1/activate-emergency')[0][1].body)).toEqual({ incidentTypeId: 1 })
