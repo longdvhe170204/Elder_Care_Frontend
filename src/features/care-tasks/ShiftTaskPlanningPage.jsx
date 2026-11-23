@@ -24,7 +24,7 @@ import { problemOf } from '@/common/problem'
 import { usePermissions } from '@/common/permissions/permissions'
 import { ShiftSourceDialog } from './ShiftSourceDialog'
 import { ShiftTaskBatchDialog } from './ShiftTaskBatchDialog'
-import { dateOf, formatDate, nextDate, shiftLabel, timeOf } from './shiftPlanning'
+import { dateOf, formatDate, needsOf, nextDate, shiftLabel, timeOf } from './shiftPlanning'
 
 const PAGE_SIZE = 10
 const NO_FILTER = { residentId: '', taskTypeId: '', performerId: '' }
@@ -324,6 +324,12 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     try {
       const { data } = await getShiftsByShiftIdCareTasks({ path: { shiftId } })
       setShiftTasks(data)
+      // Số việc theo nguồn của ca còn chưa lập, để Trưởng tầng biết còn ai thiếu (số liệu hiển thị, không tự lập)
+      const missing = source.residents.map((r) => needsOf(r, source.shift, data, []).todo).filter(Boolean)
+      if (missing.length)
+        setSuccess(
+          `Đã lập ${count} công việc của ca. Ca còn ${missing.reduce((a, b) => a + b, 0)} việc theo nguồn chưa lập (${missing.length} người).`,
+        )
     } catch (error) {
       setFailure(problemOf(error))
     }
@@ -538,6 +544,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
           shiftPicker={shiftPicker}
           shiftId={shiftId}
           source={source}
+          tasks={shiftTasks}
           shiftMembers={shiftMembers}
           people={people}
           types={types}

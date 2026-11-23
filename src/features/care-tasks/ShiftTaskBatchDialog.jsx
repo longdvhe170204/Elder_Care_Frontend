@@ -8,7 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { IMPORTANCE, CARE_ROLES } from './carePlanLabels'
-import { BASIS, ERRORS, matchBasis, pad, plannedAtOf, timeOf } from './shiftPlanning'
+import { BASIS, ERRORS, matchBasis, needsOf, pad, plannedAtOf, timeOf } from './shiftPlanning'
 
 const SHIFT_LEVEL = ['SHIFT_START_CHECK', 'SUPERVISION', 'AD_HOC']
 const newRow = () => ({ key: crypto.randomUUID(), content: '' })
@@ -97,6 +97,7 @@ export function ShiftTaskBatchDialog({
   shiftPicker,
   shiftId,
   source,
+  tasks = [],
   shiftMembers,
   people,
   types,
@@ -151,8 +152,26 @@ export function ShiftTaskBatchDialog({
   const name = (id) => people[id] || `Người cao tuổi · mã ${id}`
   const staffName = (a) =>
     [staffNames[a.staffId] || a.fullName || `Nhân viên · mã ${a.staffId}`, CARE_ROLES[a.role]].filter(Boolean).join(' · ')
+  // Việc cần lập của từng người trong ca: so nguồn với việc đã có của ca và các dòng đang nhập đã khớp căn cứ
+  const drafts = rows
+    .filter((r) => r.residentId && r.residentId !== 'FLOOR' && r.time)
+    .map((r) => ({ residentId: r.residentId, time: r.time, basis: resolve(r, residentsById[r.residentId], shift).basis }))
+    .filter((d) => d.basis)
+  const needs = Object.fromEntries(
+    (source?.residents ?? []).map((r) => [
+      String(r.residentId),
+      needsOf(r, shift, tasks, drafts.filter((d) => d.residentId === String(r.residentId))),
+    ]),
+  )
   const residentOptions = [
-    ...(source?.residents ?? []).map((r) => [String(r.residentId), name(r.residentId)]),
+    ...(source?.residents ?? []).map((r) => {
+      const need = needs[String(r.residentId)]
+      const notes = [
+        !need.hasPlan && 'chưa có kế hoạch',
+        need.todo ? `còn ${need.todo} việc chưa lập` : need.entries.length ? 'đã đủ' : null,
+      ].filter(Boolean)
+      return [String(r.residentId), [name(r.residentId), ...notes].join(' · ')]
+    }),
     ['FLOOR', 'Cả tầng (việc cấp ca)'],
   ]
   const typeOptions = types.map((t) => [String(t.id), t.name])
@@ -366,7 +385,7 @@ export function ShiftTaskBatchDialog({
                     </div>
                   </div>
                   <div className="grid gap-4 md:grid-cols-3">
-                    <RowField label="Người cao tuổi" error={errors.resident}>
+                    <RowField label="Người cao tuổi" error={errors.resident} className="md:col-span-3">
                       {(p) => (
                         <Select
                           {...p}
@@ -377,6 +396,14 @@ export function ShiftTaskBatchDialog({
                         />
                       )}
                     </RowField>
+                    {current && (
+                      <NeedList
+                        name={name(r.residentId)}
+                        shiftText={`${timeOf(shift.startsAt)}–${timeOf(shift.endsAt)}`}
+                        need={needs[r.residentId]}
+                        typeName={typeName}
+                      />
+                    )}
                     <RowField label="Loại công việc" error={errors.type}>
                       {(p) => (
                         <Select
@@ -478,7 +505,7 @@ function BasisCheck({ row, found, error, onSource, onAdHoc }) {
   const hints = (found?.items ?? []).map(({ item, times }) =>
     [
       `Mục kế hoạch · ${item.content}`,
-      times.length ? `giờ trong ca ${times.join(', ')}` : 'không có giờ trong ca này',
+      times === null ? 'lúc nào trong ca' : times.length ? `giờ trong ca ${times.join(', ')}` : 'không có giờ trong ca này',
       `mức ${IMPORTANCE[item.importance] || item.importance}`,
     ].join(' · '),
   )
@@ -561,5 +588,66 @@ function BasisCheck({ row, found, error, onSource, onAdHoc }) {
         </p>
       )}
     </div>
+  )
+}
+
+const STATES = {
+  TODO: ['Chưa lập', 'text-warning-foreground'],
+  DRAFT: ['Đang nhập', 'text-accent-foreground'],
+  DONE: ['Đã lập', 'text-success-foreground'],
+}
+
+// "Việc cần lập trong ca" của người đang chọn: dữ liệu nguồn chỉ để xem (kế hoạch chăm sóc đã duyệt, bữa ăn, lần đo,
+// hoạt động, theo dõi), người lập tự nhập dòng theo đó (Q-307). Chưa có kế hoạch hiệu lực thì báo (BF-01 "Điểm đã làm rõ").
+function NeedList({ name, shiftText, need, typeName }) {
+  const id = useId()
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2 rounded-lg border bg-muted p-3 md:col-span-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h4 id={id} className="type-label">
+          Việc cần lập cho {name} trong ca {shiftText}
+        </h4>
+        {need.entries.length > 0 && (
+          <span className="type-body-sm text-muted-foreground">
+            {need.todo ? `Còn ${need.todo} việc chưa lập` : 'Đã lập đủ theo nguồn'}
+          </span>
+        )}
+      </div>
+      {!need.hasPlan && (
+        <p role="note" className="rounded-md bg-warning p-2 type-body-sm text-warning-foreground">
+          Chưa có kế hoạch chăm sóc hiệu lực. Lập được việc theo bữa ăn, lần đo, hoạt động hoặc việc phát sinh; kế hoạch do
+          Điều dưỡng lập, Bác sĩ duyệt.
+        </p>
+      )}
+      {need.entries.length ? (
+        <table className="w-full type-body-sm">
+          <thead className="text-left text-muted-foreground">
+            <tr>
+              <th className="py-1 pr-3 font-normal">Việc</th>
+              <th className="py-1 pr-3 font-normal">Giờ</th>
+              <th className="py-1 pr-3 font-normal">Mức</th>
+              <th className="py-1 pr-3 font-normal">Người làm</th>
+              <th className="py-1 font-normal">Trạng thái</th>
+            </tr>
+          </thead>
+          <tbody>
+            {need.entries.map((e) => (
+              <tr key={`${e.basis}-${e.time}`} className="border-t">
+                <td className="py-1.5 pr-3">
+                  <span className="type-label">{typeName[e.taskTypeId] || e.kind}</span>
+                  <span className="block text-muted-foreground">{e.text}</span>
+                </td>
+                <td className="py-1.5 pr-3 tabular-nums">{e.time ?? 'Trong ca'}</td>
+                <td className="py-1.5 pr-3">{IMPORTANCE[e.importance] || '—'}</td>
+                <td className="py-1.5 pr-3">{CARE_ROLES[e.role] || '—'}</td>
+                <td className={`py-1.5 type-label ${STATES[e.state][1]}`}>{STATES[e.state][0]}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        need.hasPlan && <p className="type-body-sm text-muted-foreground">Không có việc theo nguồn nào trong ca này.</p>
+      )}
+    </section>
   )
 }

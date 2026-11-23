@@ -66,14 +66,85 @@ export function inShift(shift, time) {
   return at >= new Date(shift.startsAt).getTime() && at < new Date(shift.endsAt).getTime()
 }
 
+// Mục kế hoạch "một lần mỗi ca" hoặc không có giờ nào thì làm lúc nào trong ca cũng khớp (như CareTaskValidator)
+export const anyTimeItem = (item) =>
+  item.frequencyType === 'ONCE_PER_SHIFT' || (!item.times?.length && !item.startsAt)
+
+// Giờ trong ngày (HH:MM) của mục kế hoạch: danh sách giờ, hoặc từ giờ bắt đầu lặp mỗi N giờ
+export function itemTimes(item) {
+  if (item.times?.length) return item.times.map((t) => t.slice(0, 5))
+  if (!item.startsAt) return []
+  const [hour, minute] = item.startsAt.split(':').map(Number)
+  if (!(item.intervalHours > 0)) return [`${pad(hour)}:${pad(minute)}`]
+  const times = []
+  for (let k = 0; k * item.intervalHours < 24; k++) times.push(`${pad((hour + k * item.intervalHours) % 24)}:${pad(minute)}`)
+  return times
+}
+
+// Mục kế hoạch của người cao tuổi (bỏ trùng khi ca qua đêm lấy kế hoạch của hai ngày) kèm giờ rơi vào ca; null là
+// làm lúc nào trong ca cũng được
+function planItemsInShift(resident, shift) {
+  const seen = new Set()
+  return (resident?.planItems ?? [])
+    .filter((item) => !seen.has(item.id) && seen.add(item.id))
+    .map((item) => ({ item, times: anyTimeItem(item) ? null : itemTimes(item).filter((t) => inShift(shift, t)) }))
+}
+
 // Đối chiếu loại công việc và giờ người lập đã nhập với nguồn của người cao tuổi (FR-017, FR-023). Không điền thay
 // người lập (Q-307): chỉ trả mục kế hoạch cùng loại có đúng giờ đó, các nguồn khác có đúng giờ đó, và các mục kế hoạch
 // cùng loại kèm giờ của mục nằm trong ca để báo khi chưa khớp.
 export function matchBasis(resident, shift, taskTypeId, time) {
-  const items = (resident?.planItems ?? [])
-    .filter((i) => String(i.taskTypeId) === String(taskTypeId))
-    .map((item) => ({ item, times: (item.times ?? []).map((t) => t.slice(0, 5)).filter((t) => inShift(shift, t)) }))
-  const plan = time ? items.find((i) => i.times.includes(time))?.item : undefined
+  const items = planItemsInShift(resident, shift).filter(({ item }) => String(item.taskTypeId) === String(taskTypeId))
+  const plan = time ? items.find((i) => i.times === null || i.times.includes(time))?.item : undefined
   const sources = time && !plan ? (resident?.otherSources ?? []).filter((s) => timeOf(s.at) === time) : []
   return { items, plan, sources }
+}
+
+const sameBasis = (task, basis, time) =>
+  task.basis && `${task.basis.type}:${task.basis.id}` === basis && (time === null || timeOf(task.plannedAt) === time)
+
+// Việc cần lập của một người cao tuổi trong ca (hiển thị để đối chiếu, không tự lập, Q-307): mỗi giờ của mục kế hoạch
+// rơi vào ca và mỗi nguồn khác trong ca là một việc; Đã lập khi ca đã có công việc chưa hủy cùng căn cứ, giờ; Đang
+// nhập khi một dòng của lô đang nhập đã khớp.
+export function needsOf(resident, shift, tasks, drafts) {
+  const id = resident.residentId
+  const own = tasks.filter((t) => t.residentId === id && t.status !== 'CANCELLED')
+  const entries = [
+    ...planItemsInShift(resident, shift).flatMap(({ item, times }) =>
+      (times ?? [null]).map((time) => ({
+        basis: `CARE_PLAN_ITEM:${item.id}`,
+        kind: BASIS.CARE_PLAN_ITEM,
+        text: item.content,
+        taskTypeId: item.taskTypeId,
+        time,
+        importance: item.importance,
+        role: item.performerRole,
+      })),
+    ),
+    ...(resident.otherSources ?? [])
+      .filter((s) => {
+        const at = new Date(s.at).getTime()
+        return at >= new Date(shift.startsAt).getTime() && at < new Date(shift.endsAt).getTime()
+      })
+      .map((s) => ({
+        basis: `${s.type}:${s.id}`,
+        kind: BASIS[s.type] || 'Nguồn khác',
+        text: s.description,
+        time: timeOf(s.at),
+      })),
+  ]
+    .map((e) => ({
+      ...e,
+      state: own.some((t) => sameBasis(t, e.basis, e.time))
+        ? 'DONE'
+        : drafts.some((d) => d.basis === e.basis && (e.time === null || d.time === e.time))
+          ? 'DRAFT'
+          : 'TODO',
+    }))
+    .sort((a, b) => (a.time ? new Date(plannedAtOf(shift, a.time)) : 0) - (b.time ? new Date(plannedAtOf(shift, b.time)) : 0))
+  return {
+    entries,
+    hasPlan: (resident.planItems ?? []).length > 0,
+    todo: entries.filter((e) => e.state === 'TODO').length,
+  }
 }

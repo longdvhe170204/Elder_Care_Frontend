@@ -97,7 +97,7 @@ it('FR_017_moModalKhongTuDienDongCongViec', async () => {
   fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm dòng' }))
   const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
   expect(within(row).getByLabelText('Nội dung (không bắt buộc)')).toHaveValue('')
-  expect(within(row).getByRole('option', { name: '[Họ tên kiểm thử]' })).toHaveValue('77')
+  expect(within(row).getByRole('option', { name: '[Họ tên kiểm thử] · còn 2 việc chưa lập' })).toHaveValue('77')
   expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
 })
 
@@ -122,7 +122,9 @@ it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
     },
   ])
   expect(options.headers['Idempotency-Key']).toBeTruthy()
-  expect(await screen.findByText('Đã lập 1 công việc của ca.')).toBeInTheDocument()
+  expect(
+    await screen.findByText('Đã lập 1 công việc của ca. Ca còn 2 việc theo nguồn chưa lập (1 người).'),
+  ).toBeInTheDocument()
 })
 
 it('FR_017_lichSuKhongTheoCa_phanTrangMayChu', async () => {
@@ -265,6 +267,58 @@ it('FR_017_guiXong_viecMoiLapLenDauLichSu', async () => {
   const first = within(screen.getByRole('table')).getAllByRole('row')[1]
   expect(first).toHaveTextContent('Việc vừa lập')
   expect(within(first).getByText('Mới lập')).toBeInTheDocument()
+})
+
+it('FR_017_viecCanLapTrongCa_daLapDangNhapChuaLap', async () => {
+  api.on(
+    'GET',
+    '/shifts/5/care-tasks',
+    json(200, [
+      {
+        id: 1,
+        residentId: 77,
+        status: 'NOT_YET_DUE',
+        basis: { type: 'MEAL', id: 61 },
+        plannedAt: '2026-11-01T04:30:00Z',
+      },
+    ]),
+  )
+  view()
+  const dialog = await openBatch()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm dòng' }))
+  const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
+  await waitFor(() =>
+    expect(within(row).getByRole('option', { name: '[Họ tên kiểm thử] · còn 1 việc chưa lập' })).toBeInTheDocument(),
+  )
+  fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
+  const needs = within(row).getByRole('region', { name: 'Việc cần lập cho [Họ tên kiểm thử] trong ca 07:00–15:00' })
+  const lines = within(needs).getAllByRole('row').slice(1)
+  expect(lines.map((l) => l.textContent)).toEqual([
+    'Loại công việc kiểm thửMục kế hoạch kiểm thử08:00Thường—Chưa lập',
+    'Bữa ănBữa ăn11:30——Đã lập',
+  ])
+  fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
+  fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
+  expect(within(needs).getByText('Đang nhập')).toBeInTheDocument()
+  expect(within(needs).getByText('Đã lập đủ theo nguồn')).toBeInTheDocument()
+})
+
+it('BF_01_chuaCoKeHoachHieuLuc_baoTrongDong', async () => {
+  api.on(
+    'GET',
+    '/shifts/5/source-data',
+    json(200, {
+      shift: SHIFT,
+      residents: [{ residentId: 77, assignments: [], planItems: [], otherSources: [] }],
+    }),
+  )
+  view()
+  const dialog = await openBatch()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm dòng' }))
+  const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
+  expect(within(row).getByRole('option', { name: '[Họ tên kiểm thử] · chưa có kế hoạch' })).toBeInTheDocument()
+  fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
+  expect(within(row).getByRole('note')).toHaveTextContent('Chưa có kế hoạch chăm sóc hiệu lực.')
 })
 
 it('FR_023_canCuTuDoiChieuLoaiVaGio_khongCoOChon', async () => {
