@@ -14,7 +14,7 @@ import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
 import { CallReminderSheet } from './CallReminderSheet'
 import { NotificationDetail } from '@/common/notifications/NotificationDetail'
-import { LEVEL_LABELS, label, reminderIdOf } from './notificationLabels'
+import { LEVEL_LABELS, label, planningOf, reminderIdOf } from './notificationLabels'
 
 // Hộp thông báo (009 T035; FR-033 → FR-036; DESIGN.md `notification-inbox`). Khẩn cấp chưa xác nhận lên đầu (backend
 // sắp), mỗi dòng có nút "Xác nhận đã nhận" (FR-026); thông báo mới qua SSE thì tải lại trang đầu, mất luồng thì hỏi lại
@@ -185,13 +185,24 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
           onOpened={replace}
           onHidden={hide}
           onNavigate={onNavigate}
-          sourceAction={(n) =>
-            reminderIdOf(n) !== null && (
-              <Button variant="outline" className="self-start" onClick={() => openReminder(reminderIdOf(n))}>
-                Mở lượt nhắc gọi
-              </Button>
+          sourceAction={(n) => {
+            if (reminderIdOf(n) !== null)
+              return (
+                <Button variant="outline" className="self-start" onClick={() => openReminder(reminderIdOf(n))}>
+                  Mở lượt nhắc gọi
+                </Button>
+              )
+            // BF-01 bước 15 nối BF-02 bước 1: thông báo cần lập công việc mở màn Lập công việc ca cho người đó
+            const planning = planningOf(n)
+            return (
+              planning &&
+              onNavigate && (
+                <Button className="self-start" onClick={() => onNavigate('care-task-planning', planning)}>
+                  Lập công việc cho người này
+                </Button>
+              )
             )
-          }
+          }}
           {...titles}
         />
       ),

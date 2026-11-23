@@ -4,6 +4,7 @@ import {
   getAlertsById,
   postAlertsByIdChangeLevel,
   postAlertsByIdClose,
+  postAlertsByIdFollowUps,
   postAlertsByIdReceive,
   postAlertsByIdStartHandling,
 } from '@/api/api007'
@@ -33,6 +34,7 @@ const COMMANDS = {
   'start-handling': postAlertsByIdStartHandling,
   close: postAlertsByIdClose,
   'change-level': postAlertsByIdChangeLevel,
+  'follow-up': postAlertsByIdFollowUps,
 }
 
 export function runAlertCommand(id, command, body) {

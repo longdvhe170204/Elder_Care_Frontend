@@ -116,6 +116,28 @@ describe('AlertsPage', () => {
     expect(JSON.parse(api.calls('POST', '/alerts/3/close')[0][1].body)).toEqual({ resolution: 'Đã đo lại, ổn định' })
   })
 
+  it('Q_418_khongCoLenhClose_khongHienNutDong_FR_087_ghiTheoDoi', async () => {
+    const following = {
+      ...ALERT_IN_PROGRESS,
+      allowedCommands: ['follow-up'],
+      followUps: [{ content: 'Đo lại 160/95', at: '2026-11-08T02:00:00Z', recordedBy: 'Mai Thị Hoa' }],
+    }
+    api.on('GET', '/alerts/3', json(200, following))
+    api.on('POST', '/alerts/3/follow-ups', json(201, {}))
+    render(<AlertsPage role="CAREGIVER" />)
+    const cards = await screen.findAllByRole('article')
+    fireEvent.click(within(cards[2]).getByRole('button', { name: /Chi tiết/ }))
+    expect(await screen.findByText('Đo lại 160/95')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Đóng cảnh báo' })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu theo dõi' }))
+    expect(await screen.findByText('Nhập kết quả theo dõi')).toBeTruthy()
+    expect(api.calls('POST', '/alerts/3/follow-ups')).toHaveLength(0)
+    fireEvent.change(screen.getByLabelText('Ghi kết quả theo dõi'), { target: { value: 'Đo lại 140/90' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu theo dõi' }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/3/follow-ups')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/alerts/3/follow-ups')[0][1].body)).toEqual({ content: 'Đo lại 140/90' })
+  })
+
   it('FR_029_409_hienDieuKienChuaThoa', async () => {
     api.on('POST', '/alerts/1/receive', problem(409, 'ALREADY_RECEIVED'))
     render(<AlertsPage role="NURSING_STAFF" />)

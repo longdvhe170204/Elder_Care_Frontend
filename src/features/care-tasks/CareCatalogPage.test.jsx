@@ -13,6 +13,8 @@ beforeEach(() => {
     json(200, [
       { function: 'CARE_TASK_CATALOG', operation: 'CREATE' },
       { function: 'CARE_TASK_CATALOG', operation: 'UPDATE' },
+      { function: 'DAILY_ROUTINE', operation: 'CREATE' },
+      { function: 'DAILY_ROUTINE', operation: 'UPDATE' },
     ]),
   )
   api.on('GET', '/task-types', json(200, []))
@@ -75,4 +77,33 @@ it('FR_004_412DanhMucGiuFormVaHienGiaTriMoi', async () => {
   fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Lưu danh mục' }))
   expect(await screen.findByText('Đã đổi ở phiên khác')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Tải lại danh mục' })).toBeInTheDocument()
+})
+
+it('FR_056_mocSinhHoat_themVaNgungGuiIfMatch_khongCanLyDo', async () => {
+  api.on(
+    'GET',
+    '/daily-routines',
+    json(200, [{ id: 5, version: 2, name: 'Thức dậy', time: '06:00', active: true, effectiveFrom: '2026-01-01' }]),
+  )
+  api.on('POST', '/daily-routines', json(201, null, { ETag: '"0"' }))
+  api.on('POST', '/daily-routines/5/deactivate', json(200, null))
+  render(
+    <PermissionsProvider>
+      <CareCatalogPage />
+    </PermissionsProvider>,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Mốc sinh hoạt cố định' }))
+  expect(await screen.findByText('06:00')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm danh mục' }))
+  let dialog = await screen.findByRole('dialog')
+  fireEvent.change(within(dialog).getByLabelText('Tên'), { target: { value: 'Ngủ trưa' } })
+  fireEvent.change(within(dialog).getByLabelText('Giờ (HH:mm)'), { target: { value: '12:30' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu danh mục' }))
+  await waitFor(() => expect(api.calls('POST', '/daily-routines')).toHaveLength(1))
+  expect(JSON.parse(api.calls('POST', '/daily-routines')[0][1].body)).toEqual({ name: 'Ngủ trưa', time: '12:30' })
+  fireEvent.click(await screen.findByRole('button', { name: 'Ngừng Thức dậy' }))
+  dialog = await screen.findByRole('dialog')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận ngừng' }))
+  await waitFor(() => expect(api.calls('POST', '/daily-routines/5/deactivate')).toHaveLength(1))
+  expect(api.calls('POST', '/daily-routines/5/deactivate')[0][1].headers['If-Match']).toBe('"2"')
 })

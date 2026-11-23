@@ -16,6 +16,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
+import { AlertFollowUps } from './AlertFollowUps'
 import { PressedAlertPanel } from './PressedAlertPanel'
 import { loadAlert, loadAlertBoard, runAlertCommand } from './alerts'
 import {
@@ -33,6 +34,8 @@ import {
 // Màn Cảnh báo (spec 007 User Story 3, FR-027 → FR-036; T031 phần web): danh sách theo phạm vi đọc từ api-007
 // `GET /alerts`, họ tên từ api-001. Nút lệnh chỉ theo `allowedCommands` backend trả (DESIGN.md 7.4); hạ từ Khẩn cấp,
 // tiếp nhận của Quản lý viện ở Leo thang cấp 2 do backend quyết. Đóng cần kết quả, đổi mức cần lý do (FR-029).
+// Q-418: nút Đóng chỉ hiện cho Trưởng tầng, Bác sĩ (backend trả trong allowedCommands). Q-419, FR-087: khi cảnh báo đang
+// mở, nhân viên chăm sóc người đó ghi kết quả theo dõi; danh sách theo dõi hiện trong khung chi tiết.
 
 const GROUPS = [
   ['open', 'Đang mở'],
@@ -112,6 +115,7 @@ function AlertCard({ alert, name, busy, onReceive, onStart, onOpen, onReconcile 
   )
 }
 
+// Kết quả theo dõi (FR-087): danh sách cũ trước, form ghi khi backend cho lệnh `follow-up`. Ghi không đổi trạng thái.
 // Khung chi tiết: nguồn, thời điểm, lệnh cần nhập kết quả hoặc lý do (Đóng, Đổi mức), khối nút bấm khẩn cấp
 function AlertDetail({ id, name, Title, Description, onDone }) {
   const [alert, setAlert] = useState(null)
@@ -207,6 +211,7 @@ function AlertDetail({ id, name, Title, Description, onDone }) {
         </section>
       )}
       {['SOS', 'ASSIST_BUTTON'].includes(alert.origin) && <PressedAlertPanel alert={alert} onChanged={reload} />}
+      <AlertFollowUps alert={alert} canRecord={commands.includes('follow-up')} onRecorded={reload} />
       {problem && <ProblemAlert problem={problem} />}
       {!mode && (commands.includes('close') || commands.includes('change-level')) && (
         <div className="flex flex-col gap-2">

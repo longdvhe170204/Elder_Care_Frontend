@@ -12,6 +12,10 @@ import {
   postNonPerformanceReasonTypes,
   putNonPerformanceReasonTypesById,
   postNonPerformanceReasonTypesByIdDeactivate,
+  getDailyRoutines,
+  postDailyRoutines,
+  putDailyRoutinesById,
+  postDailyRoutinesByIdDeactivate,
 } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
@@ -47,6 +51,24 @@ const CATALOGS = {
     update: putNonPerformanceReasonTypesById,
     deactivate: postNonPerformanceReasonTypesByIdDeactivate,
   },
+  // 005 FR-056 (Q-416): mốc chung của toàn viện hiện trên Lịch chăm sóc hằng ngày; mọi thay đổi áp dụng từ ngày hôm sau
+  routines: {
+    title: 'Mốc sinh hoạt cố định',
+    fn: 'DAILY_ROUTINE',
+    get: getDailyRoutines,
+    create: postDailyRoutines,
+    update: putDailyRoutinesById,
+    deactivate: postDailyRoutinesByIdDeactivate,
+  },
+}
+
+const isActive = (row) => (row.status ? row.status === 'ACTIVE' : row.active)
+const today = () => new Date().toLocaleDateString('sv-SE')
+
+function effectiveNote(row) {
+  if (!row.effectiveFrom || row.effectiveFrom <= today()) return null
+  const [y, m, d] = row.effectiveFrom.split('-')
+  return `${row.active ? 'Giá trị mới' : 'Ngừng'} áp dụng từ ${d}/${m}/${y}`
 }
 const NUMBERS = ['windowBeforeMinutes', 'windowAfterMinutes', 'serviceId', 'upperLimit']
 
@@ -83,12 +105,14 @@ function CatalogForm({ kind, row, deactivate, onSaved, onReload }) {
   )
   async function submit(event) {
     event.preventDefault()
-    if (deactivate && !reason.trim()) {
+    if (deactivate && kind !== 'routines' && !reason.trim()) {
       setReasonError(true)
       return
     }
     let body =
-      kind === 'reasons'
+      kind === 'routines'
+        ? { name: values.name, time: values.time }
+        : kind === 'reasons'
         ? { name: values.name }
         : kind === 'results'
           ? { type: values.type, code: values.code, name: values.name, ruleGroup: values.ruleGroup || null }
@@ -109,7 +133,7 @@ function CatalogForm({ kind, row, deactivate, onSaved, onReload }) {
                 NUMBERS.map((key) => [key, values[key] === '' || values[key] == null ? null : Number(values[key])]),
               ),
             }
-    if (deactivate) body = { reason: reason.trim() }
+    if (deactivate) body = kind === 'routines' ? undefined : { reason: reason.trim() }
     setBusy(true)
     setError(null)
     try {
@@ -119,7 +143,7 @@ function CatalogForm({ kind, row, deactivate, onSaved, onReload }) {
         body,
         headers: {
           'Idempotency-Key': crypto.randomUUID(),
-          ...(row && !deactivate && { 'If-Match': `"${row.version}"` }),
+          ...(row && (!deactivate || kind === 'routines') && { 'If-Match': `"${row.version}"` }),
         },
       })
       onSaved()
@@ -141,7 +165,9 @@ function CatalogForm({ kind, row, deactivate, onSaved, onReload }) {
           </>
         )}
       </ProblemAlert>
-      {deactivate ? (
+      {deactivate && kind === 'routines' ? (
+        <p>Ngừng mốc {row.name}: từ ngày mai mốc không còn hiện trên lịch chăm sóc hằng ngày.</p>
+      ) : deactivate ? (
         <>
           <CareField label="Lý do" value={reason} onChange={setReason} type="textarea" maxLength={2000} />
           <p className="type-body-sm text-muted-foreground">Ngừng hiệu lực: {row.name}</p>
@@ -179,6 +205,12 @@ function CatalogForm({ kind, row, deactivate, onSaved, onReload }) {
               {field('vitalSignType', 'Loại chỉ số')}
               {field('certificates', 'Mã chứng chỉ, cách nhau bằng dấu phẩy')}
             </div>
+          )}
+          {kind === 'routines' && (
+            <>
+              {field('time', 'Giờ (HH:mm)', null, 'time', true)}
+              <p className="type-body-sm text-muted-foreground">Thay đổi áp dụng từ ngày mai; lịch hôm nay giữ giá trị cũ.</p>
+            </>
           )}
           {kind === 'results' && (
             <>
@@ -238,7 +270,7 @@ export function CareCatalogPage() {
   }
   return (
     <div className="flex flex-col gap-6">
-      <PageHeader title="Danh mục chăm sóc" subtitle="Loại công việc, giá trị kết quả và lý do không thực hiện" />
+      <PageHeader title="Danh mục chăm sóc" subtitle="Loại công việc, giá trị kết quả, lý do không thực hiện và mốc sinh hoạt cố định" />
       <SectionTabs
         label="Loại danh mục"
         semantics="pressed"
@@ -255,7 +287,7 @@ export function CareCatalogPage() {
         <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={loading}>
           <div className="flex flex-wrap items-center justify-between gap-3">
             <h2 className="type-title">{CATALOGS[kind].title}</h2>
-            {can('CARE_TASK_CATALOG', 'CREATE') && (
+            {can(CATALOGS[kind].fn ?? 'CARE_TASK_CATALOG', 'CREATE') && (
               <Button onClick={() => setEditing({ row: null })}>Thêm danh mục</Button>
             )}
           </div>
@@ -269,16 +301,22 @@ export function CareCatalogPage() {
               {items.map((row) => (
                 <li key={row.id} className="flex flex-wrap items-center justify-between gap-4 py-4">
                   <div>
-                    <p className="type-label">{row.name}</p>
-                    <StatusBadge status={row.status === 'ACTIVE' ? 'Hiệu lực' : 'Ngừng hiệu lực'} />
+                    <p className="type-label">
+                      {row.time && <span className="tabular-nums">{row.time} </span>}
+                      {row.name}
+                    </p>
+                    <StatusBadge status={isActive(row) ? 'Hiệu lực' : 'Ngừng hiệu lực'} />
+                    {effectiveNote(row) && (
+                      <p className="type-body-sm text-muted-foreground">{effectiveNote(row)}</p>
+                    )}
                     {row.fixed && <p className="type-body-sm text-muted-foreground">Lý do cố định</p>}
                   </div>
-                  {can('CARE_TASK_CATALOG', 'UPDATE') && !row.fixed && (
+                  {can(CATALOGS[kind].fn ?? 'CARE_TASK_CATALOG', 'UPDATE') && !row.fixed && (
                     <div className="flex gap-2">
                       <Button variant="outline" aria-label={`Sửa ${row.name}`} onClick={() => setEditing({ row })}>
                         Sửa
                       </Button>
-                      {row.status === 'ACTIVE' && (
+                      {isActive(row) && (
                         <Button
                           variant="outline"
                           aria-label={`Ngừng ${row.name}`}

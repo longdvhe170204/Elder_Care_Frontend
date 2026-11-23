@@ -99,6 +99,9 @@ export const postAlertsByIdChangeLevel = (params) => request('POST', '/alerts/{i
 /** Đóng (kết quả bắt buộc; lý do với cảnh báo công việc Bắt buộc quá hạn; nguy kịch cần kết quả xác nhận lại và lựa chọn) (FR-029, FR-050d, BR-M04-06) */
 export const postAlertsByIdClose = (params) => request('POST', '/alerts/{id}/close', params)
 
+/** Ghi kết quả theo dõi vào cảnh báo đang mở (bổ sung 2026-11-22, Q-419); không đổi trạng thái (FR-087) */
+export const postAlertsByIdFollowUps = (params) => request('POST', '/alerts/{id}/follow-ups', params)
+
 /** Chuyển sự cố (từ Đang xử lý); sự cố liên kết mức mặc định bằng mức cảnh báo (FR-029, FR-040) */
 export const postAlertsByIdConvertToIncident = (params) => request('POST', '/alerts/{id}/convert-to-incident', params)
 
