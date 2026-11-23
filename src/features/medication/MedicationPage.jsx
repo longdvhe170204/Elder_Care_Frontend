@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronDown, Clock, FileText, RotateCw, Search } from 'lucide-react'
+import { AlertCircle, CheckCircle2, ChevronDown, Clock, FileText, Hourglass, Pill, RotateCw, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -39,6 +39,80 @@ const RECORD_ROLE = 'NURSING_STAFF'
 const MANAGER_ROLE = 'NURSING_HOME_MANAGER'
 const OPEN = ['Đến giờ', 'Trễ']
 const FILTERS = ['Tất cả', 'Trễ', 'Đến giờ', 'Chưa đến giờ', 'Đã xong']
+
+const FILTER_BADGES = {
+  'Tất cả': {
+    active: 'bg-white/25 text-white',
+    inactive: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+  },
+  'Trễ': {
+    active: 'bg-white/25 text-white',
+    inactive: 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300',
+  },
+  'Đến giờ': {
+    active: 'bg-white/25 text-white',
+    inactive: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
+  },
+  'Chưa đến giờ': {
+    active: 'bg-white/25 text-white',
+    inactive: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
+  },
+  'Đã xong': {
+    active: 'bg-white/25 text-white',
+    inactive: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
+  },
+}
+
+const KPI_CARD_CONFIG = {
+  'Trễ': {
+    hint: 'Cần xử lý ngay',
+    bg: 'bg-gradient-to-b from-rose-50/80 via-white to-white',
+    border: 'border-rose-200/90 hover:border-rose-300',
+    title: 'text-rose-700',
+    count: 'text-rose-950',
+    hintColor: 'text-rose-600',
+    iconBox: 'bg-rose-100 text-rose-600',
+    icon: AlertCircle,
+    activeRing: 'border-2 border-rose-500 shadow-[0_8px_20px_-4px_rgba(244,63,94,0.3)] ring-2 ring-rose-500/15',
+    indicatorBar: 'bg-rose-500',
+  },
+  'Đến giờ': {
+    hint: 'Cần phát thuốc trong ca',
+    bg: 'bg-gradient-to-b from-amber-50/80 via-white to-white',
+    border: 'border-amber-200/90 hover:border-amber-300',
+    title: 'text-amber-800',
+    count: 'text-amber-950',
+    hintColor: 'text-amber-600',
+    iconBox: 'bg-amber-100 text-amber-600',
+    icon: Hourglass,
+    activeRing: 'border-2 border-amber-500 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.3)] ring-2 ring-amber-500/15',
+    indicatorBar: 'bg-amber-500',
+  },
+  'Chưa đến giờ': {
+    hint: 'Các mốc giờ tiếp theo',
+    bg: 'bg-gradient-to-b from-sky-50/80 via-white to-white',
+    border: 'border-sky-200/90 hover:border-sky-300',
+    title: 'text-sky-800',
+    count: 'text-sky-950',
+    hintColor: 'text-sky-600',
+    iconBox: 'bg-sky-100 text-sky-600',
+    icon: Clock,
+    activeRing: 'border-2 border-sky-500 shadow-[0_8px_20px_-4px_rgba(14,165,233,0.3)] ring-2 ring-sky-500/15',
+    indicatorBar: 'bg-sky-500',
+  },
+  'Đã phát xong': {
+    hint: 'Đã hoàn thành',
+    bg: 'bg-gradient-to-b from-emerald-50/80 via-white to-white',
+    border: 'border-emerald-200/90 hover:border-emerald-300',
+    title: 'text-emerald-800',
+    count: 'text-emerald-950',
+    hintColor: 'text-emerald-600',
+    iconBox: 'bg-emerald-100 text-emerald-600',
+    icon: CheckCircle2,
+    activeRing: 'border-2 border-emerald-500 shadow-[0_8px_20px_-4px_rgba(16,185,129,0.3)] ring-2 ring-emerald-500/15',
+    indicatorBar: 'bg-emerald-500',
+  },
+}
 
 // Nhãn trạng thái liều trên thẻ: nền đặc, chữ in đậm (Trễ, Bỏ lỡ đỏ; Đến giờ vàng cam; Đã dùng, Đã xong xanh lá; còn lại xám).
 const DOSE_TONE = {
@@ -139,13 +213,14 @@ function DoseCard({ group, canRecord, onOpen, onLate }) {
             <Button
               variant={late ? 'destructive' : 'default'}
               className={cn(
-                'px-6 py-2 text-xs font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md rounded-xl',
+                'px-6 py-2 text-xs font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md rounded-xl flex items-center gap-1.5',
                 late
                   ? 'bg-red-600 hover:bg-red-700 text-white'
                   : 'bg-[#24496f] hover:bg-[#1b3754] text-white dark:bg-sky-600 dark:hover:bg-sky-700',
               )}
               onClick={() => onOpen(group)}
             >
+              <Pill aria-hidden className="size-3.5" />
               Phát thuốc
             </Button>
           </div>
@@ -158,24 +233,32 @@ function DoseCard({ group, canRecord, onOpen, onLate }) {
 function Section({ label, sub, count, defaultOpen, urgent, current, children }) {
   return (
     <Collapsible defaultOpen={defaultOpen} className="flex flex-col gap-3">
-      <CollapsibleTrigger className="group flex min-h-11 w-fit items-center gap-2 rounded-full px-3 py-1.5 transition-colors duration-200 hover:bg-slate-100 dark:hover:bg-slate-800">
-        <ChevronDown
-          className="size-4 -rotate-90 text-slate-500 transition-transform group-data-[panel-open]:rotate-0"
-          aria-hidden="true"
-        />
-        <span className={cn('text-base font-bold tabular-nums', current ? 'text-primary' : 'text-slate-800 dark:text-slate-200')}>
-          {label}
-        </span>
-        {sub && <span className="text-xs text-slate-500 tabular-nums">({sub})</span>}
+      <CollapsibleTrigger className="group flex min-h-11 w-full items-center justify-between rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-2xs transition-all duration-200 hover:bg-slate-50 hover:shadow-xs dark:border-slate-800 dark:bg-slate-900">
+        <div className="flex items-center gap-2.5">
+          <ChevronDown
+            className="size-4 -rotate-90 text-slate-500 transition-transform group-data-[panel-open]:rotate-0"
+            aria-hidden="true"
+          />
+          <span className={cn('text-base font-extrabold tabular-nums', current ? 'text-primary' : 'text-slate-800 dark:text-slate-200')}>
+            ⏰ {label}
+          </span>
+          {sub && <span className="text-xs text-slate-500 tabular-nums">({sub})</span>}
+          {current && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-bold text-blue-700 dark:bg-blue-950 dark:border-blue-800 dark:text-blue-300">
+              <span className="size-2 rounded-full bg-blue-600 animate-ping" />
+              Bây giờ
+            </span>
+          )}
+        </div>
         <span
           className={cn(
-            'rounded-full px-2 py-0.5 text-xs tabular-nums font-bold',
+            'rounded-full px-2.5 py-0.5 text-xs tabular-nums font-bold',
             urgent
-              ? 'bg-red-500 text-white shadow-xs'
+              ? 'bg-rose-500 text-white shadow-xs'
               : 'bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
           )}
         >
-          {count}
+          {count} người cao tuổi
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -392,47 +475,84 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
             value={[mode]}
             onValueChange={(n) => n[0] && setMode(n[0])}
             aria-label="Loại thuốc"
-            className="flex flex-wrap items-center gap-1.5 rounded-full bg-slate-100/80 p-1 dark:bg-slate-800/60"
+            className="flex flex-wrap items-center gap-1.5 rounded-full bg-slate-100/90 border-2 border-slate-200/90 p-1.5 shadow-inner dark:bg-slate-800/60 dark:border-slate-700"
           >
             <ToggleGroupItem
               value="scheduled"
-              className="rounded-full px-5 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+              className={cn(
+                'rounded-full px-5 py-2.5 text-sm font-black transition-all duration-200',
+                mode === 'scheduled'
+                  ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+              )}
             >
               Liều theo lịch
               {groups.length > 0 && (
-                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+                <span
+                  className={cn(
+                    'ml-2 rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums transition-colors',
+                    mode === 'scheduled'
+                      ? 'bg-[#24496F] text-white'
+                      : 'bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300',
+                  )}
+                >
                   {groups.length}
                 </span>
               )}
             </ToggleGroupItem>
             <ToggleGroupItem
               value="prn"
-              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+              className={cn(
+                'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
+                mode === 'prn'
+                  ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+              )}
             >
               Thuốc khi cần (PRN)
             </ToggleGroupItem>
             <ToggleGroupItem
               value="prescriptions"
-              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+              className={cn(
+                'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
+                mode === 'prescriptions'
+                  ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+              )}
             >
               Đơn thuốc
             </ToggleGroupItem>
             <ToggleGroupItem
               value="reconciliation"
-              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+              className={cn(
+                'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
+                mode === 'reconciliation'
+                  ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+              )}
             >
               Đối chiếu thuốc
             </ToggleGroupItem>
             <ToggleGroupItem
               value="family"
-              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+              className={cn(
+                'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
+                mode === 'family'
+                  ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+              )}
             >
               Thuốc gia đình gửi
             </ToggleGroupItem>
             {role === MANAGER_ROLE && (
               <ToggleGroupItem
                 value="temporary"
-                className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+                className={cn(
+                  'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
+                  mode === 'temporary'
+                    ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+                )}
               >
                 Phụ trách tạm
               </ToggleGroupItem>
@@ -440,90 +560,72 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
           </ToggleGroup>
         </div>
 
-        {/* 4 Thẻ chỉ số tổng quan nhanh theo ca trực */}
+        {/* 4 Thẻ chỉ số tổng quan 3D đa sắc theo ca trực */}
         {mode === 'scheduled' && round && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            {/* Card 1: Trễ */}
-            <button
-              type="button"
-              onClick={() => setFilter(filter === 'Trễ' ? 'Tất cả' : 'Trễ')}
-              className={cn(
-                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
-                'border-slate-200/80 border-l-[6px] border-l-red-500',
-                filter === 'Trễ' && 'ring-2 ring-red-400/50 bg-red-50/30'
-              )}
-            >
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Trễ</div>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
-                  {count('Trễ')}
-                </span>
-                <span className="text-xs font-medium text-slate-500">liều</span>
-              </div>
-            </button>
+            {[
+              ['Trễ', 'Trễ', KPI_CARD_CONFIG['Trễ']],
+              ['Đến giờ', 'Đến giờ', KPI_CARD_CONFIG['Đến giờ']],
+              ['Chưa đến giờ', 'Chưa đến giờ', KPI_CARD_CONFIG['Chưa đến giờ']],
+              ['Đã phát xong', 'Đã xong', KPI_CARD_CONFIG['Đã phát xong']],
+            ].map(([displayTitle, filterValue, cfg]) => {
+              const isSelected = filter === filterValue
+              const Icon = cfg.icon
+              return (
+                <button
+                  key={displayTitle}
+                  type="button"
+                  onClick={() => setFilter(isSelected ? 'Tất cả' : filterValue)}
+                  className={cn(
+                    'relative flex flex-col justify-between p-4 rounded-2xl border text-left transition-all duration-200 min-h-[114px] shadow-2xs hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
+                    cfg.bg,
+                    isSelected
+                      ? cn(cfg.activeRing, '-translate-y-0.5')
+                      : cn(cfg.border, 'opacity-90 hover:opacity-100'),
+                  )}
+                >
+                  <div className="flex w-full items-center justify-between gap-1.5">
+                    <span className={cn('text-[15px] sm:text-base font-extrabold tracking-tight', cfg.title)}>
+                      {displayTitle}
+                    </span>
+                    <div
+                      aria-hidden="true"
+                      className={cn(
+                        'w-8 h-8 rounded-full flex items-center justify-center shrink-0 shadow-2xs transition-transform',
+                        cfg.iconBox,
+                        isSelected && 'scale-105',
+                      )}
+                    >
+                      <Icon className="size-4 stroke-[2.3]" />
+                    </div>
+                  </div>
 
-            {/* Card 2: Đến giờ */}
-            <button
-              type="button"
-              onClick={() => setFilter(filter === 'Đến giờ' ? 'Tất cả' : 'Đến giờ')}
-              className={cn(
-                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
-                'border-slate-200/80 border-l-[6px] border-l-amber-500',
-                filter === 'Đến giờ' && 'ring-2 ring-amber-400/50 bg-amber-50/30'
-              )}
-            >
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Đến giờ</div>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
-                  {count('Đến giờ')}
-                </span>
-                <span className="text-xs font-medium text-slate-500">liều</span>
-              </div>
-            </button>
+                  <div className="mt-2 flex items-baseline gap-1.5">
+                    <span className={cn('text-3xl font-extrabold tracking-tight tabular-nums', cfg.count)}>
+                      {count(filterValue)}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500">liều</span>
+                  </div>
 
-            {/* Card 3: Chưa đến giờ */}
-            <button
-              type="button"
-              onClick={() => setFilter(filter === 'Chưa đến giờ' ? 'Tất cả' : 'Chưa đến giờ')}
-              className={cn(
-                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
-                'border-slate-200/80 border-l-[6px] border-l-sky-500',
-                filter === 'Chưa đến giờ' && 'ring-2 ring-sky-400/50 bg-sky-50/30'
-              )}
-            >
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Chưa đến giờ</div>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
-                  {count('Chưa đến giờ')}
-                </span>
-                <span className="text-xs font-medium text-slate-500">liều</span>
-              </div>
-            </button>
+                  <span className={cn('text-[11px] font-medium mt-0.5', cfg.hintColor)}>
+                    {cfg.hint}
+                  </span>
 
-            {/* Card 4: Đã phát xong */}
-            <button
-              type="button"
-              onClick={() => setFilter(filter === 'Đã xong' ? 'Tất cả' : 'Đã xong')}
-              className={cn(
-                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
-                'border-slate-200/80 border-l-[6px] border-l-emerald-500',
-                filter === 'Đã xong' && 'ring-2 ring-emerald-400/50 bg-emerald-50/30'
-              )}
-            >
-              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Đã phát xong</div>
-              <div className="mt-2 flex items-baseline gap-1.5">
-                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
-                  {count('Đã xong')}
-                </span>
-                <span className="text-xs font-medium text-slate-500">liều</span>
-              </div>
-            </button>
+                  {isSelected && (
+                    <div
+                      aria-hidden="true"
+                      className={cn('absolute bottom-1.5 left-4 right-4 h-1 rounded-full', cfg.indicatorBar)}
+                    />
+                  )}
+                </button>
+              )
+            })}
           </div>
         )}
 
         {/* Tầng 2: Toolbar gồm Lọc Pills, Ô tìm kiếm và Nút làm mới */}
         {mode === 'scheduled' && (
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl border-2 border-slate-200/90 shadow-2xs dark:bg-slate-900 dark:border-slate-800">
             <ToggleGroup
               variant="default"
               size="sm"
@@ -532,34 +634,43 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
               aria-label="Lọc theo trạng thái"
               className="flex flex-wrap items-center gap-2"
             >
-              {FILTERS.map((f) => (
-                <ToggleGroupItem
-                  key={f}
-                  value={f}
-                  className={cn(
-                    'inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-semibold transition-all shadow-xs border',
-                    filter === f
-                      ? 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950 dark:text-sky-200 dark:border-sky-700'
-                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400'
-                  )}
-                >
-                  <span>{f}</span>
-                  <span className={cn('tabular-nums font-bold', filter === f ? 'text-sky-700 dark:text-sky-300' : 'text-slate-400')}>
-                    ({count(f)})
-                  </span>
-                </ToggleGroupItem>
-              ))}
+              {FILTERS.map((f) => {
+                const isSelected = filter === f
+                const badgeCfg = FILTER_BADGES[f] || FILTER_BADGES['Tất cả']
+                return (
+                  <ToggleGroupItem
+                    key={f}
+                    value={f}
+                    className={cn(
+                      'inline-flex h-9 items-center gap-2 rounded-full px-4 py-1.5 text-xs font-extrabold transition-all duration-200 border-2',
+                      isSelected
+                        ? '!bg-gradient-to-r !from-[#24496F] !to-[#183552] !text-white shadow-[0_4px_12px_rgba(36,73,111,0.3)] border-[#24496F] -translate-y-0.5 font-black'
+                        : 'border-slate-300 bg-white text-slate-800 hover:border-[#24496F] hover:shadow-2xs dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200',
+                    )}
+                  >
+                    <span>{f}</span>
+                    <span
+                      className={cn(
+                        'rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums transition-colors',
+                        isSelected ? badgeCfg.active : badgeCfg.inactive,
+                      )}
+                    >
+                      {count(f)}
+                    </span>
+                  </ToggleGroupItem>
+                )
+              })}
             </ToggleGroup>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
                 <input
                   type="text"
                   placeholder="Tìm người cao tuổi, số phòng..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="h-8.5 w-52 sm:w-64 rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs shadow-xs placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                  className="h-9.5 w-56 sm:w-64 rounded-xl border-2 border-slate-400 bg-slate-50/80 pl-9 pr-3 text-xs font-bold text-slate-800 shadow-sm placeholder:text-slate-400 focus:bg-white focus:border-[#24496F] focus:outline-none focus:ring-2 focus:ring-[#24496F]/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
                 />
               </div>
 
@@ -567,10 +678,10 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
                 variant="outline"
                 size="sm"
                 onClick={reload}
-                className="h-8.5 gap-1.5 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                className="h-9.5 gap-2 rounded-xl border-2 border-[#24496F]/50 bg-white px-4 text-xs font-extrabold text-[#24496F] shadow-sm hover:bg-[#24496F]/5 hover:border-[#24496F] transition-all dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
                 title="Tải lại danh sách"
               >
-                <RotateCw className="size-3 text-slate-500" />
+                <RotateCw className="size-4 text-[#24496F]" />
                 <span>Làm mới</span>
               </Button>
             </div>

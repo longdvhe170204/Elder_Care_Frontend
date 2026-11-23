@@ -238,15 +238,11 @@ export function MedicationCatalogPage({ role }) {
             : 'Tra cứu danh mục thuốc, hoạt chất và cửa sổ dùng thuốc (Chỉ Quản lý viện có quyền Thêm/Sửa/Ngừng theo Phụ lục 27).'
         }
         aside={
-          isManager ? (
-            <Button onClick={handleOpenCreate} className="h-10 gap-2 rounded-xl bg-[#24496f] hover:bg-[#193552] text-white px-4 text-xs font-bold shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5 shrink-0">
-              <Plus className="size-4" /> Thêm thuốc
-            </Button>
-          ) : (
+          !isManager ? (
             <div className="text-xs text-slate-500 bg-slate-100 rounded-xl px-3.5 py-2 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-300">
               Vai trò: <strong className="text-slate-800 dark:text-slate-100">{role === 'DOCTOR' ? 'Bác sĩ' : role === 'NURSING_STAFF' ? 'Điều dưỡng' : role}</strong> (Chỉ xem)
             </div>
-          )
+          ) : null
         }
       />
 

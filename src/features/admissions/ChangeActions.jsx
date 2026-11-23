@@ -30,7 +30,7 @@ import {
   addendumNoText,
   isoDate,
 } from './changeRequestRules'
-import { Choices, ReasonField } from './FormParts'
+import { ReasonField } from './FormParts'
 
 // Lệnh trên yêu cầu thay đổi lưu trú theo BF-08 sửa đổi (004 FR-043d → FR-043h; Q-417 → Q-421): ghi nhận phụ lục đã
 // ký, ý kiến người cao tuổi, trả về nháp, hủy, gửi duyệt kèm cảnh báo và lý do. Kiểm thật ở backend; lỗi 409 hiện mô tả
@@ -268,57 +268,125 @@ export function ResidentOpinions({ request, canRecord, onChanged }) {
   }
 
   return (
-    <section className="flex flex-col gap-2 rounded-xl border p-4" aria-label="Ý kiến người cao tuổi">
-      <h3 className="type-card-title">Ý kiến người cao tuổi</h3>
+    <section className="flex flex-col gap-3 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Ý kiến người cao tuổi">
+      <div className="flex items-center justify-between">
+        <h3 className="type-card-title font-bold text-foreground">Ý kiến người cao tuổi</h3>
+        <span className="rounded-md bg-muted/60 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+          {items?.length ? `${items.length} ghi nhận` : 'Chưa ghi'}
+        </span>
+      </div>
       {items === null ? null : items.length === 0 ? (
         <p className="type-body-sm text-muted-foreground">Chưa ghi ý kiến của người cao tuổi.</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {items.map((o, i) => (
-            <li key={o.id} className="flex flex-col gap-0.5">
+            <li key={o.id} className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/30 p-2.5">
               <span className="flex flex-wrap items-center gap-2">
-                <span className="type-body-sm font-medium">{`${labelOf(OPINIONS, o.opinion)}${i === 0 ? ', hiện hành' : ''}`}</span>
-                <Badge variant="secondary">{OPINION_SOURCE_BADGES[o.source] ?? o.source}</Badge>
+                <span className="type-body-sm font-semibold text-foreground">{`${labelOf(OPINIONS, o.opinion)}${i === 0 ? ', hiện hành' : ''}`}</span>
+                <Badge variant="secondary" className="text-xs font-medium">{OPINION_SOURCE_BADGES[o.source] ?? o.source}</Badge>
               </span>
               <span className="type-caption text-muted-foreground">
                 {`Ghi ${o.recordedBy ? `bởi ${o.recordedBy}, ` : ''}${formatDate(o.recordedAt)}${o.note ? `. ${o.note}` : ''}`}
               </span>
               {o.outdated && i === 0 && (
-                <span className="type-caption text-warning-foreground">Ghi trước khi nội dung thay đổi; nên ghi lại.</span>
+                <span className="type-caption font-semibold text-warning-foreground">Ghi trước khi nội dung thay đổi; nên ghi lại.</span>
               )}
             </li>
           ))}
         </ul>
       )}
       {open && canRecord && !adding && (
-        <Button variant="outline" className="h-11 self-start" onClick={() => setAdding(true)}>
+        <Button variant="outline" className="h-10 self-start font-semibold border-border/80 shadow-2xs hover:bg-accent" onClick={() => setAdding(true)}>
           Ghi ý kiến người cao tuổi
         </Button>
       )}
       {adding && (
-        <FieldGroup>
-          <Choices label="Ý kiến" options={OPINIONS} value={opinion} onChange={setOpinion} />
-          <Choices label="Nguồn" options={OPINION_SOURCES} value={source} onChange={setSource} />
+        <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-muted/40 p-3.5 shadow-2xs">
           <Field>
-            <FieldLabel htmlFor="opinion-note">Ghi chú</FieldLabel>
-            <Textarea
+            <FieldLabel htmlFor="opinion-select">Ý kiến</FieldLabel>
+            <div className="relative">
+              <select
+                id="opinion-select"
+                aria-label="Ý kiến"
+                className={SELECT}
+                value={opinion}
+                onChange={(e) => setOpinion(e.target.value)}
+              >
+                <option value="">-- Chọn ý kiến của người cao tuổi --</option>
+                {OPINIONS.map(([code, text]) => (
+                  <option key={code} value={code}>
+                    {text}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sr-only">
+              {OPINIONS.map(([code, text]) => (
+                <button
+                  key={code}
+                  type="button"
+                  aria-pressed={opinion === code}
+                  onClick={() => setOpinion(code)}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="source-select">Nguồn</FieldLabel>
+            <div className="relative">
+              <select
+                id="source-select"
+                aria-label="Nguồn"
+                className={SELECT}
+                value={source}
+                onChange={(e) => setSource(e.target.value)}
+              >
+                {OPINION_SOURCES.map(([code, text]) => (
+                  <option key={code} value={code}>
+                    {text}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="sr-only">
+              {OPINION_SOURCES.map(([code, text]) => (
+                <button
+                  key={code}
+                  type="button"
+                  aria-pressed={source === code}
+                  onClick={() => setSource(code)}
+                >
+                  {text}
+                </button>
+              ))}
+            </div>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="opinion-note">Ghi chú (nếu có)</FieldLabel>
+            <Input
               id="opinion-note"
-              rows={2}
+              type="text"
+              placeholder="Nhập ghi chú ngắn..."
               maxLength={1000}
               value={note}
               onChange={(e) => setNote(e.target.value)}
+              className="h-10 bg-card border-border/80"
             />
           </Field>
           <ProblemAlert problem={failure} />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" className="h-11" onClick={() => setAdding(false)}>
+          <div className="flex items-center justify-end gap-2 pt-1 border-t border-border/60">
+            <Button variant="ghost" size="sm" className="h-9 px-3 text-xs" onClick={() => setAdding(false)}>
               Thôi
             </Button>
-            <Button className="h-11" disabled={busy || !opinion} onClick={save}>
+            <Button size="sm" className="h-9 px-4 text-xs font-bold shadow-xs" disabled={busy || !opinion} onClick={save}>
               Lưu ý kiến
             </Button>
           </div>
-        </FieldGroup>
+        </div>
       )}
     </section>
   )

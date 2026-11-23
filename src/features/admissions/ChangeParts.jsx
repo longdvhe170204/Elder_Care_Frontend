@@ -88,7 +88,7 @@ function useFamilyMemberName(residentId, familyMemberId) {
         const found = (data ?? []).find((r) => r.familyMember?.id === familyMemberId)
         if (live) setName(found?.familyMember?.fullName ?? null)
       })
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       live = false
     }
@@ -112,22 +112,24 @@ function confirmationText(c, confirmerName) {
 function ChangeRow({ type, content }) {
   const Icon = CHANGE_TYPE_ICONS[type]
   return (
-    <li className="flex flex-col gap-2 rounded-xl border bg-muted/40 p-3 transition-colors hover:border-primary/40 hover:bg-accent/40 sm:flex-row sm:items-center sm:justify-between">
-      <span className="flex items-center gap-2 type-label font-semibold">
-        {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[type]}`} />}
-        {labelOf(CHANGE_TYPES, type)}
-      </span>
-      <span className="flex flex-wrap items-center gap-2 type-body-sm tabular-nums">
+    <li className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent/30 shadow-2xs">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 type-label font-semibold text-foreground">
+          {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[type]}`} />}
+          {labelOf(CHANGE_TYPES, type)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 type-body-sm tabular-nums">
         <span className="sr-only">Trước:</span>
-        <span className="rounded-md bg-card px-2.5 py-1 text-muted-foreground ring-1 ring-border">
+        <span className="flex-1 rounded-md bg-card px-2.5 py-1.5 text-center text-muted-foreground ring-1 ring-border shadow-2xs font-medium truncate">
           {changeValueText(type, content.previousValue)}
         </span>
-        <ArrowRight aria-hidden className="size-4 text-primary" />
+        <ArrowRight aria-hidden className="size-4 shrink-0 text-primary" />
         <span className="sr-only">Sau:</span>
-        <span className="rounded-md bg-primary px-2.5 py-1 font-semibold text-primary-foreground shadow-sm">
+        <span className="flex-1 rounded-md bg-primary px-2.5 py-1.5 text-center font-semibold text-primary-foreground shadow-sm truncate">
           {changeValueText(type, content.newValue)}
         </span>
-      </span>
+      </div>
     </li>
   )
 }
@@ -160,18 +162,20 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
       {content.costImpact?.length > 0 && (
         <section className={`flex flex-col ${cards ? 'gap-3' : 'gap-2'}`}>
           <h3 className={headingClassName}>Ảnh hưởng chi phí</h3>
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-1.5">
             {content.costImpact.map((c) =>
               cards ? (
                 <li
                   key={c.item}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2 type-body-sm tabular-nums"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-card p-3 shadow-2xs type-body-sm tabular-nums"
                 >
-                  <span>{costItemLabel(c.item)}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{money(c.previousUnitPrice)}</span>
-                    <ArrowRight aria-hidden className="size-4 text-primary" />
-                    <span className="font-semibold text-primary">{money(c.newUnitPrice)}</span>
+                  <span className="font-medium text-foreground">{costItemLabel(c.item)}</span>
+                  <span className="flex items-center gap-2 whitespace-nowrap shrink-0">
+                    <span className="text-muted-foreground line-through">{money(c.previousUnitPrice)}</span>
+                    <ArrowRight aria-hidden className="size-4 text-primary shrink-0" />
+                    <span className="rounded-md bg-success/15 px-2 py-0.5 font-bold text-success-foreground border border-success/30">
+                      {money(c.newUnitPrice)}
+                    </span>
                   </span>
                 </li>
               ) : (
@@ -192,7 +196,7 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
             <Button
               variant="outline"
               className="h-11 self-start"
-              onClick={() => openFile(confirmation.evidenceFileId).catch(() => {})}
+              onClick={() => openFile(confirmation.evidenceFileId).catch(() => { })}
             >
               Xem bằng chứng
             </Button>
@@ -252,7 +256,7 @@ export function ChangeRequestView({
     if (!decidable) return
     getApprovalRequestsById({ path: { id: request.approvalRequestId } })
       .then(({ data }) => live && setFetched({ key: commandsKey, commands: data?.allowedCommands ?? [] }))
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       live = false
     }
@@ -291,15 +295,15 @@ export function ChangeRequestView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-5 [&_svg]:stroke-[2.5]">
-      <div className="flex flex-col gap-1">
-        <Title className="type-title">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
-        <Description className="type-body-sm text-muted-foreground">
+      <div className="flex flex-col gap-1 border-b border-border/60 pb-3">
+        <Title className="type-title font-bold text-foreground">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
+        <Description className="type-body-sm text-muted-foreground leading-relaxed">
           {`${REQUEST_STATUS[request.status] ?? request.status}. Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}${contractNumber ? `. Hợp đồng ${contractNumber}` : ''}`}
         </Description>
       </div>
       <ChangeProgress progress={changeSteps(request)} />
       <div className="flex flex-col gap-5">
-        <div className="rounded-xl border-l-4 border-primary bg-muted/60 p-4">
+        <div className="rounded-xl border-l-4 border-primary bg-muted/50 p-4 shadow-2xs">
           <Info label="Lý do">{request.reason}</Info>
         </div>
         <ChangeContent content={request} variant="cards" />
@@ -313,8 +317,21 @@ export function ChangeRequestView({
           <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
         )}
         {state && (draft || sent) && (
-          <section className="flex flex-col gap-1 rounded-xl border p-4">
-            <h3 className="type-card-title">Xác nhận của người đại diện</h3>
+          <section className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
+              {state.attention && draft ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
+                  <span className="size-1.5 rounded-full bg-warning-foreground animate-pulse" aria-hidden />
+                  Chờ phản hồi
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
+                  <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
+                  Đã xác nhận
+                </span>
+              )}
+            </div>
             {state.attention && draft ? (
               <Alert variant="attention">
                 <AlertTitle>{state.text}</AlertTitle>
@@ -322,9 +339,13 @@ export function ChangeRequestView({
             ) : (
               <p className="type-body-sm font-medium">{state.text}</p>
             )}
-            {sent && <p className="type-body-sm">{confirmationRequestText(sent)}</p>}
+            {sent && (
+              <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5 type-body-sm">
+                {confirmationRequestText(sent)}
+              </div>
+            )}
             {draft && needsConfirmation && (
-              <p className="type-caption text-muted-foreground">
+              <p className="type-caption text-muted-foreground leading-relaxed">
                 {canConfirm
                   ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
                   : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
@@ -359,13 +380,13 @@ export function ChangeRequestView({
           </Alert>
         )}
         {addendum ? (
-          <section className="flex flex-col gap-1 rounded-xl border p-4" aria-label="Phụ lục hợp đồng">
+          <section className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Phụ lục hợp đồng">
             <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
             <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
             <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
             {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
             {addendum.signedFileId && (
-              <Button variant="outline" className="h-11 self-start" onClick={() => openFile(addendum.signedFileId).catch(() => {})}>
+              <Button variant="outline" className="h-11 self-start rounded-xl" onClick={() => openFile(addendum.signedFileId).catch(() => { })}>
                 Xem bản đã ký
               </Button>
             )}
@@ -379,51 +400,100 @@ export function ChangeRequestView({
       <div
         role="group"
         aria-label="Lệnh của yêu cầu"
-        className="sticky bottom-0 -mx-6 -mb-6 mt-auto flex flex-wrap justify-end gap-2 border-t bg-card px-6 py-4"
+        className="mt-6 flex flex-col gap-2.5 border-t border-border pt-4"
       >
-        <Button variant="ghost" className="h-11" onClick={onReload}>
-          Tải lại
-        </Button>
-        {draft && canUpdate && (
-          <Button variant="outline" className="h-11" onClick={() => onEdit(request)}>
-            Sửa yêu cầu nháp
-          </Button>
-        )}
+        {/* Hàng 1: Nút hành động chính (Primary CTA) */}
         {draft && canUpdate && canConfirm && needsConfirmation && (
-          <Button variant="outline" className="h-11" onClick={() => onConfirm(request)}>
-            Ghi xác nhận trực tiếp
-          </Button>
-        )}
-        {draft && canUpdate && canConfirm && needsConfirmation && (
-          <Button className="h-11" disabled={busy || !etag} onClick={sendToRepresentative}>
+          <Button
+            className="h-11 w-full font-bold shadow-sm hover:shadow-md transition-all duration-200"
+            disabled={busy || !etag}
+            onClick={sendToRepresentative}
+          >
             {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
           </Button>
         )}
-        {addendum && onPrint && (
-          <Button variant="outline" className="h-11" onClick={() => onPrint(request)}>
-            In phụ lục
-          </Button>
-        )}
         {pendingSignature && canConfirm && (
-          <Button className="h-11" disabled={!etag} onClick={() => setAction('sign')}>
+          <Button
+            className="h-11 w-full font-bold shadow-sm hover:shadow-md transition-all duration-200"
+            disabled={!etag}
+            onClick={() => setAction('sign')}
+          >
             Ghi nhận phụ lục đã ký
           </Button>
         )}
-        {request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft') && (
-          <Button variant="outline" className="h-11" disabled={!etag} onClick={() => setAction('return-to-draft')}>
-            Trả về nháp
-          </Button>
-        )}
-        {((open && canUpdate) || (request.status === 'APPROVED' && allowed.includes('cancel'))) && (
-          <Button variant="outline" className="h-11" disabled={!etag} onClick={() => setAction('cancel')}>
-            Hủy yêu cầu
-          </Button>
-        )}
         {draft && canUpdate && !needsConfirmation && (
-          <Button className="h-11" disabled={busy || !etag} onClick={() => setAction('submit')}>
+          <Button
+            className="h-11 w-full font-bold shadow-sm hover:shadow-md transition-all duration-200"
+            disabled={busy || !etag}
+            onClick={() => setAction('submit')}
+          >
             Gửi duyệt
           </Button>
         )}
+
+        {/* Hàng 2: Các nút tác vụ nghiệp vụ (Secondary Actions) */}
+        <div className="flex flex-wrap items-center gap-2">
+          {draft && canUpdate && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[130px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onEdit(request)}
+            >
+              Sửa yêu cầu nháp
+            </Button>
+          )}
+          {draft && canUpdate && canConfirm && needsConfirmation && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[150px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onConfirm(request)}
+            >
+              Ghi xác nhận trực tiếp
+            </Button>
+          )}
+          {addendum && onPrint && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[120px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onPrint(request)}
+            >
+              In phụ lục
+            </Button>
+          )}
+          {request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft') && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[120px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              disabled={!etag}
+              onClick={() => setAction('return-to-draft')}
+            >
+              Trả về nháp
+            </Button>
+          )}
+        </div>
+
+        {/* Hàng 3: Tiện ích & Hủy (Tải lại và Hủy) */}
+        <div className="flex items-center justify-between border-t border-border/60 pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 px-3 text-muted-foreground hover:text-foreground text-xs"
+            onClick={onReload}
+          >
+            Tải lại
+          </Button>
+          {((open && canUpdate) || (request.status === 'APPROVED' && allowed.includes('cancel'))) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-3 text-muted-foreground hover:bg-muted/60 hover:text-foreground text-xs font-medium"
+              disabled={!etag}
+              onClick={() => setAction('cancel')}
+            >
+              Hủy yêu cầu
+            </Button>
+          )}
+        </div>
       </div>
       {action === 'sign' && <SignatureSheet request={request} etag={etag} onClose={closeAction} onDone={actionDone} />}
       {action === 'submit' && <SubmitSheet request={request} etag={etag} onClose={closeAction} onDone={actionDone} />}
@@ -485,12 +555,12 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         for (const c of active)
           getResidentsById({ path: { id: c.residentId } })
             .then(({ data: r }) => setNames((n) => ({ ...n, [c.residentId]: r.personalInfo?.fullName })))
-            .catch(() => {})
+            .catch(() => { })
       })
       .catch((e) => setFailure(problemOf(e)))
     getServices({ query: {} })
       .then(({ data }) => setCatalog(data ?? []))
-      .catch(() => {})
+      .catch(() => { })
   }, [permissionStatus, seesContracts])
 
   const activeTypes = seesContracts ? types : ['CARE_LEVEL']
@@ -570,9 +640,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
       services: lineOf(id)
         ? pickedServices.filter((s) => s.serviceId !== id)
         : [
-            ...pickedServices,
-            { serviceId: id, action: contractServiceIds.has(id) ? 'REMOVE' : 'ADD' },
-          ],
+          ...pickedServices,
+          { serviceId: id, action: contractServiceIds.has(id) ? 'REMOVE' : 'ADD' },
+        ],
     })
   const setRow = (i, patch) =>
     set({ arrivalSchedule: (value.arrivalSchedule ?? []).map((r, j) => (j === i ? { ...r, ...patch } : r)) })
@@ -707,7 +777,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                     contract.careLevel && `mức ${labelOf(CARE_LEVELS, contract.careLevel)}`,
                     contract.startDate && `bắt đầu ${formatDate(contract.startDate)}`,
                     (contract.currentEndDate ?? contract.endDate) &&
-                      `kết thúc ${formatDate(contract.currentEndDate ?? contract.endDate)}`,
+                    `kết thúc ${formatDate(contract.currentEndDate ?? contract.endDate)}`,
                   ]
                     .filter(Boolean)
                     .join(', ')}

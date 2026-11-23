@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarDays, CircleCheck, Eye, FileSignature, FileText, Funnel, Plus, Search } from 'lucide-react'
+import { CalendarDays, CheckCheck, Clock, Eye, FilePenLine, FileSignature, FileText, Funnel, Plus, Search, ShieldCheck } from 'lucide-react'
 import { getContracts, getResidencyChangeRequests, getResidencyChangeRequestsById, getResidentsById } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -14,6 +14,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
+import { cn } from '@/lib/utils'
 import { CHANGE_TYPES, REQUEST_STATUS, labelOf } from './admissionLabels'
 import { ChangeRequestSheet, ChangeRequestView, ConfirmationSheet } from './ChangeParts'
 import { CHANGE_TYPE_ICONS, CHANGE_TYPE_TONES } from './changeTypeIcons'
@@ -43,6 +44,69 @@ const FILTERS = [
   ['APPROVED', 'Đã duyệt', (r) => r.status === 'APPROVED' && !awaitingSignature(r)],
   ['DONE', 'Đã xong', (r) => ['APPLIED', 'APPLY_FAILED', 'REJECTED', 'CANCELLED', 'SUPERSEDED'].includes(r.status)],
 ]
+
+const STATUS_CARD_CONFIG = {
+  DRAFT: {
+    hint: 'Đang chỉnh sửa',
+    bg: 'bg-gradient-to-b from-blue-50/80 via-white to-white',
+    border: 'border-blue-200/90',
+    title: 'text-blue-700',
+    count: 'text-blue-950',
+    hintColor: 'text-blue-600',
+    iconBox: 'bg-blue-100 text-blue-600',
+    icon: FilePenLine,
+    activeRing: 'border-2 border-blue-500 shadow-[0_8px_20px_-4px_rgba(59,130,246,0.3)] ring-2 ring-blue-500/15',
+    indicatorBar: 'bg-blue-600',
+  },
+  PENDING_APPROVAL: {
+    hint: 'Cần xét duyệt',
+    bg: 'bg-gradient-to-b from-amber-50/80 via-white to-white',
+    border: 'border-amber-200/90',
+    title: 'text-amber-800',
+    count: 'text-amber-950',
+    hintColor: 'text-amber-600',
+    iconBox: 'bg-amber-100 text-amber-600',
+    icon: Clock,
+    activeRing: 'border-2 border-amber-500 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.3)] ring-2 ring-amber-500/15',
+    indicatorBar: 'bg-amber-500',
+  },
+  PENDING_SIGNATURE: {
+    hint: 'Cần ký phụ lục',
+    bg: 'bg-gradient-to-b from-purple-50/80 via-white to-white',
+    border: 'border-purple-200/90',
+    title: 'text-purple-800',
+    count: 'text-purple-950',
+    hintColor: 'text-purple-600',
+    iconBox: 'bg-purple-100 text-purple-600',
+    icon: FileSignature,
+    activeRing: 'border-2 border-purple-500 shadow-[0_8px_20px_-4px_rgba(139,92,246,0.3)] ring-2 ring-purple-500/15',
+    indicatorBar: 'bg-purple-600',
+  },
+  APPROVED: {
+    hint: 'Chờ có hiệu lực',
+    bg: 'bg-gradient-to-b from-emerald-50/80 via-white to-white',
+    border: 'border-emerald-200/90',
+    title: 'text-emerald-800',
+    count: 'text-emerald-950',
+    hintColor: 'text-emerald-600',
+    iconBox: 'bg-emerald-100 text-emerald-600',
+    icon: ShieldCheck,
+    activeRing: 'border-2 border-emerald-500 shadow-[0_8px_20px_-4px_rgba(16,185,129,0.3)] ring-2 ring-emerald-500/15',
+    indicatorBar: 'bg-emerald-500',
+  },
+  DONE: {
+    hint: 'Hoàn tất / đóng',
+    bg: 'bg-gradient-to-b from-cyan-50/80 via-white to-white',
+    border: 'border-cyan-200/90',
+    title: 'text-cyan-800',
+    count: 'text-cyan-950',
+    hintColor: 'text-cyan-700',
+    iconBox: 'bg-cyan-100 text-cyan-700',
+    icon: CheckCheck,
+    activeRing: 'border-2 border-cyan-500 shadow-[0_8px_20px_-4px_rgba(6,182,212,0.3)] ring-2 ring-cyan-500/15',
+    indicatorBar: 'bg-cyan-600',
+  },
+}
 
 export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}) {
   const { can } = usePermissions()
@@ -200,28 +264,70 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
         />
       )}
       <ToggleGroup
-        variant="filter"
         size="lg"
         value={[filter]}
         onValueChange={(n) => n[0] && (setPage(0), setFilter(n[0]))}
         aria-label="Lọc yêu cầu theo trạng thái"
+        className="w-full grid grid-cols-2 sm:grid-cols-5 gap-3 border-none p-0 overflow-visible"
       >
-        {FILTERS.map(([key, label, matches]) => (
-          <ToggleGroupItem
-            key={key}
-            value={key}
-            className="h-11 gap-1.5 px-4 md:rounded-t-lg md:px-4 font-semibold transition-colors duration-200 md:aria-pressed:bg-primary md:aria-pressed:text-primary-foreground md:data-[state=on]:bg-primary md:data-[state=on]:text-primary-foreground"
-          >
-            {key === filter && <CircleCheck aria-hidden />}
-            {`${label} (${(requests ?? []).filter(matches).length})`}
-          </ToggleGroupItem>
-        ))}
+        {FILTERS.map(([key, label, matches]) => {
+          const count = (requests ?? []).filter(matches).length
+          const isSelected = key === filter
+          const cfg = STATUS_CARD_CONFIG[key]
+          const Icon = cfg.icon
+          return (
+            <ToggleGroupItem
+              key={key}
+              value={key}
+              variant="default"
+              className={cn(
+                'relative flex flex-col items-start justify-between h-auto p-4 !rounded-2xl md:!rounded-2xl border text-left transition-all duration-200 min-h-[114px] shadow-2xs hover:shadow-md hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
+                cfg.bg,
+                isSelected
+                  ? cn(cfg.activeRing, '-translate-y-0.5')
+                  : cn(cfg.border, 'hover:border-primary/40 opacity-90 hover:opacity-100'),
+              )}
+            >
+              <div className="flex w-full items-center justify-between gap-1.5">
+                <span className={cn('text-xs font-bold', cfg.title)}>
+                  {`${label} (${count})`}
+                </span>
+                <div
+                  aria-hidden="true"
+                  className={cn(
+                    'w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-2xs transition-transform',
+                    cfg.iconBox,
+                    isSelected && 'scale-105',
+                  )}
+                >
+                  <Icon className="size-3.5 stroke-[2.2]" />
+                </div>
+              </div>
+
+              <span className={cn('text-3xl font-extrabold tracking-tight mt-1 tabular-nums', cfg.count)}>
+                {count}
+              </span>
+
+              <span className={cn('text-[11px] font-medium mt-0.5', cfg.hintColor)}>
+                {cfg.hint}
+              </span>
+
+              {/* Thanh gờ chỉ thị trạng thái khi được chọn (Active Indicator bo tròn) */}
+              {isSelected && (
+                <div
+                  aria-hidden="true"
+                  className={cn('absolute bottom-1.5 left-4 right-4 h-1 rounded-full', cfg.indicatorBar)}
+                />
+              )}
+            </ToggleGroupItem>
+          )
+        })}
       </ToggleGroup>
-      <p role="status" className="empty:hidden type-body-sm">
+      <p role="status" className="empty:hidden rounded-xl border border-primary/20 bg-accent px-4 py-2.5 type-body-sm text-accent-foreground shadow-2xs">
         {announcement}
       </p>
       <ProblemAlert problem={failure} />
-      <Card className="gap-0 overflow-hidden py-0 shadow-md ring-1 ring-primary/10 [&_svg]:stroke-[2.5]">
+      <Card className="gap-0 overflow-hidden py-0 shadow-sm ring-1 ring-border/80 [&_svg]:stroke-[2.5]">
         <div className="flex flex-wrap items-center gap-3 p-4">
           <div className="relative min-w-60 flex-1 md:max-w-sm">
             <Search
@@ -230,7 +336,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
             />
             <Input
               type="search"
-              className="h-11 rounded-full pl-9"
+              className="h-11 rounded-xl pl-9 bg-card border-border/80 shadow-2xs"
               placeholder="Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng..."
               aria-label="Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng"
               value={query}
@@ -239,7 +345,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
           </div>
           <Button
             variant="outline"
-            className="h-11 px-4"
+            className="h-11 px-4 rounded-xl border-border/80 shadow-2xs hover:bg-accent"
             aria-expanded={filterOpen}
             onClick={() => setFilterOpen((open) => !open)}
           >
@@ -249,14 +355,14 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
           </Button>
           <Input
             type="date"
-            className="h-11 w-44 rounded-full"
+            className="h-11 w-44 rounded-xl border-border/80 bg-card shadow-2xs"
             aria-label="Ngày hiệu lực"
             value={dateFilter}
             onChange={(e) => (setPage(0), setDateFilter(e.target.value))}
           />
           {can('RESIDENCY_CHANGE_REQUEST', 'CREATE') && (
             <Button
-              className="ml-auto h-11 px-5 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg"
+              className="ml-auto h-11 px-5 rounded-xl font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
               onClick={() => setSheet({})}
             >
               <Plus aria-hidden />
@@ -272,7 +378,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
                 <Button
                   key={code}
                   variant={typeFilter.includes(code) ? 'tonal' : 'outline'}
-                  className="h-10"
+                  className="h-10 rounded-lg shadow-2xs"
                   aria-pressed={typeFilter.includes(code)}
                   onClick={() => toggleTypeFilter(code)}
                 >
@@ -291,15 +397,15 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
           )
         ) : (
           <Table aria-label="Yêu cầu điều chỉnh hợp đồng">
-            <TableHeader className="bg-primary text-primary-foreground [&_th]:font-semibold [&_th]:text-primary-foreground">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-14 pl-4">#</TableHead>
-                <TableHead>Yêu cầu</TableHead>
-                <TableHead>Thay đổi</TableHead>
-                <TableHead>Ngày hiệu lực</TableHead>
-                <TableHead>Số phụ lục</TableHead>
-                <TableHead>Trạng thái</TableHead>
-                <TableHead className="w-16 pr-4">
+            <TableHeader className="bg-[#24496F] text-white border-b border-border/80 [&_th]:text-white [&_th]:font-bold [&_th]:text-xs [&_th]:uppercase [&_th]:tracking-wider">
+              <TableRow className="hover:bg-transparent border-none">
+                <TableHead className="w-14 pl-4 text-center text-white">#</TableHead>
+                <TableHead className="text-white">Yêu cầu</TableHead>
+                <TableHead className="text-white">Thay đổi</TableHead>
+                <TableHead className="text-white">Ngày hiệu lực</TableHead>
+                <TableHead className="text-white">Số phụ lục</TableHead>
+                <TableHead className="text-white">Trạng thái</TableHead>
+                <TableHead className="w-16 pr-4 text-center text-white">
                   <span className="sr-only">Xem chi tiết</span>
                 </TableHead>
               </TableRow>
@@ -315,35 +421,42 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
                     key={r.approvalRequestId}
                     className={
                       r.approvalRequestId === openedId
-                        ? 'bg-accent hover:bg-accent shadow-[inset_4px_0_0_var(--primary)]'
-                        : 'hover:bg-accent/50'
+                        ? 'bg-accent/80 hover:bg-accent shadow-[inset_4px_0_0_var(--primary)] font-medium transition-colors'
+                        : 'hover:bg-accent/40 transition-colors'
                     }
                   >
-                    <TableCell className="pl-4 tabular-nums text-muted-foreground">{from + i + 1}</TableCell>
+                    <TableCell className="pl-4 text-center tabular-nums text-muted-foreground">{from + i + 1}</TableCell>
                     <TableCell className="whitespace-normal">
-                      <button
-                        type="button"
-                        className="text-left font-semibold text-primary underline underline-offset-4 transition-colors hover:text-accent-foreground"
-                        aria-pressed={r.approvalRequestId === openedId}
-                        onClick={() => open(r.approvalRequestId)}
-                      >
-                        {residentName ?? `Yêu cầu mã ${r.approvalRequestId}`}
-                      </button>
-                      <span className="block type-caption text-muted-foreground">
-                        {residentName
-                          ? contractNumber
-                            ? `${contractNumber}, yêu cầu mã ${r.approvalRequestId}`
-                            : `Yêu cầu mã ${r.approvalRequestId}`
-                          : (contractNumber ?? `Hợp đồng mã ${r.contractId}`)}
-                      </span>
+                      <div className="flex items-center gap-2.5">
+                        <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground font-bold text-xs ring-1 ring-border">
+                          {(residentName ?? String(r.approvalRequestId)).slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <button
+                            type="button"
+                            className="text-left font-semibold text-primary underline underline-offset-4 transition-colors hover:text-accent-foreground"
+                            aria-pressed={r.approvalRequestId === openedId}
+                            onClick={() => open(r.approvalRequestId)}
+                          >
+                            {residentName ?? `Yêu cầu mã ${r.approvalRequestId}`}
+                          </button>
+                          <span className="block type-caption text-muted-foreground mt-0.5">
+                            {residentName
+                              ? contractNumber
+                                ? `${contractNumber}, yêu cầu mã ${r.approvalRequestId}`
+                                : `Yêu cầu mã ${r.approvalRequestId}`
+                              : (contractNumber ?? `Hợp đồng mã ${r.contractId}`)}
+                          </span>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell className="whitespace-normal">
                       <div className="flex flex-col gap-1">
                         {r.changeTypes.map((t) => {
                           const Icon = CHANGE_TYPE_ICONS[t]
                           return (
-                            <span key={t} className="flex items-center gap-2">
-                              {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[t]}`} />}
+                            <span key={t} className="inline-flex items-center gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-2 py-0.5 text-xs font-medium">
+                              {Icon && <Icon aria-hidden className={`size-3.5 shrink-0 ${CHANGE_TYPE_TONES[t]}`} />}
                               {labelOf(CHANGE_TYPES, t)}
                             </span>
                           )
@@ -351,47 +464,64 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
                       </div>
                     </TableCell>
                     <TableCell className="tabular-nums">
-                      <span className="flex items-center gap-2">
-                        <CalendarDays aria-hidden className="size-[18px] text-primary" />
+                      <span className="flex items-center gap-1.5 text-foreground font-medium">
+                        <CalendarDays aria-hidden className="size-4 text-primary" />
                         {formatDate(r.requestedEffectiveDate)}
                       </span>
                     </TableCell>
                     <TableCell className="tabular-nums">
                       {r.addendum?.addendumNo ? (
-                        <span className="flex items-center gap-2">
-                          <FileText aria-hidden className="size-[18px] text-primary" />
+                        <span className="flex items-center gap-1.5 font-medium">
+                          <FileText aria-hidden className="size-4 text-primary" />
                           {String(r.addendum.addendumNo).padStart(2, '0')}
                         </span>
                       ) : (
-                        '—'
+                        <span className="text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell>
-                      <StatusPill request={r} text={status.text} />
-                      {status.days !== null && (
-                        <span
-                          className={`block type-caption ${status.overdue ? 'text-destructive' : 'text-muted-foreground'}`}
-                        >
-                          {`${status.days} ngày từ lúc duyệt`}
-                        </span>
-                      )}
-                      {confirmation && (
-                        <span
-                          className={`block type-caption ${confirmation.attention ? 'text-destructive' : 'text-muted-foreground'}`}
-                        >
-                          {confirmation.text}
-                        </span>
-                      )}
+                      <div className="space-y-1">
+                        <StatusPill request={r} text={status.text} />
+                        {status.days !== null && (
+                          <span
+                            className={`block type-caption ${status.overdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}
+                          >
+                            {`${status.days} ngày từ lúc duyệt`}
+                          </span>
+                        )}
+                        {confirmation && (
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md type-caption font-medium border ${
+                              confirmation.attention
+                                ? 'bg-destructive/10 text-destructive border-destructive/20'
+                                : 'bg-success/15 text-success-foreground border-success/30'
+                            }`}
+                          >
+                            <span
+                              className={`size-1.5 rounded-full ${
+                                confirmation.attention ? 'bg-destructive animate-pulse' : 'bg-success-foreground'
+                              }`}
+                              aria-hidden
+                            />
+                            {confirmation.text}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
-                    <TableCell className="pr-4">
+                    <TableCell className="pr-4 text-center">
                       <Button
-                        variant="outline"
+                        variant={r.approvalRequestId === openedId ? 'default' : 'outline'}
                         size="icon"
-                        className="size-11 border-primary/40 text-primary transition-colors duration-200 hover:border-primary hover:bg-primary hover:text-primary-foreground"
+                        className={cn(
+                          'size-9 rounded-xl transition-all duration-200 shadow-2xs mx-auto',
+                          r.approvalRequestId === openedId
+                            ? 'bg-[#24496F] text-white hover:bg-[#1B365D] shadow-sm'
+                            : 'border-border/80 text-muted-foreground hover:border-[#24496F] hover:bg-[#24496F]/10 hover:text-[#24496F]',
+                        )}
                         aria-label={`Xem yêu cầu mã ${r.approvalRequestId}`}
                         onClick={() => open(r.approvalRequestId)}
                       >
-                        <Eye aria-hidden />
+                        <Eye aria-hidden className="size-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
