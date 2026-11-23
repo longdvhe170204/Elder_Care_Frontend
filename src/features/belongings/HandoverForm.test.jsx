@@ -10,8 +10,16 @@ const LEVELS = [
 const LOCATIONS = [{ id: 21, name: 'Kho tầng 2', status: 'ACTIVE' }]
 const CLOTHES = { id: 90, description: 'Áo len', quantity: 5, status: 'HELD', holder: 'STAFF', version: 3 }
 
-function renderForm(belonging = CLOTHES, onDone = vi.fn()) {
-  render(<HandoverForm belonging={belonging} levels={LEVELS} locations={LOCATIONS} onDone={onDone} />)
+function renderForm(belonging = CLOTHES, onDone = vi.fn(), lastLevelId) {
+  render(
+    <HandoverForm
+      belonging={belonging}
+      levels={LEVELS}
+      locations={LOCATIONS}
+      lastLevelId={lastLevelId}
+      onDone={onDone}
+    />,
+  )
   return onDone
 }
 
@@ -90,6 +98,52 @@ describe('HandoverForm (013 T015, US2)', () => {
       holderAbsent: true,
     })
     expect(body.items[0].condition).toEqual({ levelId: 12 })
+  })
+
+  // BF-14 test web 2026-11-22: trước đây chỉ biết phải chọn xử lý sau khi backend chặn
+  it('FR_015_hienChenhLechSoVoiLanTruoc_batChonXuLyTruocKhiGui', async () => {
+    const api = mockRoutes()
+    api.on('POST', '/belongings/handovers', json(200, { handovers: [], belongings: [] }))
+    const onDone = renderForm(CLOTHES, vi.fn(), 11)
+    fireEvent.change(screen.getByLabelText('Lệnh bàn giao'), { target: { value: 'GIVE_FOR_USE' } })
+    fireEvent.change(screen.getByLabelText('Mức tình trạng lúc bàn giao'), { target: { value: '11' } })
+    expect(screen.queryByLabelText('Xử lý chênh lệch tình trạng')).not.toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Mức tình trạng lúc bàn giao'), { target: { value: '12' } })
+    expect(screen.getByText(/Nguyên vẹn → Trầy xước/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+    expect(await screen.findByText('Chọn cách xử lý chênh lệch tình trạng.')).toBeInTheDocument()
+    expect(api.calls('POST', '/belongings/handovers')).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Xử lý chênh lệch tình trạng'), { target: { value: 'ACKNOWLEDGE' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(sent(api).body.conditionHandling).toBe('ACKNOWLEDGE')
+  })
+
+  // BF-14 test web 2026-11-22: loại sự cố đồ gửi mặc định Trung bình, chọn Nhẹ phải ghi lý do (007 FR-042)
+  it('FR_023_suCoMoiMucNhe_batBuocLyDoChonMucThap', async () => {
+    const api = mockRoutes()
+    api.on('POST', '/belongings/handovers', json(200, { handovers: [], belongings: [] }))
+    const onDone = renderForm()
+    fireEvent.change(screen.getByLabelText('Lệnh bàn giao'), { target: { value: 'REPORT_LOST' } })
+    fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Không thấy trong tủ' } })
+    fireEvent.change(screen.getByLabelText('Sự cố'), { target: { value: 'NEW' } })
+    fireEvent.change(screen.getByLabelText('Mức sự cố'), { target: { value: 'LOW' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+    expect(await screen.findByText('Nhập lý do chọn mức thấp hơn mặc định.')).toBeInTheDocument()
+    expect(api.calls('POST', '/belongings/handovers')).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Lý do chọn mức thấp hơn mặc định'), {
+      target: { value: 'Đồ giá trị thấp' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(sent(api).body.items[0].incident).toEqual({
+      method: 'NEW',
+      level: 'LOW',
+      lowerLevelReason: 'Đồ giá trị thấp',
+    })
   })
 
   it('FR_008_ghiHuHong_dienSanViTriHienTai_batBuocAnh_noiDungGuiDuViTri', async () => {

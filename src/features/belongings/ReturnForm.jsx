@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { postBelongingsReturns } from '@/api'
+import { getBelongingsById, postBelongingsReturns } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -8,8 +8,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
-import { FilesField, SelectField } from './BelongingFields'
+import { FilesField, MemberField, SelectField } from './BelongingFields'
 import { activeOptions, confirmationFit, pickLabel } from './belongingLabels'
+import { useFamilyContacts } from './useFamilyContacts'
 import { ReturnConfirmation } from './ReturnConfirmation'
 import { useOpenConfirmations } from './useOpenConfirmations'
 
@@ -60,6 +61,23 @@ export function ReturnForm({
   const key = useRef(crypto.randomUUID())
   const set = (name) => (value) => setV((s) => ({ ...s, [name]: value }))
   const setItem = (id, patch) => setChosen((c) => ({ ...c, [id]: { ...c[id], ...patch } }))
+  const contacts = useFamilyContacts(residentId)
+  // Chọn người thân thì điền sẵn họ tên theo hồ sơ (vẫn sửa được nếu giấy tờ ghi khác)
+  function chooseFamily(familyMemberId) {
+    const member = contacts.members.find((m) => String(m.id) === familyMemberId)
+    setV((s) => ({ ...s, familyMemberId, ...(member && !s.fullName && { fullName: member.fullName }) }))
+  }
+  // FR-020: tình trạng lúc tiếp nhận để so với lúc trả; không đọc được thì bỏ qua, lệnh trả vẫn làm được
+  function toggle(id, on) {
+    setItem(id, { on })
+    if (!on || chosen[id]?.intake !== undefined) return
+    getBelongingsById({ path: { id } }).then(
+      ({ data }) => setItem(id, { intake: data.handovers.find((h) => h.kind === 'INTAKE') ?? null }),
+      () => setItem(id, { intake: null }),
+    )
+  }
+  const intakeText = (h) =>
+    h && [levels.find((l) => l.id === h.conditionLevelId)?.name, h.conditionDescription].filter(Boolean).join(', ')
   const selected = belongings.filter((b) => chosen[b.id]?.on)
   const levelOptions = activeOptions([...levels].sort((a, b) => a.order - b.order))
 
@@ -114,7 +132,7 @@ export function ReturnForm({
       if (isValuable(b) && !chosen[b.id].photos?.length) e[`photo-${b.id}`] = 'Chọn ảnh tình trạng của đồ có giá trị.'
     }
     if (!v.type) e.type = 'Chọn người nhận.'
-    if (v.type === 'FAMILY_MEMBER' && !/^[1-9]\d*$/.test(v.familyMemberId)) e.familyMemberId = 'Nhập mã người thân.'
+    if (v.type === 'FAMILY_MEMBER' && !/^[1-9]\d*$/.test(v.familyMemberId)) e.familyMemberId = 'Chọn người thân nhận.'
     if (['FAMILY_MEMBER', 'OTHER_PERSON'].includes(v.type) && !v.fullName.trim()) e.fullName = 'Nhập họ tên người nhận.'
     if (v.type === 'RESIDENT') {
       if (signature.length === 0 && !v.noSignatureReason.trim())
@@ -186,11 +204,14 @@ export function ReturnForm({
               <label className="flex min-h-10 cursor-pointer items-center gap-2">
                 <Checkbox
                   checked={!!chosen[b.id]?.on}
-                  onCheckedChange={(on) => setItem(b.id, { on })}
+                  onCheckedChange={(on) => toggle(b.id, on)}
                   aria-label={`Trả ${b.description}, mã ${b.id}`}
                 />
                 <span className="type-body-sm">{pickLabel(b, locationName)}</span>
               </label>
+              {chosen[b.id]?.on && intakeText(chosen[b.id].intake) && (
+                <p className="type-body-sm text-muted-foreground">Lúc tiếp nhận: {intakeText(chosen[b.id].intake)}</p>
+              )}
               {chosen[b.id]?.on && (
                 <div className="grid gap-3 sm:grid-cols-2">
                   <Field>
@@ -247,18 +268,16 @@ export function ReturnForm({
           </p>
         )}
         {v.type === 'FAMILY_MEMBER' && (
-          <Field data-invalid={!!errors.familyMemberId || undefined}>
-            <FieldLabel htmlFor="return-family">Mã người thân</FieldLabel>
-            <Input
-              id="return-family"
-              inputMode="numeric"
-              className="h-11"
-              value={v.familyMemberId}
-              onChange={(e) => set('familyMemberId')(e.target.value)}
-              aria-invalid={!!errors.familyMemberId || undefined}
-            />
-            {errors.familyMemberId && <FieldError>{errors.familyMemberId}</FieldError>}
-          </Field>
+          <MemberField
+            id="return-family"
+            label="Người thân nhận"
+            fallbackLabel="Mã người thân"
+            contacts={contacts}
+            filter={(m) => m.representative || m.pickupAllowed}
+            value={v.familyMemberId}
+            onChange={chooseFamily}
+            error={errors.familyMemberId}
+          />
         )}
         {['FAMILY_MEMBER', 'OTHER_PERSON'].includes(v.type) && (
           <>

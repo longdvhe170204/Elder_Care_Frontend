@@ -13,6 +13,7 @@ import { formatDate } from '@/common/dateTime'
 import { loadFileUrl } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { AssessmentTab } from '../assessments/AssessmentTab'
+import { CareLevelDecision } from './CareLevelDecision'
 import { CARE_LEVEL_LABELS, RESIDENCE_TYPE_LABELS } from '../assessments/assessmentLabels'
 import { ConsentTab } from '../consents/ConsentTab'
 import { StatusTab } from '../status/StatusTab'
@@ -111,12 +112,19 @@ function PartContent({ part, residentId, profile, onChanged }) {
   if (part === 'health') return <HealthTab residentId={residentId} allowedCommands={allowedCommands} />
   if (part === 'assessment')
     return (
-      <AssessmentTab
-        residentId={residentId}
-        residentStatus={profile.status}
-        allowedCommands={allowedCommands}
-        onChanged={onChanged}
-      />
+      <>
+        <AssessmentTab
+          residentId={residentId}
+          residentStatus={profile.status}
+          allowedCommands={allowedCommands}
+          onChanged={onChanged}
+        />
+        <CareLevelDecision
+          residentId={residentId}
+          currentCareLevel={profile.currentCareLevel}
+          residentStatus={profile.status}
+        />
+      </>
     )
   if (part === 'status')
     return (

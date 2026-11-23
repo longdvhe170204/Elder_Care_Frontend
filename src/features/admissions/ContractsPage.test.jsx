@@ -125,6 +125,43 @@ describe('ContractsPage', () => {
     expect(await screen.findByText(/Trường tài chính được ẩn theo quyền/)).toBeInTheDocument()
   })
 
+  it('BR_M02_09_hopDongHieuLuc_hienNoiDungHienHanhTheoPhuLuc_vaTomTatPhuLuc', async () => {
+    api.on(
+      'GET',
+      '/contracts/33/content',
+      json(200, {
+        contractId: 33,
+        version: 2,
+        effectiveFrom: '2026-11-18',
+        addendumId: 5,
+        content: { ...ACTIVE, careLevel: 'SPECIAL' },
+      }),
+    )
+    api.on(
+      'GET',
+      '/contracts/33/addenda',
+      json(200, [
+        {
+          id: 5,
+          approvalRequestId: 9,
+          changeTypes: ['CARE_LEVEL'],
+          contentBefore: { careLevel: 'REGULAR' },
+          contentAfter: { careLevel: 'SPECIAL' },
+          effectiveDate: '2026-11-18',
+          status: 'APPLIED',
+        },
+      ]),
+    )
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Hiệu lực 1' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Phạm Thị Mai' }))
+
+    expect(await screen.findByText('Theo phụ lục hiệu lực từ 18/11/2026; bản gốc giữ nguyên.')).toBeInTheDocument()
+    expect(screen.getByText('Đặc biệt')).toBeInTheDocument()
+    expect(screen.getByText('Mức chăm sóc: Thường xuyên → Đặc biệt')).toBeInTheDocument()
+    expect(api.calls('GET', '/contracts/33/content')[0][0]).toMatch(/date=\d{4}-\d{2}-\d{2}/)
+  })
+
   it('FR_025_guiKy409_hienDieuKienChuaThoa', async () => {
     api.on(
       'POST',
