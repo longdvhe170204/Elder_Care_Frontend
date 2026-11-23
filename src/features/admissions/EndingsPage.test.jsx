@@ -144,6 +144,27 @@ describe('EndingsPage', () => {
     })
   })
 
+  it('FR_063_banGiao_hanhChinhKhongXemDuocNhanVien_nguoiGhiLaNhanVienBanGiao', async () => {
+    // Hành chính không xem được hồ sơ nhân viên (Phụ lục 27): GET /staff trả rỗng; backend lấy chính người ghi
+    api.on('GET', '/staff', json(200, []))
+    api.on('POST', '/residency-endings/14/handover', json(201, {}))
+    renderPage()
+    await openEnding()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận bàn giao…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Người thân' }))
+    fireEvent.change(await screen.findByLabelText('Người thân nhận'), { target: { value: '41' } })
+    fireEvent.change(screen.getByLabelText('Thời điểm bàn giao'), { target: { value: '2026-11-20T09:00' } })
+    expect(await screen.findByText(/Chính bạn, người ghi bàn giao/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residency-endings/14/handover')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residency-endings/14/handover')[0][1].body)).toEqual({
+      recipientType: 'FAMILY_MEMBER',
+      familyMemberId: 41,
+      handoverAt: '2026-11-20T09:00:00+07:00',
+    })
+  })
+
   it('FR_062_lapHoSo_chuyenCoSoThieuNoiChuyenDen_baoTaiO', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
