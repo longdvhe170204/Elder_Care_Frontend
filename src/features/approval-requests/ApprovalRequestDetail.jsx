@@ -18,6 +18,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { problemOf } from '@/common/problem'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { ChangeContent } from '@/features/admissions/ChangeParts'
+import { DisposalContent } from '@/features/belongings/DisposalContent'
 import { ACTION_LABELS, actorLabel, statusLabel, typeLabel } from './approvalStatus'
 import { useRequestSubject } from './requestSubject'
 
@@ -247,6 +248,8 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
             headingClassName="type-caption text-muted-foreground"
           />
         </>
+      ) : request.type === 'M12.UNCLAIMED_BELONGING_DISPOSAL' ? (
+        <DisposalContent content={request.content ?? {}} />
       ) : (
         content.length > 0 && (
           <section className="flex flex-col gap-2">

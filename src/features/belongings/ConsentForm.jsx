@@ -1,17 +1,18 @@
 import { useRef, useState } from 'react'
 import { postSelfCustodyConsents } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { FieldGroup } from '@/components/ui/field'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
-import { FilesField } from './BelongingFields'
+import { FilesField, MemberField } from './BelongingFields'
+import { useFamilyContacts } from './useFamilyContacts'
 
 // Hành chính ghi đồng ý cho tự giữ theo bản ký scan của người đại diện (013 T011; FR-015a, FR-017b, BR-M12-06; api-013
 // POST /self-custody-consents). Backend kiểm người ký là người đại diện hiện tại (409 GIVER_NOT_REPRESENTATIVE). Mã người
-// đại diện nhập tay vì api-013 không có danh sách người thân (như tab Đồng ý của 001).
+// đại diện chọn theo tên từ quan hệ của 012; không đọc được thì nhập mã (hoàn thiện BF-14, 2026-11-23).
 export function ConsentForm({ belonging, onDone }) {
+  const contacts = useFamilyContacts(belonging.residentId)
   const [representativeId, setRepresentativeId] = useState('')
   const [files, setFiles] = useState([])
   const [errors, setErrors] = useState({})
@@ -22,7 +23,7 @@ export function ConsentForm({ belonging, onDone }) {
   async function submit(event) {
     event.preventDefault()
     const found = {}
-    if (!/^[1-9]\d*$/.test(representativeId)) found.representativeId = 'Nhập mã người đại diện.'
+    if (!/^[1-9]\d*$/.test(representativeId)) found.representativeId = 'Chọn người đại diện.'
     if (files.length === 0) found.files = 'Chọn tệp bản ký.'
     setErrors(found)
     setFailure(null)
@@ -45,18 +46,16 @@ export function ConsentForm({ belonging, onDone }) {
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
       <FieldGroup>
-        <Field data-invalid={!!errors.representativeId || undefined}>
-          <FieldLabel htmlFor="consent-representative">Mã người đại diện</FieldLabel>
-          <Input
-            id="consent-representative"
-            inputMode="numeric"
-            className="h-11"
-            value={representativeId}
-            onChange={(e) => setRepresentativeId(e.target.value)}
-            aria-invalid={!!errors.representativeId || undefined}
-          />
-          {errors.representativeId && <FieldError>{errors.representativeId}</FieldError>}
-        </Field>
+        <MemberField
+          id="consent-representative"
+          label="Người đại diện ký"
+          fallbackLabel="Mã người đại diện"
+          contacts={contacts}
+          filter={(m) => m.representative}
+          value={representativeId}
+          onChange={setRepresentativeId}
+          error={errors.representativeId}
+        />
         <FilesField
           id="consent-file"
           label="Bản ký của người đại diện"

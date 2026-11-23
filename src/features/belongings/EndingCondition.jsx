@@ -11,7 +11,8 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { uploadFile } from '@/common/files'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
-import { FilesField, SelectField } from './BelongingFields'
+import { FilesField, MemberField, SelectField } from './BelongingFields'
+import { useFamilyContacts } from './useFamilyContacts'
 import { CHANNEL_OPTIONS, amountText, nowLocal, statusLabel, toOffsetIso } from './belongingLabels'
 
 // Điều kiện (b) kết thúc lưu trú phần đồ gửi và mục "xử lý đồ gửi" sau qua đời (013 T026, US5; FR-025, FR-026,
@@ -25,11 +26,19 @@ const METHODS = [
   { value: 'DESTROY', label: 'Tiêu hủy' },
   { value: 'TRANSFER_TO_AUTHORITY', label: 'Chuyển cơ quan có thẩm quyền' },
 ]
-const POST_DEATH = { NOT_STARTED: 'Chưa làm', IN_PROGRESS: 'Đang làm', COMPLETED: 'Hoàn thành' }
+// Trạng thái mục việc sau qua đời của 004 (PostDeathItemStatus); hai mã cũ giữ cho dữ liệu đã có
+const POST_DEATH = {
+  NOT_COMPLETED: 'Chưa hoàn thành',
+  COMPLETED: 'Hoàn thành',
+  NOT_APPLICABLE: 'Không áp dụng',
+  NOT_STARTED: 'Chưa làm',
+  IN_PROGRESS: 'Đang làm',
+}
 const DISPOSABLE = ['HELD', 'DAMAGED']
 const emptyAttempt = () => ({ familyMemberId: '', channel: '', at: nowLocal(), result: '' })
 
 function DisposalForm({ residentId, belongings, onDone }) {
+  const contacts = useFamilyContacts(residentId)
   const [ids, setIds] = useState([])
   const [v, setV] = useState({ method: '', unit: '', date: '', reason: '' })
   const [minutes, setMinutes] = useState([])
@@ -125,16 +134,15 @@ function DisposalForm({ residentId, belongings, onDone }) {
           <legend className="type-label">Các lần liên hệ người thân</legend>
           {attempts.map((a, i) => (
             <div key={i} className="grid gap-3 rounded-lg border p-3 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor={`attempt-member-${i}`}>Mã người thân đã liên hệ (lần {i + 1})</FieldLabel>
-                <Input
-                  id={`attempt-member-${i}`}
-                  inputMode="numeric"
-                  className="h-11"
-                  value={a.familyMemberId}
-                  onChange={(e) => setAttempt(i, { familyMemberId: e.target.value })}
-                />
-              </Field>
+              <MemberField
+                id={`attempt-member-${i}`}
+                label={`Người thân đã liên hệ (lần ${i + 1})`}
+                fallbackLabel={`Mã người thân đã liên hệ (lần ${i + 1})`}
+                contacts={contacts}
+                filter={(m) => m.representative || m.primaryContact}
+                value={a.familyMemberId}
+                onChange={(familyMemberId) => setAttempt(i, { familyMemberId })}
+              />
               <SelectField
                 id={`attempt-channel-${i}`}
                 label={`Kênh (lần ${i + 1})`}
@@ -209,6 +217,7 @@ function BelongingLines({ items, catalogs }) {
       {items.map((b) => (
         <li key={b.id} className="type-body-sm">
           {b.description}, {catalogs.typeName(b.typeId)}, {amountText(b)}, {statusLabel(b.status)}
+          {b.storageLocationId && `, ${catalogs.locationName(b.storageLocationId)}`}
         </li>
       ))}
     </ul>

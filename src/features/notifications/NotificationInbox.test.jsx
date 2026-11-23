@@ -73,6 +73,39 @@ describe('NotificationInbox', () => {
     expect(screen.queryByText('M05.CARE_TASK 88')).toBeNull()
   })
 
+  // Hoàn thiện BF-14 (2026-11-23): thông báo đồ gửi mở được (canOpen) thì có nút mở, bấm là sang màn Đồ gửi đúng đồ
+  it('FR_034_thongBaoDoGuiMoDuoc_coNutMo_sangManDoGui', async () => {
+    const lost = notification({
+      id: 21,
+      title: 'Đồ gửi thất lạc',
+      sourceRecord: { type: 'M12.BELONGING_HANDOVER', id: '23', canOpen: true },
+    })
+    api.on('GET', '/me/notifications', json(200, { ...PAGE, items: [lost] }))
+    api.on('GET', '/me/notifications/21', json(200, { ...lost, status: 'VIEWED' }))
+    api.on('GET', '/belongings/handovers/23', json(200, { id: 23, belongingId: 9, residentId: 9005, kind: 'LOSS' }))
+    const onNavigate = vi.fn()
+    render(<DetailHost>{(host) => <NotificationInbox {...host} onNavigate={onNavigate} />}</DetailHost>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Đồ gửi thất lạc' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở đồ gửi' }))
+    await vi.waitFor(() => expect(onNavigate).toHaveBeenCalledWith('belongings', { residentId: 9005, belongingId: 9 }))
+  })
+
+  it('FR_034_khongMoDuoc_khongCoNutMo', async () => {
+    const lost = notification({
+      id: 22,
+      title: 'Đồ gửi thất lạc',
+      sourceRecord: { type: 'M12.BELONGING_HANDOVER', id: '24', canOpen: false },
+    })
+    api.on('GET', '/me/notifications', json(200, { ...PAGE, items: [lost] }))
+    api.on('GET', '/me/notifications/22', json(200, { ...lost, status: 'VIEWED' }))
+    render(<DetailHost>{(host) => <NotificationInbox {...host} onNavigate={vi.fn()} />}</DetailHost>)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Đồ gửi thất lạc' }))
+    expect(await screen.findByText('Đo huyết áp lúc 08:00 chưa ghi nhận')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mở đồ gửi' })).toBeNull()
+  })
+
   // DESIGN.md 9.3 (2.2.2) và 002 T047a: không có SSE (jsdom) thì hỏi lại định kỳ bằng yêu cầu nền; tạm dừng được
   it('tuLamMoi_yeuCauNen_tamDungThiNgung', async () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })

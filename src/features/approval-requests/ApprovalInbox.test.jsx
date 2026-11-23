@@ -274,4 +274,45 @@ describe('ApprovalInbox', () => {
     expect(panel).not.toHaveTextContent('{"careLevel"')
     expect(panel).not.toHaveTextContent('CARE_SERVICE')
   })
+
+  // Hoàn thiện BF-14 (2026-11-23): đề nghị xử lý đồ không người nhận hiện nội dung đọc được, mở được biên bản
+  it('xuLyDoKhongNguoiNhan_noiDungDocDuoc_moBienBan', async () => {
+    const disposal = request({
+      type: 'M12.UNCLAIMED_BELONGING_DISPOSAL',
+      content: {
+        residentId: 9005,
+        belongingIds: [9],
+        method: 'DESTROY',
+        receivingUnit: 'UBND phường',
+        minutesFileId: 29,
+        contactAttempts: [
+          { familyMemberId: 9005, channel: 'PHONE_CALL', at: '2026-11-10T02:00:00Z', result: 'Không nghe máy' },
+        ],
+      },
+    })
+    api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, { items: [disposal], nextCursor: null }))
+    api.on('GET', '/residents/9005', json(200, { id: 9005, personalInfo: { fullName: 'Phạm Văn Thử' } }))
+    api.on('GET', '/residents/9005/belongings', json(200, [{ id: 9, description: 'Bộ quần áo cũ', quantity: 1 }]))
+    api.on(
+      'GET',
+      '/residents/9005/relationships',
+      json(200, [
+        { id: 1, familyMember: { id: 9005, fullName: 'Phạm Thị Đại Diện' }, representative: true, rights: {} },
+      ]),
+    )
+    render(<ApprovalInbox />)
+    expect((await screen.findAllByRole('row'))[1]).toHaveTextContent('Xử lý đồ không người nhận')
+
+    api.on('GET', '/approval-requests/7', json(200, disposal, { ETag: '"1"' }))
+    fireEvent.click(screen.getByRole('button', { name: 'YC-2026-000007' }))
+    const panel = await screen.findByRole('dialog')
+
+    expect(await within(panel).findByText('Tiêu hủy')).toBeInTheDocument()
+    expect(await within(panel).findByText(/Bộ quần áo cũ/)).toBeInTheDocument()
+    expect(await within(panel).findByText(/Phạm Thị Đại Diện: Không nghe máy/)).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Mở biên bản' })).toBeInTheDocument()
+    expect(panel).not.toHaveTextContent('DESTROY')
+    expect(panel).not.toHaveTextContent('minutesFileId')
+    expect(panel).not.toHaveTextContent('M12.UNCLAIMED_BELONGING_DISPOSAL')
+  })
 })

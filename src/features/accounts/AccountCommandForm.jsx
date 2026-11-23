@@ -9,7 +9,15 @@ import {
   postAccountsByIdUnlock,
 } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -22,6 +30,12 @@ import { TemporaryPasswordNotice } from './TemporaryPasswordNotice'
 // (GET /accounts/{id}/permissions, phiên bản quyền BR-M15-17). Khóa người đang là Phụ trách bộ phận cần người thay (Q-292).
 
 const REASON_MAX = 2000
+
+// Cấp lại mật khẩu người thân phải ghi cách xác minh danh tính (FR-052, hợp đồng Verification), như form tạo tài khoản
+const METHODS = [
+  ['IN_PERSON_ID_DOCUMENT', 'Có mặt, đối chiếu giấy tờ tùy thân'],
+  ['CALLBACK_REGISTERED_NUMBER', 'Gọi lại số đã đăng ký'],
+]
 
 const isRoleCommand = (command) => command === 'assign-role' || command === 'remove-role'
 
@@ -41,6 +55,9 @@ export function AccountCommandForm({ command, account, etag, onDone, onCancel, o
   const [failure, setFailure] = useState(null)
   const [saving, setSaving] = useState(false)
   const [password, setPassword] = useState(null)
+  const [method, setMethod] = useState('')
+  const [proof, setProof] = useState('')
+  const needsVerification = command === 'reset-password' && account.type === 'FAMILY_MEMBER'
 
   useEffect(() => {
     if (!isRoleCommand(command)) return undefined
@@ -65,7 +82,18 @@ export function AccountCommandForm({ command, account, etag, onDone, onCancel, o
       case 'unlock':
         return postAccountsByIdUnlock({ path, headers: { 'If-Match': etag }, body: { reason } })
       case 'reset-password':
-        return postAccountsByIdResetPassword({ path, body: { reason } })
+        return postAccountsByIdResetPassword({
+          path,
+          body: {
+            reason,
+            ...(needsVerification && {
+              verification:
+                method === 'IN_PERSON_ID_DOCUMENT'
+                  ? { method, idDocumentNumber: proof.trim() }
+                  : { method, calledPhoneNumber: proof.trim() },
+            }),
+          },
+        })
       case 'assign-role':
         return postAccountsByIdAssignRole({ path, headers: { 'If-Match': permissionEtag }, body: { role, reason } })
       default:
@@ -80,6 +108,9 @@ export function AccountCommandForm({ command, account, etag, onDone, onCancel, o
     if (isRoleCommand(command) && !role) next.role = 'Chọn vai trò'
     if (needsReplacement && !/^\d+$/.test(replacement.trim())) next.replacement = 'Nhập mã hồ sơ người thay'
     if (!reason.trim()) next.reason = 'Nhập lý do'
+    if (needsVerification && !method) next.method = 'Chọn cách xác minh danh tính'
+    else if (needsVerification && !proof.trim())
+      next.proof = method === 'IN_PERSON_ID_DOCUMENT' ? 'Nhập số giấy tờ đã đối chiếu' : 'Nhập số đã gọi lại'
     setErrors(next)
     if (Object.keys(next).length > 0) return
 
@@ -176,6 +207,56 @@ export function AccountCommandForm({ command, account, etag, onDone, onCancel, o
           />
           {errors.reason ? <FieldError>{errors.reason}</FieldError> : <FieldDescription>Bắt buộc.</FieldDescription>}
         </Field>
+
+        {needsVerification && (
+          <FieldSet data-invalid={!!errors.method || undefined}>
+            <FieldLegend variant="label">Xác minh danh tính</FieldLegend>
+            <div className="flex flex-col gap-2">
+              {METHODS.map(([code, label]) => (
+                <label key={code} className="flex items-center gap-2 type-body-sm">
+                  <input
+                    type="radio"
+                    name="account-command-method"
+                    value={code}
+                    checked={method === code}
+                    onChange={() => {
+                      setMethod(code)
+                      setProof('')
+                    }}
+                    className="size-4"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {errors.method && <FieldError>{errors.method}</FieldError>}
+          </FieldSet>
+        )}
+        {needsVerification && method && (
+          <Field data-invalid={!!errors.proof || undefined}>
+            <FieldLabel htmlFor="account-command-proof">
+              {method === 'IN_PERSON_ID_DOCUMENT' ? 'Số giấy tờ đã đối chiếu' : 'Số đã gọi lại'}
+            </FieldLabel>
+            <Input
+              id="account-command-proof"
+              autoComplete="off"
+              inputMode={method === 'CALLBACK_REGISTERED_NUMBER' ? 'tel' : undefined}
+              value={proof}
+              onChange={(e) => setProof(e.target.value)}
+              aria-invalid={!!errors.proof || undefined}
+              className="h-10"
+            />
+            {errors.proof ? (
+              <FieldError>{errors.proof}</FieldError>
+            ) : (
+              <FieldDescription>
+                {method === 'IN_PERSON_ID_DOCUMENT'
+                  ? 'Đối chiếu giấy tờ người thân mang đến với hồ sơ người thân.'
+                  : 'Phải trùng số điện thoại đã đăng ký trong hồ sơ người thân, không dùng số người yêu cầu đưa.'}
+              </FieldDescription>
+            )}
+          </Field>
+        )}
       </FieldGroup>
 
       <ProblemAlert problem={failure}>

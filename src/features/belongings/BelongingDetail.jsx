@@ -12,6 +12,7 @@ import { problemOf } from '@/common/problem'
 import { ConsentForm } from './ConsentForm'
 import { HandoverForm } from './HandoverForm'
 import { WithdrawConsentForm } from './WithdrawConsentForm'
+import { memberName, useFamilyContacts } from './useFamilyContacts'
 import { amountText, commandsFor, GIVER_LABELS, holderLabel, kindLabel, statusLabel } from './belongingLabels'
 
 // Khung chi tiết một đồ gửi (013 T011; FR-011, FR-012; api-013 GET /belongings/{id}): thông tin đồ, lịch sử bàn giao
@@ -64,10 +65,12 @@ function IncidentLink({ entry, onLinked }) {
   )
 }
 
-function HistoryEntry({ entry, onFailure, canLink, onLinked }) {
-  // Bên nhận là nhân viên thì backend không có tên (chỉ mã nhân viên): hiện vai trò thay cho vế bị trống
+function HistoryEntry({ entry, levelName, onFailure, canLink, onLinked }) {
+  // Backend điền tên khi tra được (2026-11-23); không tra được thì hiện vai trò thay cho vế bị trống
+  const giver = entry.giverName ?? GIVER_LABELS[entry.giverType]
   const recipient = entry.recipientName ?? GIVER_LABELS[entry.recipientType]
-  const parties = [entry.giverName, recipient].filter(Boolean).join(' → ')
+  const parties = [giver, recipient].filter(Boolean).join(' → ')
+  const level = entry.conditionLevelId != null && levelName(entry.conditionLevelId)
   return (
     <li className="flex flex-col gap-1 border-t py-3 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -76,7 +79,12 @@ function HistoryEntry({ entry, onFailure, canLink, onLinked }) {
       </div>
       {parties && <span className="type-body-sm">{parties}</span>}
       <span className="type-body-sm text-muted-foreground">
-        {[amountText(entry), entry.conditionDescription, entry.targetStatus && statusLabel(entry.targetStatus)]
+        {[
+          amountText(entry),
+          level && `Tình trạng: ${level}`,
+          entry.conditionDescription,
+          entry.targetStatus && statusLabel(entry.targetStatus),
+        ]
           .filter(Boolean)
           .join(', ')}
       </span>
@@ -107,6 +115,22 @@ function HistoryEntry({ entry, onFailure, canLink, onLinked }) {
       )}
     </li>
   )
+}
+
+// Mức tình trạng của bản ghi bàn giao gần nhất có ghi mức, để form bàn giao hiện chênh lệch (FR-015)
+function lastLevelId(handovers) {
+  const withLevel = handovers.filter((h) => h.conditionLevelId != null)
+  const latest = withLevel.reduce(
+    (a, h) => (!a || h.occurredAt > a.occurredAt || (h.occurredAt === a.occurredAt && h.id > a.id) ? h : a),
+    null,
+  )
+  return latest?.conditionLevelId
+}
+
+// Tên người đại diện thay cho mã (hoàn thiện BF-14, 2026-11-23)
+function RepresentativeName({ residentId, id }) {
+  const contacts = useFamilyContacts(residentId)
+  return memberName(contacts.members, id)
 }
 
 export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Description }) {
@@ -170,7 +194,10 @@ export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Descr
         {state.selfCustodyConsent && (
           <>
             <dt className="text-muted-foreground">Đồng ý cho tự giữ</dt>
-            <dd>Có hiệu lực, người đại diện #{state.selfCustodyConsent.representativeId}</dd>
+            <dd>
+              Có hiệu lực, người đại diện{' '}
+              <RepresentativeName residentId={b.residentId} id={state.selfCustodyConsent.representativeId} />
+            </dd>
           </>
         )}
         <dt className="text-muted-foreground">Vị trí</dt>
@@ -210,13 +237,14 @@ export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Descr
             levels={catalogs.levels}
             locations={catalogs.locations}
             valuable={!!type?.valuable}
+            lastLevelId={lastLevelId(state.handovers)}
             onDone={done}
           />
         </section>
       )}
       {action === 'withdraw' && state.selfCustodyConsent && (
         <section className="flex flex-col gap-3 rounded-xl border p-3" aria-label="Rút đồng ý cho tự giữ">
-          <WithdrawConsentForm consent={state.selfCustodyConsent} onDone={done} />
+          <WithdrawConsentForm consent={state.selfCustodyConsent} residentId={b.residentId} onDone={done} />
         </section>
       )}
       {action === 'consent' && (
@@ -229,7 +257,14 @@ export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Descr
         <h3 className="type-card-title">Lịch sử bàn giao</h3>
         <ul className="flex flex-col">
           {state.handovers.map((h) => (
-            <HistoryEntry key={h.id} entry={h} onFailure={setFailure} canLink={canUpdate} onLinked={done} />
+            <HistoryEntry
+              key={h.id}
+              entry={h}
+              levelName={catalogs.levelName}
+              onFailure={setFailure}
+              canLink={canUpdate}
+              onLinked={done}
+            />
           ))}
         </ul>
       </section>

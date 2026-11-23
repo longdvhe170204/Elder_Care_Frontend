@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
-import { FilesField } from './BelongingFields'
+import { FilesField, MemberField } from './BelongingFields'
+import { useFamilyContacts } from './useFamilyContacts'
 
 // Hành chính rút đồng ý cho tự giữ theo bản ký scan của người đại diện (FR-015a; api-013
 // POST /self-custody-consents/{id}/withdraw). Mã bản đồng ý lấy từ selfCustodyConsent của chi tiết đồ; người đại diện
 // điền sẵn theo bản đồng ý, sửa được nếu người ký rút là người đại diện hiện tại khác.
-export function WithdrawConsentForm({ consent, onDone }) {
+export function WithdrawConsentForm({ consent, residentId, onDone }) {
+  const contacts = useFamilyContacts(residentId)
   const [reason, setReason] = useState('')
   const [representativeId, setRepresentativeId] = useState(String(consent.representativeId))
   const [files, setFiles] = useState([])
@@ -24,7 +26,7 @@ export function WithdrawConsentForm({ consent, onDone }) {
     event.preventDefault()
     const found = {}
     if (!reason.trim()) found.reason = 'Nhập lý do rút đồng ý.'
-    if (!/^[1-9]\d*$/.test(representativeId)) found.representativeId = 'Nhập mã người đại diện.'
+    if (!/^[1-9]\d*$/.test(representativeId)) found.representativeId = 'Chọn người đại diện.'
     if (files.length === 0) found.files = 'Chọn tệp bản ký.'
     setErrors(found)
     setFailure(null)
@@ -59,18 +61,16 @@ export function WithdrawConsentForm({ consent, onDone }) {
           />
           {errors.reason && <FieldError>{errors.reason}</FieldError>}
         </Field>
-        <Field data-invalid={!!errors.representativeId || undefined}>
-          <FieldLabel htmlFor="withdraw-representative">Mã người đại diện</FieldLabel>
-          <Input
-            id="withdraw-representative"
-            inputMode="numeric"
-            className="h-11"
-            value={representativeId}
-            onChange={(e) => setRepresentativeId(e.target.value)}
-            aria-invalid={!!errors.representativeId || undefined}
-          />
-          {errors.representativeId && <FieldError>{errors.representativeId}</FieldError>}
-        </Field>
+        <MemberField
+          id="withdraw-representative"
+          label="Người đại diện ký rút"
+          fallbackLabel="Mã người đại diện"
+          contacts={contacts}
+          filter={(m) => m.representative}
+          value={representativeId}
+          onChange={setRepresentativeId}
+          error={errors.representativeId}
+        />
         <FilesField
           id="withdraw-file"
           label="Bản ký của người đại diện"
