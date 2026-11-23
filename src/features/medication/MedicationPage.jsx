@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Clock, FileText, RotateCw, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
@@ -7,7 +7,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AllergyNote } from '@/common/CareNotes'
 import { NowStrip } from '@/common/NowStrip'
-import { ClockAside, PageHeader } from '@/common/PageHeader'
+import { PageHeader } from '@/common/PageHeader'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
@@ -40,21 +40,22 @@ const MANAGER_ROLE = 'NURSING_HOME_MANAGER'
 const OPEN = ['Đến giờ', 'Trễ']
 const FILTERS = ['Tất cả', 'Trễ', 'Đến giờ', 'Chưa đến giờ', 'Đã xong']
 
-// Nhãn trạng thái liều trên thẻ: nền đặc, chữ in đậm (Trễ, Bỏ lỡ đỏ; Đến giờ vàng nâu; Đã dùng, Đã xong xanh lá; còn lại xám).
-// text-card: trắng ở chế độ sáng, xanh đêm ở chế độ tối (nền tông sáng).
+// Nhãn trạng thái liều trên thẻ: nền đặc, chữ in đậm (Trễ, Bỏ lỡ đỏ; Đến giờ vàng cam; Đã dùng, Đã xong xanh lá; còn lại xám).
 const DOSE_TONE = {
-  'Trễ': 'bg-destructive',
-  'Bỏ lỡ': 'bg-destructive',
-  'Đến giờ': 'bg-warning-foreground',
-  'Đã dùng': 'bg-success-foreground',
-  'Đã xong': 'bg-success-foreground',
+  'Trễ': 'bg-destructive text-white',
+  'Bỏ lỡ': 'bg-destructive text-white',
+  'Đến giờ': 'bg-amber-500 text-white',
+  'Chưa đến giờ': 'bg-sky-500 text-white',
+  'Đã dùng': 'bg-emerald-600 text-white',
+  'Đã xong': 'bg-emerald-600 text-white',
+  'Tạm dừng': 'bg-slate-400 text-white',
 }
 
 function DoseStatus({ status }) {
   return (
     <Badge
       variant="secondary"
-      className={cn('h-6 px-2.5 text-xs font-bold text-card shadow-sm', DOSE_TONE[status] ?? 'bg-muted-foreground')}
+      className={cn('h-6 px-2.5 text-xs font-bold shadow-xs', DOSE_TONE[status] ?? 'bg-muted-foreground text-white')}
     >
       {status}
     </Badge>
@@ -86,12 +87,16 @@ function DoseCard({ group, canRecord, onOpen, onLate }) {
   const r = group.resident
   const showRecord = canRecord && group.doses.some((d) => OPEN.includes(d.status))
   return (
-    <Card className="gap-3 shadow-sm transition-shadow duration-200 hover:shadow-md">
-      <CardHeader className="flex flex-row items-center gap-2.5 border-b pb-3">
-        <ResidentAvatar name={r.name} code={r.code} initials={r.initials} />
+    <Card className="flex flex-col gap-3 rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900">
+      <CardHeader className="flex flex-row items-center gap-3 border-b border-slate-100 pb-3 dark:border-slate-800">
+        <ResidentAvatar name={r.name} code={r.code} initials={r.initials} className="size-10 text-sm font-bold shadow-xs" />
         <div className="flex min-w-0 flex-1 flex-col">
-          <span className={cn('truncate type-card-title', done ? 'text-muted-foreground' : 'text-primary')}>{r.name}</span>
-          <span className="type-caption font-medium text-muted-foreground tabular-nums">{r.room === '—' ? 'Bán trú' : r.room}</span>
+          <span className={cn('truncate text-base font-bold tracking-tight', done ? 'text-muted-foreground' : 'text-slate-900 dark:text-slate-100')}>
+            {r.name}
+          </span>
+          <span className="text-xs font-medium text-slate-500 tabular-nums">
+            {r.room === '—' ? 'Bán trú' : r.room}
+          </span>
         </div>
         <DoseStatus status={group.status} />
       </CardHeader>
@@ -100,18 +105,18 @@ function DoseCard({ group, canRecord, onOpen, onLate }) {
         {!done && <AllergyNote allergies={r.allergies} />}
         <ul className="flex flex-col gap-2">
           {group.doses.map((d) => (
-            <li key={d.id} className="flex flex-col gap-1.5 rounded-lg bg-muted/50 px-3 py-2.5">
+            <li key={d.id} className="flex flex-col gap-1.5 rounded-xl bg-slate-50/70 p-3 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800/60">
               <div className="flex items-start justify-between gap-2">
-                <span className={cn('type-card-title', done && 'text-muted-foreground')}>
+                <span className={cn('text-sm font-semibold', done ? 'text-muted-foreground' : 'text-slate-900 dark:text-slate-100')}>
                   {d.drug}
-                  <span className="block type-body-sm font-normal text-muted-foreground">
+                  <span className="block text-xs font-normal text-slate-500">
                     {d.dose}, {d.route}
                   </span>
                 </span>
                 {d.status !== group.status && <DoseStatus status={d.status} />}
               </div>
               {!done && <DoseTags dose={d} />}
-              {(d.result || d.note) && <span className="type-caption text-muted-foreground">{d.result ?? d.note}</span>}
+              {(d.result || d.note) && <span className="text-xs text-muted-foreground italic">{d.result ?? d.note}</span>}
             </li>
           ))}
         </ul>
@@ -121,19 +126,24 @@ function DoseCard({ group, canRecord, onOpen, onLate }) {
             .map((d) => (
               <div
                 key={d.id}
-                className="flex items-center justify-between gap-2 rounded-lg bg-warning px-3 py-2 text-warning-foreground ring-1 ring-warning-foreground/30"
+                className="flex items-center justify-between gap-2 rounded-xl bg-amber-50 p-3 text-amber-900 ring-1 ring-amber-300 dark:bg-amber-950/40 dark:text-amber-200 dark:ring-amber-700"
               >
-                <span className="type-body-sm">{d.drug} đã Bỏ lỡ</span>
-                <Button variant="outline" size="sm" onClick={() => onLate(d)}>
+                <span className="text-xs font-medium">{d.drug} đã Bỏ lỡ</span>
+                <Button variant="outline" size="sm" onClick={() => onLate(d)} className="h-7 text-xs font-semibold bg-white dark:bg-slate-900">
                   Ghi đã dùng muộn
                 </Button>
               </div>
             ))}
         {showRecord && (
-          <div className="mt-auto flex justify-end border-t pt-3">
+          <div className="mt-auto flex justify-end border-t border-slate-100 pt-3 dark:border-slate-800">
             <Button
-              variant={late ? 'default' : 'tonal'}
-              className="px-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+              variant={late ? 'destructive' : 'default'}
+              className={cn(
+                'px-6 py-2 text-xs font-semibold shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md rounded-xl',
+                late
+                  ? 'bg-red-600 hover:bg-red-700 text-white'
+                  : 'bg-[#24496f] hover:bg-[#1b3754] text-white dark:bg-sky-600 dark:hover:bg-sky-700',
+              )}
               onClick={() => onOpen(group)}
             >
               Phát thuốc
@@ -148,26 +158,28 @@ function DoseCard({ group, canRecord, onOpen, onLate }) {
 function Section({ label, sub, count, defaultOpen, urgent, current, children }) {
   return (
     <Collapsible defaultOpen={defaultOpen} className="flex flex-col gap-3">
-      <CollapsibleTrigger className="group flex min-h-11 w-fit items-center gap-2 rounded-full pl-1 pr-3 transition-colors duration-200 hover:bg-card">
+      <CollapsibleTrigger className="group flex min-h-11 w-fit items-center gap-2 rounded-full px-3 py-1.5 transition-colors duration-200 hover:bg-slate-100 dark:hover:bg-slate-800">
         <ChevronDown
-          className="size-5 -rotate-90 text-foreground transition-transform group-data-[panel-open]:rotate-0"
+          className="size-4 -rotate-90 text-slate-500 transition-transform group-data-[panel-open]:rotate-0"
           aria-hidden="true"
         />
-        <span className={cn('type-title tabular-nums', current ? 'text-accent-foreground' : 'text-primary')}>{label}</span>
-        {sub && <span className="type-caption text-foreground tabular-nums">{sub}</span>}
+        <span className={cn('text-base font-bold tabular-nums', current ? 'text-primary' : 'text-slate-800 dark:text-slate-200')}>
+          {label}
+        </span>
+        {sub && <span className="text-xs text-slate-500 tabular-nums">({sub})</span>}
         <span
           className={cn(
-            'rounded-full px-2 type-caption tabular-nums',
+            'rounded-full px-2 py-0.5 text-xs tabular-nums font-bold',
             urgent
-              ? 'bg-destructive font-bold text-card shadow-sm'
-              : 'bg-primary/10 font-semibold text-primary ring-1 ring-primary/20',
+              ? 'bg-red-500 text-white shadow-xs'
+              : 'bg-slate-100 text-slate-700 ring-1 ring-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700',
           )}
         >
           {count}
         </span>
       </CollapsibleTrigger>
       <CollapsibleContent>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-3 *:max-w-[480px]">{children}</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
       </CollapsibleContent>
     </Collapsible>
   )
@@ -216,7 +228,7 @@ function ReconciliationMode({ resident, setResident, isDoctor, onSaved }) {
   }, [needsName, resident?.id, setResident])
   const name = resident && (resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`)
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <NowStrip
         label="Cần đối chiếu"
         items={entries.map((e) => ({
@@ -225,19 +237,48 @@ function ReconciliationMode({ resident, setResident, isDoctor, onSaved }) {
           onSelect: () => setResident({ id: e.residentId, personalInfo: { fullName: e.name } }),
         }))}
       />
-      <ResidentPicker onPick={setResident} selectedId={resident?.id} />
-      {resident && !needsName && (
-        <ReconciliationPanel
-          key={resident.id}
-          residentId={resident.id}
-          residentName={name}
-          isDoctor={isDoctor}
-          onChanged={(message) => {
-            onSaved(message)
-            setRevision((n) => n + 1)
-          }}
-        />
-      )}
+
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        {/* Cột trái: Danh sách tối đa 8 người cao tuổi có phân trang */}
+        <div className="w-full lg:w-80 lg:shrink-0">
+          <div className="flex flex-col gap-3 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between px-0.5">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Danh sách người cao tuổi
+              </h3>
+            </div>
+            <ResidentPicker onPick={setResident} selectedId={resident?.id} />
+          </div>
+        </div>
+
+        {/* Cột phải: Phiếu đối chiếu thuốc của người cao tuổi đang chọn */}
+        <div className="flex min-w-0 flex-1 flex-col gap-5">
+          {resident && !needsName ? (
+            <ReconciliationPanel
+              key={resident.id}
+              residentId={resident.id}
+              residentName={name}
+              isDoctor={isDoctor}
+              onChanged={(message) => {
+                onSaved(message)
+                setRevision((n) => n + 1)
+              }}
+            />
+          ) : (
+            <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-200 bg-white/50 p-12 text-center dark:border-slate-800 dark:bg-slate-900/50">
+              <div className="rounded-full bg-slate-100 p-3.5 dark:bg-slate-800">
+                <FileText className="size-6 text-slate-400" />
+              </div>
+              <h4 className="mt-3 text-sm font-bold text-slate-800 dark:text-slate-200">
+                Chưa chọn người cao tuổi
+              </h4>
+              <p className="mt-1 max-w-sm text-xs text-slate-500">
+                Chọn người cao tuổi từ danh sách bên trái hoặc từ dải "Cần đối chiếu" ở trên để xem và lập phiếu đối chiếu thuốc.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
@@ -248,6 +289,7 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
   const canRecord = role === RECORD_ROLE
   const [mode, setMode] = useState(initialMode)
   const [filter, setFilter] = useState('Tất cả')
+  const [search, setSearch] = useState('')
   const [round, setRound] = useState(null)
   const [problem, setProblem] = useState(null)
   const [clock, setClock] = useState(() => hhmm(new Date()))
@@ -265,6 +307,7 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
       setProblem(problemOf(error))
     }
   }, [])
+
   useEffect(() => {
     let cancelled = false
     loadDoseRound().then(
@@ -278,10 +321,22 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
       clearInterval(tick)
     }
   }, [])
+
   const shift = { now: clock, start: round?.shift?.start, end: round?.shift?.end }
   const groups = groupsOf(round?.doses ?? [], round?.residents ?? [])
   const count = (s) => (s === 'Tất cả' ? groups.length : groups.filter((g) => g.status === s).length)
-  const visible = groups.filter((g) => filter === 'Tất cả' || g.status === filter)
+
+  // Lọc theo thanh tìm kiếm
+  const searchedGroups = groups.filter((g) => {
+    if (!search.trim()) return true
+    const q = search.trim().toLowerCase()
+    const nameMatch = g.resident?.name?.toLowerCase().includes(q)
+    const roomMatch = g.resident?.room?.toLowerCase().includes(q)
+    const drugMatch = g.doses.some((d) => d.drug?.toLowerCase().includes(q))
+    return nameMatch || roomMatch || drugMatch
+  })
+
+  const visible = searchedGroups.filter((g) => filter === 'Tất cả' || g.status === filter)
   const active = visible.filter((g) => g.status !== 'Đã xong')
   const done = visible.filter((g) => g.status === 'Đã xong')
   const times = [...new Set(active.map((g) => g.time))].sort()
@@ -304,66 +359,223 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
   return (
     <div className="mx-auto flex max-w-[1600px] flex-col gap-6">
       <PageHeader
-        title="Phát thuốc"
+        title={<span className="text-[#142B45] dark:text-[#C9D6E5] font-bold tracking-tight">Phát thuốc</span>}
         subtitle={
           canRecord
             ? 'Liều của người cao tuổi bạn phụ trách và liều chung của tầng.'
             : 'Bạn chỉ xem; xác nhận liều do Điều dưỡng thực hiện.'
         }
-        aside={<ClockAside time={shift.now} caption={shift.start ? `Ca ${shift.start} đến ${shift.end}` : undefined} />}
+        aside={
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center rounded-2xl border border-slate-200/80 bg-white px-4 py-2 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+              <span className="font-mono text-2xl font-bold tracking-wider text-slate-800 tabular-nums dark:text-slate-100">
+                {shift.now}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 rounded-2xl border border-sky-100 bg-sky-50/80 px-4 py-2 text-xs font-semibold text-sky-900 shadow-xs dark:border-sky-900/40 dark:bg-sky-950/40 dark:text-sky-200">
+              <Clock className="size-3.5 text-sky-600 dark:text-sky-400" />
+              <span>Ca trực: {shift.start ? `${shift.start} - ${shift.end}` : '07:00 - 18:00'}</span>
+              <span className="text-sky-300 dark:text-sky-700">|</span>
+              <span className="flex items-center gap-1.5 font-bold text-emerald-600 dark:text-emerald-400">
+                <span className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                Đang trực
+              </span>
+            </div>
+          </div>
+        }
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+        {/* Tầng 1: Chọn chế độ nghiệp vụ dạng Pills */}
+        <div className="flex flex-wrap items-center gap-2 pt-1 pb-2">
           <ToggleGroup
-            variant="filter"
-            size="lg"
+            variant="default"
+            size="default"
             value={[mode]}
             onValueChange={(n) => n[0] && setMode(n[0])}
             aria-label="Loại thuốc"
+            className="flex flex-wrap items-center gap-1.5 rounded-full bg-slate-100/80 p-1 dark:bg-slate-800/60"
           >
-            <ToggleGroupItem value="scheduled" className="h-11 px-4">
+            <ToggleGroupItem
+              value="scheduled"
+              className="rounded-full px-5 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+            >
               Liều theo lịch
+              {groups.length > 0 && (
+                <span className="ml-1.5 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+                  {groups.length}
+                </span>
+              )}
             </ToggleGroupItem>
-            <ToggleGroupItem value="prn" className="h-11 px-4">
-              Thuốc khi cần
+            <ToggleGroupItem
+              value="prn"
+              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+            >
+              Thuốc khi cần (PRN)
             </ToggleGroupItem>
-            <ToggleGroupItem value="prescriptions" className="h-11 px-4">
+            <ToggleGroupItem
+              value="prescriptions"
+              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+            >
               Đơn thuốc
             </ToggleGroupItem>
-            <ToggleGroupItem value="reconciliation" className="h-11 px-4">
+            <ToggleGroupItem
+              value="reconciliation"
+              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+            >
               Đối chiếu thuốc
             </ToggleGroupItem>
-            <ToggleGroupItem value="family" className="h-11 px-4">
+            <ToggleGroupItem
+              value="family"
+              className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+            >
               Thuốc gia đình gửi
             </ToggleGroupItem>
             {role === MANAGER_ROLE && (
-              <ToggleGroupItem value="temporary" className="h-11 px-4">
+              <ToggleGroupItem
+                value="temporary"
+                className="rounded-full px-4 py-2 text-xs font-semibold transition-all data-[state=on]:bg-[#24496f] data-[state=on]:text-white data-[state=on]:shadow-xs data-[state=off]:text-slate-600 data-[state=off]:hover:bg-white data-[state=off]:hover:text-slate-900 dark:data-[state=on]:bg-sky-600 dark:data-[state=off]:text-slate-300"
+              >
                 Phụ trách tạm
               </ToggleGroupItem>
             )}
           </ToggleGroup>
-          {mode === 'scheduled' && (
+        </div>
+
+        {/* 4 Thẻ chỉ số tổng quan nhanh theo ca trực */}
+        {mode === 'scheduled' && round && (
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+            {/* Card 1: Trễ */}
+            <button
+              type="button"
+              onClick={() => setFilter(filter === 'Trễ' ? 'Tất cả' : 'Trễ')}
+              className={cn(
+                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
+                'border-slate-200/80 border-l-[6px] border-l-red-500',
+                filter === 'Trễ' && 'ring-2 ring-red-400/50 bg-red-50/30'
+              )}
+            >
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Trễ</div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
+                  {count('Trễ')}
+                </span>
+                <span className="text-xs font-medium text-slate-500">liều</span>
+              </div>
+            </button>
+
+            {/* Card 2: Đến giờ */}
+            <button
+              type="button"
+              onClick={() => setFilter(filter === 'Đến giờ' ? 'Tất cả' : 'Đến giờ')}
+              className={cn(
+                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
+                'border-slate-200/80 border-l-[6px] border-l-amber-500',
+                filter === 'Đến giờ' && 'ring-2 ring-amber-400/50 bg-amber-50/30'
+              )}
+            >
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Đến giờ</div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
+                  {count('Đến giờ')}
+                </span>
+                <span className="text-xs font-medium text-slate-500">liều</span>
+              </div>
+            </button>
+
+            {/* Card 3: Chưa đến giờ */}
+            <button
+              type="button"
+              onClick={() => setFilter(filter === 'Chưa đến giờ' ? 'Tất cả' : 'Chưa đến giờ')}
+              className={cn(
+                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
+                'border-slate-200/80 border-l-[6px] border-l-sky-500',
+                filter === 'Chưa đến giờ' && 'ring-2 ring-sky-400/50 bg-sky-50/30'
+              )}
+            >
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Chưa đến giờ</div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
+                  {count('Chưa đến giờ')}
+                </span>
+                <span className="text-xs font-medium text-slate-500">liều</span>
+              </div>
+            </button>
+
+            {/* Card 4: Đã phát xong */}
+            <button
+              type="button"
+              onClick={() => setFilter(filter === 'Đã xong' ? 'Tất cả' : 'Đã xong')}
+              className={cn(
+                'group relative flex flex-col justify-between rounded-2xl border bg-white p-4 text-left shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:bg-slate-900',
+                'border-slate-200/80 border-l-[6px] border-l-emerald-500',
+                filter === 'Đã xong' && 'ring-2 ring-emerald-400/50 bg-emerald-50/30'
+              )}
+            >
+              <div className="text-xs font-semibold text-slate-600 dark:text-slate-400">Đã phát xong</div>
+              <div className="mt-2 flex items-baseline gap-1.5">
+                <span className="text-3xl font-bold tracking-tight text-slate-900 tabular-nums dark:text-white">
+                  {count('Đã xong')}
+                </span>
+                <span className="text-xs font-medium text-slate-500">liều</span>
+              </div>
+            </button>
+          </div>
+        )}
+
+        {/* Tầng 2: Toolbar gồm Lọc Pills, Ô tìm kiếm và Nút làm mới */}
+        {mode === 'scheduled' && (
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <ToggleGroup
-              variant="filter"
-              size="lg"
+              variant="default"
+              size="sm"
               value={[filter]}
               onValueChange={(n) => n[0] && setFilter(n[0])}
               aria-label="Lọc theo trạng thái"
+              className="flex flex-wrap items-center gap-2"
             >
               {FILTERS.map((f) => (
                 <ToggleGroupItem
                   key={f}
                   value={f}
                   className={cn(
-                    'h-11 px-4',
-                    f === 'Trễ' && count('Trễ') > 0 && 'bg-destructive-subtle text-destructive',
+                    'inline-flex h-8 items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-semibold transition-all shadow-xs border',
+                    filter === f
+                      ? 'bg-sky-100 text-sky-900 border-sky-300 dark:bg-sky-950 dark:text-sky-200 dark:border-sky-700'
+                      : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400'
                   )}
                 >
-                  {f} <span className="tabular-nums">{count(f)}</span>
+                  <span>{f}</span>
+                  <span className={cn('tabular-nums font-bold', filter === f ? 'text-sky-700 dark:text-sky-300' : 'text-slate-400')}>
+                    ({count(f)})
+                  </span>
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
-          )}
-        </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Tìm người cao tuổi, số phòng..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="h-8.5 w-52 sm:w-64 rounded-xl border border-slate-200 bg-white pl-8 pr-3 text-xs shadow-xs placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-2 focus:ring-sky-500/20 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={reload}
+                className="h-8.5 gap-1.5 rounded-xl border-slate-200 bg-white px-3 text-xs font-medium text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+                title="Tải lại danh sách"
+              >
+                <RotateCw className="size-3 text-slate-500" />
+                <span>Làm mới</span>
+              </Button>
+            </div>
+          </div>
+        )}
       </PageHeader>
 
       {mode === 'scheduled' && (
@@ -379,7 +591,7 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
 
       <ProblemAlert problem={problem} />
 
-      <p role="status" aria-live="polite" className="empty:hidden rounded-xl border border-l-4 border-l-primary bg-card px-4 py-3 type-body-sm shadow-sm">
+      <p role="status" aria-live="polite" className="empty:hidden rounded-2xl border border-l-4 border-l-primary bg-card px-4 py-3 type-body-sm shadow-sm">
         {announcement}
       </p>
 
@@ -407,7 +619,65 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
           }}
         />
       ) : !round ? (
-        !problem && <p className="rounded-xl border bg-card px-4 py-3 type-body-sm shadow-sm">Đang tải vòng phát thuốc…</p>
+        !problem && <p className="rounded-2xl border bg-card px-4 py-3 type-body-sm shadow-sm">Đang tải vòng phát thuốc…</p>
+      ) : groups.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-200 bg-white/70 p-12 text-center shadow-xs dark:border-slate-800 dark:bg-slate-900/50">
+          <div className="flex size-16 items-center justify-center rounded-2xl bg-sky-50 text-3xl text-sky-600 dark:bg-sky-950 dark:text-sky-400">
+            💊
+          </div>
+          <h3 className="mt-4 text-base font-bold text-slate-800 dark:text-slate-100">
+            Không có liều thuốc nào trong ca hiện tại
+          </h3>
+          <p className="mt-1.5 max-w-md text-xs text-slate-500 leading-relaxed dark:text-slate-400">
+            {shift.start
+              ? `Ca trực hiện tại (${shift.start} – ${shift.end}) không có lịch phát thuốc nào cần thực hiện.`
+              : 'Hiện tại chưa có ca trực nào được phân công hoặc ca trực đã hết giờ.'}
+          </p>
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => setMode('prescriptions')}
+              className="rounded-xl bg-[#24496f] hover:bg-[#1b3754] text-white px-4 py-2 text-xs font-semibold shadow-xs"
+            >
+              Xem danh sách Đơn thuốc
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={reload}
+              className="rounded-xl border-slate-200 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
+            >
+              Làm mới dữ liệu
+            </Button>
+          </div>
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-10 text-center text-sm text-slate-500 dark:border-slate-800 dark:bg-slate-900/40">
+          {search ? (
+            <>
+              Không tìm thấy kết quả phù hợp với từ khóa <span className="font-semibold text-slate-800 dark:text-slate-200">"{search}"</span>.{' '}
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
+              >
+                Xóa tìm kiếm
+              </button>
+            </>
+          ) : (
+            <>
+              Không có liều nào ở trạng thái <span className="font-semibold text-slate-800 dark:text-slate-200">"{filter}"</span>.{' '}
+              <button
+                type="button"
+                onClick={() => setFilter('Tất cả')}
+                className="font-semibold text-primary underline underline-offset-4 hover:text-primary/80"
+              >
+                Xem tất cả ({groups.length} liều)
+              </button>
+            </>
+          )}
+        </div>
       ) : (
         <div className="flex flex-col gap-6">
           {times.map((t) => {
