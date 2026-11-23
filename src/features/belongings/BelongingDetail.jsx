@@ -64,10 +64,12 @@ function IncidentLink({ entry, onLinked }) {
   )
 }
 
-function HistoryEntry({ entry, onFailure, canLink, onLinked }) {
-  // Bên nhận là nhân viên thì backend không có tên (chỉ mã nhân viên): hiện vai trò thay cho vế bị trống
+function HistoryEntry({ entry, levelName, onFailure, canLink, onLinked }) {
+  // Backend điền tên khi tra được (2026-11-23); không tra được thì hiện vai trò thay cho vế bị trống
+  const giver = entry.giverName ?? GIVER_LABELS[entry.giverType]
   const recipient = entry.recipientName ?? GIVER_LABELS[entry.recipientType]
-  const parties = [entry.giverName, recipient].filter(Boolean).join(' → ')
+  const parties = [giver, recipient].filter(Boolean).join(' → ')
+  const level = entry.conditionLevelId != null && levelName(entry.conditionLevelId)
   return (
     <li className="flex flex-col gap-1 border-t py-3 first:border-t-0 first:pt-0">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -76,7 +78,12 @@ function HistoryEntry({ entry, onFailure, canLink, onLinked }) {
       </div>
       {parties && <span className="type-body-sm">{parties}</span>}
       <span className="type-body-sm text-muted-foreground">
-        {[amountText(entry), entry.conditionDescription, entry.targetStatus && statusLabel(entry.targetStatus)]
+        {[
+          amountText(entry),
+          level && `Tình trạng: ${level}`,
+          entry.conditionDescription,
+          entry.targetStatus && statusLabel(entry.targetStatus),
+        ]
           .filter(Boolean)
           .join(', ')}
       </span>
@@ -240,7 +247,14 @@ export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Descr
         <h3 className="type-card-title">Lịch sử bàn giao</h3>
         <ul className="flex flex-col">
           {state.handovers.map((h) => (
-            <HistoryEntry key={h.id} entry={h} onFailure={setFailure} canLink={canUpdate} onLinked={done} />
+            <HistoryEntry
+              key={h.id}
+              entry={h}
+              levelName={catalogs.levelName}
+              onFailure={setFailure}
+              canLink={canUpdate}
+              onLinked={done}
+            />
           ))}
         </ul>
       </section>

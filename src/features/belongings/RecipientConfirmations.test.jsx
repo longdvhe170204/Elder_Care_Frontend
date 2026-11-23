@@ -32,6 +32,41 @@ function setup(role = 'OFFICE_STAFF') {
 describe('RecipientConfirmations (013 T019, FR-017 → FR-017b)', () => {
   afterEach(() => vi.unstubAllGlobals())
 
+  // Test luồng BF-14 2026-11-23: backend chỉ cho Hành chính lập, ghi liên hệ, hủy (Q-153)
+  it('FR_017_dieuDuongCoQuyenSua_khongThayNutCuaHanhChinh', async () => {
+    setup('NURSING_STAFF')
+    expect(await screen.findByText('Lê Văn Nam')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Lập xác nhận người nhận khác' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ghi lần liên hệ cho Lê Văn Nam' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Hủy yêu cầu của Lê Văn Nam' })).not.toBeInTheDocument()
+  })
+
+  it('FR_017a_quanLyVienXemCacLanLienHeTruocKhiDuyetThay', async () => {
+    const api = mockRoutes()
+    api.on('GET', '/me/permissions', json(200, []))
+    api.on(
+      'GET',
+      '/recipient-confirmations',
+      json(200, [
+        {
+          ...PENDING,
+          contactAttempts: [
+            { familyMemberId: 33, channel: 'PHONE_CALL', at: '2026-11-23T06:00:00Z', result: 'Không nghe máy' },
+          ],
+        },
+      ]),
+    )
+    render(
+      <PermissionsProvider>
+        <RecipientConfirmations residentId={7} belongings={BELONGINGS} role="NURSING_HOME_MANAGER" />
+      </PermissionsProvider>,
+    )
+    const attempts = await screen.findByRole('list', { name: 'Các lần liên hệ người đại diện của Lê Văn Nam' })
+    expect(attempts).toHaveTextContent('Gọi điện')
+    expect(attempts).toHaveTextContent('Không nghe máy')
+    expect(attempts).toHaveTextContent('người đại diện mã 33')
+  })
+
   it('FR_017_danhSachTheoNguoiCaoTuoi_trangThai', async () => {
     const api = setup()
     expect(await screen.findByText('Lê Văn Nam')).toBeInTheDocument()

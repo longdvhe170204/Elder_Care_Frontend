@@ -55,6 +55,30 @@ describe('EndingCondition (013 T026, US5)', () => {
     expect(screen.getByText(/Còn 2 đồ chưa trả/)).toBeInTheDocument()
   })
 
+  // Test luồng BF-14 2026-11-23: FR-025 nêu vị trí đồ chặn; trạng thái mục sau qua đời của 004 bằng chữ
+  it('FR_025_doChanCoViTri_mucSauQuaDoiKhongHienMaTho', async () => {
+    const api = mockRoutes()
+    api.on('GET', '/me/permissions', json(200, []))
+    api.on(
+      'GET',
+      '/residents/7/belongings/ending-condition',
+      json(200, {
+        met: false,
+        blocking: [{ ...PHONE, storageLocationId: 9702 }],
+        lostWithOpenIncident: [],
+        postDeathItem: { status: 'NOT_COMPLETED', basis: 'Còn 1 đồ chưa trả' },
+      }),
+    )
+    render(
+      <PermissionsProvider>
+        <EndingCondition residentId={7} catalogs={catalogs} />
+      </PermissionsProvider>,
+    )
+    expect(await screen.findByText(/Điện thoại Nokia/)).toHaveTextContent('Kho tầng 2')
+    expect(screen.getByText(/Mục "xử lý đồ gửi" sau qua đời/)).toHaveTextContent('Chưa hoàn thành')
+    expect(screen.queryByText(/NOT_COMPLETED/)).not.toBeInTheDocument()
+  })
+
   it('BR_M12_08_deNghiXuLy_quaYeuCauPheDuyet', async () => {
     const api = setup()
     api.on('POST', '/files', json(201, { fileId: 801 }))

@@ -159,6 +159,37 @@ describe('BelongingsPage (013 T011, US1)', () => {
     expect(await screen.findByText(/Trần Thu Hà → Nhân viên/)).toBeInTheDocument()
   })
 
+  // Test luồng BF-14 2026-11-23 (FR-011, FR-020): lịch sử nêu mức tình trạng; bên giao thiếu tên thì hiện vai trò
+  it('FR_020_lichSuNeuMucTinhTrang_benGiaoThieuTenHienVaiTro', async () => {
+    const api = setup()
+    api.on(
+      'GET',
+      '/belongings/90',
+      json(200, {
+        belonging: PHONE,
+        handovers: [
+          {
+            id: 301,
+            belongingId: 90,
+            kind: 'INTAKE',
+            targetStatus: 'HELD',
+            giverType: 'RESIDENT',
+            recipientType: 'STAFF',
+            recipientName: 'Trần Thu Hà',
+            occurredAt: '2026-11-06T02:00:00Z',
+            quantity: 1,
+            conditionLevelId: 11,
+            photoFileIds: [],
+          },
+        ],
+      }),
+    )
+    await openResident()
+    fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết Điện thoại Nokia' }))
+    expect(await screen.findByText('Người cao tuổi → Trần Thu Hà')).toBeInTheDocument()
+    expect(screen.getByText(/Tình trạng: Nguyên vẹn/)).toBeInTheDocument()
+  })
+
   it('FR_029_khongCoQuyenTao_khongCoNutTiepNhan', async () => {
     setup(['BELONGINGS:VIEW'])
     await openResident()
