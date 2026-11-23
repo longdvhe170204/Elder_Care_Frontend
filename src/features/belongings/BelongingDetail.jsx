@@ -12,6 +12,7 @@ import { problemOf } from '@/common/problem'
 import { ConsentForm } from './ConsentForm'
 import { HandoverForm } from './HandoverForm'
 import { WithdrawConsentForm } from './WithdrawConsentForm'
+import { memberName, useFamilyContacts } from './useFamilyContacts'
 import { amountText, commandsFor, GIVER_LABELS, holderLabel, kindLabel, statusLabel } from './belongingLabels'
 
 // Khung chi tiết một đồ gửi (013 T011; FR-011, FR-012; api-013 GET /belongings/{id}): thông tin đồ, lịch sử bàn giao
@@ -126,6 +127,12 @@ function lastLevelId(handovers) {
   return latest?.conditionLevelId
 }
 
+// Tên người đại diện thay cho mã (hoàn thiện BF-14, 2026-11-23)
+function RepresentativeName({ residentId, id }) {
+  const contacts = useFamilyContacts(residentId)
+  return memberName(contacts.members, id)
+}
+
 export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Description }) {
   const { can } = usePermissions()
   const [state, setState] = useState({ status: 'loading' })
@@ -187,7 +194,10 @@ export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Descr
         {state.selfCustodyConsent && (
           <>
             <dt className="text-muted-foreground">Đồng ý cho tự giữ</dt>
-            <dd>Có hiệu lực, người đại diện #{state.selfCustodyConsent.representativeId}</dd>
+            <dd>
+              Có hiệu lực, người đại diện{' '}
+              <RepresentativeName residentId={b.residentId} id={state.selfCustodyConsent.representativeId} />
+            </dd>
           </>
         )}
         <dt className="text-muted-foreground">Vị trí</dt>
@@ -234,7 +244,7 @@ export function BelongingDetail({ belongingId, catalogs, onChanged, Title, Descr
       )}
       {action === 'withdraw' && state.selfCustodyConsent && (
         <section className="flex flex-col gap-3 rounded-xl border p-3" aria-label="Rút đồng ý cho tự giữ">
-          <WithdrawConsentForm consent={state.selfCustodyConsent} onDone={done} />
+          <WithdrawConsentForm consent={state.selfCustodyConsent} residentId={b.residentId} onDone={done} />
         </section>
       )}
       {action === 'consent' && (

@@ -43,7 +43,7 @@ function toQuery({ level, unread, eventType, residentId }, cursor) {
 
 const isOpenUrgent = (n) => n.level === 'URGENT' && !n.acknowledgedAt
 
-export function NotificationInbox({ openedKey, onOpen, onClose }) {
+export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
   const [filter, setFilter] = useState({ level: '', unread: false, eventType: '', residentId: '' })
   const [state, setState] = useState({ status: 'loading', items: [], nextCursor: null })
   // Loại sự kiện đã gặp, ghi bằng tiêu đề thông báo thay cho mã (DESIGN.md mục 8, D9)
@@ -184,6 +184,7 @@ export function NotificationInbox({ openedKey, onOpen, onClose }) {
           id={id}
           onOpened={replace}
           onHidden={hide}
+          onNavigate={onNavigate}
           sourceAction={(n) =>
             reminderIdOf(n) !== null && (
               <Button variant="outline" className="self-start" onClick={() => openReminder(reminderIdOf(n))}>
