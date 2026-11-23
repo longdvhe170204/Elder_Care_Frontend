@@ -1,6 +1,6 @@
 ---
 name: Elder_Care
-version: 6.20.0
+version: 6.21.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
 updated: 2026-11-20
@@ -450,6 +450,7 @@ Chủ dự án duyệt 2026-11-17 (6.14.0). Một lượt tiếp nhận là mộ
 - Bề mặt nền trắng, viền 1px màu Đường kẻ, không đổ bóng. Khung chi tiết cố định chỉ có viền trái. Chỉ lớp nổi (menu nổi, `Sheet` mở đè, hộp thoại) có một tầng bóng.
 - Bo góc theo cấp (CĐA 2026-10-28): 6px điểm nhấn, 8px mục menu, 10px ô giường, ô nhập, khối việc, khối dị ứng, 12px bề mặt (bảng, khối, dải cần làm ngay, hộp thoại); nút, chip lọc, nhãn nguồn, ảnh đại diện bo tròn hẳn.
 - Không làm mờ nền, không kính mờ, không gradient, không hiệu ứng trang trí (mục 1 điều 2).
+- Lớp phủ sau hộp thoại (`Dialog`) và `Sheet` mở đè: đen 40% (`bg-black/40`), không làm mờ, đặt ở `src/components/ui/dialog.jsx`, `sheet.jsx` cho mọi màn; đủ tối để lớp nổi tách khỏi nền xám của trang mà vẫn thấy màn phía sau.
 
 ## 7. Component
 
@@ -811,6 +812,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.21.0 | 2026-11-23 | Mục 6 thêm lớp phủ sau `Dialog`, `Sheet`: đen 40% thay 10% mặc định của shadcn, vì modal có thân nền xám bị lẫn với nền trang (màn Lập công việc ca). Áp cho mọi màn web |
 | 6.20.0 | 2026-11-22 | Chủ dự án chốt Q-416 (luồng chăm sóc hằng ngày): mục 2.3 thêm "Lịch chăm sóc hằng ngày" ở "Thêm" của cổng người thân cho mọi người thân có quan hệ Hiệu lực (công việc chăm sóc và trạng thái không còn phụ thuộc quyền xem sức khỏe; giá trị đo vẫn phụ thuộc); mục 3.5 thêm công việc "Chưa hoàn thành" vào tông neutral. Không thêm màu |
 | 6.19.0 | 2026-11-20 | Chủ dự án duyệt điều hướng app theo vai trò: mục 15.4 thay câu "lấy theo loại tài khoản và quyền" bằng khung nhân viên theo Figma (Ca của tôi · việc chính · Tra cứu · Thông báo · Thêm; vai trò chọn, quyền lọc; nút Khẩn cấp; ba vai trò chỉ dùng web), người thân 5 tab cố định có câu thiếu quyền. Không thêm màu. |
 | 6.18.0 | 2026-11-20 | Chủ dự án yêu cầu giữ bố cục đồng nhất khi nhiều người dùng AI sửa màn: thêm mục 0 "Mẫu màn" (năm mẫu, màn tham chiếu, luật thêm mẫu mới); mục 12 thêm skill dự án `ui-redesign` và cách dùng `frontend-design` trong một mẫu; mục 13 điều 2 chọn mẫu trước khi đề xuất, đổi bố cục thì đưa 2–3 phương án để chủ dự án chọn một. Chủ dự án quyết chuyển file này và các skill giao diện (`frontend-design`, `shadcn`, `ui-redesign`) từ kho Elder_Care sang gốc kho Elder_Care_Frontend; kho Elder_Care giữ file trỏ sang đây (đầu file, "Vị trí"). Không thêm màu, không đổi màn nào. |
