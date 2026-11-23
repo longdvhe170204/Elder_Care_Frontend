@@ -40,6 +40,14 @@ function pickShift(list, target) {
   )
 }
 
+// Số trang hiện trên thanh phân trang: trang đầu, cuối, trang đang xem và hai trang kề; khoảng bỏ qua là "…"
+function pageItems(current, pages) {
+  const shown = [...new Set([1, current - 1, current, current + 1, pages])]
+    .filter((n) => n >= 1 && n <= pages)
+    .sort((a, b) => a - b)
+  return shown.flatMap((n, i) => (i && n - shown[i - 1] > 1 ? [`gap-${n}`, n] : [n]))
+}
+
 function FilterSelect({ label, value, options, onChange }) {
   return (
     <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={control}>
@@ -395,9 +403,24 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
                 <Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
                   Trước
                 </Button>
-                <span className="type-body-sm tabular-nums">
-                  Trang {page + 1} / {pages}
-                </span>
+                {pageItems(page + 1, pages).map((n) =>
+                  typeof n === 'string' ? (
+                    <span key={n} aria-hidden="true" className="px-1 text-muted-foreground">
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={n}
+                      variant="outline"
+                      className={`min-w-11 tabular-nums ${n === page + 1 ? 'border-accent-foreground bg-accent text-accent-foreground' : ''}`}
+                      aria-label={`Trang ${n}`}
+                      aria-current={n === page + 1 ? 'page' : undefined}
+                      onClick={() => setPage(n - 1)}
+                    >
+                      {n}
+                    </Button>
+                  ),
+                )}
                 <Button variant="outline" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
                   Sau
                 </Button>

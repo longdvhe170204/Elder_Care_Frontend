@@ -134,12 +134,24 @@ it('FR_017_lichSuKhongTheoCa_phanTrangMayChu', async () => {
   expect(within(table).getAllByRole('row')).toHaveLength(11)
   expect(screen.getByText('12 việc')).toBeInTheDocument()
   expect(screen.queryByLabelText('Ngày lập')).not.toBeInTheDocument()
-  expect(screen.getByText('Trang 1 / 2')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Sau' }))
+  expect(screen.getByRole('button', { name: 'Trang 1' })).toHaveAttribute('aria-current', 'page')
+  fireEvent.click(screen.getByRole('button', { name: 'Trang 2' }))
   expect(await screen.findByText('Hiển thị 11–12 / 12 công việc')).toBeInTheDocument()
   const query = new URL(api.calls('GET', '/care-tasks').at(-1)[0], 'http://localhost').searchParams
   expect(query.get('page')).toBe('1')
   expect(query.get('size')).toBe('10')
+})
+
+it('FR_017_phanTrangNhieuTrang_hienSoTrangKeVaDauCuoi', async () => {
+  api.on('GET', '/care-tasks', json(200, { items: TASKS, total: 250 }))
+  view()
+  await screen.findByRole('table')
+  const pager = screen.getByRole('navigation', { name: 'Phân trang công việc đã lập' })
+  expect(within(pager).getAllByRole('button').map((b) => b.textContent)).toEqual(['Trước', '1', '2', '25', 'Sau'])
+  fireEvent.click(within(pager).getByRole('button', { name: 'Trang 25' }))
+  await waitFor(() =>
+    expect(new URL(api.calls('GET', '/care-tasks').at(-1)[0], 'http://localhost').searchParams.get('page')).toBe('24'),
+  )
 })
 
 it('FR_017_locTheoNguoiCaoTuoiCongViecNguoiLam_guiLenMayChu', async () => {
