@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { BellIcon, UsersIcon } from 'lucide-react'
+import { BellIcon } from 'lucide-react'
 import {
+  getCareTasks,
   getFloorsById,
   getMeShifts,
   getShiftsById,
   getShiftSchedules,
   getResidents,
   getResidentsById,
+  getStaff,
   getTaskTypes,
   getShiftsByShiftIdSourceData,
   getShiftsByShiftIdCareTasks,
@@ -24,7 +26,9 @@ import { ShiftSourceDialog } from './ShiftSourceDialog'
 import { ShiftTaskBatchDialog } from './ShiftTaskBatchDialog'
 import { STATUSES, dateOf, formatDate, nextDate, shiftLabel, timeOf } from './shiftPlanning'
 
-const PAGE_SIZE = 5
+const PAGE_SIZE = 10
+const NO_FILTER = { residentId: '', taskTypeId: '', performerId: '' }
+const control = 'h-11 w-full rounded-lg border border-input bg-popover px-3 focus-visible:outline-ring'
 
 // Ca chứa thời điểm, hoặc ca đầu tiên bắt đầu sau đó, hoặc ca đầu ngày
 function pickShift(list, target) {
@@ -36,8 +40,22 @@ function pickShift(list, target) {
   )
 }
 
-// Lập công việc ca (005, BF-02 bước 1): Trưởng tầng chọn ngày, ca đã công bố; đối chiếu nguồn trong "Xem chi tiết",
-// nhập lô trong modal "Lập công việc". residentId, at: mở từ thông báo cần lập công việc (BF-01 bước 15).
+function FilterSelect({ label, value, options, onChange }) {
+  return (
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={control}>
+      <option value="">{label}: tất cả</option>
+      {options.map(([id, text]) => (
+        <option key={id} value={id}>
+          {text}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+// Lập công việc ca (005, BF-02 bước 1): lịch sử công việc đã lập không theo ca, ngày (lọc theo người cao tuổi, công việc,
+// người làm); chọn ngày, ca đã công bố trong modal "Lập công việc". residentId, at: mở từ thông báo cần lập công việc
+// (BF-01 bước 15).
 export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: focusResidentId, at: focusAt }) {
   const { status, can } = usePermissions()
   const [target] = useState(() => {
@@ -49,16 +67,22 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   const [shifts, setShifts] = useState([])
   const [shiftId, setShiftId] = useState(initialShiftId || '')
   const [source, setSource] = useState(null)
-  const [tasks, setTasks] = useState([])
+  const [shiftTasks, setShiftTasks] = useState([])
   const [shiftMembers, setShiftMembers] = useState([])
   const [floorName, setFloorName] = useState('')
   const [residents, setResidents] = useState([])
   const [types, setTypes] = useState([])
+  const [staff, setStaff] = useState([])
   const [rows, setRows] = useState([])
-  const [page, setPage] = useState(1)
+  const [history, setHistory] = useState({ items: [], total: 0 })
+  const [page, setPage] = useState(0)
+  const [filter, setFilter] = useState(NO_FILTER)
+  const [revision, setRevision] = useState(0)
+  const [fresh, setFresh] = useState([])
   const [dialog, setDialog] = useState(null)
   const [failure, setFailure] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const [success, setSuccess] = useState('')
   const first = useRef(true)
   const view = can('SHIFT_TASK_PLANNING', 'VIEW')
@@ -82,10 +106,32 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
       .catch((error) => {
         if (current) setFailure(problemOf(error))
       })
+    // Danh sách người làm cho bộ lọc; không tải được thì bộ lọc chỉ có "tất cả"
+    getStaff({ query: { status: 'WORKING' } })
+      .then(({ data }) => current && setStaff(data))
+      .catch(() => {})
     return () => {
       current = false
     }
   }, [status, view, focusResidentId])
+
+  // Lịch sử công việc đã lập: việc lập gần nhất trước, phân trang ở máy chủ
+  useEffect(() => {
+    if (status !== 'ready' || !view) return
+    let current = true
+    const query = { page, size: PAGE_SIZE }
+    Object.entries(filter).forEach(([key, value]) => {
+      if (value) query[key] = Number(value)
+    })
+    Promise.resolve().then(() => current && setHistoryLoading(true))
+    getCareTasks({ query })
+      .then(({ data }) => current && setHistory(data))
+      .catch((error) => current && setFailure(problemOf(error)))
+      .finally(() => current && setHistoryLoading(false))
+    return () => {
+      current = false
+    }
+  }, [status, view, page, filter, revision])
 
   // Ca đã công bố bắt đầu trong ngày lập; lần đầu chọn ca chứa thời điểm thông báo (hoặc bây giờ)
   useEffect(() => {
@@ -117,6 +163,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     }
   }, [status, view, initialShiftId, date, manager, target])
 
+  // Nguồn, công việc, thành viên của ca đang chọn để lập
   useEffect(() => {
     if (status !== 'ready' || !view || !shiftId) return
     let current = true
@@ -129,10 +176,8 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
       .then(([data, work, roster]) => {
         if (!current) return
         setSource(data.data)
-        setTasks(work.data)
-        setPage(1)
+        setShiftTasks(work.data)
         setShiftMembers(roster.data.staff.filter((m) => !m.absent && !m.approvedLeave))
-        setFailure(null)
         if (initialShiftId) setDate(dateOf(data.data.shift.startsAt))
         getFloorsById({ path: { id: data.data.shift.floorAreaId } })
           .then(({ data: floor }) => current && setFloorName(floor.name))
@@ -167,13 +212,18 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     }
   }, [source, known])
 
-  async function saved(count) {
+  // Gửi lô xong: về trang đầu, bỏ lọc để thấy ngay các việc vừa lập (lịch sử xếp việc lập gần nhất trước)
+  async function saved(created, count) {
     setRows([])
     setDialog(null)
     setSuccess(`Đã lập ${count} công việc của ca.`)
+    setFresh(created.map((t) => t.id))
+    setFilter(NO_FILTER)
+    setPage(0)
+    setRevision((n) => n + 1)
     try {
       const { data } = await getShiftsByShiftIdCareTasks({ path: { shiftId } })
-      setTasks(data)
+      setShiftTasks(data)
     } catch (error) {
       setFailure(problemOf(error))
     }
@@ -190,65 +240,50 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     : ''
   const focusName = focusResidentId && (people[focusResidentId] || `Người cao tuổi · mã ${focusResidentId}`)
   const focusInShift = source?.residents.some((r) => r.residentId === focusResidentId)
-  const pages = Math.max(1, Math.ceil(tasks.length / PAGE_SIZE))
-  const shown = tasks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pages = Math.max(1, Math.ceil(history.total / PAGE_SIZE))
   const locked = rows.length > 0
+  const setFilterOf = (key) => (value) => {
+    setFilter((old) => ({ ...old, [key]: value }))
+    setPage(0)
+    setFresh([])
+  }
+  const openBatch = () => {
+    setSuccess('')
+    setDialog('batch')
+  }
+
+  // Chọn ngày, ca để lập: đặt trong modal, khóa khi còn dòng chưa gửi (các dòng gắn với người cao tuổi của ca)
+  const shiftPicker = (
+    <div className="flex flex-wrap gap-2">
+      <input
+        type="date"
+        required
+        aria-label="Ngày lập"
+        value={date}
+        disabled={!!initialShiftId || locked}
+        onChange={(e) => setDate(e.target.value)}
+        className={`${control} w-40`}
+      />
+      <select
+        aria-label="Ca đã công bố"
+        value={shiftId}
+        disabled={!!initialShiftId || locked}
+        onChange={(e) => setShiftId(e.target.value)}
+        className={`${control} w-48`}
+      >
+        {!shiftOptions.length && <option value="">Không có ca đã công bố</option>}
+        {shiftOptions.map((s) => (
+          <option key={s.id} value={s.id}>
+            {shiftLabel(s)}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
 
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Lập công việc ca" subtitle="Đối chiếu nguồn, giao việc và gửi các dòng đã nhập cùng lúc." />
-      <section aria-label="Chọn ca" className="flex flex-wrap items-end gap-4 rounded-xl border bg-card p-4">
-        <label className="flex min-w-48 flex-col gap-2">
-          <span className="type-label">Ngày lập</span>
-          <input
-            type="date"
-            required
-            value={date}
-            disabled={!!initialShiftId || locked}
-            onChange={(e) => {
-              setSuccess('')
-              setDate(e.target.value)
-            }}
-            className="h-11 rounded-lg border border-input bg-popover px-3 focus-visible:outline-ring"
-          />
-        </label>
-        <label className="flex min-w-64 flex-col gap-2">
-          <span className="type-label">Ca đã công bố</span>
-          <select
-            value={shiftId}
-            disabled={!!initialShiftId || locked}
-            onChange={(e) => {
-              setSuccess('')
-              setShiftId(e.target.value)
-            }}
-            className="h-11 rounded-lg border border-input bg-popover px-3 focus-visible:outline-ring"
-          >
-            {!shiftOptions.length && <option value="">Không có ca đã công bố</option>}
-            {shiftOptions.map((s) => (
-              <option key={s.id} value={s.id}>
-                {shiftLabel(s)}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="flex min-w-40 flex-col gap-2">
-          <span className="type-label">Tầng phụ trách</span>
-          <span className="flex h-11 items-center gap-2">
-            <UsersIcon aria-hidden="true" className="size-5 text-muted-foreground" />
-            {floorName || '—'}
-          </span>
-        </div>
-        {shift && (
-          <Badge variant="held" className="mb-3 ml-auto">
-            Đã công bố
-          </Badge>
-        )}
-      </section>
-      {locked && (
-        <p className="type-body-sm text-muted-foreground">
-          Đang có {rows.length} dòng chưa gửi; gửi hoặc bỏ các dòng trước khi đổi ngày, ca.
-        </p>
-      )}
       {focusResidentId && source && (
         <div
           role="status"
@@ -259,8 +294,8 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
             <p className="type-label text-foreground">{focusName} cần lập công việc</p>
             <p className="type-body-sm">
               {focusInShift
-                ? `Đã chọn ${shiftLabel(shift).toLowerCase()}. Bấm Xem chi tiết để đối chiếu nguồn của ${focusName}.`
-                : `${focusName} không có trong ca này, chọn ca khác.`}
+                ? `Bấm Lập công việc: ${shiftLabel(shift).toLowerCase()} ngày ${formatDate(dateOf(shift.startsAt))} đã được chọn sẵn.`
+                : `${focusName} không có trong ${shiftLabel(shift).toLowerCase()}, chọn ca khác khi lập.`}
             </p>
           </div>
           <Badge variant="neutral-outline" className="bg-card">
@@ -268,119 +303,136 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
           </Badge>
         </div>
       )}
+      <section aria-label="Lọc công việc đã lập" className="rounded-xl border bg-card p-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
+          <FilterSelect
+            label="Người cao tuổi"
+            value={filter.residentId}
+            options={residents.map((r) => [String(r.id), people[r.id]])}
+            onChange={setFilterOf('residentId')}
+          />
+          <FilterSelect
+            label="Công việc"
+            value={filter.taskTypeId}
+            options={types.map((t) => [String(t.id), t.name])}
+            onChange={setFilterOf('taskTypeId')}
+          />
+          <FilterSelect
+            label="Người làm"
+            value={filter.performerId}
+            options={staff.map((s) => [String(s.id), s.fullName])}
+            onChange={setFilterOf('performerId')}
+          />
+          {create && (
+            <Button className="h-11 px-6" disabled={!source || loading} onClick={openBatch}>
+              Lập công việc
+            </Button>
+          )}
+        </div>
+      </section>
       <ProblemAlert problem={failure} />
       {success && (
         <p role="status" className="rounded-xl bg-success p-4 text-success-foreground">
           {success}
         </p>
       )}
-      {loading && <p role="status">Đang tải dữ liệu ca…</p>}
-      {source && !loading && (
-        <>
-          {create && (
-            <Button
-              className="h-11 self-end px-6"
-              onClick={() => {
-                setSuccess('')
-                setDialog('batch')
-              }}
-            >
-              Lập công việc
-            </Button>
-          )}
-          <section aria-label="Công việc đã lập" className="overflow-hidden rounded-xl border bg-card">
-            <div className="flex items-center justify-between gap-3 p-4">
-              <h2 className="type-title">Công việc đã lập</h2>
-              <Badge variant="held">{tasks.length} việc</Badge>
-            </div>
-            {tasks.length ? (
-              <Table>
-                <TableHeader className="bg-muted">
-                  <TableRow>
-                    <TableHead>Người cao tuổi</TableHead>
-                    <TableHead>Công việc</TableHead>
-                    <TableHead>Giờ</TableHead>
-                    <TableHead>Người làm</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {shown.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell>{t.residentCard?.fullName || t.location || 'Cả tầng'}</TableCell>
-                      <TableCell className="type-label">{t.content || t.taskType}</TableCell>
-                      <TableCell className="tabular-nums">{timeOf(t.plannedAt)}</TableCell>
-                      <TableCell>{t.performer || 'Việc chung của tầng'}</TableCell>
-                      <TableCell>
-                        <StatusBadge status={STATUSES[t.status]} />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <p className="border-t px-4 py-3 text-muted-foreground">Ca chưa có công việc.</p>
-            )}
-            <div className="flex flex-wrap items-center gap-3 border-t p-4">
-              <Button variant="outline" onClick={() => setDialog('source')}>
-                Xem chi tiết
-              </Button>
-              {tasks.length > 0 && (
-                <span className="type-body-sm text-muted-foreground">
-                  Hiển thị {(page - 1) * PAGE_SIZE + 1}–{(page - 1) * PAGE_SIZE + shown.length} / {tasks.length} công
-                  việc
+      <section aria-label="Công việc đã lập" className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex items-center justify-between gap-3 p-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="type-title">Công việc đã lập</h2>
+            <p className="type-body-sm text-muted-foreground">Mọi ca, việc lập gần nhất trước.</p>
+          </div>
+          <Badge variant="held">{history.total} việc</Badge>
+        </div>
+        {historyLoading ? (
+          <p role="status" className="border-t px-4 py-3">
+            Đang tải công việc đã lập…
+          </p>
+        ) : history.items.length ? (
+          <Table>
+            <TableHeader className="bg-muted">
+              <TableRow>
+                <TableHead>Người cao tuổi</TableHead>
+                <TableHead>Công việc</TableHead>
+                <TableHead>Ngày, giờ</TableHead>
+                <TableHead>Người làm</TableHead>
+                <TableHead>Trạng thái</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.items.map((t) => (
+                <TableRow key={t.id} className={fresh.includes(t.id) ? 'bg-accent/40' : undefined}>
+                  <TableCell>
+                    <span className="flex flex-wrap items-center gap-2">
+                      {t.residentCard?.fullName || t.location || 'Cả tầng'}
+                      {fresh.includes(t.id) && <Badge variant="held">Mới lập</Badge>}
+                    </span>
+                  </TableCell>
+                  <TableCell className="type-label">{t.content || t.taskType}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatDate(dateOf(t.plannedAt))} {timeOf(t.plannedAt)}
+                  </TableCell>
+                  <TableCell>{t.performer || 'Việc chung của tầng'}</TableCell>
+                  <TableCell>
+                    <StatusBadge status={STATUSES[t.status]} />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="border-t px-4 py-3 text-muted-foreground">
+            {Object.values(filter).some(Boolean) ? 'Không có công việc khớp bộ lọc.' : 'Chưa có công việc đã lập.'}
+          </p>
+        )}
+        {history.total > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-t p-4">
+            <span className="type-body-sm text-muted-foreground">
+              Hiển thị {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + history.items.length} / {history.total} công việc
+            </span>
+            {pages > 1 && (
+              <nav aria-label="Phân trang công việc đã lập" className="ml-auto flex items-center gap-2">
+                <Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                  Trước
+                </Button>
+                <span className="type-body-sm tabular-nums">
+                  Trang {page + 1} / {pages}
                 </span>
-              )}
-              {pages > 1 && (
-                <nav aria-label="Phân trang công việc đã lập" className="ml-auto flex gap-2">
-                  <Button variant="outline" disabled={page === 1} onClick={() => setPage(page - 1)}>
-                    Trước
-                  </Button>
-                  {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
-                    <Button
-                      key={n}
-                      variant="outline"
-                      className={n === page ? 'border-accent-foreground bg-accent text-accent-foreground' : undefined}
-                      aria-label={`Trang ${n}`}
-                      aria-current={n === page ? 'page' : undefined}
-                      onClick={() => setPage(n)}
-                    >
-                      {n}
-                    </Button>
-                  ))}
-                  <Button variant="outline" disabled={page === pages} onClick={() => setPage(page + 1)}>
-                    Sau
-                  </Button>
-                </nav>
-              )}
-            </div>
-          </section>
-          <ShiftSourceDialog
-            open={dialog === 'source' || dialog === 'batch-source'}
-            onOpenChange={(open) => !open && setDialog(dialog === 'batch-source' ? 'batch' : null)}
-            subtitle={subtitle}
-            source={source}
-            tasks={tasks}
-            people={people}
-            focusResidentId={focusInShift ? focusResidentId : undefined}
-          />
-          {create && (
-            <ShiftTaskBatchDialog
-              open={dialog === 'batch'}
-              onOpenChange={(open) => !open && setDialog(null)}
-              subtitle={subtitle}
-              shiftId={shiftId}
-              source={source}
-              shiftMembers={shiftMembers}
-              people={people}
-              types={types}
-              rows={rows}
-              setRows={setRows}
-              onSaved={saved}
-              onCompare={() => setDialog('batch-source')}
-            />
-          )}
-        </>
+                <Button variant="outline" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
+                  Sau
+                </Button>
+              </nav>
+            )}
+          </div>
+        )}
+      </section>
+      {source && (
+        <ShiftSourceDialog
+          open={dialog === 'batch-source'}
+          onOpenChange={(open) => !open && setDialog('batch')}
+          subtitle={subtitle}
+          source={source}
+          tasks={shiftTasks}
+          people={people}
+          focusResidentId={focusInShift ? focusResidentId : undefined}
+        />
+      )}
+      {create && source && (
+        <ShiftTaskBatchDialog
+          open={dialog === 'batch'}
+          onOpenChange={(open) => !open && setDialog(null)}
+          subtitle={subtitle}
+          shiftPicker={shiftPicker}
+          shiftId={shiftId}
+          source={source}
+          shiftMembers={shiftMembers}
+          people={people}
+          types={types}
+          rows={rows}
+          setRows={setRows}
+          onSaved={saved}
+          onCompare={() => setDialog('batch-source')}
+        />
       )}
     </div>
   )

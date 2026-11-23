@@ -59,3 +59,21 @@ export function plannedAtOf(shift, time) {
 }
 
 export const pad = (n) => String(n).padStart(2, '0')
+
+// Giờ (HH:MM) có nằm trong ca không, tính cả ca qua đêm
+export function inShift(shift, time) {
+  const at = new Date(plannedAtOf(shift, time)).getTime()
+  return at >= new Date(shift.startsAt).getTime() && at < new Date(shift.endsAt).getTime()
+}
+
+// Đối chiếu loại công việc và giờ người lập đã nhập với nguồn của người cao tuổi (FR-017, FR-023). Không điền thay
+// người lập (Q-307): chỉ trả mục kế hoạch cùng loại có đúng giờ đó, các nguồn khác có đúng giờ đó, và các mục kế hoạch
+// cùng loại kèm giờ của mục nằm trong ca để báo khi chưa khớp.
+export function matchBasis(resident, shift, taskTypeId, time) {
+  const items = (resident?.planItems ?? [])
+    .filter((i) => String(i.taskTypeId) === String(taskTypeId))
+    .map((item) => ({ item, times: (item.times ?? []).map((t) => t.slice(0, 5)).filter((t) => inShift(shift, t)) }))
+  const plan = time ? items.find((i) => i.times.includes(time))?.item : undefined
+  const sources = time && !plan ? (resident?.otherSources ?? []).filter((s) => timeOf(s.at) === time) : []
+  return { items, plan, sources }
+}

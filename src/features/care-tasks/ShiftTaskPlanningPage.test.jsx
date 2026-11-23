@@ -44,13 +44,17 @@ beforeEach(() => {
         {
           residentId: 77,
           assignments: [{ staffId: 22, fullName: '[Nhân viên kiểm thử]', role: 'CAREGIVER' }],
-          planItems: [{ id: 90, content: 'Mục kế hoạch kiểm thử', times: ['08:00:00'] }],
+          planItems: [
+            { id: 90, taskTypeId: 9, content: 'Mục kế hoạch kiểm thử', times: ['08:00:00'], importance: 'NORMAL' },
+          ],
           otherSources: [{ type: 'MEAL', id: 61, at: '2026-11-01T04:30:00Z', description: 'Bữa ăn' }],
         },
       ],
     }),
   )
   api.on('GET', '/shifts/5/care-tasks', json(200, []))
+  api.on('GET', '/care-tasks', json(200, { items: [], total: 0 }))
+  api.on('GET', '/staff/22', json(200, { id: 22, fullName: '[Nhân viên kiểm thử]' }))
   api.on(
     'GET',
     '/shifts/5',
@@ -66,7 +70,9 @@ const view = (props = { shiftId: 5 }) =>
   )
 
 async function openBatch() {
-  fireEvent.click(await screen.findByRole('button', { name: 'Lập công việc' }))
+  const button = await screen.findByRole('button', { name: 'Lập công việc' })
+  await waitFor(() => expect(button).toBeEnabled())
+  fireEvent.click(button)
   return screen.findByRole('dialog', { name: 'Lập công việc cho ca' })
 }
 
@@ -75,34 +81,12 @@ async function enterRow(dialog) {
   const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
   fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
   fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
-  fireEvent.change(within(row).getByLabelText('Căn cứ'), { target: { value: 'CARE_PLAN_ITEM:90' } })
   fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
   fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'NORMAL' } })
   fireEvent.change(within(row).getByLabelText('Phân công'), { target: { value: '22' } })
   fireEvent.change(within(row).getByLabelText('Nội dung (không bắt buộc)'), { target: { value: 'Nội dung tự nhập' } })
   return row
 }
-
-it('FR_017_bangCongViecDaLap_phanTrang5Viec', async () => {
-  api.on('GET', '/shifts/5/care-tasks', json(200, TASKS))
-  view()
-  const table = await screen.findByRole('table')
-  expect(within(table).getAllByRole('row')).toHaveLength(6)
-  expect(screen.getByText('7 việc')).toBeInTheDocument()
-  expect(screen.getByText('Hiển thị 1–5 / 7 công việc')).toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Trang 2' }))
-  expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(3)
-  expect(screen.getByText('Hiển thị 6–7 / 7 công việc')).toBeInTheDocument()
-})
-
-it('FR_017_xemChiTiet_nguonChiDeDoiChieu', async () => {
-  view()
-  fireEvent.click(await screen.findByRole('button', { name: 'Xem chi tiết' }))
-  const dialog = await screen.findByRole('dialog', { name: 'Chi tiết công việc của ca' })
-  expect(within(dialog).getByText('Chỉ xem')).toBeInTheDocument()
-  expect(within(dialog).getByText('Mục kế hoạch kiểm thử · 08:00')).toBeInTheDocument()
-  expect(within(dialog).getByText('Người này chưa có công việc đã lập trong ca.')).toBeInTheDocument()
-})
 
 it('FR_017_moModalKhongTuDienDongCongViec', async () => {
   view()
@@ -141,13 +125,110 @@ it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
   expect(await screen.findByText('Đã lập 1 công việc của ca.')).toBeInTheDocument()
 })
 
+it('FR_017_lichSuKhongTheoCa_phanTrangMayChu', async () => {
+  api.on('GET', '/care-tasks', (url) =>
+    json(200, { items: url.searchParams.get('page') === '1' ? TASKS.slice(0, 2) : [...TASKS, ...TASKS.slice(0, 3)].map((t, i) => ({ ...t, id: 500 + i })), total: 12 }),
+  )
+  view()
+  const table = await screen.findByRole('table')
+  expect(within(table).getAllByRole('row')).toHaveLength(11)
+  expect(screen.getByText('12 việc')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Ngày lập')).not.toBeInTheDocument()
+  expect(screen.getByText('Trang 1 / 2')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Sau' }))
+  expect(await screen.findByText('Hiển thị 11–12 / 12 công việc')).toBeInTheDocument()
+  const query = new URL(api.calls('GET', '/care-tasks').at(-1)[0], 'http://localhost').searchParams
+  expect(query.get('page')).toBe('1')
+  expect(query.get('size')).toBe('10')
+})
+
+it('FR_017_locTheoNguoiCaoTuoiCongViecNguoiLam_guiLenMayChu', async () => {
+  api.on('GET', '/staff', json(200, [{ id: 22, fullName: '[Nhân viên kiểm thử]' }]))
+  view()
+  await screen.findByText('Chưa có công việc đã lập.')
+  fireEvent.change(await screen.findByLabelText('Người cao tuổi'), { target: { value: '77' } })
+  fireEvent.change(screen.getByLabelText('Công việc'), { target: { value: '9' } })
+  await screen.findByRole('option', { name: '[Nhân viên kiểm thử]' })
+  fireEvent.change(screen.getByLabelText('Người làm'), { target: { value: '22' } })
+  await waitFor(() => {
+    const query = new URL(api.calls('GET', '/care-tasks').at(-1)[0], 'http://localhost').searchParams
+    expect([query.get('residentId'), query.get('taskTypeId'), query.get('performerId'), query.get('page')]).toEqual([
+      '77',
+      '9',
+      '22',
+      '0',
+    ])
+  })
+  expect(await screen.findByText('Không có công việc khớp bộ lọc.')).toBeInTheDocument()
+})
+
+it('FR_017_doiChieuNguon_chiDeXem', async () => {
+  view()
+  const batch = await openBatch()
+  fireEvent.click(within(batch).getByRole('button', { name: 'Đối chiếu nguồn' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Chi tiết công việc của ca' })
+  expect(within(dialog).getByText('Chỉ xem')).toBeInTheDocument()
+  expect(within(dialog).getByText('Mục kế hoạch kiểm thử · 08:00')).toBeInTheDocument()
+  expect(within(dialog).getByText('Người này chưa có công việc đã lập trong ca.')).toBeInTheDocument()
+})
+
+it('FR_017_guiXong_viecMoiLapLenDauLichSu', async () => {
+  api.on('POST', '/shifts/5/care-tasks/plan', () => {
+    api.on(
+      'GET',
+      '/care-tasks',
+      json(200, { items: [{ ...TASKS[0], id: 200, content: 'Việc vừa lập' }, ...TASKS], total: 8 }),
+    )
+    return json(201, [{ ...TASKS[0], id: 200 }])
+  })
+  view()
+  const dialog = await openBatch()
+  await enterRow(dialog)
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  expect(await screen.findByText('Việc vừa lập')).toBeInTheDocument()
+  const first = within(screen.getByRole('table')).getAllByRole('row')[1]
+  expect(first).toHaveTextContent('Việc vừa lập')
+  expect(within(first).getByText('Mới lập')).toBeInTheDocument()
+})
+
+it('FR_023_canCuTuDoiChieuLoaiVaGio_khongCoOChon', async () => {
+  view()
+  const dialog = await openBatch()
+  const row = await enterRow(dialog)
+  expect(within(row).queryByRole('combobox', { name: 'Căn cứ' })).not.toBeInTheDocument()
+  expect(within(row).getByRole('group', { name: 'Căn cứ' })).toHaveTextContent(
+    'Khớp mục kế hoạch · Mục kế hoạch kiểm thử · 08:00',
+  )
+  expect(await within(row).findByRole('option', { name: '[Nhân viên kiểm thử] · Nhân viên chăm sóc' })).toHaveValue('22')
+})
+
+it('FR_017_thieuTruongHoacLechMucKeHoach_baoTruocKhiGui', async () => {
+  view()
+  const dialog = await openBatch()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm dòng' }))
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
+  expect(await within(dialog).findByRole('alert')).toHaveTextContent('Chưa lưu lô công việc')
+  expect(within(row).getByText('Chọn mức quan trọng.')).toBeInTheDocument()
+  fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
+  fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
+  fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
+  fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'IMPORTANT' } })
+  expect(within(row).getByText('Mục kế hoạch yêu cầu mức Thường.')).toBeInTheDocument()
+  expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
+})
+
 it('FR_023_phatSinhKhongGuiIdCanCu_viecChungKhongGanNguoi', async () => {
   api.on('POST', '/shifts/5/care-tasks/plan', json(201, []))
   view()
   const dialog = await openBatch()
   const row = await enterRow(dialog)
-  fireEvent.change(within(row).getByLabelText('Căn cứ'), { target: { value: 'AD_HOC' } })
+  fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '09:00' } })
   fireEvent.change(within(row).getByLabelText('Phân công'), { target: { value: 'SHARED' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  expect(await within(row).findByText(/Giờ này không khớp nguồn nào/)).toBeInTheDocument()
+  expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
+  fireEvent.click(within(row).getByLabelText('Lập là việc phát sinh, không theo nguồn nào'))
   fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
   await waitFor(() => expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(1))
   const body = JSON.parse(api.calls('POST', '/shifts/5/care-tasks/plan')[0][1].body)[0]
@@ -197,7 +278,7 @@ it('FR_017_khongCoQuyenThiKhongHienLenhLap', async () => {
   expect(screen.queryByRole('button', { name: 'Lập công việc' })).not.toBeInTheDocument()
 })
 
-// BF-01 bước 15 nối BF-02 bước 1: mở từ thông báo cần lập công việc thì tự chọn ngày, ca chứa thời điểm, báo người đó
+// BF-01 bước 15 nối BF-02 bước 1: mở từ thông báo thì chọn sẵn ngày, ca chứa thời điểm trong modal, báo người đó
 it('FR_020_moTuThongBao_chonCaChuaThoiDiem_vaBaoNguoiCaoTuoi', async () => {
   api.on(
     'GET',
@@ -214,15 +295,18 @@ it('FR_020_moTuThongBao_chonCaChuaThoiDiem_vaBaoNguoiCaoTuoi', async () => {
   const query = new URL(api.calls('GET', '/me/shifts')[0][0], 'http://localhost').searchParams
   expect(query.get('from')).toBe('2030-01-10')
   expect(query.get('to')).toBe('2030-01-11')
-  expect(screen.getByLabelText('Ngày lập')).toHaveValue('2030-01-10')
-  fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết' }))
+  const batch = await openBatch()
+  expect(within(batch).getByLabelText('Ngày lập')).toHaveValue('2030-01-10')
+  expect(within(batch).getByLabelText('Ca đã công bố')).toHaveValue('5')
+  fireEvent.click(within(batch).getByRole('button', { name: 'Đối chiếu nguồn' }))
   const dialog = await screen.findByRole('dialog', { name: 'Chi tiết công việc của ca' })
   expect(within(dialog).getByRole('button', { name: /\[Họ tên kiểm thử\]/ })).toHaveAttribute('aria-pressed', 'true')
   expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
 })
 
+// Người chưa có ở trang hồ sơ đầu thì tải riêng hồ sơ để hiện tên
 it('FR_020_moTuThongBao_nguoiChuaCoOTrangHoSoDau_taiRiengDeHienTen', async () => {
   api.on('GET', '/residents/88', json(200, { id: 88, personalInfo: { fullName: '[Người mới vào tầng]' } }))
   view({ shiftId: 5, residentId: 88 })
-  expect(await screen.findByText(/\[Người mới vào tầng\] không có trong ca này, chọn ca khác/)).toBeInTheDocument()
+  expect(await screen.findByText(/\[Người mới vào tầng\] không có trong ca .*, chọn ca khác khi lập/)).toBeInTheDocument()
 })
