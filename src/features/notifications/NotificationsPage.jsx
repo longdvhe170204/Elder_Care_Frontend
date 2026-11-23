@@ -44,7 +44,7 @@ const TABS = [
   },
 ]
 
-export function NotificationsPage({ role }) {
+export function NotificationsPage({ role, onNavigate }) {
   const tabs = TABS.filter((t) => !t.roles || t.roles.includes(role))
   const [tab, setTab] = useState('inbox')
   const [detail, setDetail] = useState(null)
@@ -80,7 +80,7 @@ export function NotificationsPage({ role }) {
         )}
       </PageHeader>
       {current.value === 'inbox' && (
-        <NotificationInbox openedKey={detail?.key} onOpen={setDetail} onClose={closeDetail} />
+        <NotificationInbox openedKey={detail?.key} onOpen={setDetail} onClose={closeDetail} onNavigate={onNavigate} />
       )}
       {current.value === 'history' && <NotificationHistory openedKey={detail?.key} onOpen={setDetail} />}
       {current.value === 'errors' && <DeliveryErrors />}

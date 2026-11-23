@@ -117,3 +117,11 @@ export function reminderIdOf(notification) {
   const source = notification.sourceRecord
   return source?.type === 'M13.CALL_REMINDER' ? Number(source.id) : null
 }
+
+// Thông báo cần lập công việc (005 TaskPlanningNeeded, nguồn M04.RESIDENT): tham số mở màn Lập công việc ca
+export function planningOf(notification) {
+  const source = notification.sourceRecord
+  if (notification.eventType !== 'TaskPlanningNeeded' || source?.type !== 'M04.RESIDENT') return null
+  const at = notification.sentAt
+  return at ? { residentId: Number(source.id), at } : { residentId: Number(source.id) }
+}
