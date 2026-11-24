@@ -22,7 +22,8 @@ const RIGHTS = {
 
 function describe(request) {
   const value = request.newValue ? 'Bật' : 'Tắt'
-  const person = request.newPicker?.fullName ?? 'người thân'
+  // familyMemberName: họ tên người bị tác động backend trả (thêm 2026-11-24, test BF-12)
+  const person = request.familyMemberName ?? request.newPicker?.fullName ?? 'người thân'
   switch (request.type) {
     case 'RIGHT':
       return `${value} quyền ${RIGHTS[request.right] ?? request.right} cho ${person}`

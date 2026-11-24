@@ -12,9 +12,12 @@ import { FileInput } from '@/common/FileInput'
 
 // Ghi phiếu đăng ký người thân (012 T010, T013; FR-008, Q-126): người đại diện ký, bản scan bắt buộc; mỗi quyền đánh
 // dấu thành một yêu cầu Hiệu lực ngay cách "bản ký". Chỉ chép đúng các quyền ghi trên phiếu giấy; không chọn sẵn ô nào.
-// Được yêu cầu thay đổi dịch vụ, nhận thông báo khẩn tự theo vai trò (FR-009, FR-010) nên không có trên phiếu.
+// Được yêu cầu thay đổi dịch vụ tự theo vai trò người đại diện (FR-010) nên không có trên phiếu; nhận thông báo khẩn chỉ tự
+// bật với người liên hệ chính (FR-009), người thân khác ghi được trên phiếu (FR-007, FR-008; test BF-12 2026-11-24).
 
-const FORM_RIGHTS = RIGHT_ORDER.filter((r) => r !== 'REQUEST_SERVICES' && r !== 'RECEIVE_URGENT')
+const FORM_RIGHTS = RIGHT_ORDER.filter((r) => r !== 'REQUEST_SERVICES')
+const rightsOnForm = (relationship) =>
+  relationship.primaryContact ? FORM_RIGHTS.filter((r) => r !== 'RECEIVE_URGENT') : FORM_RIGHTS
 
 export function RegistrationFormSheet({ open, residentId, residentName, relationships, onClose, onDone }) {
   const [key] = useState(() => crypto.randomUUID())
@@ -101,7 +104,7 @@ export function RegistrationFormSheet({ open, residentId, residentName, relation
           {relationships.map((r) => (
             <fieldset key={r.id} className="flex flex-col gap-2 rounded-lg border p-4">
               <legend className="type-label px-1">{r.familyMember.fullName}</legend>
-              {FORM_RIGHTS.map((right) => {
+              {rightsOnForm(r).map((right) => {
                 const id = `${r.id}:${right}`
                 return (
                   <Field key={right} orientation="horizontal">

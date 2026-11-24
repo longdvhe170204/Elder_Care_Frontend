@@ -129,4 +129,16 @@ describe('FamilyMembersPage', () => {
     await screen.findByRole('heading', { name: 'Trần Thu Hà' })
     expect(screen.queryByRole('button', { name: 'Đặt người đại diện đầu tiên' })).not.toBeInTheDocument()
   })
+
+  // Test BF-12 (2026-11-24): phiếu ghi được quyền nhận thông báo khẩn (FR-007, FR-008); người liên hệ chính luôn bật (FR-009)
+  it('FR_008_phieuDangKy_coNhanThongBaoKhan_truNguoiLienHeChinh', async () => {
+    await openResident()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi phiếu đăng ký' }))
+
+    const ha = await screen.findByRole('group', { name: 'Trần Thu Hà' })
+    expect(within(ha).queryAllByLabelText('Nhận thông báo khẩn')).not.toHaveLength(0)
+    const minh = screen.getByRole('group', { name: 'Trần Văn Minh' })
+    expect(within(minh).queryAllByLabelText('Nhận thông báo khẩn')).toHaveLength(0)
+    expect(within(minh).queryAllByLabelText('Được yêu cầu thay đổi dịch vụ')).toHaveLength(0)
+  })
 })

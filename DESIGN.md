@@ -1,9 +1,9 @@
 ---
 name: Elder_Care
-version: 6.25.0
+version: 6.26.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
-updated: 2026-11-23
+updated: 2026-11-24
 direction: Dòng thời gian ca (hướng 3): nền trơn, menu xanh đêm đậm, trạng thái là chữ màu
 colors:
   light:
@@ -259,7 +259,8 @@ Cổng người thân là bản web (`src/features/family-portal/`, đường d�
 - **Điện thoại:** thanh dưới 4 mục (Trang chủ, Hôm nay, Thăm, Thêm), cao 56px, mục đang chọn có nền xanh trời quanh biểu tượng; Thông báo là nút chuông ở đầu trang. Một cột.
 - Số việc chờ người xem (thông báo cần xác nhận đã nhận, việc chờ người đại diện quyết định) hiện trên Thông báo bằng viên xanh đêm, không dùng đỏ.
 - **Hiện theo quyền:** mục người thân không có quyền thì không hiện (spec 012 User Story 5): không có quyền xem sức khỏe thì không có mục Sức khỏe, lịch không có giờ thuốc; mục "Lịch chăm sóc hằng ngày" (ở "Thêm", spec 012 FR-076, Q-440) hiện cho mọi người thân có quan hệ Hiệu lực: mốc chung, giờ bữa, hoạt động chỉ giờ và tên, công việc chăm sóc có tên và trạng thái Hoàn thành / Chưa hoàn thành / Không thực hiện, giá trị đo chỉ khi có quyền xem sức khỏe có tác dụng; trong sự cố, phần sức khỏe thay bằng dòng khóa của mục 2.2. Chi phí cho người có quyền xem chi phí; hợp đồng, việc chờ quyết định cho người đại diện; đồ gửi cho người đại diện và người được phép đón. Khoản thuốc chỉ hiện mã vật phẩm khi người xem không có quyền xem sức khỏe.
-- **Trang Tài khoản** liệt kê quyền của người xem (Có, Không) để người thân biết mình được xem gì; không sửa quyền ở đây.
+- **Trang Tài khoản** liệt kê đủ sáu quyền của người xem (Có, Không) để người thân biết mình được xem gì; không sửa quyền ở đây.
+- **Gia đình và quyền** (6.26.0, chủ dự án chọn phương án A 2026-11-24 khi test BF-12; spec 012 FR-013, FR-014, FR-015 (a), FR-050): mục ở "Thêm", ngay dưới Tài khoản, cho mọi người thân. Mỗi người thân một thẻ: họ tên (thêm "(bạn)" với người xem), quan hệ và vai trò, "Đang bật: …", yêu cầu Chờ xác nhận của người đó, nút `outline` "Đề nghị đổi quyền". Người đại diện thấy mọi người thân Hiệu lực và có nút chính "Thêm người được phép đón"; người thân khác chỉ thấy thẻ của mình và chỉ chọn được "Tắt …" quyền đang bật. Form mở bằng `Sheet`: chọn một quyền (nhãn "Bật …" hoặc "Tắt …" theo giá trị hiện tại; không có "Được yêu cầu thay đổi dịch vụ", không có "Nhận thông báo khẩn" của người liên hệ chính), lý do bắt buộc, nút "Gửi đề nghị". Sau khi gửi báo một câu theo kết quả: có hiệu lực ngay; trái mong muốn của người cao tuổi nên chờ Quản lý viện duyệt; chờ người đại diện xác nhận. Đặt, thôi người đại diện và dấu "được tự về" vẫn lập tại quầy.
 - **Lệnh của người thân** theo cùng quy tắc form (mục 7.2): từ chối, mở lại bắt buộc lý do; đăng ký thăm từ chối ngay kèm lý do cụ thể, không tạo lượt.
 - **Bản mẫu:** hiện theo một người thân có đủ quyền (người đại diện, người liên hệ chính, có tên trong bản đồng ý) để thấy mọi phần; quy tắc ẩn theo quyền vẫn có trong mã.
 
@@ -817,6 +818,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.26.0 | 2026-11-24 | Test BF-12: chủ dự án chọn phương án A (trang so sánh ba phương án: màn riêng, gộp vào trang Tài khoản, nút trong Thông báo) cho việc người thân lập yêu cầu đổi quyền trên cổng; mục 2.3 thêm màn "Gia đình và quyền" ở "Thêm" (bố cục riêng của cổng, không thêm mẫu màn ở mục 0) và trang Tài khoản liệt kê đủ sáu quyền. Không thêm màu |
 | 6.25.0 | 2026-11-23 | Mục 6 thêm lớp phủ sau `Dialog`, `Sheet`: đen 40% thay 10% mặc định của shadcn, vì modal có thân nền xám bị lẫn với nền trang (màn Lập công việc ca). Áp cho mọi màn web |
 | 6.24.0 | 2026-11-22 | Chủ dự án chốt Q-440 (luồng chăm sóc hằng ngày): mục 2.3 thêm "Lịch chăm sóc hằng ngày" ở "Thêm" của cổng người thân cho mọi người thân có quan hệ Hiệu lực (công việc chăm sóc và trạng thái không còn phụ thuộc quyền xem sức khỏe; giá trị đo vẫn phụ thuộc); mục 3.5 thêm công việc "Chưa hoàn thành" vào tông neutral. Không thêm màu |
 | 6.23.0 | 2026-11-20 | Chủ dự án duyệt điều hướng app theo vai trò: mục 15.4 thay câu "lấy theo loại tài khoản và quyền" bằng khung nhân viên theo Figma (Ca của tôi · việc chính · Tra cứu · Thông báo · Thêm; vai trò chọn, quyền lọc; nút Khẩn cấp; ba vai trò chỉ dùng web), người thân 5 tab cố định có câu thiếu quyền. Không thêm màu. |

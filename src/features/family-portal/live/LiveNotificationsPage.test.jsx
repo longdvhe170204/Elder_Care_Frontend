@@ -106,13 +106,15 @@ describe('LiveNotificationsPage', () => {
           reason: 'Gia đình muốn xem chi phí',
           status: 'PENDING_CONFIRMATION',
           source: 'COUNTER',
+          familyMemberName: 'Trần Thu Hà',
         },
       ]),
     )
     api.on('POST', '/right-change-requests/4/confirm', json(200, {}))
     render(<LiveNotificationsPage viewer={{ ...viewer, residentId: 9 }} />)
 
-    expect(await screen.findByText('Bật quyền Xem chi phí cho người thân')).toBeInTheDocument()
+    // Test BF-12 (2026-11-24): thẻ nêu tên người thân bị tác động
+    expect(await screen.findByText('Bật quyền Xem chi phí cho Trần Thu Hà')).toBeInTheDocument()
     expect(screen.getByText('Lý do: Gia đình muốn xem chi phí')).toBeInTheDocument()
     const [call] = api.calls('GET', '/right-change-requests')
     expect(call[0]).toContain('residentId=9')
