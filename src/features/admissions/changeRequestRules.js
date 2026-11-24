@@ -64,7 +64,7 @@ export function requiredCompanions(currentType, newType) {
 
 const COMPANION_TEXT = {
   ARRIVAL_SCHEDULE: 'Lịch đến',
-  BED: 'Giường',
+  BED: 'Loại phòng',
   DURATION: 'Thời hạn',
 }
 

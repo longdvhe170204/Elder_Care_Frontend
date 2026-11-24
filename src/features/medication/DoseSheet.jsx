@@ -111,11 +111,11 @@ function DoseForm({ dose, entry, onChange, errors }) {
         variant="outline"
         value={entry.result ? [entry.result] : []}
         onValueChange={(n) => onChange({ result: n[0] ?? '' })}
-        className="grid w-full grid-cols-2 sm:grid-cols-4"
+        className="grid w-full grid-cols-2"
         aria-label={`Kết quả liều ${dose.drug}`}
       >
         {RESULTS.map((r) => (
-          <ToggleGroupItem key={r} value={r} className="h-11 px-2">
+          <ToggleGroupItem key={r} value={r} className="h-auto min-h-11 whitespace-normal px-2 py-1.5 text-center leading-tight">
             {r}
           </ToggleGroupItem>
         ))}
@@ -164,10 +164,10 @@ function DoseForm({ dose, entry, onChange, errors }) {
           {(dose.measurements ?? []).length > 0 && (
             <Field data-invalid={(errors.measure && true) || undefined}>
               <FieldLabel>Chỉ số đo trước khi dùng</FieldLabel>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
                 {dose.measurements.map((code) => (
-                  <div key={code} className="flex items-center gap-2">
-                    <label htmlFor={`measure-${dose.id}-${code}`} className="w-36 shrink-0 type-body-sm">
+                  <div key={code} className="flex flex-wrap items-center gap-2">
+                    <label htmlFor={`measure-${dose.id}-${code}`} className="min-w-36 type-body-sm">
                       {measurementLabel(code)}
                     </label>
                     <Input
@@ -176,7 +176,7 @@ function DoseForm({ dose, entry, onChange, errors }) {
                       value={entry.measure?.[code] ?? ''}
                       onChange={(e) => onChange({ measure: { ...entry.measure, [code]: e.target.value } })}
                       aria-invalid={(errors.measure && true) || undefined}
-                      className="h-11 w-24 tabular-nums"
+                      className="h-11 w-28 shrink-0 tabular-nums"
                     />
                     <span className="type-caption text-muted-foreground">{measurementUnit(code)}</span>
                   </div>
