@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
-import { ApiError, getStaff, postResidentsByResidentIdPickups } from '@/api'
+import { useState } from 'react'
+import { ApiError, postResidentsByResidentIdPickups } from '@/api'
+import { useHandoverStaff } from '@/common/useHandoverStaff'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -47,18 +48,12 @@ export function RecordPickupSheet({ residentId, residentName, pickupList, onClos
   const [docType, setDocType] = useState('')
   const [docNumber, setDocNumber] = useState('')
   const [staffId, setStaffId] = useState('')
-  const [staff, setStaff] = useState(null)
+  // "Tôi" và nhân viên cùng ca (test BF-12 2026-11-24: Hành chính không có ca nên trước đây danh sách rỗng)
+  const staff = useHandoverStaff()
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const [blockReason, setBlockReason] = useState(null)
-
-  useEffect(() => {
-    // Nhân viên đang làm việc mà người ghi xem được (api-008: nhân viên chỉ thấy người cùng ca)
-    getStaff({ query: { status: 'WORKING' } })
-      .then(({ data }) => setStaff(data))
-      .catch(() => setStaff([]))
-  }, [])
 
   const selfReturn = type === 'SELF_RETURN'
   const byException = picker === EXCEPTION
@@ -202,7 +197,7 @@ export function RecordPickupSheet({ residentId, residentName, pickupList, onClos
               <option value="">{staff === null ? 'Đang tải danh sách nhân viên' : 'Chọn nhân viên'}</option>
               {(staff ?? []).map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.fullName}
+                  {s.label}
                 </option>
               ))}
             </select>

@@ -168,6 +168,24 @@ describe('Quy trình đón', () => {
     expect(await screen.findByText('Đã ghi đón')).toBeInTheDocument()
   })
 
+  // Test BF-12 (2026-11-24): Hành chính không có ca nên /staff rỗng; người ghi chọn chính mình làm người bàn giao
+  it('FR_021_khongCoNguoiCungCa_chonToiLamNguoiBanGiao', async () => {
+    permissions([['PICKUP', 'CREATE']])
+    api.on('GET', '/staff', json(200, []))
+    api.on('GET', '/me', json(200, { accountId: 7, type: 'STAFF', fullName: 'Bùi Thị Hạnh', staffId: 9010 }))
+    await openResident()
+    const sheet = await openRecordSheet()
+    api.on('POST', '/residents/5/pickups', json(201, { ...RECORDS[0], id: 55, type: 'SELF_RETURN' }))
+
+    fireEvent.click(within(sheet).getByRole('radio', { name: 'Tự về' }))
+    expect(await within(sheet).findByRole('option', { name: 'Tôi (Bùi Thị Hạnh)' })).toBeInTheDocument()
+    fireEvent.change(within(sheet).getByLabelText('Nhân viên tiễn'), { target: { value: '9010' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Ghi bản ghi đón' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residents/5/pickups')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residents/5/pickups')[0][1].body).handoverStaffId).toBe(9010)
+  })
+
   it('FR_021_tuVe_khongCoNguoiDonVaGiayTo', async () => {
     permissions([['PICKUP', 'CREATE']])
     await openResident()
