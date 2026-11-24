@@ -158,6 +158,57 @@ describe('ReportForm', () => {
     expect(api.calls('POST', '/incidents')).toHaveLength(0)
   })
 
+  it('BF_06_daXuLyXong_ghiNhanSau_phaiNoiDaBaoNguoiNhaChua_roiGuiRecordedLater', async () => {
+    permissions(BOTH)
+    api.on('POST', '/incidents', json(201, { incident: { id: 56 } }))
+    renderPage()
+    await start()
+    fireEvent.click(screen.getByRole('button', { name: /^Sự cố/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đã xử lý xong/ }))
+    // Ghi nhận sau không còn "mở khẩn cấp"; chưa nói đã báo người nhà chưa thì không gửi
+    expect(screen.queryByRole('button', { name: 'Lưu và mở khẩn cấp' })).toBeNull()
+    save()
+    expect(await screen.findByText('Chọn đã báo người nhà chưa')).toBeTruthy()
+    expect(api.calls('POST', '/incidents')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: /^Đã báo rồi/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gặp trực tiếp' }))
+    save()
+    await waitFor(() => expect(api.calls('POST', '/incidents')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents')[0][1].body)).toMatchObject({
+      recordedLater: true,
+      familyNotice: { state: 'INFORMED', method: 'IN_PERSON' },
+    })
+  })
+
+  it('BF_06_ghiNhanSau_chuaBaoNguoiNha_guiNotYet', async () => {
+    permissions(BOTH)
+    api.on('POST', '/incidents', json(201, { incident: { id: 57 } }))
+    renderPage()
+    await start()
+    fireEvent.click(screen.getByRole('button', { name: /^Sự cố/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đã xử lý xong/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Chưa báo/ }))
+    save()
+    await waitFor(() => expect(api.calls('POST', '/incidents')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/incidents')[0][1].body)).toMatchObject({
+      recordedLater: true,
+      familyNotice: { state: 'NOT_YET' },
+    })
+  })
+
+  it('BF_06_dangXuLy_khongGuiRecordedLater', async () => {
+    permissions(BOTH)
+    api.on('POST', '/incidents', json(201, { incident: { id: 58 } }))
+    renderPage()
+    await start()
+    fireEvent.click(screen.getByRole('button', { name: /^Sự cố/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và mở khẩn cấp' }))
+    await waitFor(() => expect(api.calls('POST', '/incidents')).toHaveLength(1))
+    const body = JSON.parse(api.calls('POST', '/incidents')[0][1].body)
+    expect(body.recordedLater).toBeUndefined()
+    expect(body.familyNotice).toBeUndefined()
+  })
+
   it('BF_06_loaiKhongPhaiSucKhoe_luonLaSuCo_khongHoi', async () => {
     permissions(BOTH)
     renderPage()

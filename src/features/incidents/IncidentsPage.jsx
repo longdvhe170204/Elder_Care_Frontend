@@ -45,6 +45,7 @@ import {
   FocusHeading,
 } from './CasePage'
 import { EmergencyCardPanel } from './EmergencyCardPanel'
+import { FamilyNoticePanel } from './FamilyNoticePanel'
 import { HandoverStaffField } from './HandoverStaffField'
 import { FollowUpBlock, FollowUpForm } from './IncidentFollowUps'
 import { IncidentTypeIcon } from './IncidentTypePicker'
@@ -748,6 +749,9 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       />
       {problem && !inDialog && <ProblemAlert problem={problem} />}
       {content.residentId != null && isOpen(incident) && <CriticalNotice residentId={content.residentId} />}
+      {content.residentId != null && (
+        <FamilyNoticePanel incidentId={incident.id} canRecord={commands.includes('family-notice')} />
+      )}
       {/* Trái: cần biết để xử lý (thẻ khẩn cấp, gọi điện, ghi nhận); phải: Diễn biến (đề xuất 2026-11-24) */}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div className="flex min-w-0 flex-col gap-5">
