@@ -1019,12 +1019,16 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
   if (creating) {
     return (
       <ReportForm
+        defaultKind="alert"
         onClose={() => setCreating(false)}
         onOpenIncident={onNavigate && ((incidentId) => onNavigate('incidents', { incidentId }))}
         onDone={({ kind, id, message }) => {
-          // Sự cố mở ở màn Sự cố để thấy ngay thẻ khẩn cấp, Gọi 115; cảnh báo về danh sách
+          // Sự cố mở ở màn Sự cố để thấy ngay thẻ khẩn cấp, Gọi 115; cảnh báo ở lại màn này và mở chi tiết
           if (kind === 'incident' && id != null && onNavigate) onNavigate('incidents', { incidentId: id })
-          else created(message)
+          else {
+            created(message)
+            if (id != null) setOpenId(id)
+          }
         }}
       />
     )

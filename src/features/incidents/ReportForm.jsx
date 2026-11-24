@@ -20,8 +20,8 @@ import { loadFloorChoices, loadResidentChoices, recordIncident, runIncidentComma
 import { LEVEL_LABEL, needsLowerReason, presetLevel, vietnamIso, vietnamNowLocal } from './incidentView'
 
 // Báo sự việc (đề xuất 2026-11-24, góp ý demo BF-06): một form thay cho "Tạo cảnh báo" và "Ghi nhận sự cố" vốn giống hệt
-// nhau. Người dùng trả lời "Đã xảy ra chưa?": đã xảy ra thì ghi sự cố (BF-06 bước 7, FR-040), mới là dấu hiệu cần người xem
-// thì tạo cảnh báo thủ công (bước 1, FR-026). Loại không phải sức khỏe (đồ gửi, cơ sở vật chất) và người không có quyền
+// nhau. Người dùng chọn "Ghi thành gì?": Sự cố (đã xảy ra, BF-06 bước 7, FR-040) hoặc Cảnh báo (dấu hiệu cần người xem)
+// (bước 1, FR-026). Loại không phải sức khỏe (đồ gửi, cơ sở vật chất) và người không có quyền
 // tạo cảnh báo luôn ghi sự cố; người chỉ có quyền tạo cảnh báo luôn tạo cảnh báo. Mức chọn sẵn theo mặc định của loại,
 // mức thấp hơn mặc định của sự cố cần lý do (FR-042). Mô tả để trống thì ghép tên loại và nơi xảy ra (backend bắt buộc).
 
@@ -137,7 +137,13 @@ function Section({ title, children, className }) {
  * onDone({ kind: 'incident' | 'alert', id, level, message }): đã lưu. onOpenIncident(id): mở sự cố Khẩn cấp đang có của
  * người này (FR-041).
  */
-export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'report-event' }) {
+export function ReportForm({
+  onClose,
+  onDone,
+  onOpenIncident,
+  returnFocusId = 'report-event',
+  defaultKind = 'incident',
+}) {
   const { can } = usePermissions()
   const canAlert = can('ALERT_HANDLING', 'CREATE')
   const canIncident = can('INCIDENT_EMERGENCY', 'CREATE')
@@ -149,7 +155,8 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
   const [noResident, setNoResident] = useState(false)
   const [floorId, setFloorId] = useState('')
   const [typeId, setTypeId] = useState('')
-  const [happened, setHappened] = useState(true)
+  // Ghi thành cảnh báo hay sự cố: chọn sẵn theo màn đang mở (Cảnh báo → cảnh báo, Sự cố → sự cố), đổi được bằng hai nút
+  const [wantAlert, setWantAlert] = useState(defaultKind === 'alert')
   const [level, setLevel] = useState('')
   const [note, setNote] = useState('')
   const [place, setPlace] = useState('')
@@ -194,11 +201,11 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
   const choosable = noResident ? activeTypes.filter((t) => t.allowsNoResident) : activeTypes
   const type = activeTypes.find((t) => String(t.id) === typeId) ?? null
   const answered = residentId != null || noResident
-  // Có hỏi "Đã xảy ra chưa?" không: chỉ khi làm được cả hai và việc là sức khỏe của một người cao tuổi
+  // Có cho chọn Cảnh báo hay Sự cố không: chỉ khi làm được cả hai và việc là sức khỏe của một người cao tuổi
   const ask = canAlert && canIncident && !!type && !type.nonHealth && residentId != null
   // Chỉ tạo được cảnh báo (không có quyền ghi sự cố) thì luôn là cảnh báo; còn lại mặc định ghi sự cố
   const alertOnly = canAlert && !canIncident
-  const kind = alertOnly || (ask && !happened) ? 'alert' : 'incident'
+  const kind = alertOnly || (ask && wantAlert) ? 'alert' : 'incident'
   const lowerNeeded = kind === 'incident' && needsLowerReason(level, type)
   const description = note.trim() || [type?.name, place.trim()].filter(Boolean).join(', ')
   const errors = {
@@ -391,21 +398,21 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
 
         <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6">
           {ask && (
-            <Section title="Đã xảy ra chưa?">
-              <div role="group" aria-label="Đã xảy ra chưa?" className="grid grid-cols-2 gap-2">
+            <Section title="Ghi thành gì?">
+              <div role="group" aria-label="Ghi thành gì?" className="grid grid-cols-2 gap-2">
                 {[
-                  [true, 'Đã xảy ra', 'Cụ đã ngã, đã nghẹn…'],
-                  [false, 'Mới là dấu hiệu', 'Cần người xem'],
+                  [true, 'Cảnh báo', 'Mới là dấu hiệu, cần người xem'],
+                  [false, 'Sự cố', 'Đã xảy ra, ghi hồ sơ (cụ đã ngã, đã nghẹn…)'],
                 ].map(([value, label, hint]) => (
                   <Button
                     key={label}
                     type="button"
                     variant="outline"
-                    aria-pressed={happened === value}
-                    onClick={() => setHappened(value)}
+                    aria-pressed={wantAlert === value}
+                    onClick={() => setWantAlert(value)}
                     className={cn(
                       'h-auto min-h-16 flex-col items-start gap-0.5 rounded-lg bg-card px-3 py-2 text-left whitespace-normal',
-                      happened === value && 'border-2 border-primary bg-accent',
+                      wantAlert === value && 'border-2 border-primary bg-accent',
                     )}
                   >
                     <span className="type-label">{label}</span>
