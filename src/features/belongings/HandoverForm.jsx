@@ -6,6 +6,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { StaffSelectField } from '@/common/StaffSelectField'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { FilesField, SelectField } from './BelongingFields'
@@ -256,16 +257,12 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, l
         )}
         {v.type !== 'GIVE_FOR_USE' && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field>
-              <FieldLabel htmlFor="handover-recipient">Mã nhân viên nhận (trống là bạn)</FieldLabel>
-              <Input
-                id="handover-recipient"
-                inputMode="numeric"
-                className="h-11"
-                value={v.recipientStaffId}
-                onChange={(e) => set('recipientStaffId')(e.target.value)}
-              />
-            </Field>
+            <StaffSelectField
+              id="handover-recipient"
+              label="Nhân viên nhận (trống là bạn)"
+              value={v.recipientStaffId}
+              onChange={set('recipientStaffId')}
+            />
             <SelectField
               id="handover-location"
               label="Vị trí lưu giữ mới"

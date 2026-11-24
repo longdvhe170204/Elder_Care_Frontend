@@ -123,4 +123,27 @@ describe('IntakeForm (013 T011, US1)', () => {
     expect(screen.getByText('Chọn vị trí lưu giữ.')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/7/belongings')).toHaveLength(0)
   })
+
+  // Demo 2026-11-25: người thân giao đồ chọn theo tên, không có ô mã, họ tên, giấy tờ
+  it('nguoiThanGiao_chonTheoTen_khongNhapMaHoTenGiayTo', async () => {
+    const api = mockRoutes()
+    api.on(
+      'GET',
+      '/residents/7/relationships',
+      json(200, [{ id: 1, familyMember: { id: 33, fullName: 'Trần Văn Bình' }, representative: true, rights: {} }]),
+    )
+    api.on('POST', '/residents/7/belongings', json(201, { id: 1 }))
+    const onDone = renderForm()
+    fill({ type: 1 })
+    fireEvent.change(screen.getByLabelText('Người giao'), { target: { value: 'FAMILY_MEMBER' } })
+    fireEvent.change(await screen.findByLabelText('Người thân giao'), { target: { value: '33' } })
+    expect(screen.queryByLabelText('Họ tên người giao')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Giấy tờ người giao')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Lưu/ }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(JSON.parse(api.calls('POST', '/residents/7/belongings')[0][1].body).giver).toEqual({
+      type: 'FAMILY_MEMBER',
+      id: 33,
+    })
+  })
 })

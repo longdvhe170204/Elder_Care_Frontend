@@ -8,8 +8,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
-import { FilesField, SelectField } from './BelongingFields'
+import { FilesField, MemberField, SelectField } from './BelongingFields'
 import { GIVER_LABELS, activeOptions, nowLocal, toOffsetIso } from './belongingLabels'
+import { useFamilyContacts } from './useFamilyContacts'
 
 // Lệnh Tiếp nhận đồ gửi (013 T011, US1; FR-003 → FR-008; api-013 BelongingIntake). Loại tiền mặt nhập số tiền, loại
 // khác nhập số lượng (FR-005); đồ có giá trị (dấu `valuable` của loại theo CFG-M12-01 hiện hành) bắt buộc ảnh (BR-M12-05);
@@ -44,7 +45,7 @@ function validate(values, type, photos, giveNow, signedForm) {
     errors.amount = type?.hasCashAmount ? 'Nhập số tiền lớn hơn 0.' : 'Nhập số lượng lớn hơn 0.'
   if (!values.levelId) errors.levelId = 'Chọn mức tình trạng.'
   if (!values.giverType) errors.giverType = 'Chọn người giao.'
-  if (values.giverType === 'FAMILY_MEMBER' && !/^[1-9]\d*$/.test(values.giverId)) errors.giverId = 'Nhập mã người thân.'
+  if (values.giverType === 'FAMILY_MEMBER' && !/^[1-9]\d*$/.test(values.giverId)) errors.giverId = 'Chọn người thân.'
   if (values.giverType === 'OTHER_PERSON' && !values.giverName.trim()) errors.giverName = 'Nhập họ tên người giao.'
   if (values.giverType === 'OTHER_PERSON' && !values.giverIdDocument.trim())
     errors.giverIdDocument = 'Nhập giấy tờ của người giao.'
@@ -57,6 +58,8 @@ function validate(values, type, photos, giveNow, signedForm) {
 }
 
 export function IntakeForm({ residentId, types, levels, locations, onDone }) {
+  // Demo 2026-11-25: người thân giao đồ chọn theo tên (danh sách quan hệ của 012), không nhập mã, họ tên, giấy tờ
+  const contacts = useFamilyContacts(residentId)
   const [values, setValues] = useState(() => ({ ...EMPTY, at: nowLocal() }))
   const [photos, setPhotos] = useState([])
   const [signedForm, setSignedForm] = useState([])
@@ -84,8 +87,9 @@ export function IntakeForm({ residentId, types, levels, locations, onDone }) {
       const amount = Number(values.amount)
       const giver = { type: values.giverType }
       if (values.giverType === 'FAMILY_MEMBER') giver.id = Number(values.giverId)
-      if (values.giverName.trim()) giver.fullName = values.giverName.trim()
-      if (values.giverIdDocument.trim()) giver.idDocument = values.giverIdDocument.trim()
+      if (values.giverType === 'OTHER_PERSON' && values.giverName.trim()) giver.fullName = values.giverName.trim()
+      if (values.giverType === 'OTHER_PERSON' && values.giverIdDocument.trim())
+        giver.idDocument = values.giverIdDocument.trim()
       const { data } = await postResidentsByResidentIdBelongings({
         path: { residentId },
         headers: { 'Idempotency-Key': key.current },
@@ -195,20 +199,17 @@ export function IntakeForm({ residentId, types, levels, locations, onDone }) {
           error={errors.giverType}
         />
         {values.giverType === 'FAMILY_MEMBER' && (
-          <Field data-invalid={!!errors.giverId || undefined}>
-            <FieldLabel htmlFor="intake-giver-id">Mã người thân</FieldLabel>
-            <Input
-              id="intake-giver-id"
-              inputMode="numeric"
-              className="h-11"
-              value={values.giverId}
-              onChange={(e) => set('giverId')(e.target.value)}
-              aria-invalid={!!errors.giverId || undefined}
-            />
-            {errors.giverId && <FieldError>{errors.giverId}</FieldError>}
-          </Field>
+          <MemberField
+            id="intake-giver-id"
+            label="Người thân giao"
+            fallbackLabel="Mã người thân"
+            contacts={contacts}
+            value={values.giverId}
+            onChange={set('giverId')}
+            error={errors.giverId}
+          />
         )}
-        {['OTHER_PERSON', 'FAMILY_MEMBER'].includes(values.giverType) && (
+        {values.giverType === 'OTHER_PERSON' && (
           <div className="grid gap-4 sm:grid-cols-2">
             <Field data-invalid={!!errors.giverName || undefined}>
               <FieldLabel htmlFor="intake-giver-name">Họ tên người giao</FieldLabel>
