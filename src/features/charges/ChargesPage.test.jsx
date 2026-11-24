@@ -258,3 +258,24 @@ it('bangChiPhi_hienTen_timTheoTen', async () => {
   fireEvent.change(screen.getByLabelText('Tìm theo tên, mã hồ sơ'), { target: { value: 'Trần' } })
   expect(screen.queryByRole('button', { name: 'Xem bảng #31' })).toBeNull()
 })
+
+// Demo 2026-11-25: nút vào màn gom đổi tên theo việc nó làm (gom toàn bộ, không chỉ lập từng khoản)
+it('nutGomChiPhiPhatSinh_moManGom', async () => {
+  api.on(
+    'GET',
+    '/me/permissions',
+    json(200, [
+      { function: 'COST_ADJUSTMENT', operation: 'VIEW' },
+      { function: 'COST_ADJUSTMENT', operation: 'CREATE' },
+      { function: 'PERIOD_CLOSING', operation: 'VIEW' },
+    ]),
+  )
+  render(
+    <PermissionsProvider>
+      <ChargesPage />
+    </PermissionsProvider>,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Gom chi phí phát sinh' }))
+  expect(await screen.findByRole('heading', { name: 'Gom chi phí phát sinh' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Gom toàn bộ chi phí chưa lập' })).toBeInTheDocument()
+})

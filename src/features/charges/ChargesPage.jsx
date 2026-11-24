@@ -120,7 +120,7 @@ export function ChargesPage({ role }) {
         <PageHeader
           title={
             workspace === 'sources'
-              ? 'Lập khoản từ nguồn'
+              ? 'Gom chi phí phát sinh'
               : workspace === 'manual'
                 ? 'Lập khoản nhập tay'
                 : 'Biến động sau chốt'
@@ -159,7 +159,7 @@ export function ChargesPage({ role }) {
       )}
       {can('COST_ADJUSTMENT', 'CREATE') && (
         <div className="flex gap-3">
-          <Button onClick={() => setWorkspace('sources')}>Lập khoản từ nguồn</Button>
+          <Button onClick={() => setWorkspace('sources')}>Gom chi phí phát sinh</Button>
           <Button variant="outline" onClick={() => setWorkspace('manual')}>
             Lập khoản nhập tay
           </Button>
