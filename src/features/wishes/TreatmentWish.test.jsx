@@ -230,11 +230,8 @@ describe('TreatmentWish', () => {
     fireEvent.change(screen.getByLabelText('Số thẻ'), { target: { value: 'GD4797912345678' } })
     fireEvent.change(screen.getByLabelText('Hạn thẻ'), { target: { value: '2027-06-30' } })
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hỏi gia đình trước khi chuyển viện không khẩn cấp' }))
-    fireEvent.change(screen.getByLabelText('Mã người thân cần báo'), { target: { value: 'abc' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
-    expect(await screen.findByText('Mã người thân là số nguyên dương')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Mã người thân cần báo'), { target: { value: '31' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
+    expect(screen.queryByLabelText('Mã người thân cần báo')).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Báo Trần Văn Minh' }))
     await pickMember('Người thân nêu ý kiến', 32)
     fireEvent.change(screen.getByLabelText('Nội dung ý kiến'), { target: { value: 'Muốn bệnh viện Z' } })
     fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến' }))
@@ -275,8 +272,7 @@ describe('TreatmentWish', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
     fillMinimum()
-    fireEvent.change(screen.getByLabelText('Mã người thân cần báo'), { target: { value: '99' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Báo Ngô Văn Khác' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
     expect(await screen.findByText(/Người cần báo phải là người thân có quan hệ Hiệu lực/)).toBeInTheDocument()
