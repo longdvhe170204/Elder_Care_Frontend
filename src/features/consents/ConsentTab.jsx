@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ApiError, getResidentsByIdConsents, postConsentsByIdWithdraw, postResidentsByIdConsents } from '@/api'
+import {
+  ApiError,
+  getResidentsByIdConsents,
+  getResidentsByResidentIdRelationships,
+  postConsentsByIdWithdraw,
+  postResidentsByIdConsents,
+} from '@/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -92,19 +98,45 @@ function yesNo(value) {
   return value ? 'Có' : 'Không'
 }
 
-function ConsentDetails({ consent, onDownloadFailure }) {
+// Người thân có quan hệ Hiệu lực với người cao tuổi (api-012), để chọn theo tên thay cho ô nhập mã (demo 2026-11-25).
+// Không đọc được thì danh sách rỗng: phần xem hiện "người thân mã …", form báo chưa có người thân để chọn.
+function useMembers(residentId) {
+  const [members, setMembers] = useState([])
+  useEffect(() => {
+    let live = true
+    getResidentsByResidentIdRelationships({ path: { residentId } })
+      .then(
+        ({ data }) =>
+          live &&
+          setMembers(
+            (data ?? [])
+              .filter((r) => r.status === undefined || r.status === 'ACTIVE')
+              .map((r) => ({ id: r.familyMember.id, fullName: r.familyMember.fullName })),
+          ),
+      )
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [residentId])
+  return members
+}
+
+const nameOf = (members, id) => members.find((m) => m.id === id)?.fullName ?? `người thân mã ${id}`
+
+function ConsentDetails({ consent, members = [], onDownloadFailure }) {
   const court = consent.courtDecision
   return (
     <>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
         <Row label="Người đồng ý">
           {CONSENTER_LABELS[consent.consenterType]}
-          {consent.consenterFamilyMemberId != null && ` (mã người thân ${consent.consenterFamilyMemberId})`}
+          {consent.consenterFamilyMemberId != null && ` (${nameOf(members, consent.consenterFamilyMemberId)})`}
         </Row>
         <Row label="Ngày đồng ý">{formatDateTime(consent.consentedAt)}</Row>
         <Row label="Người thân được xem sức khỏe">
           {consent.familyMemberIdsAllowedHealthView.length > 0
-            ? `Mã ${consent.familyMemberIdsAllowedHealthView.join(', ')}`
+            ? consent.familyMemberIdsAllowedHealthView.map((id) => nameOf(members, id)).join(', ')
             : 'Không ai'}
         </Row>
         <Row label="Đồng ý dùng hình ảnh">{yesNo(consent.photoConsent)}</Row>
@@ -118,11 +150,7 @@ function ConsentDetails({ consent, onDownloadFailure }) {
       <div className="flex flex-wrap gap-2">
         <DownloadButton fileId={consent.evidenceFileId} label="Tải bản ký" onFailure={onDownloadFailure} />
         {court && (
-          <DownloadButton
-            fileId={court.fileId}
-            label="Tải quyết định của Tòa án"
-            onFailure={onDownloadFailure}
-          />
+          <DownloadButton fileId={court.fileId} label="Tải quyết định của Tòa án" onFailure={onDownloadFailure} />
         )}
         {consent.withdrawal?.evidenceFileId != null && (
           <DownloadButton
@@ -136,13 +164,12 @@ function ConsentDetails({ consent, onDownloadFailure }) {
   )
 }
 
-function RecordForm({ residentId, onCancel, onDone }) {
+function RecordForm({ residentId, members, onCancel, onDone }) {
   const [signer, setSigner] = useState('RESIDENT')
   const [signerId, setSignerId] = useState('')
   const [court, setCourt] = useState({ number: '', date: '', court: '' })
   const [courtFile, setCourtFile] = useState(null)
   const [evidence, setEvidence] = useState(null)
-  const [idInput, setIdInput] = useState('')
   const [ids, setIds] = useState([])
   const [photo, setPhoto] = useState(false)
   const [notification, setNotification] = useState(false)
@@ -153,18 +180,6 @@ function RecordForm({ residentId, onCancel, onDone }) {
   const [key] = useState(() => crypto.randomUUID())
   // tệp đã tải lên theo đối tượng File, để gửi lại sau lỗi không tải lên lần nữa
   const uploaded = useRef(new Map())
-
-  function addId() {
-    const text = idInput.trim()
-    if (!POSITIVE_INTEGER.test(text)) {
-      setErrors((current) => ({ ...current, ids: 'Mã người thân là số nguyên dương' }))
-      return
-    }
-    const value = Number(text)
-    setIds((current) => (current.includes(value) ? current : [...current, value]))
-    setIdInput('')
-    setErrors((current) => ({ ...current, ids: undefined }))
-  }
 
   async function upload(file) {
     if (!uploaded.current.has(file)) uploaded.current.set(file, await uploadFile(file))
@@ -177,7 +192,7 @@ function RecordForm({ residentId, onCancel, onDone }) {
     if (!date) next.date = 'Chọn ngày đồng ý'
     else if (date > today()) next.date = 'Ngày đồng ý không ở tương lai'
     if (signer === 'LEGAL_REPRESENTATIVE') {
-      if (!POSITIVE_INTEGER.test(signerId.trim())) next.signerId = 'Nhập mã người thân là người ký'
+      if (!POSITIVE_INTEGER.test(signerId.trim())) next.signerId = 'Chọn người thân là người ký'
       if (!court.number.trim()) next.number = 'Nhập số quyết định'
       if (!court.date) next.courtDate = 'Chọn ngày quyết định'
       else if (court.date > today()) next.courtDate = 'Ngày quyết định không ở tương lai'
@@ -247,8 +262,8 @@ function RecordForm({ residentId, onCancel, onDone }) {
     >
       <h3 className="type-card-title">Ghi nhận bản đồng ý</h3>
       <p className="type-body-sm text-muted-foreground">
-        Bản mới thay bản Hiệu lực hiện hành. Người thân không có trong danh sách dưới đây sẽ không xem được thông tin sức
-        khỏe.
+        Bản mới thay bản Hiệu lực hiện hành. Người thân không có trong danh sách dưới đây sẽ không xem được thông tin
+        sức khỏe.
       </p>
 
       <Field>
@@ -281,21 +296,25 @@ function RecordForm({ residentId, onCancel, onDone }) {
       {rep && (
         <>
           <Field data-invalid={!!errors.signerId || undefined}>
-            <FieldLabel htmlFor="consent-signer-id">Mã người thân là người ký</FieldLabel>
-            <Input
+            <FieldLabel htmlFor="consent-signer-id">Người thân là người ký</FieldLabel>
+            <select
               id="consent-signer-id"
-              inputMode="numeric"
+              className="h-11 w-full rounded-md border border-input bg-transparent px-3"
               value={signerId}
               onChange={(e) => setSignerId(e.target.value)}
               aria-invalid={!!errors.signerId || undefined}
-            />
+            >
+              <option value="">Chọn người thân</option>
+              {members.map((m) => (
+                <option key={m.id} value={String(m.id)}>
+                  {m.fullName}
+                </option>
+              ))}
+            </select>
             {errors.signerId ? (
               <FieldError>{errors.signerId}</FieldError>
             ) : (
-              <FieldDescription>
-                Tạm thời nhập mã tới khi hồ sơ người thân (feature 012) có danh sách. Hệ thống kiểm người này có quan hệ
-                Hiệu lực với người cao tuổi.
-              </FieldDescription>
+              <FieldDescription>Người thân có quan hệ Hiệu lực với người cao tuổi.</FieldDescription>
             )}
           </Field>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -356,51 +375,26 @@ function RecordForm({ residentId, onCancel, onDone }) {
         {errors.date && <FieldError>{errors.date}</FieldError>}
       </Field>
 
-      <Field data-invalid={!!errors.ids || undefined}>
-        <FieldLabel htmlFor="consent-family-id">Mã người thân được xem sức khỏe</FieldLabel>
-        <div className="flex gap-2">
-          <Input
-            id="consent-family-id"
-            inputMode="numeric"
-            value={idInput}
-            onChange={(e) => setIdInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                addId()
-              }
-            }}
-            aria-invalid={!!errors.ids || undefined}
-          />
-          <Button type="button" variant="outline" className="h-11" onClick={addId}>
-            Thêm mã
-          </Button>
-        </div>
-        {errors.ids ? (
-          <FieldError>{errors.ids}</FieldError>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="type-label">Người thân được xem sức khỏe</legend>
+        {members.length === 0 ? (
+          <p className="type-body-sm text-muted-foreground">Hồ sơ chưa có người thân có quan hệ Hiệu lực.</p>
         ) : (
-          <FieldDescription>
-            Tạm thời nhập mã tới khi hồ sơ người thân (feature 012) có danh sách. Để trống nếu không ai được xem.
-          </FieldDescription>
+          members.map((m) => (
+            <label key={m.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3">
+              <Checkbox
+                checked={ids.includes(m.id)}
+                onCheckedChange={(on) =>
+                  setIds((current) => (on ? [...current, m.id] : current.filter((x) => x !== m.id)))
+                }
+                aria-label={`${m.fullName} được xem sức khỏe`}
+              />
+              <span className="type-body-sm">{m.fullName}</span>
+            </label>
+          ))
         )}
-        {ids.length > 0 && (
-          <ul aria-label="Người thân được xem sức khỏe" className="flex flex-wrap gap-2">
-            {ids.map((id) => (
-              <li key={id} className="flex items-center gap-1 rounded-full border px-3 py-1 type-body-sm">
-                <span>Mã {id}</span>
-                <button
-                  type="button"
-                  className="min-h-8 min-w-8 rounded-full text-muted-foreground"
-                  aria-label={`Bỏ mã ${id}`}
-                  onClick={() => setIds((current) => current.filter((x) => x !== id))}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Field>
+        <FieldDescription>Không chọn ai thì không người thân nào xem được thông tin sức khỏe.</FieldDescription>
+      </fieldset>
 
       <div className="flex flex-col gap-2">
         <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3">
@@ -478,8 +472,8 @@ function WithdrawForm({ consent, onCancel, onDone }) {
     >
       <h3 className="type-card-title">Rút lại đồng ý</h3>
       <p className="type-body-sm text-muted-foreground">
-        Người thân trong phạm vi mất quyền xem thông tin sức khỏe từ lần truy cập kế tiếp. Bản đã rút lại không kích hoạt
-        lại được; muốn đồng ý lại thì ghi nhận bản mới.
+        Người thân trong phạm vi mất quyền xem thông tin sức khỏe từ lần truy cập kế tiếp. Bản đã rút lại không kích
+        hoạt lại được; muốn đồng ý lại thì ghi nhận bản mới.
       </p>
       <Field data-invalid={!!errors.reason || undefined}>
         <FieldLabel htmlFor="consent-withdraw-reason">Lý do rút lại (bắt buộc)</FieldLabel>
@@ -513,6 +507,7 @@ export function ConsentTab({ residentId, status, allowedCommands = [], onChanged
   const [downloadFailure, setDownloadFailure] = useState(null)
   const [form, setForm] = useState(null)
   const [done, setDone] = useState(null)
+  const members = useMembers(residentId)
 
   const load = useCallback(async () => {
     try {
@@ -589,7 +584,7 @@ export function ConsentTab({ residentId, status, allowedCommands = [], onChanged
         </div>
 
         {current ? (
-          <ConsentDetails consent={current} onDownloadFailure={setDownloadFailure} />
+          <ConsentDetails consent={current} members={members} onDownloadFailure={setDownloadFailure} />
         ) : (
           <Alert variant="attention">
             <AlertTitle>Chưa có bản đồng ý Hiệu lực</AlertTitle>
@@ -645,6 +640,7 @@ export function ConsentTab({ residentId, status, allowedCommands = [], onChanged
       {form === 'record' && canRecord && (
         <RecordForm
           residentId={residentId}
+          members={members}
           onCancel={() => setForm(null)}
           onDone={() => finished('Đã ghi nhận bản đồng ý.')}
         />
@@ -679,7 +675,7 @@ export function ConsentTab({ residentId, status, allowedCommands = [], onChanged
                 {consent.withdrawal?.reason && (
                   <p className="type-body-sm whitespace-pre-wrap">{consent.withdrawal.reason}</p>
                 )}
-                <ConsentDetails consent={consent} onDownloadFailure={setDownloadFailure} />
+                <ConsentDetails consent={consent} members={members} onDownloadFailure={setDownloadFailure} />
               </li>
             ))}
           </ul>
