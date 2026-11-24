@@ -337,7 +337,7 @@ function ShiftWorkspace({ initialMonth }) {
                 onDone={done}
               />
             )}
-            {panel?.kind === 'schedule' && <ScheduleForm month={month} onDone={done} />}
+            {panel?.kind === 'schedule' && <ScheduleForm month={month} places={places} onDone={done} />}
             {panel?.kind === 'assignments' && (
               <AssignmentPanel
                 key={panel.shift.id}
@@ -351,6 +351,7 @@ function ShiftWorkspace({ initialMonth }) {
             {panel?.kind === 'floorManagers' && (
               <FloorManagerPanel
                 staff={staff}
+                places={places}
                 canCreate={can('SHIFT_SCHEDULE', 'CREATE')}
                 canUpdate={can('SHIFT_SCHEDULE', 'UPDATE')}
               />
