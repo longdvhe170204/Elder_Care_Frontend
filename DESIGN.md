@@ -1,6 +1,6 @@
 ---
 name: Elder_Care
-version: 6.25.0
+version: 6.26.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
 updated: 2026-11-23
@@ -163,6 +163,7 @@ Các màn web giống nhau nhờ dùng chung một số kiểu bố cục đã d
 
 - Làm hay sửa một màn: chọn một mẫu trong bảng và ghi tên mẫu trong mô tả PR. Trong một mẫu được đổi thứ tự khối, cột, nhóm lọc, câu chữ; không đổi khung, component dùng chung, cách mở chi tiết.
 - Không mẫu nào hợp, hoặc muốn lai hai mẫu: đề xuất phương án (trang so sánh, mục 13 điều 2) → chủ dự án duyệt → thêm dòng vào bảng này, tăng phiên bản → mới sửa mã. Bố cục chỉ một màn dùng thì ghi là bố cục riêng của màn đó, chưa thành mẫu; khi màn thứ hai cần thì mới thêm vào bảng và tách component ra `src/common`.
+- Bố cục riêng đề xuất, chờ chủ dự án duyệt (6.23.0, Đức Anh 2026-11-23): hồ sơ xử lý cả trang của Sự cố và form ghi theo bước của Sự cố, Cảnh báo (mục 5.4).
 - Bố cục riêng đã duyệt, chưa là mẫu: Tổng quan "Cột chú ý" (`dashboard/DashboardPage.jsx`, mục 5.1, 7.2 `dashboard-attention`); cổng người thân (mục 2.1, 2.3).
 - Chưa có màn tham chiếu: Phòng, giường dạng thẻ phòng (`room-card`, mục 14 "Chưa thiết kế"). Màn chưa áp 6.x (mục 14) không lấy làm mẫu để chép.
 - Skill `/ui-redesign` (mục 12) đi theo mục này khi dùng AI sửa bố cục.
@@ -444,6 +445,23 @@ Chủ dự án duyệt 2026-11-17 (6.14.0). Một lượt tiếp nhận là mộ
 - Cột trái (6.20.0, chủ dự án chọn phương án B "Việc tiếp theo" 2026-11-21, thay yêu cầu 2026-11-18 bỏ thanh tiến độ): (1) thanh tiến độ bốn giai đoạn (Hồ sơ; Sức khỏe; Giường, hợp đồng; Sau tiếp nhận), mỗi đoạn một thanh xanh thương hiệu trên rãnh nền phụ kèm "<giai đoạn>, x trên y bước xong"; (2) khối "Việc tiếp theo của bạn": bước đầu tiên chưa xong mà vai trò đang đăng nhập làm được (theo `allowedCommands` của hồ sơ và khóa quyền), bước là điều kiện trước, bước không bắt buộc sau, đủ điều kiện thì "Hoàn tất tiếp nhận"; tên bước `title` và một nút chính; (3) khối "Đang chờ người khác": bước chưa xong của vai trò khác, mỗi dòng kèm nhãn vai trò (chủ dự án duyệt ghi vai trò ở khối này; danh sách bước vẫn không ghi); (4) nút "Xem tất cả các bước (n)" mở danh sách bước theo giai đoạn. Mỗi bước: tên, dòng phụ khi cần ("Không bắt buộc để tiếp nhận", "Kế toán ghi thu tiền cọc khi gia đình nộp"), một bộ nhãn trạng thái "Xong" (xanh lá), "Chưa xong" (bước là điều kiện), "Chưa làm" (không bắt buộc), "Sau tiếp nhận", lượt đã đóng thì "Không còn kiểm"; nút mở đúng form hoặc màn sở hữu (bước Đặt cọc: "Xem tiền cọc", với Kế toán "Ghi thu tiền cọc"). Trạng thái bước không bắt buộc lấy từ cảnh báo của lệnh Hoàn tất tiếp nhận (`MISSING_CONSENT`, `UNCONFIRMED_HEALTH_RECORD`, `MISSING_*_WISH`).
 - Cột phải: điều kiện Hoàn tất tiếp nhận cùng bộ nhãn "Xong", "Chưa xong", cảnh báo (câu không mang mã spec), ý kiến về việc vào ở kèm nguồn (mục 2.2), nút "Hoàn tất tiếp nhận" (theo `allowedCommands`) mở tab Trạng thái của hồ sơ, là nút phụ khi khối Việc tiếp theo đang có nút chính; dòng "Còn n điều kiện chưa xong". Backend vẫn kiểm mọi lệnh.
 - Chỉ hiện trạng thái đã ghi; không tự làm bước thay người. "Việc tiếp theo" chỉ theo thứ tự bước BF-01 và quyền của người dùng, không xếp hạng hay gợi ý thứ tự khác (Q-306, Q-307).
+
+### 5.4 Hồ sơ xử lý cả trang: Sự cố (đề xuất 2026-11-23, chờ chủ dự án duyệt)
+
+Chi tiết dài, có nhiều khối làm việc cùng lúc thì mở cả trang; chi tiết ngắn giữ khung phải (mục 5 "Khung chi tiết").
+
+| Nội dung | Cách mở |
+| --- | --- |
+| Chi tiết sự cố; cảnh báo nguy kịch (BF-17) | Cả trang (`CasePage`, `src/features/incidents/CasePage.jsx`) |
+| Chi tiết cảnh báo khác | Khung phải (`DetailLayout`), danh sách vẫn thấy |
+| Ghi nhận sự cố, Tạo cảnh báo | Cả trang, theo bước: cột trái các bước và câu đã trả lời, cột phải câu đang trả lời; loại chọn bằng lưới biểu tượng kèm tên |
+| Lệnh ngắn (đóng, đổi mức, giao, chuyển viện, giao việc) | Hộp thoại |
+
+- Đầu trang: đường dẫn "Sự cố / SC-1" (không thêm nút trùng nút "Quay lại" của khung chung), biểu tượng loại, tên, "Mức" và "Trạng thái" có nhãn riêng, thanh tiến trình trạng thái. Đã kết thúc thì thanh chỉ hiện bước đầu và bước cuối vì API không trả lịch sử trạng thái. Chuyển viện, về viện chỉ là dòng trong Diễn biến; đầu trang chỉ thêm một câu việc cần làm khi đang ở bệnh viện hoặc vừa về (sửa 2026-11-24). Chi tiết cảnh báo (khung 420px) không có thanh tiến trình.
+- Hai cột (sửa 2026-11-24, góp ý test demo: quá nhiều khối, quá nhiều chữ): trái là phần cần biết để xử lý (thẻ thông tin khẩn cấp, "Cần gọi điện", Ghi nhận; giờ xảy ra, giờ tiếp nhận, xử lý ban đầu, người được báo gập vào "Xem thêm"); phải Diễn biến rồi Việc tiếp theo. Nút "Ghi diễn biến" và form nằm trong khối Diễn biến. "Cần gọi điện": người nhà hiện đủ, nhân viên chưa xác nhận gom thành một dòng, bấm mới mở danh sách.
+- Lệnh nằm ở thanh lệnh dính chân trang, với chi tiết cảnh báo là chân khung (`CaseActionBar`, sửa 2026-11-24): một nút chính theo trạng thái (Tiếp nhận; Chuyển theo dõi; Đóng sự cố), lệnh hay dùng là nút viền, lệnh ít dùng (Đổi mức, Chuyển cho người khác, Chỉ tiếp nhận, Kết thúc theo dõi sau ngã; Kích hoạt khẩn cấp khi cảnh báo chưa ở mức Khẩn cấp) gom vào "Thêm thao tác". Câu nói rõ hậu quả hiện khi rê chuột; lệnh bị khóa nói lý do bằng một dòng trên thanh hoặc danh sách điều kiện trong khối Diễn biến. Trường chưa ghi gom thành một dòng "Chưa ghi: …".
+- "Cần làm ngay" ở màn Cảnh báo chỉ gồm cảnh báo gấp chưa ai tiếp nhận.
+- SOS (người cao tuổi bấm) và Cần hỗ trợ (nhân viên gửi) khác tên, khác biểu tượng, khác nguồn.
 
 ## 6. Hình khối, độ nổi
 
@@ -817,6 +835,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.26.0 | 2026-11-23 | Đề xuất của Đức Anh (BF-06), chờ chủ dự án duyệt: mục 5.4 hồ sơ xử lý cả trang của Sự cố, form ghi theo bước có lưới biểu tượng; chi tiết cảnh báo vẫn ở khung phải; "Cần làm ngay" của Cảnh báo chỉ gồm việc chưa ai tiếp nhận. Sửa 2026-11-24 (góp ý test demo): thay các ô lệnh bằng thanh lệnh chân trang một nút chính, lệnh ít dùng vào "Thêm thao tác"; trái phần cần biết, phải Diễn biến; phần ít xem gập "Xem thêm". Không thêm màu, không thêm component dùng chung |
 | 6.25.0 | 2026-11-23 | Mục 6 thêm lớp phủ sau `Dialog`, `Sheet`: đen 40% thay 10% mặc định của shadcn, vì modal có thân nền xám bị lẫn với nền trang (màn Lập công việc ca). Áp cho mọi màn web |
 | 6.24.0 | 2026-11-22 | Chủ dự án chốt Q-440 (luồng chăm sóc hằng ngày): mục 2.3 thêm "Lịch chăm sóc hằng ngày" ở "Thêm" của cổng người thân cho mọi người thân có quan hệ Hiệu lực (công việc chăm sóc và trạng thái không còn phụ thuộc quyền xem sức khỏe; giá trị đo vẫn phụ thuộc); mục 3.5 thêm công việc "Chưa hoàn thành" vào tông neutral. Không thêm màu |
 | 6.23.0 | 2026-11-20 | Chủ dự án duyệt điều hướng app theo vai trò: mục 15.4 thay câu "lấy theo loại tài khoản và quyền" bằng khung nhân viên theo Figma (Ca của tôi · việc chính · Tra cứu · Thông báo · Thêm; vai trò chọn, quyền lọc; nút Khẩn cấp; ba vai trò chỉ dùng web), người thân 5 tab cố định có câu thiếu quyền. Không thêm màu. |

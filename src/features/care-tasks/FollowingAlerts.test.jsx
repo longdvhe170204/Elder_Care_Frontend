@@ -17,6 +17,7 @@ const ALERT = {
 beforeEach(() => {
   api = mockRoutes()
   api.on('GET', '/alerts/9', json(200, ALERT))
+  api.on('GET', '/incident-types', json(200, []))
   api.on('POST', '/alerts/9/follow-ups', json(201, {}))
 })
 afterEach(() => vi.unstubAllGlobals())
