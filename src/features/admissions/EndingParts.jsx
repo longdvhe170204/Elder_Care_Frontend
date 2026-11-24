@@ -38,14 +38,18 @@ import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 const SETTLEMENT = ['END_H_SETTLEMENT', 'END_H_SETTLEMENT_CONFIRMATION']
 const HOUSE_LABEL = 'Điều kiện (h): số dư và tiền cọc đã quyết toán'
 
+// Trạng thái có màu (Đạt xanh, Chưa đạt đỏ; DESIGN.md mục 3.5). Lý do chỉ hiện khi Chưa đạt: dòng Đạt, Tự động backend
+// trả căn cứ là mã spec (FR-063 …), không phải chữ cho người dùng
 function ConditionLine({ line }) {
   return (
     <li className="flex flex-col">
-      <span className="type-body-sm">{line.name ?? line.code}</span>
-      <span className="type-caption text-muted-foreground">
-        {CONDITION_STATUS[line.status] ?? line.status}
-        {line.basis ? `, ${line.basis}` : ''}
+      <span className="flex flex-wrap items-center gap-x-2">
+        <span className="type-body-sm">{line.name ?? line.code}</span>
+        <StatusBadge status={CONDITION_STATUS[line.status] ?? line.status} />
       </span>
+      {line.status === 'NOT_MET' && line.basis && (
+        <span className="type-caption text-muted-foreground">{line.basis}</span>
+      )}
     </li>
   )
 }

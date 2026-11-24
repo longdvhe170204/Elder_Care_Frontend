@@ -88,6 +88,34 @@ describe('EndingsPage', () => {
     expect(screen.getByText(/Tự động/)).toBeInTheDocument()
   })
 
+  it('FR_063_dieuKien_datMauXanh_chuaDatMauDo_khongHienMaSpec', async () => {
+    api.on(
+      'GET',
+      '/residency-endings/14/conditions',
+      json(200, {
+        conditions: [
+          { code: 'END_B_BELONGINGS', name: 'Không còn đồ gửi cần nhận', status: 'MET', basis: 'FR-063 (b)' },
+          {
+            code: 'END_E_HANDOVER',
+            name: 'Đã ghi nhận bàn giao người cao tuổi',
+            status: 'NOT_MET',
+            basis: 'Chưa ghi nhận bàn giao người cao tuổi',
+          },
+          { code: 'END_G_BED', name: 'Giường được giải phóng', status: 'AUTOMATIC', basis: 'FR-063 (g), FR-065' },
+        ],
+        warnings: [],
+      }),
+    )
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
+    await screen.findByText('Không còn đồ gửi cần nhận')
+
+    expect(screen.getByText('Đạt')).toHaveClass('text-success-foreground')
+    expect(screen.getByText('Chưa đạt')).toHaveClass('text-destructive')
+    expect(screen.getByText('Chưa ghi nhận bàn giao người cao tuổi')).toBeInTheDocument()
+    expect(screen.queryByText(/FR-063/)).not.toBeInTheDocument()
+  })
+
   it('FR_064_xinNgoaiLe_khongCoChoDieuKienBanGiao_vaXacNhanQuyetToan', async () => {
     renderPage()
     await openEnding()
