@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
-import { SelectField, TextField } from './BalanceFields'
+import { MoneyField, SelectField, TextField } from './BalanceFields'
 import { LEDGER_LABELS, TYPE_LABELS, formatMoney, labelOf } from './balanceLabels'
 
 // Lập hoàn tiền, hoàn cọc hoặc điều chỉnh (017 T027; FR-010, FR-011, FR-013, FR-014, BR-M11-10, BR-M11-14). Giao dịch
@@ -25,6 +25,8 @@ const METHOD_OPTIONS = [
   { value: 'BANK_TRANSFER', label: 'Chuyển khoản' },
   { value: 'OTHER', label: 'Khác' },
 ]
+// Ô nào báo vào lỗi nào (họ tên, giấy tờ người nhận khác chung một lỗi)
+const ERROR_KEY = { otherName: 'recipient', otherDocument: 'recipient' }
 const isRefund = (type) => type === 'REFUND' || type === 'DEPOSIT_REFUND'
 
 // Giao dịch gốc của điều chỉnh: giao dịch Đã xác nhận cùng sổ, trừ thanh toán bảng chi phí (FR-011; máy chủ vẫn kiểm)
@@ -51,11 +53,16 @@ export function TransactionForm({ residentId, transactions = [], representative 
     reason: '',
     note: '',
   })
-  const [errors, setErrors] = useState({})
+  // Lỗi hiện ngay tại ô khi người dùng đã sửa ô đó; bấm gửi thì hiện mọi lỗi (demo 2026-11-25)
+  const [touched, setTouched] = useState({})
+  const [submitted, setSubmitted] = useState(false)
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const key = useRef(crypto.randomUUID())
-  const set = (name) => (value) => setV((s) => ({ ...s, [name]: value }))
+  const set = (name) => (value) => {
+    setV((s) => ({ ...s, [name]: value }))
+    setTouched((t) => ({ ...t, [ERROR_KEY[name] ?? name]: true }))
+  }
 
   function validate() {
     const found = {}
@@ -68,13 +75,14 @@ export function TransactionForm({ residentId, transactions = [], representative 
     if (!v.reason.trim()) found.reason = 'Nhập lý do.'
     return found
   }
+  const live = validate()
+  const errors = submitted ? live : Object.fromEntries(Object.entries(live).filter(([k]) => touched[k]))
 
   async function submit(event) {
     event.preventDefault()
-    const found = validate()
-    setErrors(found)
+    setSubmitted(true)
     setFailure(null)
-    if (Object.keys(found).length > 0) return
+    if (Object.keys(live).length > 0) return
     const ledger = v.type === 'REFUND' ? 'BALANCE' : v.type === 'DEPOSIT_REFUND' ? 'DEPOSIT' : v.ledger
     const body = { type: v.type, residentId, ledger, amount: Number(v.amount), reason: v.reason.trim() }
     if (isRefund(v.type)) {
@@ -108,14 +116,14 @@ export function TransactionForm({ residentId, transactions = [], representative 
             options={LEDGER_OPTIONS}
           />
         )}
-        <TextField
+        <MoneyField
           id="tx-amount"
           label="Số tiền"
-          inputMode="numeric"
           value={v.amount}
           onChange={set('amount')}
+          allowNegative={v.type === 'ADJUSTMENT'}
           error={errors.amount}
-          hint={v.type === 'ADJUSTMENT' ? 'Điều chỉnh nhập số có dấu: âm để giảm, dương để tăng.' : 'Đơn vị đồng.'}
+          hint={v.type === 'ADJUSTMENT' ? 'Điều chỉnh nhập số có dấu: âm để giảm, dương để tăng.' : undefined}
         />
         {isRefund(v.type) && (
           <>

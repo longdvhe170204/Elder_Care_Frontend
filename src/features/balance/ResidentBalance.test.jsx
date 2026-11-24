@@ -142,6 +142,21 @@ describe('ResidentBalance (017)', () => {
     expect(await screen.findByText(/Đã gửi duyệt/)).toBeInTheDocument()
   })
 
+  // Demo 2026-11-25: số tiền hiện dạng 1.250.000 đ; nhập sai báo đỏ ngay tại ô, không đợi bấm gửi
+  it('soTien_dinhDangNhomNghin_vaBaoLoiNgayTaiO', async () => {
+    const api = setup()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
+    fill('Loại giao dịch', 'REFUND')
+    fill('Số tiền', '1250000')
+    expect(screen.getByLabelText('Số tiền')).toHaveValue('1.250.000')
+    fill('Số tiền', '0')
+    expect(screen.getByText('Nhập số tiền là số nguyên khác 0.')).toBeInTheDocument()
+    expect(screen.queryByText('Nhập lý do.')).not.toBeInTheDocument()
+    fill('Số tiền', '1.000.000')
+    expect(screen.queryByText('Nhập số tiền là số nguyên khác 0.')).not.toBeInTheDocument()
+    expect(api.calls('POST', '/balance-transactions')).toHaveLength(0)
+  })
+
   it('FR_014_hoanTien_batBuocPhuongThuc', async () => {
     const api = setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
