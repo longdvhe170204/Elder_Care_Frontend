@@ -181,6 +181,24 @@ describe('EndingsPage', () => {
     expect(screen.queryByText(/Chính bạn/)).not.toBeInTheDocument()
   })
 
+  // Demo 2026-11-25: người đề nghị gõ tên để tìm, gợi ý người cao tuổi, người thân và nhân viên
+  it('FR_062_nguoiDeNghi_goiYTheoTen', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: 'Nguyễn Thị Lan (NCT-0005)' })
+    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '5' } })
+    const input = within(dialog).getByLabelText('Người đề nghị')
+    const list = document.getElementById(input.getAttribute('list'))
+    await waitFor(() =>
+      expect([...list.querySelectorAll('option')].map((o) => o.value)).toEqual([
+        'Nguyễn Thị Lan (người cao tuổi)',
+        'Trần Văn Minh (người thân)',
+        'Hoàng Thu Hà (nhân viên)',
+      ]),
+    )
+  })
+
   it('FR_062_lapHoSo_chuyenCoSoThieuNoiChuyenDen_baoTaiO', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))

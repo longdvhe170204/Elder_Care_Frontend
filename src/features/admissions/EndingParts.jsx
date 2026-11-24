@@ -16,6 +16,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { SuggestField } from '@/common/SuggestField'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
@@ -365,6 +366,39 @@ export function EndingView({ ending, canUpdate, onChanged }) {
   )
 }
 
+// Gợi ý người đề nghị theo tên: chính người cao tuổi, người thân đang có quan hệ và nhân viên đang làm việc (demo
+// 2026-11-25); ghi kèm vai trò để phân biệt người trùng tên. Không tải được nhóm nào thì bỏ nhóm đó, vẫn gõ tự do được.
+function useRequesterOptions(residentId) {
+  const [staff, setStaff] = useState([])
+  const [resident, setResident] = useState({ id: null, names: [] })
+  useEffect(() => {
+    getStaff({ query: { status: 'WORKING' } })
+      .then(({ data }) => setStaff((data ?? []).map((s) => `${s.fullName} (${s.position ?? 'nhân viên'})`)))
+      .catch(() => {})
+  }, [])
+  useEffect(() => {
+    if (!residentId) return
+    let cancelled = false
+    Promise.allSettled([
+      getResidentsById({ path: { id: residentId } }),
+      getResidentsByResidentIdRelationships({ path: { residentId } }),
+    ]).then(([self, relations]) => {
+      if (cancelled) return
+      const names = []
+      const own = self.status === 'fulfilled' && self.value.data.personalInfo?.fullName
+      if (own) names.push(`${own} (người cao tuổi)`)
+      if (relations.status === 'fulfilled')
+        for (const r of relations.value.data.filter((x) => x.status === 'ACTIVE'))
+          names.push(`${r.familyMember.fullName} (người thân)`)
+      setResident({ id: residentId, names })
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [residentId])
+  return [...(resident.id === residentId ? resident.names : []), ...staff]
+}
+
 export function CreateEndingSheet({ role, onClose, onDone }) {
   const [residentId, setResidentId] = useState('')
   const [endCase, setEndCase] = useState('')
@@ -376,6 +410,7 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const requesterOptions = useRequesterOptions(residentId)
   const cases =
     role === 'DOCTOR' ? END_CASES.filter(([c]) => ['DISCHARGE', 'TRANSFER_TO_ANOTHER_FACILITY'].includes(c)) : END_CASES
 
@@ -465,16 +500,15 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
             />
             {shown('destination') && <FieldError>{shown('destination')}</FieldError>}
           </Field>
-          <Field data-invalid={!!shown('requestedBy') || undefined}>
-            <FieldLabel htmlFor="ending-requested-by">Người đề nghị</FieldLabel>
-            <Input
-              id="ending-requested-by"
-              className="h-11"
-              value={requestedBy}
-              onChange={(e) => setRequestedBy(e.target.value)}
-            />
-            {shown('requestedBy') && <FieldError>{shown('requestedBy')}</FieldError>}
-          </Field>
+          <SuggestField
+            id="ending-requested-by"
+            label="Người đề nghị"
+            value={requestedBy}
+            onChange={setRequestedBy}
+            options={requesterOptions}
+            error={shown('requestedBy')}
+            hint="Gõ tên để tìm người cao tuổi, người thân hoặc nhân viên."
+          />
           <ReasonField id="ending-create-reason" value={reason} onChange={setReason} error={shown('reason')} />
         </FieldGroup>
         <div className="mt-4">
