@@ -106,23 +106,23 @@ describe('AlertsPage', () => {
     const cards = await screen.findAllByRole('article')
     expect(cards).toHaveLength(3)
     expect(within(cards[0]).getByText('Lê Văn Bình')).toBeTruthy()
-    expect(within(cards[0]).getByText('Đã leo thang tối đa')).toBeTruthy()
+    // Một nhãn ngắn thay cho dòng hạn tiếp nhận, người chờ nhận (đề xuất 2026-11-24)
+    expect(within(cards[0]).getByText('Quá hạn, đã báo Quản lý viện')).toBeTruthy()
     expect(within(cards[0]).getByText('Mất ngủ kéo dài')).toBeTruthy()
     expect(await within(cards[1]).findByText('Trần Thị Mai')).toBeTruthy()
-    expect(within(cards[1]).getByText(/2 lần cùng loại đã gộp/)).toBeTruthy()
+    expect(within(cards[1]).getByText(/2 lần gộp/)).toBeTruthy()
     expect(screen.queryByRole('button', { name: /Tiếp nhận.*Lê Văn Bình/ })).toBeNull()
   })
 
-  // DESIGN.md mục 5, 7.2, 11 ("một tín hiệu cho một điều"): cảnh báo gấp nổi lên bằng dải "Cần làm ngay" và thứ tự,
-  // thẻ không cộng viền đỏ; bấm một mục trên dải mở chi tiết cảnh báo đó.
-  it('DESIGN_6_7_canhBaoGapLenDaiCanLamNgay_theKhongVienDo', async () => {
+  // Đề xuất 2026-11-24 (góp ý demo): bỏ dải "Cần làm ngay" vì lặp danh sách; cảnh báo gấp lên đầu, vạch trái đỏ,
+  // bấm thẻ mở chi tiết
+  it('DESIGN_7_2_khongConDaiCanLamNgay_canhBaoGapLenDau_bamTheMoChiTiet', async () => {
     api.on('GET', '/alerts/2', json(200, ALERT_CRITICAL))
     render(<AlertsPage role="NURSING_STAFF" />)
-    const strip = await screen.findByRole('region', { name: 'Cần làm ngay' })
-    expect(within(strip).getByText('Cần làm ngay (1)')).toBeTruthy()
     const cards = await screen.findAllByRole('article')
-    for (const card of cards) expect(card.className).not.toMatch(/ring-destructive/)
-    fireEvent.click(await within(strip).findByRole('button', { name: 'Lê Văn Bình, Mất ngủ kéo dài' }))
+    expect(screen.queryByRole('region', { name: 'Cần làm ngay' })).toBeNull()
+    expect(cards[0].className).toMatch(/border-l-destructive/)
+    fireEvent.click(within(cards[0]).getByRole('button', { name: 'Chi tiết cảnh báo của Lê Văn Bình' }))
     await waitFor(() => expect(api.calls('GET', '/alerts/2')).toHaveLength(1))
   })
 
@@ -222,7 +222,7 @@ describe('AlertsPage', () => {
     api.on('POST', '/alerts/1/receive', json(200, {}))
     api.on('POST', '/alerts/1/start-handling', json(200, {}))
     render(<AlertsPage role="NURSING_STAFF" />)
-    fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận và xử lý cảnh báo của Trần Thị Mai' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Nhận và xử lý cảnh báo của Trần Thị Mai' }))
     await waitFor(() => expect(api.calls('POST', '/alerts/1/start-handling')).toHaveLength(1))
     expect(api.calls('POST', '/alerts/1/receive')).toHaveLength(1)
   })

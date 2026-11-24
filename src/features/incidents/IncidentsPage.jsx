@@ -2,12 +2,11 @@ import { useCallback, useEffect, useState } from 'react'
 import { cn } from 'cn'
 import {
   Ambulance,
-  Circle,
   CircleCheck,
   ClipboardCheck,
   Eye,
   ListChecks,
-  NotebookPen,
+  Phone,
   Plus,
   RotateCcw,
   UserPlus,
@@ -17,15 +16,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
@@ -34,9 +30,9 @@ import { Call115Panel } from '@/features/alerts/Call115Panel'
 import { typeLabel as alertTypeLabel } from '@/features/alerts/alertView'
 import { CriticalNotice } from '@/features/critical-care/CriticalNotice'
 import { ResidentCallReminders } from '@/features/notifications/ResidentCallReminders'
-import { FilterTabs, LevelChoices, ResidentChoices } from './CaseFormParts'
+import { AssistButton, AssistStatus } from '@/features/alerts/AssistRequest'
+import { FilterTabs } from './CaseFormParts'
 import {
-  CaseAction,
   CaseActionBar,
   CaseBadge,
   CaseBlock,
@@ -46,24 +42,21 @@ import {
   CaseLink,
   CaseMore,
   CasePage,
-  CaseSteps,
-  CaseWizard,
   FocusHeading,
 } from './CasePage'
 import { EmergencyCardPanel } from './EmergencyCardPanel'
 import { HandoverStaffField } from './HandoverStaffField'
 import { FollowUpBlock, FollowUpForm } from './IncidentFollowUps'
-import { IncidentTypeIcon, IncidentTypePicker } from './IncidentTypePicker'
+import { IncidentTypeIcon } from './IncidentTypePicker'
+import { ProgressionComposer } from './ProgressionComposer'
+import { ReportForm } from './ReportForm'
 import { TransferOutPanel } from './TransferOutPanel'
 import {
-  loadFloorChoices,
   loadIncident,
   loadFollowUps,
   loadIncidentBoard,
   loadLinkedAlerts,
-  loadResidentChoices,
   loadResidentStatus,
-  recordIncident,
   runIncidentCommand,
 } from './incidents'
 import {
@@ -72,12 +65,8 @@ import {
   LEVEL_ORDER,
   STATUS_LABEL,
   isOpen,
-  needsLowerReason,
-  presetLevel,
   sortIncidents,
   statusTone,
-  vietnamIso,
-  vietnamNowLocal,
 } from './incidentView'
 
 // Màn Sự cố (spec 007 User Story 4, FR-040 → FR-046; T037 phần web): danh sách theo phạm vi từ api-007
@@ -98,9 +87,8 @@ const DIALOG_HINT = {
   close: 'Sự cố đã đóng không mở lại được, chỉ đính chính.',
   reopen: 'Sự cố về trạng thái Đang xử lý.',
 }
-// Nơi chọn nhanh, sửa thêm được ở ô gõ
-const QUICK_PLACES = ['Phòng', 'Nhà vệ sinh', 'Hành lang', 'Phòng sinh hoạt chung', 'Sân']
-const STEPS = ['NEW', 'IN_PROGRESS', 'MONITORING', 'CLOSED']
+// Kết quả đóng hay gặp: bấm là điền sẵn, sửa thêm được (đề xuất 2026-11-24: chọn thay vì gõ)
+const CLOSE_RESULTS = ['Ổn định tại viện', 'Đã chuyển viện, đã về, ổn định', 'Phòng ngừa đã ghi vào kế hoạch chăm sóc']
 const FORM_TITLE = {
   progressions: 'Ghi diễn biến',
   'change-level': 'Đổi mức',
@@ -206,12 +194,6 @@ function IncidentStatus({ incident }) {
 
 // Lệnh Chuyển viện (001) chỉ làm được từ ba trạng thái này; ngoài ra báo rõ người đó đang ở trạng thái nào
 const TRANSFERABLE_STATUS = ['IN_RESIDENCE', 'TEMPORARILY_ABSENT', 'OFF_SITE_ACTIVITY']
-// Người cao tuổi không có mặt ở viện vẫn ghi được sự cố (BR-M05-19, ví dụ đồ gửi, thông tin) nhưng phải nhắc người ghi
-const AWAY_STATUS_TEXT = {
-  HOSPITALIZED: 'đang điều trị tại bệnh viện',
-  TEMPORARILY_ABSENT: 'đang tạm vắng',
-  OFF_SITE_ACTIVITY: 'đang ở hoạt động bên ngoài',
-}
 const RESIDENT_STATUS_TEXT = {
   ADMISSION_IN_PROGRESS: 'đang trong quá trình tiếp nhận',
   ADMISSION_CANCELLED: 'đã hủy tiếp nhận',
@@ -229,6 +211,13 @@ const PROGRESSION_SECTIONS = [
   ['OTHER', 'Khác'],
 ]
 const KNOWN_GROUPS = ['EVALUATION', 'ACTION', 'NOTIFICATION', 'MONITORING']
+// Màu chấm của từng nhóm ở dòng diễn biến
+const GROUP_DOT = {
+  EVALUATION: 'bg-primary',
+  ACTION: 'bg-success-foreground',
+  NOTIFICATION: 'bg-warning-foreground',
+  MONITORING: 'bg-muted-foreground',
+}
 const GROUP_LABEL = { EVALUATION: 'đánh giá', ACTION: 'xử lý' }
 // Câu giải thích từng nhóm để người ghi chọn đúng nhóm (đánh giá là nhận định, xử lý là việc đã làm)
 const GROUP_HINT = {
@@ -451,6 +440,22 @@ function CommandForm({
       )}
       <Field data-invalid={(submitted && textMissing) || undefined}>
         <FieldLabel htmlFor="incident-command-text">{TEXT_LABEL[mode]}</FieldLabel>
+        {mode === 'close' && (
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Kết quả hay gặp">
+            {CLOSE_RESULTS.map((result) => (
+              <Button
+                key={result}
+                type="button"
+                variant="outline"
+                aria-pressed={text === result}
+                className={cn('h-11 px-3', text === result && 'border-2 border-primary bg-accent')}
+                onClick={() => setText(result)}
+              >
+                {result}
+              </Button>
+            ))}
+          </div>
+        )}
         <Textarea
           id="incident-command-text"
           rows={3}
@@ -491,38 +496,6 @@ function CommandForm({
   )
 }
 
-// Điều kiện "Chuyển theo dõi" (BR-M05-20): một diễn biến đánh giá và một diễn biến xử lý; nhóm thiếu có nút ghi đúng nhóm
-function MonitoringChecklist({ missing, canWrite, onWrite }) {
-  return (
-    <div className="flex flex-col gap-2 border-t pt-3">
-      <p className="type-body-sm text-muted-foreground">Để Chuyển theo dõi cần:</p>
-      <ul className="flex flex-col gap-2">
-        {['EVALUATION', 'ACTION'].map((g) => {
-          const lacking = missing.includes(g)
-          const label = PROGRESSION_SECTIONS.find(([x]) => x === g)[1].toLowerCase()
-          return (
-            <li key={g} className="flex flex-wrap items-center gap-x-3 gap-y-1 type-body-sm">
-              {lacking ? (
-                <Circle aria-hidden="true" className="size-4 text-warning-foreground" />
-              ) : (
-                <CircleCheck aria-hidden="true" className="size-4 text-success-foreground" />
-              )}
-              <span>
-                1 diễn biến {label}: {lacking ? 'chưa có' : 'đã có'}
-              </span>
-              {lacking && canWrite && (
-                <Button type="button" variant="outline" className="h-11" onClick={() => onWrite(g)}>
-                  Ghi {label}
-                </Button>
-              )}
-            </li>
-          )
-        })}
-      </ul>
-    </div>
-  )
-}
-
 function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const [state, setState] = useState(null)
   const [linkedAlerts, setLinkedAlerts] = useState([])
@@ -531,12 +504,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const [residentStatus, setResidentStatus] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
-  const [progressionStart, setProgressionStart] = useState(null)
   const [busy, setBusy] = useState(false)
-  function openProgression(group = null) {
-    setProgressionStart(group)
-    setMode('progressions')
-  }
 
   // Trạng thái người cao tuổi, tải lại mỗi khi sự cố được tải lại (sau chuyển viện thì khóa nút Chuyển viện)
   const residentIdForStatus = state?.incident?.content?.residentId ?? null
@@ -575,8 +543,6 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const commands = incident.allowedCommands ?? []
   const type = types.find((t) => t.id === incident.currentTypeId)
   const progressionName = (typeId) => progressionTypes.find((t) => t.id === typeId)?.name ?? 'Diễn biến'
-  const progressionGroup = (typeId) =>
-    PROGRESSION_SECTIONS.find(([group]) => group === progressionTypes.find((t) => t.id === typeId)?.group)?.[1]
 
   async function run(command, body, message) {
     setBusy(true)
@@ -586,8 +552,10 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       setMode(null)
       setState(await loadIncident(incident.id))
       onChanged(message)
+      return true
     } catch (error) {
       setProblem(problemOf(error))
+      return false
     } finally {
       setBusy(false)
     }
@@ -632,9 +600,8 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
 
   const commandForm = (
     <CommandForm
-      key={`${mode}-${progressionStart ?? ''}`}
+      key={mode}
       mode={mode}
-      initialGroup={mode === 'progressions' ? progressionStart : null}
       incident={incident}
       progressionTypes={progressionTypes}
       missingGroups={missingGroups}
@@ -644,13 +611,27 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       onCancel={closeMode}
     />
   )
-  const call115 = commands.includes('call-115') && <Call115Panel subject="incidents" id={incident.id} />
+  const call115 = commands.includes('call-115') && (
+    <div id="incident-call-115">
+      <Call115Panel subject="incidents" id={incident.id} triggerEvent={`incident-call-115-${incident.id}`} />
+    </div>
+  )
   const content = incident.content ?? {}
   const progressions = incident.progressions ?? []
-  const steps = incident.status === 'CLOSED' ? ['NEW', 'CLOSED'] : STEPS
   // Thanh lệnh ở chân trang (đề xuất 2026-11-24, góp ý test demo): nút chính theo trạng thái (Tiếp nhận, Chuyển theo dõi,
   // Đóng sự cố), lệnh hay dùng là nút viền, lệnh ít dùng gom vào "Thêm thao tác"
   const actions = [
+    commands.includes('call-115') && {
+      icon: Phone,
+      label: 'Gọi 115',
+      danger: true,
+      // Ô to ở đầu trang là nút gọi duy nhất: ghi lượt gọi, mở trình quay số; khối dưới chỉ còn thông tin đọc cho tổng đài
+      // và chọn kết quả sau cuộc gọi
+      onSelect: () => {
+        window.dispatchEvent(new Event(`incident-call-115-${incident.id}`))
+        document.getElementById('incident-call-115')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      },
+    },
     commands.includes('receive') && {
       icon: ClipboardCheck,
       label: 'Tiếp nhận',
@@ -688,6 +669,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
     commands.includes('join-handling') && {
       icon: UserPlus,
       label: 'Tham gia xử lý',
+      more: true,
       disabled: busy,
       onSelect: () => run('join-handling', null, 'Đã tham gia xử lý'),
     },
@@ -721,7 +703,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       <CaseHeader
         code={type?.code}
         title={type?.name ?? 'Sự cố'}
-        subtitle={`SC-${incident.id}, ${name}, phát hiện lúc ${formatDateTime(content.discoveredAt)}`}
+        subtitle={`${name} · SC-${incident.id} · ${formatDateTime(content.discoveredAt)}${incident.assignee ? ` · ${incident.assignee} xử lý` : ''}`}
         badges={
           <>
             <CaseBadge label="Mức">
@@ -740,9 +722,9 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
         note={
           // Chi tiết chuyển viện, về viện nằm trong Diễn biến; đầu trang chỉ còn việc cần làm tiếp (đề xuất 2026-11-24)
           returnedNote && isOpen(incident) ? (
-            <p className="type-body-sm">
-              Đã về lúc {formatDateTime(returnedNote.occurredAt)}. Cần đối chiếu thuốc trong 4 giờ, Bác sĩ đánh giá lại
-              trong 48 giờ.
+            <p className="rounded-lg bg-warning px-3 py-2 type-label text-warning-foreground">
+              Tiếp: đối chiếu thuốc trong 4 giờ, Bác sĩ đánh giá lại trong 48 giờ (về lúc{' '}
+              {formatDateTime(returnedNote.occurredAt)}).
             </p>
           ) : (
             atHospital && (
@@ -751,9 +733,19 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
           )
         }
       />
-      {STEPS.includes(incident.status) && (
-        <CaseSteps steps={steps.map((s) => STATUS_LABEL[s])} current={steps.indexOf(incident.status)} />
-      )}
+      <CaseActionBar
+        tiles
+        items={actions}
+        note={
+          transferOffered &&
+          statusBlocksTransfer && (
+            <p className="type-body-sm text-muted-foreground">
+              Chưa chuyển viện được: {name}{' '}
+              {RESIDENT_STATUS_TEXT[residentStatus] ?? 'đang ở trạng thái không cho chuyển viện'}.
+            </p>
+          )
+        }
+      />
       {problem && !inDialog && <ProblemAlert problem={problem} />}
       {content.residentId != null && isOpen(incident) && <CriticalNotice residentId={content.residentId} />}
       {/* Trái: cần biết để xử lý (thẻ khẩn cấp, gọi điện, ghi nhận); phải: Diễn biến (đề xuất 2026-11-24) */}
@@ -822,43 +814,39 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
             title="Diễn biến"
             aside={progressions.length > 0 && `${progressions.length} lần ghi, mới nhất trước`}
           >
-            {commands.includes('move-to-monitoring') && missingGroups.length > 0 && (
-              <MonitoringChecklist
-                missing={missingGroups}
-                canWrite={commands.includes('progressions')}
-                onWrite={openProgression}
+            {commands.includes('progressions') && (
+              <ProgressionComposer
+                key={progressions.length}
+                types={progressionTypes}
+                missing={commands.includes('move-to-monitoring') ? missingGroups : []}
+                emergency={incident.level === 'CRITICAL'}
+                busy={busy}
+                onSubmit={(body) => run('progressions', body, 'Đã ghi diễn biến')}
               />
             )}
-            {commands.includes('progressions') && mode !== 'progressions' && (
-              <CaseAction
-                id="write-progression"
-                icon={NotebookPen}
-                className="self-start"
-                onClick={() => openProgression()}
-              >
-                Ghi diễn biến
-              </CaseAction>
-            )}
-            {mode === 'progressions' && <div className="rounded-lg border p-4">{commandForm}</div>}
             {progressions.length === 0 ? (
               <p className="type-body-sm text-muted-foreground">Chưa ghi diễn biến.</p>
             ) : (
-              <ol className="flex flex-col">
+              // Mỗi lần ghi một dòng: giờ, loại (chấm màu theo nhóm), nội dung; dòng hệ thống tự ghi chữ nhạt
+              <ol className="flex flex-col divide-y">
                 {progressions.toReversed().map((p) => {
-                  const group = progressionGroup(p.progressionTypeId)
+                  const pType = progressionTypes.find((t) => t.id === p.progressionTypeId)
+                  const system = pType?.group === 'SYSTEM' || ['TRANSFERRED_OUT', 'RETURNED_FROM_HOSPITAL'].includes(p.typeCode)
                   return (
-                    <li
-                      key={p.id}
-                      className="relative flex flex-col gap-0.5 border-l-2 pb-5 pl-5 before:absolute before:top-1.5 before:-left-[7px] before:size-3 before:rounded-full before:border-2 before:border-primary before:bg-card last:pb-0"
-                    >
-                      <span className="flex flex-wrap items-baseline gap-x-3">
-                        <span className="type-label">{progressionName(p.progressionTypeId)}</span>
-                        {group && <span className="type-caption text-accent-foreground">{group}</span>}
-                      </span>
-                      <span className="type-body-sm text-muted-foreground tabular-nums">
+                    <li key={p.id} className={cn('flex gap-3 py-2 type-body-sm', system && 'text-muted-foreground')}>
+                      <span
+                        aria-hidden="true"
+                        className={cn('mt-1.5 size-2.5 shrink-0 rounded-full', GROUP_DOT[pType?.group] ?? 'bg-border')}
+                      />
+                      <span className="w-24 shrink-0 tabular-nums text-muted-foreground">
                         {formatDateTime(p.occurredAt)}
                       </span>
-                      <span className="type-body break-words">{p.content}</span>
+                      <span className="min-w-0 break-words">
+                        <span className={cn('type-label', system && 'font-normal')}>
+                          {progressionName(p.progressionTypeId)}
+                        </span>
+                        {p.content && ` · ${p.content}`}
+                      </span>
                     </li>
                   )
                 })}
@@ -878,18 +866,6 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
           />
         </div>
       </div>
-      <CaseActionBar
-        items={actions}
-        note={
-          transferOffered &&
-          statusBlocksTransfer && (
-            <p className="type-body-sm text-muted-foreground">
-              Chưa chuyển viện được: {name}{' '}
-              {RESIDENT_STATUS_TEXT[residentStatus] ?? 'đang ở trạng thái không cho chuyển viện'}.
-            </p>
-          )
-        }
-      />
       {mode === 'follow-up' && (
         <FollowUpForm
           incidentId={incident.id}
@@ -938,422 +914,62 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   )
 }
 
-// Ghi nhận sự cố (FR-040, FR-042): người cao tuổi (loại cơ sở vật chất được bỏ trống), loại, mức, thời điểm phát hiện,
-// mô tả; mức thấp hơn mặc định cần lý do. Khẩn cấp kích hoạt quy trình ở backend trong cùng lệnh.
-function RecordIncidentForm({ types, incidents, announcement, onClose, onRecorded, onOpenExisting }) {
-  const [residents, setResidents] = useState(null)
-  const [residentId, setResidentId] = useState(null)
-  const [noResident, setNoResident] = useState(false)
-  const [residentQuery, setResidentQuery] = useState('')
-  const [floors, setFloors] = useState([])
-  const [floorId, setFloorId] = useState('')
-  const [floorsUnavailable, setFloorsUnavailable] = useState(false)
-  const [existingId, setExistingId] = useState(null)
-  const [typeId, setTypeId] = useState('')
-  const [level, setLevel] = useState('')
-  const [discoveredAt, setDiscoveredAt] = useState(() => vietnamNowLocal())
-  const [description, setDescription] = useState('')
-  const [moreDetail, setMoreDetail] = useState(false)
-  const [place, setPlace] = useState('')
-  const [initialResponse, setInitialResponse] = useState('')
-  const [occurredAt, setOccurredAt] = useState('')
-  const [lowerReason, setLowerReason] = useState('')
-  const [submitted, setSubmitted] = useState(false)
-  const [problem, setProblem] = useState(null)
-  const [busy, setBusy] = useState(false)
+// Nhãn "Tiếp: …" của dòng sự cố: việc cần làm ngay theo trạng thái backend trả (không tính theo đồng hồ máy)
+function nextStep(incident, inHospital) {
+  if (inHospital) return { text: 'Đang ở bệnh viện', tone: 'attention' }
+  if (incident.status === 'NEW') return { text: incident.assignee ? 'Chờ nhận xử lý' : 'Chưa ai nhận', tone: 'urgent' }
+  if (incident.status === 'MONITORING') return { text: 'Đang theo dõi', tone: 'neutral' }
+  if (incident.status === 'IN_PROGRESS') return { text: `${incident.assignee ?? 'Đang'} xử lý`, tone: 'neutral' }
+  return null
+}
+const CHIP_TONE = {
+  urgent: 'bg-destructive-subtle text-destructive',
+  attention: 'bg-warning text-warning-foreground',
+  neutral: 'bg-muted text-muted-foreground',
+}
 
-  useEffect(() => {
-    let cancelled = false
-    loadResidentChoices().then(
-      (data) => !cancelled && setResidents(data),
-      (error) => !cancelled && setProblem(problemOf(error)),
-    )
-    loadFloorChoices().then(
-      (data) => {
-        if (cancelled) return
-        setFloors(data)
-        setFloorsUnavailable(data.length === 0)
-        const own = data.find((f) => f.current)
-        if (own) setFloorId((value) => value || String(own.id))
-      },
-      () => !cancelled && setFloorsUnavailable(true),
-    )
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const pickedResident = residents?.find((r) => r.id === residentId) ?? null
-  const activeTypes = types.filter((t) => t.active !== false && t.status !== 'INACTIVE')
-  const type = activeTypes.find((t) => String(t.id) === typeId)
-  const residentRequired = !type?.allowsNoResident
-  const lowerNeeded = needsLowerReason(level, type)
-  const errors = {
-    resident: residentRequired && residentId == null,
-    floor: !residentRequired && !floorId,
-    type: !type,
-    level: !level,
-    description: !description.trim(),
-    lowerReason: lowerNeeded && !lowerReason.trim(),
-  }
-
-  function pickType(value) {
-    setTypeId(value)
-    const picked = activeTypes.find((t) => String(t.id) === value)
-    if (picked) setLevel(presetLevel(picked))
-  }
-
-  function submit(event) {
-    event.preventDefault()
-    save({ again: event.nativeEvent.submitter?.name === 'again' })
-  }
-
-  // separate: đã thấy sự cố Khẩn cấp đang mở và chọn tạo sự cố riêng (FR-041, createDespiteOpen)
-  async function save({ again = false, separate = false }) {
-    setSubmitted(true)
-    if (Object.values(errors).some(Boolean)) return
-    setExistingId(null)
-    setBusy(true)
-    setProblem(null)
-    try {
-      await recordIncident({
-        ...(residentId != null ? { residentId } : {}),
-        ...(!residentRequired && floorId ? { floorAreaId: Number(floorId) } : {}),
-        incidentTypeId: type.id,
-        level,
-        discoveredAt: vietnamIso(discoveredAt),
-        description: description.trim(),
-        ...(place.trim() ? { location: place.trim() } : {}),
-        ...(initialResponse.trim() ? { initialResponse: initialResponse.trim() } : {}),
-        ...(occurredAt ? { occurredAt: vietnamIso(occurredAt) } : {}),
-        ...(lowerNeeded ? { lowerLevelReason: lowerReason.trim() } : {}),
-        ...(separate ? { createDespiteOpen: true } : {}),
-      })
-      onRecorded(`Đã ghi nhận sự cố ${type.name.toLowerCase()}, ${pickedResident?.name ?? 'việc chung'}`, again)
-    } catch (error) {
-      // FR-041: người đã có sự cố Khẩn cấp đang mở thì chỉ ra sự cố đó, không tự gộp, không tự tạo thêm
-      if (error?.problem?.errorCode === 'OPEN_EMERGENCY_INCIDENT_EXISTS' && error.problem.incidentId != null) {
-        setExistingId(error.problem.incidentId)
-      } else {
-        setProblem(problemOf(error))
-      }
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function joinExisting() {
-    setBusy(true)
-    setProblem(null)
-    try {
-      await runIncidentCommand(existingId, 'join-handling')
-      onRecorded(`Đã tham gia xử lý sự cố SC-${existingId}`)
-    } catch (error) {
-      setProblem(problemOf(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const existing = existingId != null ? incidents.find((i) => i.id === existingId) : null
-  const existingType = existing && types.find((t) => t.id === existing.currentTypeId)
-
-  const answered = residentId != null || noResident
-  const chooseableTypes = noResident ? activeTypes.filter((t) => t.allowsNoResident) : activeTypes
-  const step = !answered ? 'resident' : !type ? 'type' : 'detail'
-
+// Một dòng sự cố, cùng kiểu với dòng cảnh báo (đề xuất 2026-11-24): biểu tượng loại, tên người và loại, một nhãn việc cần
+// biết; bấm cả dòng để mở. Vạch trái theo mức.
+function IncidentRow({ incident, name, typeName, typeCode, inHospital, onOpen }) {
+  const open = isOpen(incident)
+  const step = open ? nextStep(incident, inHospital) : null
   return (
-    <CasePage
-      label="Ghi nhận sự cố"
-      backLabel="Sự cố"
-      here="Ghi nhận sự cố"
-      onBack={onClose}
-      returnFocusId="record-incident"
-      announcement={announcement}
+    <article
+      aria-label={`${name}, ${typeName}`}
+      className={cn(
+        'relative flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-l-[6px] bg-card px-4 py-3',
+        incident.level === 'CRITICAL' && open
+          ? 'border-l-destructive'
+          : incident.level === 'MEDIUM'
+            ? 'border-l-warning-foreground'
+            : 'border-l-border',
+      )}
     >
-      <form onSubmit={submit} noValidate className="flex flex-col gap-5">
-        <CaseWizard
-          title="Ghi nhận sự cố"
-          subtitle="Mức Khẩn cấp mở quy trình khẩn cấp ngay khi lưu."
-          current={step}
-          steps={[
-            {
-              key: 'resident',
-              label: 'Ghi cho ai',
-              value: pickedResident ? (
-                <>
-                  <ResidentAvatar name={pickedResident.name} code={String(pickedResident.id)} className="size-8" />
-                  {pickedResident.name}
-                </>
-              ) : (
-                noResident && 'Việc chung'
-              ),
-              action: 'Đổi người',
-              onEdit: () => {
-                setResidentId(null)
-                setNoResident(false)
-              },
-            },
-            {
-              key: 'type',
-              label: 'Chuyện gì xảy ra',
-              value: type && (
-                <>
-                  <IncidentTypeIcon code={type.code} className="size-8 [&_svg]:size-4" />
-                  {type.name}
-                </>
-              ),
-              action: 'Đổi loại',
-              onEdit: () => {
-                setTypeId('')
-                setLevel('')
-              },
-            },
-            { key: 'detail', label: 'Mức và mô tả' },
-          ]}
+      <IncidentTypeIcon code={typeCode} />
+      <div className="flex min-w-0 flex-1 basis-56 flex-col">
+        <button
+          type="button"
+          id={`incident-row-${incident.id}`}
+          onClick={onOpen}
+          aria-label={`${name}, ${typeName}`}
+          className="text-left type-label outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
         >
-          {pickedResident && AWAY_STATUS_TEXT[pickedResident.status] && (
-            <Alert role="note" variant="attention">
-              {pickedResident.name} {AWAY_STATUS_TEXT[pickedResident.status]}, không có mặt ở viện. Chỉ ghi sự cố nếu
-              việc thật sự liên quan (ví dụ đồ gửi, thông tin, theo dõi sau chuyển viện).
-            </Alert>
-          )}
-          {step === 'resident' && (
-            <>
-              <FocusHeading step={step}>Ghi cho ai?</FocusHeading>
-              {!residents ? (
-                <Skeleton className="h-16 w-full" />
-              ) : (
-                <ResidentChoices
-                  residents={residents}
-                  query={residentQuery}
-                  onQuery={setResidentQuery}
-                  onPick={setResidentId}
-                />
-              )}
-              {activeTypes.some((t) => t.allowsNoResident) && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 self-start bg-card"
-                  disabled={floorsUnavailable}
-                  onClick={() => {
-                    setNoResident(true)
-                    if (type && !type.allowsNoResident) setTypeId('')
-                  }}
-                >
-                  Việc chung, không gắn người cao tuổi
-                </Button>
-              )}
-              {floorsUnavailable && (
-                <p className="type-body-sm text-muted-foreground">
-                  Việc chung phải có tầng để báo đúng người phụ trách ca, hiện chưa có tầng nào đang có ca. Nhờ Trưởng
-                  tầng ghi nhận giúp.
-                </p>
-              )}
-            </>
-          )}
-          {step === 'type' && (
-            <>
-              <FocusHeading step={step}>Chuyện gì xảy ra?</FocusHeading>
-              <IncidentTypePicker types={chooseableTypes} value="" onChange={pickType} />
-              <p className="type-body-sm text-muted-foreground">
-                Chọn loại gần nhất hoặc loại "khác", rồi ghi rõ ở Mô tả. Hay gặp loại nào chưa có thì nhờ Quản lý viện
-                thêm vào danh mục.
-              </p>
-            </>
-          )}
-          {step === 'detail' && (
-            <>
-              <FocusHeading step={step}>Mức và mô tả</FocusHeading>
-              <Card>
-                <CardContent className="flex flex-col gap-4">
-                  <Field data-invalid={(submitted && errors.level) || undefined}>
-                    <FieldLabel>Mức</FieldLabel>
-                    <LevelChoices value={level} onChange={setLevel} />
-                    <span className="type-caption text-muted-foreground">
-                      Mặc định của loại: {LEVEL_LABEL[type.defaultLevel]}
-                    </span>
-                    {submitted && errors.level && <FieldError>Chọn mức</FieldError>}
-                  </Field>
-                  {lowerNeeded && (
-                    <Field data-invalid={(submitted && errors.lowerReason) || undefined}>
-                      <FieldLabel htmlFor="incident-lower-reason">Lý do chọn mức thấp hơn</FieldLabel>
-                      <Textarea
-                        id="incident-lower-reason"
-                        rows={2}
-                        maxLength={2000}
-                        value={lowerReason}
-                        onChange={(e) => setLowerReason(e.target.value)}
-                        aria-invalid={(submitted && errors.lowerReason) || undefined}
-                      />
-                      {submitted && errors.lowerReason && (
-                        <FieldError>Nhập lý do chọn mức thấp hơn mặc định</FieldError>
-                      )}
-                    </Field>
-                  )}
-                  <div className="grid items-start gap-4 sm:grid-cols-2">
-                    <Field>
-                      <FieldLabel htmlFor="incident-discovered-at">Phát hiện lúc</FieldLabel>
-                      <Input
-                        id="incident-discovered-at"
-                        type="datetime-local"
-                        className="h-11"
-                        value={discoveredAt}
-                        onChange={(e) => setDiscoveredAt(e.target.value)}
-                      />
-                    </Field>
-                    {!residentRequired && (
-                      <Field data-invalid={(submitted && errors.floor) || undefined}>
-                        <FieldLabel htmlFor="incident-floor">Tầng xảy ra</FieldLabel>
-                        <select
-                          id="incident-floor"
-                          value={floorId}
-                          onChange={(e) => setFloorId(e.target.value)}
-                          aria-invalid={(submitted && errors.floor) || undefined}
-                          className="h-11 w-full rounded-md border border-input bg-transparent px-3"
-                        >
-                          <option value="">Chưa chọn</option>
-                          {floors.map((f) => (
-                            <option key={f.id} value={String(f.id)}>
-                              {f.name}
-                            </option>
-                          ))}
-                        </select>
-                        {floorsUnavailable && (
-                          <p className="type-caption text-muted-foreground">
-                            Tài khoản của bạn chưa xem được danh sách tầng. Nhờ Trưởng tầng ghi nhận giúp, hoặc báo Quản
-                            lý viện cấp quyền tra cứu tầng.
-                          </p>
-                        )}
-                        {submitted && errors.floor && <FieldError>Chọn tầng xảy ra sự cố</FieldError>}
-                      </Field>
-                    )}
-                  </div>
-                  <Field>
-                    <FieldLabel htmlFor="incident-place">Nơi xảy ra</FieldLabel>
-                    <div className="flex flex-wrap gap-2">
-                      {QUICK_PLACES.map((text) => (
-                        <Button
-                          key={text}
-                          type="button"
-                          variant="outline"
-                          className="h-11 px-4"
-                          aria-pressed={place === text}
-                          onClick={() => setPlace(text)}
-                        >
-                          {text}
-                        </Button>
-                      ))}
-                    </div>
-                    <Input
-                      id="incident-place"
-                      className="h-11"
-                      maxLength={200}
-                      placeholder="Ghi rõ, ví dụ: hành lang gần phòng 101"
-                      value={place}
-                      onChange={(e) => setPlace(e.target.value)}
-                    />
-                  </Field>
-                  <Field data-invalid={(submitted && errors.description) || undefined}>
-                    <FieldLabel htmlFor="incident-description">Mô tả</FieldLabel>
-                    <Textarea
-                      id="incident-description"
-                      rows={3}
-                      maxLength={2000}
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      aria-invalid={(submitted && errors.description) || undefined}
-                    />
-                    {submitted && errors.description && <FieldError>Nhập mô tả sự cố</FieldError>}
-                  </Field>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-11 self-start"
-                    aria-expanded={moreDetail}
-                    onClick={() => setMoreDetail((v) => !v)}
-                  >
-                    {moreDetail ? 'Ẩn chi tiết thêm' : 'Thêm chi tiết (không bắt buộc): xử lý ban đầu, lúc xảy ra'}
-                  </Button>
-                  {moreDetail && (
-                    <div className="flex flex-col gap-4">
-                      <Field>
-                        <FieldLabel htmlFor="incident-initial-response">Xử lý ban đầu</FieldLabel>
-                        <Textarea
-                          id="incident-initial-response"
-                          rows={2}
-                          maxLength={2000}
-                          placeholder="Đã làm gì ngay lúc đó"
-                          value={initialResponse}
-                          onChange={(e) => setInitialResponse(e.target.value)}
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="incident-occurred-at">Xảy ra lúc (nếu khác lúc phát hiện)</FieldLabel>
-                        <Input
-                          id="incident-occurred-at"
-                          type="datetime-local"
-                          className="h-11"
-                          value={occurredAt}
-                          onChange={(e) => setOccurredAt(e.target.value)}
-                        />
-                      </Field>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-              {existingId != null && (
-                <Alert variant="attention" className="gap-3 p-4">
-                  <p>
-                    Người cao tuổi này đang có sự cố Khẩn cấp chưa đóng: <strong>SC-{existingId}</strong>
-                    {existingType && `, ${existingType.name}`}
-                    {existing?.content?.discoveredAt && `, phát hiện ${formatDateTime(existing.content.discoveredAt)}`}
-                    {existing && `, người xử lý: ${existing.assignee ?? 'chưa ai nhận'}`}. Chuyện vừa ghi là một phần
-                    của sự cố đó thì tham gia xử lý; là chuyện khác (ví dụ một lần ngã khác) thì tạo sự cố riêng.
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button type="button" className="h-11" disabled={busy} onClick={joinExisting}>
-                      Tham gia xử lý SC-{existingId}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11 text-foreground"
-                      disabled={busy}
-                      onClick={() => save({ separate: true })}
-                    >
-                      Tạo sự cố riêng
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-11 text-foreground"
-                      onClick={() => onOpenExisting(existingId)}
-                    >
-                      Mở sự cố đó
-                    </Button>
-                  </div>
-                </Alert>
-              )}
-              {problem && <ProblemAlert problem={problem} />}
-              <div className="flex flex-wrap justify-end gap-2">
-                <Button type="button" variant="ghost" className="h-11" onClick={onClose}>
-                  Hủy
-                </Button>
-                <Button type="submit" name="again" variant="outline" className="h-11 bg-card" disabled={busy}>
-                  Lưu và ghi tiếp
-                </Button>
-                <Button type="submit" className="h-11" disabled={busy}>
-                  Lưu sự cố
-                </Button>
-              </div>
-            </>
-          )}
-          {step !== 'detail' && problem && <ProblemAlert problem={problem} />}
-        </CaseWizard>
-      </form>
-    </CasePage>
+          {name}
+        </button>
+        <span className="type-body-sm text-muted-foreground">
+          {typeName} · {LEVEL_LABEL[incident.level]}
+          {!open && ` · ${STATUS_LABEL[incident.status] ?? incident.status}`}
+        </span>
+      </div>
+      {step && (
+        <span className={cn('rounded-full px-3 py-1 type-caption font-semibold whitespace-nowrap', CHIP_TONE[step.tone])}>
+          {step.text}
+        </span>
+      )}
+      <span aria-hidden="true" className="type-title text-muted-foreground">
+        ›
+      </span>
+    </article>
   )
 }
 
@@ -1362,11 +978,11 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
   const [board, setBoard] = useState(null)
   const [problem, setProblem] = useState(null)
   const [group, setGroup] = useState('open')
-  const [levelFilter, setLevelFilter] = useState('ALL')
   const [openId, setOpenId] = useState(incidentId)
   const [recording, setRecording] = useState(false)
-  const [recordKey, setRecordKey] = useState(0)
   const [announcement, setAnnouncement] = useState('')
+  const [assist, setAssist] = useState(null)
+  const { can } = usePermissions()
 
   const reload = useCallback(async () => {
     try {
@@ -1404,8 +1020,7 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
   const typeName = (i) => types.find((t) => t.id === i.currentTypeId)?.name ?? 'Sự cố'
   const typeCode = (i) => types.find((t) => t.id === i.currentTypeId)?.code
   const inGroup = (value) => incidents.filter((i) => (value === 'open' ? isOpen(i) : !isOpen(i)))
-  const grouped = inGroup(group)
-  const visible = sortIncidents(grouped.filter((i) => levelFilter === 'ALL' || i.level === levelFilter))
+  const visible = sortIncidents(inGroup(group))
   const opened = incidents.find((i) => i.id === openId)
 
   async function changed(message) {
@@ -1415,20 +1030,17 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
 
   if (recording) {
     return (
-      <RecordIncidentForm
-        key={recordKey}
-        types={types}
-        incidents={incidents}
-        announcement={announcement}
-        onOpenExisting={(id) => {
+      <ReportForm
+        onClose={() => setRecording(false)}
+        onOpenIncident={(id) => {
           setRecording(false)
           setOpenId(id)
         }}
-        onClose={() => setRecording(false)}
-        onRecorded={async (message, again) => {
-          if (again) setRecordKey((k) => k + 1)
-          else setRecording(false)
+        onDone={async ({ kind, id, message }) => {
+          setRecording(false)
           await changed(message)
+          // Sự cố vừa ghi mở ngay để thấy thẻ khẩn cấp, Gọi 115, chuyển viện
+          if (kind === 'incident' && id != null) setOpenId(id)
         }}
       />
     )
@@ -1457,117 +1069,82 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-5">
       <PageHeader
         title="Sự cố"
-        subtitle="Sự cố trong phạm vi của bạn, khẩn cấp lên đầu."
         aside={
-          <Button
-            id="record-incident"
-            className="h-11"
-            onClick={() => {
-              setAnnouncement('')
-              setRecording(true)
-            }}
-          >
-            <Plus aria-hidden="true" />
-            Ghi nhận sự cố
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {can('EMERGENCY_ASSIST_BUTTON', 'CREATE') && (
+              <AssistButton
+                openAssists={[]}
+                onSent={(data) => {
+                  setAssist(data)
+                  setAnnouncement('Đã gửi yêu cầu hỗ trợ.')
+                }}
+                onOpenAlert={onNavigate && ((alertId) => onNavigate('alerts', { alertId }))}
+                onJoined={onNavigate && ((alertId) => onNavigate('alerts', { alertId }))}
+              />
+            )}
+            {/* Như nút Ghi nhận sự cố cũ: không ẩn theo quyền, backend kiểm khi lưu */}
+            <Button
+              id="report-event"
+              className="h-11"
+              onClick={() => {
+                setAnnouncement('')
+                setRecording(true)
+              }}
+            >
+              <Plus aria-hidden="true" />
+              Báo sự việc
+            </Button>
+          </div>
         }
       >
-        <div className="flex flex-col gap-3 xl:flex-row xl:flex-wrap xl:gap-x-12">
-          <FilterTabs
-            label="Nhóm sự cố"
-            value={group}
-            onChange={setGroup}
-            options={GROUPS.map(([value, label]) => [value, label, inGroup(value).length])}
-          />
-          <FilterTabs
-            label="Lọc theo mức"
-            value={levelFilter}
-            onChange={setLevelFilter}
-            options={['ALL', ...LEVEL_ORDER].map((l) => [
-              l,
-              l === 'ALL' ? 'Tất cả mức' : LEVEL_LABEL[l],
-              l === 'ALL' ? grouped.length : grouped.filter((i) => i.level === l).length,
-            ])}
-          />
-        </div>
+        <FilterTabs
+          label="Nhóm sự cố"
+          value={group}
+          onChange={setGroup}
+          options={GROUPS.map(([value, label]) => [value, label, inGroup(value).length])}
+        />
       </PageHeader>
+      {can('EMERGENCY_ASSIST_BUTTON', 'CREATE') && (
+        <AssistStatus
+          key={assist?.pressId ?? 'current'}
+          sent={assist}
+          onOpen={(alertId) => onNavigate?.('alerts', { alertId })}
+          onNavigate={onNavigate}
+        />
+      )}
       <p role="status" aria-live="polite" className="empty:hidden rounded-xl border bg-card px-4 py-3 type-body-sm">
         {announcement}
       </p>
       {problem && <ProblemAlert problem={problem} />}
-      <Card>
-        <CardContent>
-          {!board ? (
-            <Skeleton className="h-40 w-full" />
-          ) : visible.length === 0 ? (
-            <p className="type-body-sm">
-              {levelFilter !== 'ALL' && grouped.length > 0
-                ? `Không có sự cố mức ${LEVEL_LABEL[levelFilter].toLowerCase()} trong nhóm này.`
-                : group === 'open'
-                  ? 'Không có sự cố đang mở trong phạm vi của bạn.'
-                  : 'Chưa có sự cố đã kết thúc.'}
-            </p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Mã</TableHead>
-                  <TableHead>Người cao tuổi</TableHead>
-                  <TableHead>Loại</TableHead>
-                  <TableHead>Mức</TableHead>
-                  <TableHead>Trạng thái</TableHead>
-                  <TableHead>Phát hiện lúc</TableHead>
-                  <TableHead>Người xử lý</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {visible.map((i) => (
-                  <TableRow key={i.id} className="relative">
-                    <TableCell className="type-body-sm tabular-nums text-muted-foreground">SC-{i.id}</TableCell>
-                    <TableCell>
-                      <Button
-                        id={`incident-row-${i.id}`}
-                        variant="ghost"
-                        className="h-auto justify-start gap-2 px-1 py-1 after:absolute after:inset-0 after:content-[''] hover:bg-transparent"
-                        onClick={() => {
-                          setAnnouncement('')
-                          setOpenId(i.id)
-                        }}
-                        aria-label={`${nameOf(i)}, ${typeName(i)}`}
-                      >
-                        <ResidentAvatar name={nameOf(i)} code={String(i.content?.residentId ?? i.id)} />
-                        <span className="type-label">{nameOf(i)}</span>
-                      </Button>
-                    </TableCell>
-                    <TableCell className="type-body-sm">
-                      <span className="flex items-center gap-2">
-                        <IncidentTypeIcon code={typeCode(i)} className="size-8 [&_svg]:size-4" />
-                        {typeName(i)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge status={LEVEL_LABEL[i.level]} />
-                    </TableCell>
-                    <TableCell>
-                      <span className="flex flex-wrap items-center gap-x-3">
-                        <IncidentStatus incident={i} />
-                        {inHospital(i) && <Badge variant="attention">Đang ở bệnh viện</Badge>}
-                      </span>
-                    </TableCell>
-                    <TableCell className="type-body-sm tabular-nums">
-                      {formatDateTime(i.content?.discoveredAt)}
-                    </TableCell>
-                    <TableCell className="type-body-sm">{i.assignee ?? 'Chưa ai nhận'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {!board ? (
+        <Skeleton className="h-40 w-full" />
+      ) : visible.length === 0 ? (
+        <Card>
+          <CardContent className="type-body-sm">
+            {group === 'open' ? 'Không có sự cố đang mở trong phạm vi của bạn.' : 'Chưa có sự cố đã kết thúc.'}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {visible.map((i) => (
+            <IncidentRow
+              key={i.id}
+              incident={i}
+              name={nameOf(i)}
+              typeName={typeName(i)}
+              typeCode={typeCode(i)}
+              inHospital={inHospital(i)}
+              onOpen={() => {
+                setAnnouncement('')
+                setOpenId(i.id)
+              }}
+            />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

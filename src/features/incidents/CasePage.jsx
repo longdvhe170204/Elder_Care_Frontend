@@ -138,7 +138,9 @@ export function CaseAction({ icon: Icon, variant = 'outline', className, childre
 // Thanh lệnh ở chân hồ sơ (đề xuất 2026-11-24, góp ý test demo: quá nhiều ô lệnh, quá nhiều chữ): một nút chính theo trạng
 // thái, các lệnh hay dùng là nút viền, lệnh ít dùng (đổi mức, giao người, ...) gom vào "Thêm thao tác". Mục là false (backend
 // không cho lệnh) thì bỏ; không còn mục nào thì không hiện. Dòng giải thích (hint) chỉ hiện khi rê chuột (title).
-export function CaseActionBar({ items, note, className }) {
+// tiles: nút to xếp lưới ở đầu hồ sơ (sự cố, đề xuất 2026-11-24: thao tác khẩn cần bấm nhanh), không dính chân trang.
+// Mục danger (Gọi 115) tô đỏ.
+export function CaseActionBar({ items, note, className, tiles = false }) {
   const id = useId()
   const [more, setMore] = useState(false)
   const shown = items.filter(Boolean)
@@ -146,20 +148,57 @@ export function CaseActionBar({ items, note, className }) {
   const primary = shown.find((i) => i.primary && !i.more)
   const main = shown.filter((i) => !i.more)
   const extra = shown.filter((i) => i.more)
-  const button = ({ icon: Icon, label, hint, disabled, onSelect }, isPrimary) => (
+  const button = ({ icon: Icon, label, hint, disabled, onSelect, danger }, isPrimary, big = false) => (
     <Button
       key={label}
       type="button"
       variant={isPrimary ? 'default' : 'outline'}
       title={hint}
       disabled={disabled}
-      className={cn('h-11', !isPrimary && 'bg-card')}
+      className={cn(
+        big ? 'h-auto min-h-20 flex-col gap-1.5 rounded-xl px-3 py-3 whitespace-normal [&_svg]:size-6' : 'h-11',
+        !isPrimary && 'bg-card',
+        danger && 'border-destructive bg-destructive text-white hover:bg-destructive/90 hover:text-white',
+      )}
       onClick={onSelect}
     >
       {Icon && <Icon aria-hidden="true" />}
       {label}
     </Button>
   )
+  if (tiles) {
+    const ordered = [...main.filter((i) => i.danger), ...main.filter((i) => !i.danger)]
+    return (
+      <div role="group" aria-label="Thao tác" className={cn('flex flex-col gap-2', className)}>
+        {note}
+        {ordered.length > 0 && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(auto-fit,minmax(150px,1fr))]">
+            {ordered.map((item) => button(item, item === primary, true))}
+          </div>
+        )}
+        {extra.length > 0 && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              aria-expanded={more}
+              aria-controls={`${id}-more`}
+              className="h-11"
+              onClick={() => setMore((m) => !m)}
+            >
+              Thêm thao tác
+              <ChevronDown aria-hidden="true" className={cn('transition-transform', more && 'rotate-180')} />
+            </Button>
+            {more && (
+              <div id={`${id}-more`} className="flex flex-wrap gap-2">
+                {extra.map((item) => button(item, false))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
   return (
     <div
       role="group"

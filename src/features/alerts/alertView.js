@@ -88,6 +88,33 @@ export function handlerText(alert) {
   return alert.assignee ? `Người xử lý: ${alert.assignee}` : 'Không có người xử lý'
 }
 
+const SHORT_TIME = new Intl.DateTimeFormat('vi-VN', {
+  hour: '2-digit',
+  minute: '2-digit',
+  day: '2-digit',
+  month: '2-digit',
+  hour12: false,
+  timeZone: 'Asia/Ho_Chi_Minh',
+})
+
+// Một nhãn ngắn ở dòng cảnh báo thay cho "Hạn tiếp nhận …", "Chờ … nhận" (đề xuất 2026-11-24): việc cần biết ngay. Không
+// tính "còn bao nhiêu phút" theo đồng hồ máy vì bản demo chạy đồng hồ giả lập ở backend; dựa vào trạng thái backend trả.
+// tone: urgent | attention | neutral
+export function timeChip(alert) {
+  if (!isOpen(alert)) return { text: statusLabel(alert), tone: 'neutral' }
+  if (['NEW', 'ESCALATED'].includes(alert.status)) {
+    if (alert.maxEscalationReached) return { text: 'Quá hạn, đã báo Quản lý viện', tone: 'urgent' }
+    if (alert.status === 'ESCALATED') return { text: `Quá hạn, đã lên cấp ${alert.escalationLevel}`, tone: 'attention' }
+    if (alert.level === 'CRITICAL') return { text: 'Cần nhận ngay', tone: 'urgent' }
+    if (alert.level === 'LOW') return { text: 'Nhận trong ca', tone: 'neutral' }
+    if (alert.acknowledgementDeadline) {
+      return { text: `Nhận trước ${SHORT_TIME.format(new Date(alert.acknowledgementDeadline))}`, tone: 'neutral' }
+    }
+    return { text: 'Chờ nhận', tone: 'neutral' }
+  }
+  return { text: alert.assignee ? `${alert.assignee} đang xử lý` : 'Đang xử lý', tone: 'neutral' }
+}
+
 export function isUrgent(alert) {
   return isOpen(alert) && (alert.level === 'CRITICAL' || alert.maxEscalationReached)
 }

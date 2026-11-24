@@ -55,21 +55,26 @@ export function ResidentChoices({ residents, query, onQuery, onPick }) {
 }
 
 const LEVEL_STYLE = {
-  CRITICAL: [Siren, 'text-destructive hover:text-destructive', 'Ví dụ ngã, mất ý thức, khó thở. Cần người tới ngay.'],
+  CRITICAL: [
+    Siren,
+    'text-destructive hover:text-destructive',
+    'Ngã, khó thở, mất ý thức, nghẹn, đi lạc. Cần người tới ngay.',
+  ],
   MEDIUM: [
     TriangleAlert,
     'text-warning-foreground hover:text-warning-foreground',
-    'Ví dụ chỉ số bất thường, từ chối thuốc. Điều dưỡng xử lý, báo bác sĩ khi cần.',
+    'Sai thuốc, kích động, chấn thương nhẹ, chỉ số lạ. Xử lý trong 15 phút.',
   ],
-  LOW: [Info, 'text-foreground', 'Ví dụ bỏ bữa, khó ngủ. Ghi nhận và theo dõi trong ca.'],
+  LOW: [Info, 'text-foreground', 'Bỏ bữa, khó ngủ, mất hoặc hỏng đồ. Xử lý trong ca.'],
 }
 
 // Chọn mức bằng ba ô có nhãn chữ và ví dụ ngắn (nghiep-vu 9.3), chữ màu theo tông mức (DESIGN.md 3.5); ô đang chọn có viền
-// đậm cùng màu và aria-pressed. Mức là độ khẩn của việc xử lý, khác trạng thái xử lý.
-export function LevelChoices({ value, onChange }) {
+// đậm cùng màu và aria-pressed. Mức là độ khẩn của việc xử lý, khác trạng thái xử lý. suggested: mức mặc định của loại
+// (danh mục M05.INCIDENT_TYPE), ô đó có nhãn "Gợi ý". stacked: xếp dọc ở cột hẹp.
+export function LevelChoices({ value, onChange, suggested = null, stacked = false }) {
   const id = useId()
   return (
-    <div className="grid gap-3 sm:grid-cols-3" role="group" aria-label="Mức">
+    <div className={cn('grid gap-3', !stacked && 'sm:grid-cols-3')} role="group" aria-label="Mức">
       {LEVEL_ORDER.map((level) => {
         const [Icon, tone, hint] = LEVEL_STYLE[level]
         return (
@@ -90,6 +95,9 @@ export function LevelChoices({ value, onChange }) {
             <span className="flex items-center gap-2">
               <Icon aria-hidden="true" />
               {LEVEL_LABEL[level]}
+              {suggested === level && (
+                <span className="rounded bg-primary px-1.5 py-0.5 type-caption text-primary-foreground">Gợi ý</span>
+              )}
             </span>
             <span id={`${id}-${level}`} className="type-body-sm font-normal text-muted-foreground">
               {hint}

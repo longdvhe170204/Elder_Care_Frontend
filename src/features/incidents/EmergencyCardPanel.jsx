@@ -21,12 +21,13 @@ function itemText(item) {
     .join(', ')
 }
 
+// Mục trống không chiếm ô (góp ý demo 2026-11-24): gom vào một dòng "Chưa ghi nhận: …" ở cuối thẻ
 function List({ label, items }) {
-  if (!items) return null
+  if (!items || items.length === 0) return null
   return (
     <div className="flex flex-col">
       <dt className="type-caption text-muted-foreground">{label}</dt>
-      <dd className="type-body-sm">{items.length === 0 ? 'Chưa ghi nhận' : items.map(itemText).join('; ')}</dd>
+      <dd className="type-body-sm">{items.map(itemText).join('; ')}</dd>
     </div>
   )
 }
@@ -117,7 +118,15 @@ export function EmergencyCardPanel({ incidentId, children = null }) {
           <div className="flex flex-col">
             <dt className="type-caption text-muted-foreground">Người liên hệ chính</dt>
             <dd className="type-body-sm">
-              {[card.primaryContact.fullName, card.primaryContact.phoneNumber].filter(Boolean).join(', ')}
+              {card.primaryContact.fullName}
+              {card.primaryContact.phoneNumber && (
+                <>
+                  {', '}
+                  <a className="type-label text-primary underline" href={`tel:${card.primaryContact.phoneNumber}`}>
+                    {card.primaryContact.phoneNumber}
+                  </a>
+                </>
+              )}
             </dd>
           </div>
         )}
@@ -133,6 +142,24 @@ export function EmergencyCardPanel({ incidentId, children = null }) {
           </Button>
         ))}
       {problem && <ProblemAlert problem={problem} />}
+      {[
+        ['dị ứng', card.allergies],
+        ['thuốc đang dùng', card.currentMedications],
+        ['bệnh nền', card.chronicConditions],
+      ].some(([, items]) => items && items.length === 0) && (
+        <p className="type-caption text-muted-foreground">
+          Chưa ghi nhận:{' '}
+          {[
+            ['dị ứng', card.allergies],
+            ['thuốc đang dùng', card.currentMedications],
+            ['bệnh nền', card.chronicConditions],
+          ]
+            .filter(([, items]) => items && items.length === 0)
+            .map(([label]) => label)
+            .join(', ')}
+          .
+        </p>
+      )}
       {card.unavailable?.length > 0 && (
         <p className="type-caption text-muted-foreground">Chưa có dữ liệu: {card.unavailable.join(', ')}</p>
       )}

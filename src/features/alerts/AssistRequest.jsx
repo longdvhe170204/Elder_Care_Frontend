@@ -424,7 +424,7 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
       description={
         sent
           ? 'Người nhận đã được báo. Biết thêm gì hoặc chọn nhầm tầng thì sửa bên dưới, không bắt buộc.'
-          : 'Gửi ngay để người đang trực tới giúp. Không cần biết tên người cao tuổi; các mục bên dưới không bắt buộc.'
+          : 'Bấm Gửi ngay, không cần điền gì.'
       }
       problem={problem}
       onClose={() => !busy && onClose()}
@@ -452,10 +452,27 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
           )
         ) : (
           <>
-            <Button type="submit" className="h-12 w-full text-base" disabled={busy}>
+            {/* Trước nút gửi: gửi đi đâu, báo cho ai (góp ý demo 2026-11-24). Web không dùng GPS: nơi là tầng đang trực */}
+            <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-lg bg-muted/60 px-4 py-3 type-body-sm">
+              <dt className="type-caption text-muted-foreground uppercase">Ở đâu</dt>
+              <dd>
+                <strong>{floor === COMMON ? 'Khu vực chung' : (floorName ?? 'Chưa rõ tầng')}</strong>
+                {floors?.find((f) => String(f.id) === floor)?.current && ' (tầng bạn đang trực)'}
+              </dd>
+              <dt className="type-caption text-muted-foreground uppercase">Sẽ báo</dt>
+              <dd>{recipientsText(floor === COMMON ? null : floorName, Boolean(resident))}</dd>
+            </dl>
+            <Button
+              type="submit"
+              className="h-14 w-full bg-destructive text-lg text-white hover:bg-destructive/90"
+              disabled={busy}
+            >
               <HandHelping aria-hidden="true" />
               Gửi ngay
             </Button>
+            <p className="type-caption text-muted-foreground">
+              Thêm cho người tới dễ tìm (không bắt buộc, gửi trước hay sau đều được):
+            </p>
             {refusedContacts && <CallNumbers contacts={refusedContacts} />}
           </>
         )}
@@ -522,7 +539,7 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
             floors={floors}
             value={floor}
             onChange={setFloor}
-            label={sent ? 'Tầng xảy ra (đổi nếu chọn nhầm)' : 'Tầng xảy ra'}
+            label={sent ? 'Tầng xảy ra (đổi nếu chọn nhầm)' : 'Đổi tầng nếu không phải tầng trên'}
           />
         )}
 
@@ -576,12 +593,14 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
           </Field>
         )}
 
-        <p className="type-body-sm text-muted-foreground">
-          <strong className="text-foreground">{sent ? 'Báo thêm khi gửi bổ sung:' : 'Sẽ báo:'}</strong>{' '}
-          {newRecipients
-            ? `${recipientsText(floor === COMMON ? null : floorName, Boolean(resident))}.`
-            : 'không ai thêm.'}
-        </p>
+        {sent && (
+          <p className="type-body-sm text-muted-foreground">
+            <strong className="text-foreground">Báo thêm khi gửi bổ sung:</strong>{' '}
+            {newRecipients
+              ? `${recipientsText(floor === COMMON ? null : floorName, Boolean(resident))}.`
+              : 'không ai thêm.'}
+          </p>
+        )}
 
         {sent ? (
           <div className="flex flex-wrap gap-2">
@@ -593,12 +612,8 @@ export function AssistDialog({ existing = null, openAssists = [], onClose, onSen
             </Button>
           </div>
         ) : (
-          // Gửi ở cả cuối hộp: điền xong không phải cuộn lên đầu (góp ý test demo 2026-11-23)
+          // Một nút gửi duy nhất ở đầu hộp (góp ý demo 2026-11-24: hai nút gửi gây rối)
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" className="h-11" disabled={busy}>
-              <HandHelping aria-hidden="true" />
-              Gửi
-            </Button>
             <Button type="button" variant="ghost" className="h-11" disabled={busy} onClick={onClose}>
               Hủy
             </Button>
@@ -900,7 +915,11 @@ export function AssistButton({ onSent, openAssists, onOpenAlert, onJoined }) {
   const [open, setOpen] = useState(false)
   return (
     <>
-      <Button id="request-assist" variant="outline" className="h-11 bg-card" onClick={() => setOpen(true)}>
+      <Button
+        id="request-assist"
+        className="h-11 bg-destructive text-white hover:bg-destructive/90"
+        onClick={() => setOpen(true)}
+      >
         <HandHelping aria-hidden="true" />
         Cần hỗ trợ
       </Button>

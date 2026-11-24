@@ -23,11 +23,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { DetailLayout } from '@/common/DetailLayout'
-import { NowStrip } from '@/common/NowStrip'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { StatusBadge } from '@/common/StatusBadge'
 import { usePermissions } from '@/common/permissions/permissions'
 import { formatDateTime } from '@/common/dateTime'
@@ -52,7 +50,7 @@ import { loadOpenIncidents } from '@/features/incidents/incidents'
 import { AssistButton, AssistSenderBlock, AssistStatus, ResidentSearch } from './AssistRequest'
 import { EVENT_INCIDENT_TYPE, EVENT_LABEL, PLACE_LABEL } from './assistView'
 import { Call115Panel } from './Call115Panel'
-import { CreateAlertForm } from './CreateAlertForm'
+import { ReportForm } from '@/features/incidents/ReportForm'
 import { PressedAlertPanel } from './PressedAlertPanel'
 import { loadAlert, loadAlertBoard, loadIncidentTypes, receiveCreatedIncident, runAlertCommand } from './alerts'
 import {
@@ -60,10 +58,10 @@ import {
   LEVEL_ORDER,
   isOpen,
   isUrgent,
-  needsReceiver,
   originLabel,
   sortAlerts,
   statusLabel,
+  timeChip,
   statusTone,
   typeLabel,
   handlerText,
@@ -82,63 +80,75 @@ function AlertStatus({ alert }) {
   return <Badge variant={statusTone(alert)}>{statusLabel(alert)}</Badge>
 }
 
-// Một dòng cảnh báo: người và loại ở bên trái, trạng thái và hạn ở giữa, đúng một nút chính ở bên phải (DESIGN.md 7.1).
-// Vạch trái theo mức: đỏ khi Khẩn cấp hoặc đã leo thang tối đa, hổ phách khi Trung bình, xám khi Nhẹ (3.5).
-// onReconcile: cảnh báo "chưa đối chiếu thuốc" mở thẳng phiếu đối chiếu của người đó ở màn Phát thuốc (006 T078); là lối
-// chuyển màn, không phải lệnh trên cảnh báo
+const CHIP_TONE = {
+  urgent: 'bg-destructive-subtle text-destructive',
+  attention: 'bg-warning text-warning-foreground',
+  neutral: 'bg-muted text-muted-foreground',
+}
+
+// Một dòng cảnh báo (đề xuất 2026-11-24, góp ý demo: quá nhiều chữ): biểu tượng loại, tên người, loại, một nhãn thời gian,
+// đúng một nút chính. Vạch trái theo mức: đỏ khi Khẩn cấp hoặc đã leo thang tối đa, hổ phách khi Trung bình, xám khi Nhẹ
+// (DESIGN.md 3.5). Bấm vào tên mở chi tiết (vùng bấm phủ cả dòng). onReconcile: cảnh báo "chưa đối chiếu thuốc" mở thẳng
+// phiếu đối chiếu (006 T078), là lối chuyển màn, không phải lệnh trên cảnh báo
 function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }) {
   const urgent = isUrgent(alert)
   const commands = alert.allowedCommands ?? []
   // Người xử lý (không phải Quản lý viện) tiếp nhận xong thường xử lý ngay: một nút làm cả hai lệnh (FR-029 giữ hai trạng thái)
   const handler = commands.includes('activate-emergency')
-  const waiting = isOpen(alert) && alert.acknowledgementDeadline && ['NEW', 'ESCALATED'].includes(alert.status)
+  const chip = timeChip(alert)
+  const reconcile = onReconcile && alert.type === 'CHUA_DOI_CHIEU' && alert.residentId && isOpen(alert)
   return (
     <article
       aria-label={`${typeLabel(alert.type)}, ${name}`}
       className={cn(
-        'grid gap-x-4 gap-y-3 rounded-xl border border-l-4 bg-card p-4 @lg:grid-cols-[minmax(0,1fr)_auto] @lg:items-center @4xl:grid-cols-[minmax(0,5fr)_minmax(0,4fr)_minmax(260px,auto)]',
+        'relative flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-l-[6px] bg-card px-4 py-3',
         urgent ? 'border-l-destructive' : alert.level === 'MEDIUM' ? 'border-l-warning-foreground' : 'border-l-border',
       )}
     >
-      <div className="flex min-w-0 items-center gap-3">
-        <IncidentTypeIcon code={alert.type} />
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="type-card-title">{typeLabel(alert.type)}</span>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="flex items-center gap-2 type-label">
-              {alert.residentId != null && (
-                <ResidentAvatar name={name} code={String(alert.residentId)} className="size-6" />
-              )}
-              {name}
-            </span>
-            <StatusBadge status={LEVEL_LABEL[alert.level]} />
-            <AlertStatus alert={alert} />
-          </div>
-        </div>
-      </div>
-      <div className="flex min-w-0 flex-col gap-0.5 type-body-sm text-muted-foreground tabular-nums">
-        <span>
-          {originLabel(alert.origin)}, {formatDateTime(alert.latestAt)}
-          {alert.residentId == null && alert.floorName && `, ${alert.floorName}`}
-          {alert.occurrenceCount > 1 && `, ${alert.occurrenceCount} lần cùng loại đã gộp`}
-        </span>
-        {waiting ? (
-          <span className={cn(urgent && 'text-destructive')}>
-            Hạn tiếp nhận {formatDateTime(alert.acknowledgementDeadline)}
+      <IncidentTypeIcon code={alert.type} />
+      <div className="flex min-w-0 flex-1 basis-56 flex-col">
+        <button
+          type="button"
+          id={`alert-row-${alert.id}`}
+          onClick={() => onOpen(alert)}
+          aria-label={`Chi tiết cảnh báo của ${name}`}
+          className="text-left type-label outline-none after:absolute after:inset-0 after:rounded-xl focus-visible:after:ring-3 focus-visible:after:ring-ring/50"
+        >
+          {name}
+        </button>
+        <span className="type-body-sm text-muted-foreground">
+          <span>
+            {typeLabel(alert.type)}
+            {alert.residentId == null && alert.floorName && `, ${alert.floorName}`}
           </span>
-        ) : null}
-        <span>{handlerText(alert)}</span>
+          {alert.occurrenceCount > 1 && <span> · {alert.occurrenceCount} lần gộp</span>}
+        </span>
       </div>
-      <div className="flex flex-wrap items-center gap-2 @lg:col-start-2 @lg:row-start-1 @lg:justify-end @4xl:col-start-3">
+      {chip && (
+        <span className={cn('rounded-full px-3 py-1 type-caption font-semibold whitespace-nowrap', CHIP_TONE[chip.tone])}>
+          {chip.text}
+        </span>
+      )}
+      <div className="relative z-10 flex flex-wrap items-center gap-2">
+        {reconcile && (
+          <Button
+            variant="outline"
+            className="h-11"
+            aria-label={`Mở đối chiếu thuốc của ${name}`}
+            onClick={() => onReconcile(alert)}
+          >
+            Mở đối chiếu
+          </Button>
+        )}
         {commands.includes('receive') && (
           <Button
             variant={urgent ? 'default' : 'tonal'}
-            className="h-11"
+            className="h-11 px-5"
             disabled={busy}
             onClick={() => onReceive(alert, handler)}
-            aria-label={handler ? `Tiếp nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
+            aria-label={handler ? `Nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
           >
-            {handler ? 'Tiếp nhận và xử lý' : 'Tiếp nhận'}
+            {handler ? 'Nhận' : 'Tiếp nhận'}
           </Button>
         )}
         {commands.includes('start-handling') && (
@@ -152,20 +162,6 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
             Bắt đầu xử lý
           </Button>
         )}
-        {onReconcile && alert.type === 'CHUA_DOI_CHIEU' && alert.residentId && isOpen(alert) && (
-          <Button variant="outline" className="h-11" onClick={() => onReconcile(alert)}>
-            {`Mở đối chiếu thuốc của ${name}`}
-          </Button>
-        )}
-        <Button
-          variant="outline"
-          className="h-11"
-          onClick={() => onOpen(alert)}
-          id={`alert-row-${alert.id}`}
-          aria-label={`Chi tiết cảnh báo của ${name}`}
-        >
-          Chi tiết
-        </Button>
       </div>
     </article>
   )
@@ -184,6 +180,8 @@ const DIALOG_TITLE = {
   'change-level': 'Đổi mức',
   assign: 'Giao người phụ trách',
 }
+// Kết quả đóng hay gặp: bấm một ô là điền sẵn, sửa thêm được (đề xuất 2026-11-24: chọn thay vì gõ)
+const CLOSE_RESULTS = ['Đã xử lý xong, cụ ổn định', 'Theo dõi tiếp trong ca', 'Báo nhầm, không có sự việc']
 const DIALOG_HINT = {
   'convert-to-incident': 'Cảnh báo kết thúc ở đây, mọi việc tiếp theo làm ở sự cố.',
   'activate-emergency': 'Tạo ngay sự cố Khẩn cấp, báo Bác sĩ trực, Trưởng tầng và người liên hệ chính.',
@@ -248,6 +246,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   }
 
   const commands = alert.allowedCommands ?? []
+  const chip = timeChip(alert)
   const converting = mode === 'convert-to-incident' || mode === 'activate-emergency'
   const levelChoices = LEVEL_ORDER.filter((l) => l !== alert.level)
   // Đóng cảnh báo Khẩn cấp: kết quả phải nêu lý do không kích hoạt khẩn cấp, tối thiểu ít chữ để không đóng bằng "ok"
@@ -268,7 +267,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   const steps = [
     commands.includes('receive') && {
       icon: ClipboardCheck,
-      label: handler ? 'Tiếp nhận và xử lý' : 'Tiếp nhận',
+      label: handler ? 'Nhận và xử lý' : 'Tiếp nhận',
       hint: handler ? 'Báo đã nhận và bắt đầu xử lý ngay.' : 'Báo đã nhận để dừng leo thang.',
       primary: true,
       disabled: busy,
@@ -504,15 +503,27 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
         code={alert.type}
         title={typeLabel(alert.type)}
         Title={Title}
-        subtitle={`${name}, ${originLabel(alert.origin).toLowerCase()} lúc ${formatDateTime(alert.firstAt)}`}
+        subtitle={[name, alert.residentId == null && alert.floorName].filter(Boolean).join(', ')}
+        note={
+          chip && (
+            <span
+              className={cn('self-start rounded-full px-3 py-1 type-caption font-semibold', CHIP_TONE[chip.tone])}
+            >
+              {chip.text}
+            </span>
+          )
+        }
         badges={
           <>
             <CaseBadge label="Mức">
               <StatusBadge status={LEVEL_LABEL[alert.level]} />
             </CaseBadge>
-            <CaseBadge label="Trạng thái">
-              <AlertStatus alert={alert} />
-            </CaseBadge>
+            {/* Chờ nhận thì nhãn thời gian ở dưới đã nói trạng thái, không lặp */}
+            {!waiting && (
+              <CaseBadge label="Trạng thái">
+                <AlertStatus alert={alert} />
+              </CaseBadge>
+            )}
           </>
         }
       />
@@ -577,6 +588,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
                 id="alert-assignee"
                 label="Người phụ trách"
                 errorText="Chọn người phụ trách"
+                positions={['Điều dưỡng', 'Trưởng tầng', 'Bác sĩ']}
                 value={staffId}
                 onChange={setStaffId}
                 invalid={submitted && !staffId}
@@ -710,6 +722,22 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
                       ? 'Ghi chú giao việc'
                       : 'Lý do đổi mức'}
               </FieldLabel>
+              {mode === 'close' && (
+                <div className="flex flex-wrap gap-2" role="group" aria-label="Kết quả hay gặp">
+                  {CLOSE_RESULTS.map((result) => (
+                    <Button
+                      key={result}
+                      type="button"
+                      variant="outline"
+                      aria-pressed={text === result}
+                      className={cn('h-11 px-3', text === result && 'border-2 border-primary bg-accent')}
+                      onClick={() => setText(result)}
+                    >
+                      {result}
+                    </Button>
+                  ))}
+                </div>
+              )}
               <Textarea
                 id="alert-text"
                 rows={3}
@@ -798,7 +826,6 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
             ['Người xử lý', handlerText(alert)],
             ['Kết quả', !isOpen(alert) ? alert.resolution || undefined : undefined, true],
             ['Người đóng', !isOpen(alert) ? alert.closedBy || undefined : undefined],
-            ['Hạn tiếp nhận', waiting ? formatDateTime(alert.acknowledgementDeadline) : undefined],
             ['Tầng', alert.floorName || undefined],
           ]}
         />
@@ -834,6 +861,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
           <CaseFacts
             rows={[
               ['Nguồn', originLabel(alert.origin)],
+              ['Hạn tiếp nhận', waiting ? formatDateTime(alert.acknowledgementDeadline) : undefined],
               ['Lần đầu', formatDateTime(alert.firstAt)],
               ['Lần gần nhất', alert.latestAt !== alert.firstAt ? formatDateTime(alert.latestAt) : undefined],
               ['Số lần gộp', alert.occurrenceCount > 1 ? String(alert.occurrenceCount) : undefined],
@@ -867,7 +895,6 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
   const [board, setBoard] = useState(null)
   const [problem, setProblem] = useState(null)
   const [group, setGroup] = useState('open')
-  const [levelFilter, setLevelFilter] = useState('ALL')
   const [openId, setOpenId] = useState(alertId)
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
@@ -920,22 +947,23 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
 
   const alerts = board?.alerts ?? []
   const nameOf = (a) => board?.names?.[a.residentId] ?? (a.residentId ? 'Người cao tuổi' : 'Chưa rõ người cao tuổi')
-  const inGroup = alerts.filter((a) => (group === 'open' ? isOpen(a) : !isOpen(a)))
-  const visible = sortAlerts(inGroup.filter((a) => levelFilter === 'ALL' || a.level === levelFilter))
+  // Yêu cầu hỗ trợ đang mở của chính mình đã có ở thanh "Yêu cầu hỗ trợ của bạn", không lặp ở danh sách
+  const inGroup = alerts.filter((a) => (group === 'open' ? isOpen(a) && !a.pressedByMe : !isOpen(a)))
+  const visible = sortAlerts(inGroup)
   // Đang mở chia hai nhóm theo việc cần làm: chưa ai nhận (cần tiếp nhận) và đã có người nhận (đang xử lý); đã đóng một nhóm
   const sections = (
     group === 'open'
       ? [
           {
             key: 'waiting',
-            title: 'Cần tiếp nhận',
-            hint: 'Chưa ai tiếp nhận. Quá hạn thì tự leo thang lên cấp trên.',
+            title: 'Chờ nhận',
+            hint: null,
             items: visible.filter((a) => ['NEW', 'ESCALATED'].includes(a.status)),
           },
           {
             key: 'handling',
-            title: 'Đang được xử lý',
-            hint: 'Đã có người tiếp nhận. Mở Chi tiết để chuyển sự cố, đổi mức hoặc đóng.',
+            title: 'Đang xử lý',
+            hint: null,
             items: visible.filter((a) => !['NEW', 'ESCALATED'].includes(a.status)),
           },
         ]
@@ -984,7 +1012,19 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     setOpenId(id)
   }
 
-  if (creating) return <CreateAlertForm onClose={() => setCreating(false)} onCreated={created} />
+  if (creating) {
+    return (
+      <ReportForm
+        onClose={() => setCreating(false)}
+        onOpenIncident={onNavigate && ((incidentId) => onNavigate('incidents', { incidentId }))}
+        onDone={({ kind, id, message }) => {
+          // Sự cố mở ở màn Sự cố để thấy ngay thẻ khẩn cấp, Gọi 115; cảnh báo về danh sách
+          if (kind === 'incident' && id != null && onNavigate) onNavigate('incidents', { incidentId: id })
+          else created(message)
+        }}
+      />
+    )
+  }
 
   // Nguy kịch (BF-17) có khối xử lý dài nên mở cả trang; cảnh báo khác ở khung phải, danh sách vẫn thấy và bấm được
   const wholePage = opened?.type === 'CRITICAL_CONDITION' && opened.criticalFlagId != null
@@ -1043,7 +1083,6 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     >
       <PageHeader
         title="Cảnh báo"
-        subtitle="Cảnh báo trong phạm vi của bạn, khẩn cấp và đã leo thang tối đa lên đầu."
         aside={
           <div className="flex flex-wrap gap-2">
             {can('EMERGENCY_ASSIST_BUTTON', 'CREATE') && (
@@ -1062,17 +1101,18 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
                 }}
               />
             )}
-            {can('ALERT_HANDLING', 'CREATE') && (
+            {(can('ALERT_HANDLING', 'CREATE') || can('INCIDENT_EMERGENCY', 'CREATE')) && (
               <Button
-                id="create-alert"
+                id="report-event"
                 className="h-11"
                 onClick={() => {
                   setAnnouncement('')
+                  setOpenId(null)
                   setCreating(true)
                 }}
               >
                 <Plus aria-hidden="true" />
-                Tạo cảnh báo
+                Báo sự việc
               </Button>
             )}
           </div>
@@ -1086,17 +1126,7 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
             options={GROUPS.map(([value, label]) => [
               value,
               label,
-              alerts.filter((a) => (value === 'open' ? isOpen(a) : !isOpen(a))).length,
-            ])}
-          />
-          <FilterTabs
-            label="Lọc theo mức"
-            value={levelFilter}
-            onChange={setLevelFilter}
-            options={['ALL', ...LEVEL_ORDER].map((l) => [
-              l,
-              l === 'ALL' ? 'Tất cả mức' : LEVEL_LABEL[l],
-              l === 'ALL' ? inGroup.length : inGroup.filter((a) => a.level === l).length,
+              alerts.filter((a) => (value === 'open' ? isOpen(a) && !a.pressedByMe : !isOpen(a))).length,
             ])}
           />
         </div>
@@ -1110,17 +1140,6 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
           onNavigate={onNavigate}
         />
       )}
-      {/* DESIGN.md 5, 7.2: cảnh báo gấp chưa ai tiếp nhận nổi lên ở dải này, thẻ không thêm viền đỏ */}
-      <NowStrip
-        items={sortAlerts(alerts.filter(needsReceiver)).map((a) => ({
-          key: a.id,
-          label:
-            a.residentId == null
-              ? `${typeLabel(a.type)}${a.floorName ? `, ${a.floorName}` : ''}`
-              : `${nameOf(a)}, ${typeLabel(a.type)}`,
-          onSelect: () => open(a.id),
-        }))}
-      />
       <p role="status" aria-live="polite" className="empty:hidden rounded-xl border bg-card px-4 py-3 type-body-sm">
         {announcement}
       </p>
@@ -1133,9 +1152,7 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
       ) : visible.length === 0 ? (
         <Card>
           <CardContent className="type-body-sm">
-            {levelFilter !== 'ALL' && inGroup.length > 0
-              ? `Không có cảnh báo mức ${LEVEL_LABEL[levelFilter].toLowerCase()} trong nhóm này.`
-              : group === 'open'
+            {group === 'open'
                 ? 'Không có cảnh báo đang mở trong phạm vi của bạn.'
                 : 'Chưa có cảnh báo đã đóng.'}
           </CardContent>
