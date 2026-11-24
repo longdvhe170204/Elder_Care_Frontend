@@ -145,20 +145,6 @@ export const END_CASES = [
 
 export const ENDING_STATUS = { PREPARING: 'Đang chuẩn bị', COMPLETED: 'Đã kết thúc', CANCELLED: 'Đã hủy' }
 
-export const RECIPIENT_TYPES = [
-  ['FAMILY_MEMBER', 'Người thân'],
-  ['RECEIVING_FACILITY', 'Cơ sở tiếp nhận'],
-]
-
-// Điều kiện (a) → (d), (h) có thể xin ngoại lệ; (e) không có ngoại lệ (FR-064)
-export const EXCEPTION_CONDITIONS = [
-  'END_A_COSTS',
-  'END_B_BELONGINGS',
-  'END_C_STORED_MEDICATION',
-  'END_D_ALERTS_INCIDENTS',
-  'END_H_SETTLEMENT',
-]
-
 export const POST_DEATH_ITEMS = {
   BELONGINGS: 'Đồ gửi',
   STORED_MEDICATION: 'Thuốc gia đình gửi',

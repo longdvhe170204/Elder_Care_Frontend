@@ -2,13 +2,14 @@ import { useEffect, useState } from 'react'
 import {
   getResidentsById,
   getResidentsByResidentIdRelationships,
+  getMe,
   getResidencyEndingsByIdConditions,
   getStaff,
   postResidencyEndings,
   postResidencyEndingsByIdCancel,
   postResidencyEndingsByIdChangeDate,
   postResidencyEndingsByIdHandover,
-  postResidencyEndingsByIdRequestException,
+  postResidentsByIdEndResidency,
 } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -18,24 +19,15 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
-import {
-  CONDITION_STATUS,
-  END_CASES,
-  ENDING_STATUS,
-  EXCEPTION_CONDITIONS,
-  RECIPIENT_TYPES,
-  SELECT,
-  labelOf,
-  newKey,
-  vietnamIso,
-} from './admissionLabels'
+import { CONDITION_STATUS, END_CASES, ENDING_STATUS, SELECT, labelOf, newKey, vietnamIso } from './admissionLabels'
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 
 // Hồ sơ kết thúc lưu trú (004 T061, T107; US7, FR-062 → FR-067, Q-379). Điều kiện (a) → (h); (h) có hai ý (quyết toán số dư,
-// tiền cọc và Kế toán đã xác nhận quyết toán). (e) bàn giao và ý xác nhận quyết toán không có ngoại lệ (FR-064). Lệnh Kết thúc
-// lưu trú là lệnh của 001 ở tab Trạng thái của hồ sơ người cao tuổi.
+// tiền cọc và Kế toán đã xác nhận quyết toán). Demo 2026-11-25 (chủ dự án chốt): bỏ xin ngoại lệ; nút Xác nhận kết thúc mở
+// khi các điều kiện khác đã đạt, ghi bàn giao rồi gửi lệnh Kết thúc lưu trú của 001 (lệnh vẫn có ở tab Trạng thái).
 
 const SETTLEMENT = ['END_H_SETTLEMENT', 'END_H_SETTLEMENT_CONFIRMATION']
+const HANDOVER = 'END_E_HANDOVER'
 const HOUSE_LABEL = 'Điều kiện (h): số dư và tiền cọc đã quyết toán'
 
 // Trạng thái có màu (Đạt xanh, Chưa đạt đỏ; DESIGN.md mục 3.5). Lý do chỉ hiện khi Chưa đạt: dòng Đạt, Tự động backend
@@ -76,20 +68,34 @@ function Conditions({ conditions }) {
   )
 }
 
-function HandoverForm({ ending, onDone, onCancel }) {
-  const [type, setType] = useState('')
+// Giờ hiện tại theo giờ máy cho ô datetime-local (người dùng sửa được)
+function nowLocal() {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
+// Điều kiện còn chặn nút Xác nhận kết thúc: mọi dòng Chưa đạt trừ (e) bàn giao, vì bàn giao ghi ngay trong form xác nhận
+const blockingLines = (conditions) => conditions.filter((c) => c.status === 'NOT_MET' && c.code !== HANDOVER)
+
+// Xác nhận kết thúc (demo 2026-11-25, chủ dự án chốt): chỉ mở khi mọi điều kiện khác đã đạt; form ghi bàn giao (người nhận
+// là người thân, bỏ lựa chọn cơ sở tiếp nhận và mã bản ghi đón) rồi gửi luôn lệnh Kết thúc lưu trú của 001 với thời điểm
+// bàn giao. Đã có bàn giao (lần trước lệnh kết thúc lỗi) thì chỉ gửi lệnh kết thúc. Người ghi không xem được hồ sơ nhân
+// viên (Hành chính) thì nhân viên bàn giao là chính người ghi, hiện họ tên theo /me.
+function ConfirmEndForm({ ending, onDone, onCancel }) {
+  const handedOver = !!ending.handover
   const [members, setMembers] = useState([])
-  // null: đang tải. Rỗng: người ghi không xem được hồ sơ nhân viên (Hành chính, Phụ lục 27) thì nhân viên bàn giao là
-  // chính người ghi, backend tự lấy (BF-10 bước 6, phương án A 2026-11-24)
+  // null: đang tải. Rỗng: người ghi không xem được hồ sơ nhân viên thì backend lấy chính người ghi (BF-10 bước 6)
   const [staff, setStaff] = useState(null)
+  const [me, setMe] = useState('')
   const [memberId, setMemberId] = useState('')
-  const [facility, setFacility] = useState('')
-  const [at, setAt] = useState('')
+  const [at, setAt] = useState(nowLocal)
   const [staffId, setStaffId] = useState('')
-  const [pickup, setPickup] = useState('')
+  const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const [keys] = useState(() => ({ handover: newKey(), end: crypto.randomUUID() }))
 
   useEffect(() => {
     getResidentsByResidentIdRelationships({ path: { residentId: ending.residentId } })
@@ -98,16 +104,17 @@ function HandoverForm({ ending, onDone, onCancel }) {
     getStaff({ query: { status: 'WORKING' } })
       .then(({ data }) => setStaff(data ?? []))
       .catch(() => setStaff([]))
+    getMe()
+      .then(({ data }) => setMe(data?.fullName ?? ''))
+      .catch(() => {})
   }, [ending.residentId])
 
-  const family = type === 'FAMILY_MEMBER'
   const recorderIsStaff = staff !== null && staff.length === 0
   const errors = {
-    type: !type && 'Chọn người nhận',
-    member: family && !memberId && 'Chọn người thân nhận',
-    facility: type === 'RECEIVING_FACILITY' && !facility.trim() && 'Nhập tên cơ sở tiếp nhận',
+    member: !handedOver && !memberId && 'Chọn người thân nhận',
     at: !at && 'Nhập thời điểm bàn giao',
-    staff: !recorderIsStaff && !staffId && 'Chọn nhân viên bàn giao',
+    staff: !handedOver && !recorderIsStaff && !staffId && 'Chọn nhân viên bàn giao',
+    reason: !reason.trim() && 'Nhập lý do',
   }
 
   async function save() {
@@ -116,18 +123,23 @@ function HandoverForm({ ending, onDone, onCancel }) {
     setBusy(true)
     setFailure(null)
     try {
-      await postResidencyEndingsByIdHandover({
-        path: { id: ending.id },
-        headers: newKey(),
-        body: {
-          recipientType: type,
-          ...(family ? { familyMemberId: Number(memberId) } : { facilityName: facility.trim() }),
-          handoverAt: vietnamIso(at),
-          ...(!recorderIsStaff && { handoverStaffId: Number(staffId) }),
-          ...(family && pickup && { pickupRecordId: Number(pickup) }),
-        },
+      if (!handedOver)
+        await postResidencyEndingsByIdHandover({
+          path: { id: ending.id },
+          headers: keys.handover,
+          body: {
+            recipientType: 'FAMILY_MEMBER',
+            familyMemberId: Number(memberId),
+            handoverAt: vietnamIso(at),
+            ...(!recorderIsStaff && { handoverStaffId: Number(staffId) }),
+          },
+        })
+      await postResidentsByIdEndResidency({
+        path: { id: ending.residentId },
+        headers: { 'Idempotency-Key': keys.end },
+        body: { reason: reason.trim(), details: { residencyEndingId: ending.id, effectiveAt: vietnamIso(at) } },
       })
-      onDone('Đã ghi nhận bàn giao')
+      onDone('Đã kết thúc lưu trú')
     } catch (e) {
       setFailure(problemOf(e))
     } finally {
@@ -138,58 +150,31 @@ function HandoverForm({ ending, onDone, onCancel }) {
   const shown = (key) => (submitted ? errors[key] : null)
   return (
     <div className="flex flex-col gap-3 border-t pt-4">
-      <h3 className="type-card-title">Ghi nhận bàn giao người cao tuổi</h3>
+      <h3 className="type-card-title">Xác nhận kết thúc lưu trú</h3>
       <FieldGroup>
-        <Choices label="Người nhận" options={RECIPIENT_TYPES} value={type} onChange={setType} error={shown('type')} />
-        {family && (
-          <>
-            <Field data-invalid={!!shown('member') || undefined}>
-              <FieldLabel htmlFor="handover-member">Người thân nhận</FieldLabel>
-              <select
-                id="handover-member"
-                className={SELECT}
-                value={memberId}
-                onChange={(e) => setMemberId(e.target.value)}
-              >
-                <option value="">Chọn người thân</option>
-                {members.map((r) => (
-                  <option key={r.id} value={r.familyMember.id}>
-                    {r.familyMember.fullName}
-                  </option>
-                ))}
-              </select>
-              {shown('member') && <FieldError>{shown('member')}</FieldError>}
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="handover-pickup">Mã bản ghi đón</FieldLabel>
-              <Input
-                id="handover-pickup"
-                type="number"
-                min="1"
-                className="h-11"
-                value={pickup}
-                onChange={(e) => setPickup(e.target.value)}
-              />
-              <p className="type-caption text-muted-foreground">
-                Bản ghi đón hợp lệ của 012; dùng một lần, không bắt buộc.
-              </p>
-            </Field>
-          </>
-        )}
-        {type === 'RECEIVING_FACILITY' && (
-          <Field data-invalid={!!shown('facility') || undefined}>
-            <FieldLabel htmlFor="handover-facility">Tên cơ sở tiếp nhận</FieldLabel>
-            <Input
-              id="handover-facility"
-              className="h-11"
-              value={facility}
-              onChange={(e) => setFacility(e.target.value)}
-            />
-            {shown('facility') && <FieldError>{shown('facility')}</FieldError>}
+        {handedOver ? (
+          <Info label="Bàn giao">Đã ghi nhận bàn giao, chỉ còn xác nhận kết thúc</Info>
+        ) : (
+          <Field data-invalid={!!shown('member') || undefined}>
+            <FieldLabel htmlFor="handover-member">Người thân nhận</FieldLabel>
+            <select
+              id="handover-member"
+              className={SELECT}
+              value={memberId}
+              onChange={(e) => setMemberId(e.target.value)}
+            >
+              <option value="">Chọn người thân</option>
+              {members.map((r) => (
+                <option key={r.id} value={r.familyMember.id}>
+                  {r.familyMember.fullName}
+                </option>
+              ))}
+            </select>
+            {shown('member') && <FieldError>{shown('member')}</FieldError>}
           </Field>
         )}
         <Field data-invalid={!!shown('at') || undefined}>
-          <FieldLabel htmlFor="handover-at">Thời điểm bàn giao</FieldLabel>
+          <FieldLabel htmlFor="handover-at">Thời điểm bàn giao, kết thúc</FieldLabel>
           <Input
             id="handover-at"
             type="datetime-local"
@@ -199,8 +184,8 @@ function HandoverForm({ ending, onDone, onCancel }) {
           />
           {shown('at') && <FieldError>{shown('at')}</FieldError>}
         </Field>
-        {recorderIsStaff ? (
-          <Info label="Nhân viên bàn giao">Chính bạn, người ghi bàn giao</Info>
+        {handedOver ? null : recorderIsStaff ? (
+          <Info label="Nhân viên bàn giao">{me || 'Người ghi bàn giao'}</Info>
         ) : (
           <Field data-invalid={!!shown('staff') || undefined}>
             <FieldLabel htmlFor="handover-staff">Nhân viên bàn giao</FieldLabel>
@@ -215,6 +200,7 @@ function HandoverForm({ ending, onDone, onCancel }) {
             {shown('staff') && <FieldError>{shown('staff')}</FieldError>}
           </Field>
         )}
+        <ReasonField id="end-reason" value={reason} onChange={setReason} error={shown('reason')} />
       </FieldGroup>
       <ProblemAlert problem={failure} />
       <div className="flex justify-end gap-2">
@@ -222,20 +208,19 @@ function HandoverForm({ ending, onDone, onCancel }) {
           Đóng
         </Button>
         <Button className="h-11" disabled={busy} onClick={save}>
-          Lưu bàn giao
+          Xác nhận kết thúc
         </Button>
       </div>
     </div>
   )
 }
 
-export function EndingView({ ending, role, canUpdate, onChanged }) {
+export function EndingView({ ending, canUpdate, onChanged }) {
   const [name, setName] = useState('')
   const [conditions, setConditions] = useState(null)
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
   const [date, setDate] = useState('')
-  const [code, setCode] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -259,7 +244,6 @@ export function EndingView({ ending, role, canUpdate, onChanged }) {
     setMode(next)
     setReason('')
     setDate('')
-    setCode('')
     setSubmitted(false)
     setFailure(null)
   }
@@ -289,24 +273,13 @@ export function EndingView({ ending, role, canUpdate, onChanged }) {
         { expectedEndDate: date, reason: reason.trim() },
         'Đã đổi ngày kết thúc dự kiến',
       )
-    } else if (mode === 'exception') {
-      if (!code) return
-      run(
-        postResidencyEndingsByIdRequestException,
-        { conditionCode: code, reason: reason.trim() },
-        'Đã gửi yêu cầu ngoại lệ, chờ Quản lý viện duyệt',
-      )
     } else {
       run(postResidencyEndingsByIdCancel, { reason: reason.trim() }, 'Đã hủy hồ sơ kết thúc')
     }
   }
 
-  const exceptionLines = (conditions ?? []).filter(
-    (c) =>
-      EXCEPTION_CONDITIONS.includes(c.code) &&
-      c.status === 'NOT_MET' &&
-      (role !== 'ACCOUNTANT' || c.code === 'END_H_SETTLEMENT'),
-  )
+  const blocking = conditions ? blockingLines(conditions) : null
+  const canConfirm = blocking !== null && blocking.length === 0
   const reasonError = submitted && !reason.trim() ? 'Nhập lý do' : null
 
   return (
@@ -332,23 +305,25 @@ export function EndingView({ ending, role, canUpdate, onChanged }) {
 
       {preparing && canUpdate && mode === null && (
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-          <Button variant="outline" className="h-11" onClick={() => open('handover')}>
-            Ghi nhận bàn giao…
-          </Button>
-          <Button variant="outline" className="h-11" onClick={() => open('exception')}>
-            Xin ngoại lệ…
-          </Button>
+          {!canConfirm && blocking && (
+            <p className="type-body-sm mr-auto self-center text-muted-foreground">
+              Còn {blocking.length} điều kiện chưa đạt, xử lý xong mới xác nhận kết thúc được.
+            </p>
+          )}
           <Button variant="outline" className="h-11" onClick={() => open('change-date')}>
             Đổi ngày kết thúc…
           </Button>
           <Button variant="outline" className="h-11" onClick={() => open('cancel')}>
             Hủy hồ sơ…
           </Button>
+          <Button className="h-11" disabled={!canConfirm} onClick={() => open('confirm')}>
+            Xác nhận kết thúc
+          </Button>
         </div>
       )}
 
-      {mode === 'handover' && (
-        <HandoverForm
+      {mode === 'confirm' && (
+        <ConfirmEndForm
           ending={ending}
           onCancel={() => open(null)}
           onDone={(message) => {
@@ -358,23 +333,9 @@ export function EndingView({ ending, role, canUpdate, onChanged }) {
           }}
         />
       )}
-      {['exception', 'change-date', 'cancel'].includes(mode) && (
+      {['change-date', 'cancel'].includes(mode) && (
         <div className="flex flex-col gap-3 border-t pt-4">
           <FieldGroup>
-            {mode === 'exception' && (
-              <Field data-invalid={(submitted && !code) || undefined}>
-                <FieldLabel htmlFor="ending-exception">Điều kiện xin ngoại lệ</FieldLabel>
-                <select id="ending-exception" className={SELECT} value={code} onChange={(e) => setCode(e.target.value)}>
-                  <option value="">Chọn điều kiện</option>
-                  {exceptionLines.map((c) => (
-                    <option key={c.code} value={c.code}>
-                      {c.name ?? c.code}
-                    </option>
-                  ))}
-                </select>
-                {submitted && !code && <FieldError>Chọn điều kiện</FieldError>}
-              </Field>
-            )}
             {mode === 'change-date' && (
               <Field data-invalid={(submitted && !date) || undefined}>
                 <FieldLabel htmlFor="ending-new-date">Ngày kết thúc dự kiến mới</FieldLabel>
@@ -395,7 +356,7 @@ export function EndingView({ ending, role, canUpdate, onChanged }) {
               Đóng
             </Button>
             <Button className="h-11" disabled={busy} onClick={submit}>
-              {{ exception: 'Gửi yêu cầu ngoại lệ', 'change-date': 'Lưu ngày mới', cancel: 'Xác nhận hủy hồ sơ' }[mode]}
+              {{ 'change-date': 'Lưu ngày mới', cancel: 'Xác nhận hủy hồ sơ' }[mode]}
             </Button>
           </div>
         </div>

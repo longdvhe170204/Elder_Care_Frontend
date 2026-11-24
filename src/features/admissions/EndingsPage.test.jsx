@@ -34,6 +34,14 @@ const CONDITIONS = {
   warnings: [],
 }
 
+// Mọi điều kiện khác đã đạt, chỉ còn (e) bàn giao: nút Xác nhận kết thúc mở
+const READY = {
+  conditions: CONDITIONS.conditions.map((c) =>
+    c.code === 'END_E_HANDOVER' || c.status !== 'NOT_MET' ? c : { ...c, status: 'MET' },
+  ),
+  warnings: [],
+}
+
 function renderPage(role = 'OFFICE_STAFF') {
   return render(
     <PermissionsProvider>
@@ -116,81 +124,61 @@ describe('EndingsPage', () => {
     expect(screen.queryByText(/FR-063/)).not.toBeInTheDocument()
   })
 
-  it('FR_064_xinNgoaiLe_khongCoChoDieuKienBanGiao_vaXacNhanQuyetToan', async () => {
+  // Demo 2026-11-25 (chủ dự án chốt): bỏ xin ngoại lệ; nút Xác nhận kết thúc khóa khi còn điều kiện khác (e) chưa đạt
+  it('xacNhanKetThuc_khoaKhiConDieuKienKhacChuaDat_khongCoXinNgoaiLe', async () => {
     renderPage()
     await openEnding()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Xin ngoại lệ…' }))
-    const options = within(screen.getByLabelText('Điều kiện xin ngoại lệ'))
-      .getAllByRole('option')
-      .map((o) => o.textContent)
-    expect(options).toContain('Chi phí kỳ cuối đã chốt')
-    expect(options).toContain('Số dư và tiền cọc đã quyết toán')
-    expect(options).not.toContain('Đã bàn giao người cao tuổi')
-    expect(options).not.toContain('Kế toán đã xác nhận quyết toán')
+    expect(screen.queryByRole('button', { name: /Xin ngoại lệ/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Ghi nhận bàn giao/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Xác nhận kết thúc' })).toBeDisabled()
+    expect(screen.getByText(/Còn 3 điều kiện chưa đạt/)).toBeInTheDocument()
   })
 
-  it('FR_064_xinNgoaiLe_guiMaDieuKienVaLyDo', async () => {
-    api.on('POST', '/residency-endings/14/request-exception', json(201, { approvalRequestId: 90 }))
-    renderPage()
-    await openEnding()
-    fireEvent.click(screen.getByRole('button', { name: 'Xin ngoại lệ…' }))
-    fireEvent.change(screen.getByLabelText('Điều kiện xin ngoại lệ'), { target: { value: 'END_A_COSTS' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu ngoại lệ' }))
-    expect(await screen.findByText('Nhập lý do')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Chi phí chờ chứng từ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu ngoại lệ' }))
-    await waitFor(() => expect(api.calls('POST', '/residency-endings/14/request-exception')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/residency-endings/14/request-exception')[0][1].body)).toEqual({
-      conditionCode: 'END_A_COSTS',
-      reason: 'Chi phí chờ chứng từ',
-    })
-  })
-
-  it('FR_063_banGiaoChoNguoiThan_kemBanGhiDon', async () => {
+  it('xacNhanKetThuc_ghiBanGiaoChoNguoiThan_roiGuiLenhKetThuc', async () => {
+    api.on('GET', '/residency-endings/14/conditions', json(200, READY))
     api.on('POST', '/residency-endings/14/handover', json(201, {}))
+    api.on('POST', '/residents/5/end-residency', json(200, {}))
     renderPage()
     await openEnding()
-    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận bàn giao…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
-    expect(await screen.findByText('Chọn người nhận')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Người thân' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết thúc' }))
+    expect(screen.queryByRole('button', { name: 'Cơ sở tiếp nhận' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Mã bản ghi đón')).not.toBeInTheDocument()
     fireEvent.change(await screen.findByLabelText('Người thân nhận'), { target: { value: '41' } })
-    fireEvent.change(screen.getByLabelText('Thời điểm bàn giao'), { target: { value: '2026-11-20T09:00' } })
+    fireEvent.change(screen.getByLabelText('Thời điểm bàn giao, kết thúc'), { target: { value: '2026-11-20T09:00' } })
     fireEvent.change(await screen.findByLabelText('Nhân viên bàn giao'), { target: { value: '9' } })
-    fireEvent.change(screen.getByLabelText('Mã bản ghi đón'), { target: { value: '7001' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+    fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Xuất viện theo hợp đồng' } })
+    fireEvent.click(
+      within(screen.getByRole('heading', { name: 'Xác nhận kết thúc lưu trú' }).parentElement).getByRole('button', {
+        name: 'Xác nhận kết thúc',
+      }),
+    )
 
-    await waitFor(() => expect(api.calls('POST', '/residency-endings/14/handover')).toHaveLength(1))
+    await waitFor(() => expect(api.calls('POST', '/residents/5/end-residency')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/residency-endings/14/handover')[0][1].body)).toEqual({
       recipientType: 'FAMILY_MEMBER',
       familyMemberId: 41,
       handoverAt: '2026-11-20T09:00:00+07:00',
       handoverStaffId: 9,
-      pickupRecordId: 7001,
+    })
+    expect(JSON.parse(api.calls('POST', '/residents/5/end-residency')[0][1].body)).toEqual({
+      reason: 'Xuất viện theo hợp đồng',
+      details: { residencyEndingId: 14, effectiveAt: '2026-11-20T09:00:00+07:00' },
     })
   })
 
-  it('FR_063_banGiao_hanhChinhKhongXemDuocNhanVien_nguoiGhiLaNhanVienBanGiao', async () => {
-    // Hành chính không xem được hồ sơ nhân viên (Phụ lục 27): GET /staff trả rỗng; backend lấy chính người ghi
+  it('xacNhanKetThuc_hanhChinhKhongXemDuocNhanVien_hienTenNguoiGhi', async () => {
+    api.on('GET', '/residency-endings/14/conditions', json(200, READY))
     api.on('GET', '/staff', json(200, []))
-    api.on('POST', '/residency-endings/14/handover', json(201, {}))
+    api.on(
+      'GET',
+      '/me',
+      json(200, { accountId: 3, type: 'STAFF', fullName: 'Nguyễn Thị Hạnh', roles: ['OFFICE_STAFF'] }),
+    )
     renderPage()
     await openEnding()
-    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận bàn giao…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Người thân' }))
-    fireEvent.change(await screen.findByLabelText('Người thân nhận'), { target: { value: '41' } })
-    fireEvent.change(screen.getByLabelText('Thời điểm bàn giao'), { target: { value: '2026-11-20T09:00' } })
-    expect(await screen.findByText(/Chính bạn, người ghi bàn giao/)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
-
-    await waitFor(() => expect(api.calls('POST', '/residency-endings/14/handover')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/residency-endings/14/handover')[0][1].body)).toEqual({
-      recipientType: 'FAMILY_MEMBER',
-      familyMemberId: 41,
-      handoverAt: '2026-11-20T09:00:00+07:00',
-    })
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết thúc' }))
+    expect(await screen.findByText('Nguyễn Thị Hạnh')).toBeInTheDocument()
+    expect(screen.queryByText(/Chính bạn/)).not.toBeInTheDocument()
   })
 
   it('FR_062_lapHoSo_chuyenCoSoThieuNoiChuyenDen_baoTaiO', async () => {
