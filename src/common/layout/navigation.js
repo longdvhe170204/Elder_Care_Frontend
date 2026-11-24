@@ -102,7 +102,9 @@ export const NAV_GROUPS = [
         label: 'Lập công việc ca',
         icon: 'ClipboardCheck',
         functions: ['SHIFT_TASK_PLANNING'],
-        roles: [QL, TT, DD],
+        // Q-420: chỉ Trưởng tầng lập công việc của ca; Điều dưỡng chỉ còn quyền xem (P⁴¹) nên không hiện menu.
+        roles: [QL, TT],
+        byRole: true,
       },
       // Dòng "Kế hoạch chăm sóc" và "Danh mục loại công việc chăm sóc" (005 T017, Phụ lục 27).
       {

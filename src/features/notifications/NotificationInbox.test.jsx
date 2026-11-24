@@ -209,6 +209,39 @@ describe('NotificationInbox', () => {
     expect(dialog).not.toHaveTextContent('M05.CARE_TASK 88')
   })
 
+  // BF-01 bước 15 nối BF-02 bước 1: thông báo cần lập công việc mở thẳng màn Lập công việc ca cho người đó
+  it('FR_020_canLapCongViec_moManLapCongViecChoNguoiCaoTuoi', async () => {
+    const planning = notification({
+      id: 14,
+      level: 'LOW',
+      eventType: 'TaskPlanningNeeded',
+      title: 'Có người cao tuổi mới vào tầng, cần lập công việc',
+      sentAt: '2026-11-23T03:00:00Z',
+      sourceRecord: { type: 'M04.RESIDENT', id: '9001', canOpen: false },
+    })
+    api.on('GET', '/me/notifications', json(200, { ...PAGE, items: [planning] }))
+    api.on('GET', '/me/notifications/14', json(200, { ...planning, status: 'VIEWED', viewedAt: planning.sentAt }))
+    const navigate = vi.fn()
+    render(<DetailHost>{(host) => <NotificationInbox {...host} onNavigate={navigate} />}</DetailHost>)
+    fireEvent.click(await screen.findByRole('button', { name: planning.title }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lập công việc cho người này' }))
+    expect(navigate).toHaveBeenCalledWith('care-task-planning', { residentId: 9001, at: '2026-11-23T03:00:00Z' })
+  })
+
+  it('FR_020_thongBaoKhac_khongCoNutLapCongViec', async () => {
+    api.on('GET', '/me/notifications', json(200, PAGE))
+    api.on(
+      'GET',
+      '/me/notifications/11',
+      json(200, notification({ status: 'VIEWED', viewedAt: '2026-10-23T02:00:00Z' })),
+    )
+    render(<DetailHost>{(host) => <NotificationInbox {...host} onNavigate={vi.fn()} />}</DetailHost>)
+    fireEvent.click(await screen.findByRole('button', { name: 'Công việc quá hạn 30 phút' }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: 'Lập công việc cho người này' })).not.toBeInTheDocument()
+  })
+
   it('FR_036_anSauKhiXem_boKhoiDanhSach_coIdempotencyKey', async () => {
     api.on('GET', '/me/notifications', json(200, PAGE))
     api.on('GET', '/me/notifications/13', json(200, VIEWED))

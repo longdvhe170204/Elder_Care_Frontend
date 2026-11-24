@@ -10,6 +10,7 @@ import {
   postAlertsByIdClose,
   postAlertsByIdConvertToIncident,
   postAlertsByIdJoinHelp,
+  postAlertsByIdFollowUps,
   postAlertsByIdReceive,
   postAlertsByIdStartHandling,
   postIncidentsByIdReceive,
@@ -82,6 +83,7 @@ const COMMANDS = {
   'convert-to-incident': postAlertsByIdConvertToIncident,
   'activate-emergency': postAlertsByIdActivateEmergency,
   'join-help': postAlertsByIdJoinHelp,
+  'follow-up': postAlertsByIdFollowUps,
 }
 
 export function runAlertCommand(id, command, body) {

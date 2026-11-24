@@ -64,8 +64,9 @@ function ClampedNote({ children }) {
 // Khối việc trong dòng thời gian ca (DESIGN.md 7.2 task-block): đúng các trường của hợp đồng CongViec theo
 // 005 FR-030, không thêm trường ngoài hợp đồng; kết quả việc đã đóng chỉ ở khung chi tiết. Không có nút bên trong,
 // bấm khối mở khung chi tiết. Nội dung là span để hợp lệ trong button. Trong nhóm "Quá hạn (n)" không lặp chữ trạng thái
-// (hideStatus); giờ vẫn đỏ.
-export function TaskBlock({ task, selected, onSelect, hideStatus = false }) {
+// (hideStatus); giờ vẫn đỏ. following: loại cảnh báo đang mở của người cao tuổi (Q-419, 005 FR-057), hiện cả khi việc đã
+// xong vì nhãn thuộc người, không thuộc việc.
+export function TaskBlock({ task, selected, onSelect, hideStatus = false, following }) {
   const done = DONE.includes(task.status)
   const overdue = task.status === 'Quá hạn'
 
@@ -121,6 +122,11 @@ export function TaskBlock({ task, selected, onSelect, hideStatus = false }) {
           ))}
           {task.careNote && <ClampedNote>Lưu ý: {task.careNote}</ClampedNote>}
         </>
+      )}
+      {following?.length > 0 && (
+        <span className="type-caption text-warning-foreground">
+          Đang theo dõi: {following.join(', ')}. Mở để ghi kết quả theo dõi
+        </span>
       )}
       <AssigneeLine task={task} />
     </button>

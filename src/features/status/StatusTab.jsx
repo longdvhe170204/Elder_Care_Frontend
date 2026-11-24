@@ -3,6 +3,7 @@ import {
   ApiError,
   getAdmissionApplications,
   getAdmissionApplicationsByIdAdmissionConditions,
+  getResidencyEndings,
   getResidentsByIdConditionsByCommand,
   getResidentsByIdStatusHistory,
   postResidentsByIdCancelAdmission,
@@ -23,14 +24,14 @@ import { ChoiceTray } from '@/common/ChoiceTray'
 import { STATUS_COMMAND_REASONS } from '@/common/quickChoices'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
-import { formatDateTime } from '@/common/dateTime'
+import { formatDate, formatDateTime } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { FileField } from '../consents/ConsentTab'
 import { STATUS_LABELS } from '../residents/residentLabels'
 import { uploadProblem } from '../wishes/wishUtils'
 import { OpinionBlock } from '../admissions/ApplicationParts'
-import { OPEN_STATUSES } from '../admissions/admissionLabels'
+import { OPEN_STATUSES, vietnamIso } from '../admissions/admissionLabels'
 import {
   BASIS_KINDS,
   COMMAND_LABELS,
@@ -122,6 +123,10 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
   const [basisText, setBasisText] = useState('')
   const [evidence, setEvidence] = useState(null)
   const [documents, setDocuments] = useState([])
+  // Kết thúc lưu trú: hồ sơ kết thúc Đang chuẩn bị (004) và thời điểm kết thúc, backend bắt buộc trong details
+  // (residencyEndingId, effectiveAt; thời điểm phải trong ngày kết thúc dự kiến, 004 FR-066)
+  const [ending, setEnding] = useState(null)
+  const [endAt, setEndAt] = useState('')
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -151,7 +156,22 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
     loadConditions()
   }, [loadConditions])
 
+  useEffect(() => {
+    if (command !== 'END_RESIDENCY') return
+    let cancelled = false
+    // không có hồ sơ Đang chuẩn bị thì xem trước điều kiện của backend đã báo và khóa nút
+    getResidencyEndings({ query: { residentId, status: ['PREPARING'] } })
+      .then(({ data }) => {
+        if (!cancelled) setEnding((data ?? [])[0] ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [residentId, command])
+
   function detailsOf(evidenceFileId) {
+    if (command === 'END_RESIDENCY') return { residencyEndingId: ending.id, effectiveAt: vietnamIso(endAt) }
     if (command === 'TRANSFER_OUT') {
       const kind = BASIS_KINDS.find((k) => k.value === basisKind)
       const value = basisText.trim()
@@ -165,6 +185,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
     event.preventDefault()
     const next = {}
     if (!reason.trim()) next.reason = reasonField(command, status).error
+    if (command === 'END_RESIDENCY' && !endAt) next.endAt = 'Nhập thời điểm kết thúc'
     if (command === 'TRANSFER_OUT') {
       const kind = BASIS_KINDS.find((k) => k.value === basisKind)
       const value = basisText.trim()
@@ -215,7 +236,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
   }
 
   const unmet = conditions ?? []
-  const blocked = conditions === null || unmet.length > 0
+  const blocked = conditions === null || unmet.length > 0 || (command === 'END_RESIDENCY' && !ending)
 
   return (
     <form
@@ -265,6 +286,26 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
         )}
         {errors.reason && <FieldError>{errors.reason}</FieldError>}
       </Field>
+
+      {command === 'END_RESIDENCY' && (
+        <Field data-invalid={!!errors.endAt || undefined}>
+          <FieldLabel htmlFor="status-end-at">Thời điểm kết thúc (bắt buộc)</FieldLabel>
+          <Input
+            id="status-end-at"
+            type="datetime-local"
+            className="h-11"
+            value={endAt}
+            onChange={(e) => setEndAt(e.target.value)}
+            aria-invalid={!!errors.endAt || undefined}
+          />
+          {ending && (
+            <p className="type-caption text-muted-foreground">
+              Trong ngày kết thúc dự kiến {formatDate(ending.expectedEndDate)} của hồ sơ kết thúc lưu trú.
+            </p>
+          )}
+          {errors.endAt && <FieldError>{errors.endAt}</FieldError>}
+        </Field>
+      )}
 
       {command === 'TRANSFER_OUT' && (
         <Field data-invalid={!!errors.basis || undefined}>

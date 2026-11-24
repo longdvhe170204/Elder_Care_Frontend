@@ -52,9 +52,13 @@ const HISTORY = [
   },
 ]
 
-function routes({ history = HISTORY, conditions = [], forbidden = false } = {}) {
+// Hồ sơ kết thúc lưu trú Đang chuẩn bị của người cao tuổi 5 (004), lệnh Kết thúc lưu trú gửi mã hồ sơ này
+const ENDING = { id: 12, residentId: 5, endCase: 'DISCHARGE', expectedEndDate: '2026-11-30', status: 'PREPARING' }
+
+function routes({ history = HISTORY, conditions = [], forbidden = false, endings = [ENDING] } = {}) {
   api.on('GET', '/residents/5/status-history', forbidden ? problem(403, 'PERMISSION_DENIED') : json(200, history))
   api.on('GET', (u) => u.pathname.startsWith('/api/v1/residents/5/conditions/'), json(200, conditions))
+  api.on('GET', '/residency-endings', json(200, endings))
 }
 
 const pdf = (name = 'giay-to.pdf') => new File(['%PDF-1.4'], name, { type: 'application/pdf' })
@@ -196,12 +200,46 @@ describe('StatusTab', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc lưu trú' }))
     fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Hết hợp đồng' } })
+    fireEvent.change(screen.getByLabelText(/Thời điểm kết thúc/), { target: { value: '2026-11-30T09:00' } })
     await submitReady('Xác nhận kết thúc lưu trú')
 
     const alerts = await screen.findAllByRole('alert')
     expect(alerts.some((a) => a.textContent.includes('Không có quyền'))).toBe(true)
     expect(screen.queryByText(/Đã chuyển sang/)).not.toBeInTheDocument()
     expect(onChanged).not.toHaveBeenCalled()
+  })
+
+  it('Kết thúc lưu trú gửi mã hồ sơ kết thúc Đang chuẩn bị và thời điểm kết thúc (004 FR-065, FR-066)', async () => {
+    routes()
+    api.on('POST', '/residents/5/end-residency', result('RESIDENCY_ENDED'))
+    open({ allowedCommands: ['END_RESIDENCY'] })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc lưu trú' }))
+    expect(await screen.findByText(/30\/11\/2026/)).toBeInTheDocument()
+    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Gia đình đón về' } })
+    fireEvent.change(screen.getByLabelText(/Thời điểm kết thúc/), { target: { value: '2026-11-30T09:00' } })
+    await submitReady('Xác nhận kết thúc lưu trú')
+
+    await waitFor(() => expect(api.calls('POST', '/residents/5/end-residency')).toHaveLength(1))
+    const [url] = api.calls('GET', '/residency-endings')[0]
+    expect(new URL(url, 'http://localhost').searchParams.get('residentId')).toBe('5')
+    expect(new URL(url, 'http://localhost').searchParams.get('status')).toBe('PREPARING')
+    expect(JSON.parse(api.calls('POST', '/residents/5/end-residency')[0][1].body).details).toEqual({
+      residencyEndingId: 12,
+      effectiveAt: '2026-11-30T09:00:00+07:00',
+    })
+  })
+
+  it('Kết thúc lưu trú thiếu thời điểm kết thúc thì báo tại ô và không gửi', async () => {
+    routes()
+    open({ allowedCommands: ['END_RESIDENCY'] })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc lưu trú' }))
+    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Gia đình đón về' } })
+    await submitReady('Xác nhận kết thúc lưu trú')
+
+    expect(await screen.findByText('Nhập thời điểm kết thúc')).toBeInTheDocument()
+    expect(api.calls('POST', '/residents/5/end-residency')).toHaveLength(0)
   })
 
   it('vai trò không được xem thì hiện trạng thái không có quyền', async () => {
@@ -291,6 +329,7 @@ describe('StatusTab', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc lưu trú' }))
     fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Hết hợp đồng' } })
+    fireEvent.change(screen.getByLabelText(/Thời điểm kết thúc/), { target: { value: '2026-11-30T09:00' } })
     await submitReady('Xác nhận kết thúc lưu trú')
 
     const alerts = await screen.findAllByRole('alert')

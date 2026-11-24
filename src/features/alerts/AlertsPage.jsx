@@ -51,6 +51,7 @@ import { AssistButton, AssistSenderBlock, AssistStatus, ResidentSearch } from '.
 import { EVENT_INCIDENT_TYPE, EVENT_LABEL, PLACE_LABEL } from './assistView'
 import { Call115Panel } from './Call115Panel'
 import { ReportForm } from '@/features/incidents/ReportForm'
+import { AlertFollowUps } from './AlertFollowUps'
 import { PressedAlertPanel } from './PressedAlertPanel'
 import { loadAlert, loadAlertBoard, loadIncidentTypes, receiveCreatedIncident, runAlertCommand } from './alerts'
 import {
@@ -70,6 +71,8 @@ import {
 // Màn Cảnh báo (spec 007 User Story 3, FR-027 → FR-036; T031 phần web): danh sách theo phạm vi đọc từ api-007
 // `GET /alerts`, họ tên từ api-001. Nút lệnh chỉ theo `allowedCommands` backend trả (DESIGN.md 7.4); hạ từ Khẩn cấp,
 // tiếp nhận của Quản lý viện ở Leo thang cấp 2 do backend quyết. Đóng cần kết quả, đổi mức cần lý do (FR-029).
+// Q-418: nút Đóng chỉ hiện cho Trưởng tầng, Bác sĩ (backend trả trong allowedCommands). Q-419, FR-087: khi cảnh báo đang
+// mở, nhân viên chăm sóc người đó ghi kết quả theo dõi; danh sách theo dõi hiện trong khung chi tiết.
 
 const GROUPS = [
   ['open', 'Đang mở'],
@@ -794,6 +797,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
           </CardContent>
         </Card>
       )}
+      <AlertFollowUps alert={alert} canRecord={commands.includes('follow-up')} onRecorded={reload} />
       {alert.type === 'CRITICAL_CONDITION' && alert.criticalFlagId != null && alert.residentId != null && (
         <CriticalCareSection
           residentId={alert.residentId}

@@ -1,488 +1,559 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { BellIcon, SearchIcon } from 'lucide-react'
 import {
+  getCareTasks,
+  getFloorsById,
   getMeShifts,
   getShiftsById,
   getShiftSchedules,
   getResidents,
+  getResidentsById,
+  getStaff,
   getTaskTypes,
   getShiftsByShiftIdSourceData,
   getShiftsByShiftIdCareTasks,
-  postShiftsByShiftIdCareTasksPlan,
 } from '@/api'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { StatusBadge } from '@/common/StatusBadge'
-import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { usePermissions } from '@/common/permissions/permissions'
-import { CareField, CareCheck } from './CareField'
-import { IMPORTANCE, CARE_ROLES } from './carePlanLabels'
+import { ShiftSourceDialog } from './ShiftSourceDialog'
+import { ShiftTaskBatchDialog } from './ShiftTaskBatchDialog'
+import { dateOf, formatDate, needsOf, nextDate, shiftLabel, timeOf } from './shiftPlanning'
 
-const BASIS = {
-  CARE_PLAN_ITEM: 'Mục kế hoạch',
-  MEASUREMENT: 'Lần đo',
-  MEAL: 'Bữa ăn',
-  ACTIVITY_SESSION: 'Buổi hoạt động',
-  POST_FALL_MONITORING: 'Theo dõi sau ngã',
-  INCIDENT_FOLLOW_UP: 'Việc tiếp theo của sự cố',
-  CONTACT_MONITORING: 'Theo dõi tiếp xúc',
-  WATER_INTAKE_ALERT: 'Cảnh báo uống nước',
-  SHIFT_START_CHECK: 'Kiểm tra đầu ca',
-  SUPERVISION: 'Giám sát',
-  AD_HOC: 'Phát sinh',
-}
-const STATUSES = {
-  NOT_YET_DUE: 'Chưa đến hạn',
-  DUE: 'Đến hạn',
-  OVERDUE: 'Quá hạn',
-  COMPLETED: 'Hoàn thành',
-  COMPLETED_LATE: 'Hoàn thành trễ',
-  NOT_PERFORMED: 'Không thực hiện',
-  CANCELLED: 'Đã hủy',
-}
-const ERRORS = {
-  RESIDENT_NOT_STAYING: 'Người cao tuổi không đang lưu trú.',
-  RESIDENT_ABSENT: 'Người cao tuổi đang vắng mặt.',
-  DAY_CARE_NOT_PRESENT: 'Người bán trú chưa có mặt trong khoảng này.',
-  OUTSIDE_SHIFT: 'Thời điểm dự kiến nằm ngoài ca.',
-  PLAN_ITEM_MISMATCH: 'Thời điểm, khung hoặc mức chưa khớp mục kế hoạch.',
-  INVALID_BASIS: 'Căn cứ chưa hợp lệ hoặc nguồn chưa xác nhận.',
-  MEDICATION_IS_NOT_A_TASK: 'Liều thuốc không được lập thành công việc.',
-  INVALID_PERFORMER: 'Người thực hiện hoặc lựa chọn công việc chung chưa hợp lệ.',
-  MISSING_CERTIFICATE: 'Người thực hiện chưa đủ chứng chỉ.',
-  DUPLICATE_BASIS: 'Trùng căn cứ và thời điểm dự kiến.',
-  OLD_REVISION_WINDOW_OVERLAP: 'Trùng khung công việc của phiên bản trước.',
-  SHIFT_CHECK_ALREADY_EXISTS: 'Điều dưỡng đã có công việc này trong ca.',
-}
-const optionalNumber = (text) => (text === '' || text == null ? undefined : Number(text))
+const PAGE_SIZE = 10
+const NO_FILTER = { residentId: '', taskTypeId: '', performerId: '' }
+const control = 'h-11 w-full rounded-lg border border-input bg-popover px-3 focus-visible:outline-ring'
 
-export function ShiftTaskPlanningPage({ shiftId: initialShiftId }) {
+// Ca chứa thời điểm, hoặc ca đầu tiên bắt đầu sau đó, hoặc ca đầu ngày
+function pickShift(list, target) {
+  const sorted = [...list].sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))
+  return (
+    sorted.find((s) => new Date(s.startsAt) <= target && new Date(s.endsAt) > target) ??
+    sorted.find((s) => new Date(s.startsAt) > target) ??
+    sorted[0]
+  )
+}
+
+// Số trang hiện trên thanh phân trang: trang đầu, cuối, trang đang xem và hai trang kề; khoảng bỏ qua là "…"
+function pageItems(current, pages) {
+  const shown = [...new Set([1, current - 1, current, current + 1, pages])]
+    .filter((n) => n >= 1 && n <= pages)
+    .sort((a, b) => a - b)
+  return shown.flatMap((n, i) => (i && n - shown[i - 1] > 1 ? [`gap-${n}`, n] : [n]))
+}
+
+// Tìm người cao tuổi theo tên: gõ tên thì gợi ý hồ sơ khớp; khớp đúng một người hoặc chọn một gợi ý thì lọc theo người đó
+function ResidentSearch({ onPick }) {
+  const [text, setText] = useState('')
+  const [query, setQuery] = useState('')
+  const [chosen, setChosen] = useState(null)
+  const [results, setResults] = useState(null)
+  const listId = useId()
+  const hintId = useId()
+  useEffect(() => {
+    if (!query) return
+    let current = true
+    const timer = setTimeout(() => {
+      getResidents({ query: { q: query } })
+        .then(({ data }) => current && setResults(data.items))
+        .catch(() => current && setResults([]))
+    }, 300)
+    return () => {
+      current = false
+      clearTimeout(timer)
+    }
+  }, [query])
+  const found = query ? (results ?? []) : []
+  const label = (r) => `${r.personalInfo?.fullName} · ${r.profileCode}`
+  const picked = chosen ?? (found.length === 1 ? found[0] : null)
+  const pickedId = query && picked ? String(picked.id) : ''
+  useEffect(() => {
+    onPick(pickedId)
+  }, [pickedId, onPick])
+  const hint = !query || !results
+    ? ''
+    : !found.length
+      ? 'Không tìm thấy người cao tuổi.'
+      : !picked
+        ? `Có ${found.length} người khớp, chọn một trong gợi ý.`
+        : ''
+  return (
+    <div className="flex min-w-0 flex-col gap-1">
+      <InputGroup className="h-11 bg-popover">
+        <InputGroupAddon>
+          <SearchIcon aria-hidden="true" />
+        </InputGroupAddon>
+        <InputGroupInput
+          type="search"
+          aria-label="Tìm người cao tuổi theo tên"
+          aria-describedby={hint ? hintId : undefined}
+          placeholder="Tìm theo tên người cao tuổi"
+          list={listId}
+          value={text}
+          onChange={(e) => {
+            const value = e.target.value
+            // Chọn một gợi ý: giữ người đó, không tìm lại theo chuỗi "tên · mã hồ sơ"
+            const match = found.find((r) => label(r) === value)
+            setText(value)
+            setChosen(match ?? null)
+            if (!match) setQuery(value.trim())
+          }}
+        />
+      </InputGroup>
+      <datalist id={listId}>
+        {found.map((r) => (
+          <option key={r.id} value={label(r)} />
+        ))}
+      </datalist>
+      {hint && (
+        <p id={hintId} className="type-caption text-muted-foreground">
+          {hint}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function FilterSelect({ label, value, options, onChange }) {
+  return (
+    <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)} className={control}>
+      <option value="">{label}: tất cả</option>
+      {options.map(([id, text]) => (
+        <option key={id} value={id}>
+          {text}
+        </option>
+      ))}
+    </select>
+  )
+}
+
+// Lập công việc ca (005, BF-02 bước 1): lịch sử công việc đã lập không theo ca, ngày (lọc theo người cao tuổi, công việc,
+// người làm); chọn ngày, ca đã công bố trong modal "Lập công việc". residentId, at: mở từ thông báo cần lập công việc
+// (BF-01 bước 15).
+export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: focusResidentId, at: focusAt }) {
   const { status, can } = usePermissions()
-  const [shiftId, setShiftId] = useState(initialShiftId || '')
+  const [target] = useState(() => {
+    const now = new Date()
+    const from = focusAt ? new Date(focusAt) : now
+    return from > now ? from : now
+  })
+  const [date, setDate] = useState(() => (initialShiftId ? '' : dateOf(target)))
   const [shifts, setShifts] = useState([])
-  const [month, setMonth] = useState('')
+  const [shiftId, setShiftId] = useState(initialShiftId || '')
   const [source, setSource] = useState(null)
+  const [shiftTasks, setShiftTasks] = useState([])
   const [shiftMembers, setShiftMembers] = useState([])
+  const [floorName, setFloorName] = useState('')
+  const [floorNames, setFloorNames] = useState({})
   const [residents, setResidents] = useState([])
-  const [cursor, setCursor] = useState(null)
+  const [residentsReady, setResidentsReady] = useState(false)
   const [types, setTypes] = useState([])
-  const [tasks, setTasks] = useState([])
+  const [staff, setStaff] = useState([])
   const [rows, setRows] = useState([])
+  const [history, setHistory] = useState({ items: [], total: 0 })
+  const [page, setPage] = useState(0)
+  const [filter, setFilter] = useState(NO_FILTER)
+  const [revision, setRevision] = useState(0)
+  const [fresh, setFresh] = useState([])
+  const [dialog, setDialog] = useState(null)
   const [failure, setFailure] = useState(null)
-  const [rowErrors, setRowErrors] = useState([])
-  const [busy, setBusy] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(true)
   const [success, setSuccess] = useState('')
-  const summary = useRef(null)
-  const attempt = useRef(null)
+  const first = useRef(true)
   const view = can('SHIFT_TASK_PLANNING', 'VIEW')
   const create = can('SHIFT_TASK_PLANNING', 'CREATE')
+  const manager = can('SHIFT_SCHEDULE', 'CREATE')
+
   useEffect(() => {
     if (status !== 'ready' || !view) return
     let current = true
-    Promise.all([getTaskTypes(), getResidents()])
-      .then(([catalog, people]) => {
+    // Tải riêng từng danh mục để danh mục nhanh không phải chờ danh sách hồ sơ (khoảng 1–2 giây)
+    getTaskTypes()
+      .then(({ data }) => current && setTypes(data.filter((t) => t.status === 'ACTIVE')))
+      .catch((error) => current && setFailure(problemOf(error)))
+    getResidents()
+      .then((people) => {
         if (!current) return
-        setTypes(catalog.data.filter((t) => t.status === 'ACTIVE'))
         setResidents(people.data.items)
-        setCursor(people.data.nextCursor)
+        setResidentsReady(true)
+        // Mở từ thông báo: người đó chưa có ở trang hồ sơ đầu thì tải riêng để hiện tên
+        if (focusResidentId && !people.data.items.some((r) => r.id === focusResidentId))
+          getResidentsById({ path: { id: focusResidentId } })
+            .then(({ data }) => current && setResidents((old) => [...old, data]))
+            .catch(() => {})
       })
       .catch((error) => {
-        if (current) setFailure(problemOf(error))
+        if (!current) return
+        setResidentsReady(true)
+        setFailure(problemOf(error))
       })
+    // Danh sách người làm cho bộ lọc; không tải được thì bộ lọc chỉ có "tất cả"
+    getStaff({ query: { status: 'WORKING' } })
+      .then(({ data }) => current && setStaff(data))
+      .catch(() => {})
     return () => {
       current = false
     }
-  }, [status, view])
+  }, [status, view, focusResidentId])
+
+  // Lịch sử công việc đã lập: việc lập gần nhất trước, phân trang ở máy chủ
+  useEffect(() => {
+    if (status !== 'ready' || !view) return
+    let current = true
+    const query = { page, size: PAGE_SIZE }
+    Object.entries(filter).forEach(([key, value]) => {
+      if (value) query[key] = Number(value)
+    })
+    Promise.resolve().then(() => current && setHistoryLoading(true))
+    getCareTasks({ query })
+      .then(({ data }) => current && setHistory(data))
+      .catch((error) => current && setFailure(problemOf(error)))
+      .finally(() => current && setHistoryLoading(false))
+    return () => {
+      current = false
+    }
+  }, [status, view, page, filter, revision])
+
+  // Ca đã công bố bắt đầu trong ngày lập; lần đầu chọn ca chứa thời điểm thông báo (hoặc bây giờ)
+  useEffect(() => {
+    if (status !== 'ready' || !view || initialShiftId || !date) return
+    let current = true
+    const request = manager
+      ? getShiftSchedules({ query: { month: date.slice(0, 7) } }).then(({ data }) =>
+          data
+            .filter((s) => s.status === 'PUBLISHED')
+            // Ca của lịch tầng mang theo mã tầng để phân biệt các ca cùng giờ ở nhiều tầng
+            .flatMap((s) => s.shifts.map((x) => ({ ...x, floorId: s.scopeType === 'FLOOR' ? s.scopeId : null })))
+            .filter((s) => s.status !== 'CANCELLED'),
+        )
+      : getMeShifts({ query: { from: date, to: nextDate(date) } }).then(({ data }) =>
+          data.filter((s) => !['DRAFT', 'CANCELLED'].includes(s.status)),
+        )
+    request
+      .then((all) => {
+        if (!current) return
+        const list = all.filter((s) => dateOf(s.startsAt) === date)
+        list.sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt) || (a.floorId ?? 0) - (b.floorId ?? 0))
+        setShifts(list)
+        const floors = [...new Set(list.map((x) => x.floorId).filter(Boolean))]
+        if (floors.length > 1)
+          Promise.allSettled(floors.map((id) => getFloorsById({ path: { id } }))).then((results) => {
+            if (!current) return
+            const names = {}
+            results.forEach((r, i) => {
+              if (r.status === 'fulfilled') names[floors[i]] = r.value.data.name
+            })
+            setFloorNames((old) => ({ ...old, ...names }))
+          })
+        const chosen = pickShift(list, first.current ? target : new Date())
+        first.current = false
+        setShiftId(chosen ? chosen.id : '')
+        if (!chosen) setSource(null)
+      })
+      .catch((error) => current && setFailure(problemOf(error)))
+    return () => {
+      current = false
+    }
+  }, [status, view, initialShiftId, date, manager, target])
+
+  // Nguồn, công việc, thành viên của ca đang chọn để lập
   useEffect(() => {
     if (status !== 'ready' || !view || !shiftId) return
     let current = true
-    Promise.resolve().then(() => {
-      if (current) setLoading(true)
-    })
+    Promise.resolve().then(() => current && setLoading(true))
     Promise.all([
       getShiftsByShiftIdSourceData({ path: { shiftId } }),
       getShiftsByShiftIdCareTasks({ path: { shiftId } }),
       getShiftsById({ path: { id: shiftId } }),
     ])
       .then(([data, work, roster]) => {
-        if (current) {
-          setSource(data.data)
-          setTasks(work.data)
-          setShiftMembers(roster.data.staff.filter((m) => !m.absent && !m.approvedLeave))
-          setFailure(null)
-        }
+        if (!current) return
+        setSource(data.data)
+        setShiftTasks(work.data)
+        setShiftMembers(roster.data.staff.filter((m) => !m.absent && !m.approvedLeave))
+        if (initialShiftId) setDate(dateOf(data.data.shift.startsAt))
+        getFloorsById({ path: { id: data.data.shift.floorAreaId } })
+          .then(({ data: floor }) => current && setFloorName(floor.name))
+          .catch(() => current && setFloorName(''))
       })
       .catch((error) => {
-        if (current) {
-          setSource(null)
-          setFailure(problemOf(error))
-        }
+        if (!current) return
+        setSource(null)
+        setFailure(problemOf(error))
       })
-      .finally(() => {
-        if (current) setLoading(false)
-      })
+      .finally(() => current && setLoading(false))
     return () => {
       current = false
     }
-  }, [status, view, shiftId])
+  }, [status, view, shiftId, initialShiftId])
+
+  // Tên người cao tuổi trong ca chưa có ở trang hồ sơ đầu: tải riêng từng hồ sơ còn thiếu, sau khi trang đầu đã về
+  const known = residents.map((r) => r.id).join(',')
   useEffect(() => {
-    if (rowErrors.length) summary.current?.focus()
-  }, [rowErrors])
-  async function findShifts(event) {
-    event.preventDefault()
-    setFailure(null)
-    try {
-      if (can('SHIFT_SCHEDULE', 'CREATE')) {
-        const { data } = await getShiftSchedules({ query: { month } })
-        setShifts(
-          data
-            .filter((s) => s.status === 'PUBLISHED')
-            .flatMap((s) => s.shifts)
-            .filter((s) => s.status !== 'CANCELLED'),
-        )
-      } else {
-        const start = `${month}-01`
-        const [year, value] = month.split('-').map(Number)
-        const end = value === 12 ? `${year + 1}-01-01` : `${year}-${String(value + 1).padStart(2, '0')}-01`
-        const { data } = await getMeShifts({ query: { from: start, to: end } })
-        setShifts(data.filter((s) => !['DRAFT', 'CANCELLED'].includes(s.status)))
-      }
-    } catch (error) {
-      setFailure(problemOf(error))
+    if (!source || !residentsReady) return
+    const have = new Set(known.split(',').filter(Boolean).map(Number))
+    const missing = source.residents.map((r) => r.residentId).filter((id) => !have.has(id))
+    if (!missing.length) return
+    let current = true
+    Promise.allSettled(missing.map((id) => getResidentsById({ path: { id } }))).then((results) => {
+      const found = results.filter((r) => r.status === 'fulfilled').map((r) => r.value.data)
+      if (current && found.length)
+        setResidents((old) => [...old, ...found.filter((f) => !old.some((o) => o.id === f.id))])
+    })
+    return () => {
+      current = false
     }
-  }
-  async function moreResidents() {
+  }, [source, known, residentsReady])
+
+  // Gửi lô xong: về trang đầu, bỏ lọc để thấy ngay các việc vừa lập (lịch sử xếp việc lập gần nhất trước)
+  async function saved(created, count) {
+    setRows([])
+    setDialog(null)
+    setSuccess(`Đã lập ${count} công việc của ca.`)
+    setFresh(created.map((t) => t.id))
+    setFilter(NO_FILTER)
+    setPage(0)
+    setRevision((n) => n + 1)
     try {
-      const { data } = await getResidents({ query: { cursor } })
-      setResidents((old) => [...old, ...data.items])
-      setCursor(data.nextCursor)
-    } catch (error) {
-      setFailure(problemOf(error))
-    }
-  }
-  function update(key, name, value) {
-    setRows((old) =>
-      old.map((row) => {
-        if (row.key !== key) return row
-        const next = { ...row, [name]: value }
-        if (name === 'residentId' || name === 'locationType') {
-          next.basisId = ''
-          next.performerId = ''
-        }
-        if (name === 'basisType') next.basisId = ''
-        return next
-      }),
-    )
-    setSuccess('')
-    setRowErrors([])
-  }
-  async function submit(event) {
-    event.preventDefault()
-    if (!rows.length || busy) return
-    const body = rows.map((r) => ({
-      residentId: r.locationType ? undefined : optionalNumber(r.residentId),
-      location: r.locationType ? { type: r.locationType, id: source.shift.floorAreaId } : undefined,
-      taskTypeId: Number(r.taskTypeId),
-      basis: { type: r.basisType, id: optionalNumber(r.basisId) },
-      content: r.content || undefined,
-      plannedAt: `${r.plannedAt}:00+07:00`,
-      windowBeforeMinutes: optionalNumber(r.before),
-      windowAfterMinutes: optionalNumber(r.after),
-      importance: r.importance,
-      performerId: r.shared ? undefined : optionalNumber(r.performerId),
-      shared: !!r.shared,
-    }))
-    const signature = JSON.stringify(body)
-    if (attempt.current?.signature !== signature) attempt.current = { signature, key: crypto.randomUUID() }
-    setBusy(true)
-    setFailure(null)
-    setRowErrors([])
-    setSuccess('')
-    try {
-      await postShiftsByShiftIdCareTasksPlan({
-        path: { shiftId },
-        body,
-        headers: { 'Idempotency-Key': attempt.current.key },
-      })
-      setRows([])
-      attempt.current = null
-      setSuccess('Đã lập công việc của ca.')
       const { data } = await getShiftsByShiftIdCareTasks({ path: { shiftId } })
-      setTasks(data)
+      setShiftTasks(data)
+      // Số việc theo nguồn của ca còn chưa lập, để Trưởng tầng biết còn ai thiếu (số liệu hiển thị, không tự lập)
+      const missing = source.residents.map((r) => needsOf(r, source.shift, data, []).todo).filter(Boolean)
+      if (missing.length)
+        setSuccess(
+          `Đã lập ${count} công việc của ca. Ca còn ${missing.reduce((a, b) => a + b, 0)} việc theo nguồn chưa lập (${missing.length} người).`,
+        )
     } catch (error) {
       setFailure(problemOf(error))
-      setRowErrors(error.problem?.rowErrors || [])
-    } finally {
-      setBusy(false)
     }
   }
+
+  // Lọc theo người cao tuổi tìm được theo tên; đổi người thì về trang đầu
+  const pickResident = useCallback((residentId) => {
+    setFilter((old) => (old.residentId === residentId ? old : { ...old, residentId }))
+    setPage(0)
+  }, [])
+
   if (status === 'ready' && !view) return <PermissionDeniedState label="Lập công việc của ca" />
   const people = Object.fromEntries(
     residents.map((r) => [r.id, r.personalInfo?.fullName || `Người cao tuổi · mã ${r.id}`]),
   )
-  const typeOptions = Object.fromEntries(types.map((t) => [t.id, t.name]))
+  const shift = source?.shift
+  const shiftOptions = initialShiftId ? (shift ? [shift] : []) : shifts
+  const manyFloors = new Set(shiftOptions.map((x) => x.floorId).filter(Boolean)).size > 1
+  const subtitle = shift
+    ? [formatDate(dateOf(shift.startsAt)), floorName].filter(Boolean).join(' · ')
+    : ''
+  const focusName = focusResidentId && (people[focusResidentId] || `Người cao tuổi · mã ${focusResidentId}`)
+  const focusInShift = source?.residents.some((r) => r.residentId === focusResidentId)
+  const pages = Math.max(1, Math.ceil(history.total / PAGE_SIZE))
+  const locked = rows.length > 0
+  const setFilterOf = (key) => (value) => {
+    setFilter((old) => ({ ...old, [key]: value }))
+    setPage(0)
+    setFresh([])
+  }
+  const openBatch = () => {
+    setSuccess('')
+    setDialog('batch')
+  }
+
+  // Chọn ngày, ca để lập: đặt trong modal, khóa khi còn dòng chưa gửi (các dòng gắn với người cao tuổi của ca)
+  const shiftPicker = (
+    <div className="flex flex-wrap gap-2">
+      <input
+        type="date"
+        required
+        aria-label="Ngày lập"
+        value={date}
+        disabled={!!initialShiftId || locked}
+        onChange={(e) => setDate(e.target.value)}
+        className={`${control} w-40`}
+      />
+      <select
+        aria-label="Ca đã công bố"
+        value={shiftId}
+        disabled={!!initialShiftId || locked}
+        onChange={(e) => setShiftId(e.target.value)}
+        className={`${control} w-48`}
+      >
+        {!shiftOptions.length && <option value="">Không có ca đã công bố</option>}
+        {shiftOptions.map((s) => (
+          <option key={s.id} value={s.id}>
+            {manyFloors ? `${floorNames[s.floorId] || 'Tầng'} · ${shiftLabel(s)}` : shiftLabel(s)}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Lập công việc của ca" subtitle="Đối chiếu dữ liệu nguồn, nhập từng dòng rồi gửi toàn bộ lô." />
-      {!initialShiftId && (
-        <form onSubmit={findShifts} className="flex flex-wrap items-end gap-3">
-          <CareField
-            label="Tháng của ca"
-            type="month"
-            required
-            value={month}
-            onChange={setMonth}
-            disabled={busy || rows.length > 0}
-          />
-          <Button type="submit" variant="outline" disabled={!month || busy || rows.length > 0}>
-            Tìm ca
-          </Button>
-          <CareField
-            label="Ca đã công bố"
-            value={shiftId}
-            onChange={setShiftId}
-            disabled={busy || rows.length > 0}
-            options={Object.fromEntries(
-              shifts.map((s) => [s.id, `${formatDateTime(s.startsAt)} – ${formatDateTime(s.endsAt)}`]),
-            )}
-          />
-        </form>
-      )}
-      {rows.length > 0 && !initialShiftId && (
-        <p className="type-body-sm text-muted-foreground">Xóa các dòng đang nhập trước khi đổi ca.</p>
-      )}
-      <ProblemAlert problem={failure} />
-      {loading && <p role="status">Đang tải dữ liệu ca…</p>}
-      {source && !loading && (
-        <>
-          <section aria-label="Dữ liệu nguồn" className="flex flex-col gap-3 border-b pb-5">
-            <h2 className="type-title">Dữ liệu nguồn để đối chiếu</h2>
-            <p>
-              {formatDateTime(source.shift.startsAt)} – {formatDateTime(source.shift.endsAt)}
+    <div className="flex flex-col gap-5">
+      <PageHeader title="Lập công việc ca" subtitle="Đối chiếu nguồn, giao việc và gửi các dòng đã nhập cùng lúc." />
+      {focusResidentId && source && (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-3 rounded-xl bg-accent p-4 text-accent-foreground"
+        >
+          <BellIcon aria-hidden="true" className="size-5 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <p className="type-label text-foreground">{focusName} cần lập công việc</p>
+            <p className="type-body-sm">
+              {focusInShift
+                ? `Bấm Lập công việc: ${shiftLabel(shift).toLowerCase()} ngày ${formatDate(dateOf(shift.startsAt))} đã được chọn sẵn.`
+                : `${focusName} không có trong ${shiftLabel(shift).toLowerCase()}, chọn ca khác khi lập.`}
             </p>
-            <p className="type-body-sm text-muted-foreground">Dữ liệu này không được tự chuyển thành công việc.</p>
-            {source.residents.map((r) => (
-              <details key={r.residentId}>
-                <summary className="min-h-11 cursor-pointer py-3">
-                  {people[r.residentId] || 'Hồ sơ chưa tải tên'}
-                </summary>
-                <ul className="flex flex-col gap-2 pl-4">
-                  {r.planItems.map((i) => (
-                    <li key={`plan-${i.id}`}>Mục kế hoạch: {i.content}</li>
-                  ))}
-                  {r.otherSources.map((i) => (
-                    <li key={`${i.type}-${i.id}`}>
-                      {BASIS[i.type] || 'Nguồn khác'}: {i.description} · {formatDateTime(i.at)}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            ))}
-          </section>
-          <section aria-label="Công việc đã lập" className="flex flex-col gap-3">
-            <h2 className="type-title">Công việc đã lập ({tasks.length})</h2>
-            {!tasks.length && <p className="text-muted-foreground">Ca chưa có công việc.</p>}
-            {tasks.map((t) => (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b py-3" key={t.id}>
-                <div>
-                  <p>
-                    {t.residentCard?.fullName || t.location} · {t.content || t.taskType}
-                  </p>
-                  <p className="type-body-sm text-muted-foreground">
-                    {formatDateTime(t.plannedAt)} · {t.performer || 'Công việc chung'}
-                  </p>
-                </div>
-                <StatusBadge status={STATUSES[t.status]} />
-              </div>
-            ))}
-          </section>
-          {create && (
-            <form onSubmit={submit} className="flex flex-col gap-5">
-              <h2 className="type-title">Các dòng đang nhập</h2>
-              {!!rowErrors.length && (
-                <div
-                  ref={summary}
-                  tabIndex={-1}
-                  role="alert"
-                  className="rounded-lg border p-4 focus-visible:outline-ring"
-                >
-                  <h3 className="type-label">Chưa lưu lô công việc</h3>
-                  <ul>
-                    {rowErrors.map((e) => (
-                      <li key={e.row}>
-                        <a className="underline" href={`#planning-row-${e.row}`}>
-                          Kiểm tra dòng {e.row}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {!rows.length && <p>Chưa có dòng công việc.</p>}
-              {rows.map((r, index) => {
-                const number = index + 1
-                const current = source.residents.find((v) => v.residentId === Number(r.residentId))
-                const assignments = r.locationType ? shiftMembers : current?.assignments || []
-                const staff = Object.fromEntries(
-                  assignments.map((a) => [
-                    a.staffId,
-                    a.fullName || `${CARE_ROLES[a.role] || 'Nhân viên'} · mã ${a.staffId}`,
-                  ]),
-                )
-                const basis =
-                  r.basisType === 'CARE_PLAN_ITEM'
-                    ? current?.planItems.map((v) => [v.id, v.content]) || []
-                    : current?.otherSources
-                        .filter((v) => v.type === r.basisType)
-                        .map((v) => [v.id, `${v.description} · ${formatDateTime(v.at)}`]) || []
-                const errors = rowErrors.find((e) => e.row === number)?.codes || []
-                const set = (name) => (value) => update(r.key, name, value)
-                return (
-                  <fieldset
-                    id={`planning-row-${number}`}
-                    key={r.key}
-                    tabIndex={-1}
-                    disabled={busy}
-                    aria-describedby={errors.length ? `row-errors-${number}` : undefined}
-                    className="min-w-0 rounded-xl border bg-card p-5"
-                  >
-                    <legend className="type-label px-2">Dòng {number}</legend>
-                    {errors.length > 0 && (
-                      <ul id={`row-errors-${number}`} className="mb-4 text-destructive">
-                        {errors.map((code) => (
-                          <li key={code}>{ERRORS[code] || 'Dòng chưa đủ điều kiện, kiểm tra lại dữ liệu.'}</li>
-                        ))}
-                      </ul>
-                    )}
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                      <CareField
-                        label={`Người cao tuổi dòng ${number}`}
-                        value={r.residentId}
-                        onChange={set('residentId')}
-                        options={people}
-                        required={!r.locationType}
-                        disabled={!!r.locationType}
-                      />
-                      <CareField
-                        label={`Vị trí chung dòng ${number}`}
-                        value={r.locationType}
-                        onChange={set('locationType')}
-                        options={{ FLOOR: 'Tầng của ca', AREA: 'Khu vực của ca' }}
-                      />
-                      <CareField
-                        label={`Loại công việc dòng ${number}`}
-                        value={r.taskTypeId}
-                        onChange={set('taskTypeId')}
-                        options={typeOptions}
-                        required
-                      />
-                      <CareField
-                        label={`Loại căn cứ dòng ${number}`}
-                        value={r.basisType}
-                        onChange={set('basisType')}
-                        options={BASIS}
-                        required
-                      />
-                      <CareField
-                        label={`Căn cứ dòng ${number}`}
-                        value={r.basisId}
-                        onChange={set('basisId')}
-                        options={Object.fromEntries(basis)}
-                        required={!['SHIFT_START_CHECK', 'SUPERVISION', 'AD_HOC'].includes(r.basisType)}
-                        disabled={['SHIFT_START_CHECK', 'SUPERVISION', 'AD_HOC'].includes(r.basisType)}
-                      />
-                      <CareField
-                        label={`Thời điểm dự kiến dòng ${number}`}
-                        type="datetime-local"
-                        value={r.plannedAt}
-                        onChange={set('plannedAt')}
-                        required
-                      />
-                      <CareField
-                        label={`Khung trước (phút) dòng ${number}`}
-                        type="number"
-                        min={0}
-                        value={r.before}
-                        onChange={set('before')}
-                      />
-                      <CareField
-                        label={`Khung sau (phút) dòng ${number}`}
-                        type="number"
-                        min={0}
-                        value={r.after}
-                        onChange={set('after')}
-                      />
-                      <CareField
-                        label={`Mức quan trọng dòng ${number}`}
-                        value={r.importance}
-                        onChange={set('importance')}
-                        options={IMPORTANCE}
-                        required
-                      />
-                      <CareField
-                        label={`Người thực hiện dòng ${number}`}
-                        value={r.performerId}
-                        onChange={set('performerId')}
-                        options={staff}
-                        required={!r.shared}
-                        disabled={r.shared}
-                      />
-                      <CareCheck
-                        label={`Công việc chung dòng ${number}`}
-                        checked={!!r.shared}
-                        onChange={set('shared')}
-                      />
-                      <CareField
-                        label={`Nội dung dòng ${number}`}
-                        value={r.content}
-                        onChange={set('content')}
-                        type="textarea"
-                        maxLength={1000}
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="mt-4"
-                      onClick={() => {
-                        setRows((old) => old.filter((v) => v.key !== r.key))
-                        setRowErrors([])
-                      }}
-                    >
-                      Bỏ dòng {number}
-                    </Button>
-                  </fieldset>
-                )
-              })}
-              {cursor && (
-                <Button type="button" variant="outline" onClick={moreResidents}>
-                  Tải thêm hồ sơ để chọn
-                </Button>
-              )}
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  disabled={busy}
-                  onClick={() => setRows((old) => [...old, { key: crypto.randomUUID(), content: '' }])}
-                >
-                  Thêm dòng công việc
-                </Button>
-                <Button type="submit" disabled={busy || !rows.length}>
-                  {busy ? 'Đang kiểm tra và lưu…' : 'Lập công việc của ca'}
-                </Button>
-              </div>
-              <p className="type-body-sm text-muted-foreground">
-                Một dòng lỗi thì cả lô không được lưu. Khung để trống sẽ lấy theo căn cứ và cấu hình hiện hành.
-              </p>
-            </form>
-          )}
-        </>
+          </div>
+          <Badge variant="neutral-outline" className="bg-card">
+            Từ thông báo
+          </Badge>
+        </div>
       )}
-      {success && <p role="status">{success}</p>}
+      <section aria-label="Lọc công việc đã lập" className="rounded-xl border bg-card p-4">
+        <div className="grid items-start gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
+          <ResidentSearch key={revision} onPick={pickResident} />
+          <FilterSelect
+            label="Công việc"
+            value={filter.taskTypeId}
+            options={types.map((t) => [String(t.id), t.name])}
+            onChange={setFilterOf('taskTypeId')}
+          />
+          <FilterSelect
+            label="Người làm"
+            value={filter.performerId}
+            options={staff.map((s) => [String(s.id), s.fullName])}
+            onChange={setFilterOf('performerId')}
+          />
+          {create && (
+            <Button className="h-11 px-6" disabled={!source || loading} onClick={openBatch}>
+              Lập công việc
+            </Button>
+          )}
+        </div>
+      </section>
+      <ProblemAlert problem={failure} />
+      {success && (
+        <p role="status" className="rounded-xl bg-success p-4 text-success-foreground">
+          {success}
+        </p>
+      )}
+      <section aria-label="Công việc đã lập" className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex items-center justify-between gap-3 p-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="type-title">Công việc đã lập</h2>
+            <p className="type-body-sm text-muted-foreground">Mọi ca, việc lập gần nhất trước.</p>
+          </div>
+          <Badge variant="held">{history.total} việc</Badge>
+        </div>
+        {historyLoading ? (
+          <p role="status" className="border-t px-4 py-3">
+            Đang tải công việc đã lập…
+          </p>
+        ) : history.items.length ? (
+          <Table>
+            <TableHeader className="bg-muted">
+              <TableRow>
+                <TableHead>Người cao tuổi</TableHead>
+                <TableHead>Công việc</TableHead>
+                <TableHead>Ngày, giờ</TableHead>
+                <TableHead>Người làm</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {history.items.map((t) => (
+                <TableRow key={t.id} className={fresh.includes(t.id) ? 'bg-accent/40' : undefined}>
+                  <TableCell>
+                    <span className="flex flex-wrap items-center gap-2">
+                      {t.residentCard?.fullName || t.location || 'Cả tầng'}
+                      {fresh.includes(t.id) && <Badge variant="held">Mới lập</Badge>}
+                    </span>
+                  </TableCell>
+                  <TableCell className="type-label">{t.content || t.taskType}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatDate(dateOf(t.plannedAt))} {timeOf(t.plannedAt)}
+                  </TableCell>
+                  <TableCell>{t.performer || 'Việc chung của tầng'}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        ) : (
+          <p className="border-t px-4 py-3 text-muted-foreground">
+            {Object.values(filter).some(Boolean) ? 'Không có công việc khớp bộ lọc.' : 'Chưa có công việc đã lập.'}
+          </p>
+        )}
+        {history.total > 0 && (
+          <div className="flex flex-wrap items-center gap-3 border-t p-4">
+            <span className="type-body-sm text-muted-foreground">
+              Hiển thị {page * PAGE_SIZE + 1}–{page * PAGE_SIZE + history.items.length} / {history.total} công việc
+            </span>
+            {pages > 1 && (
+              <nav aria-label="Phân trang công việc đã lập" className="ml-auto flex items-center gap-2">
+                <Button variant="outline" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                  Trước
+                </Button>
+                {pageItems(page + 1, pages).map((n) =>
+                  typeof n === 'string' ? (
+                    <span key={n} aria-hidden="true" className="px-1 text-muted-foreground">
+                      …
+                    </span>
+                  ) : (
+                    <Button
+                      key={n}
+                      variant="outline"
+                      className={`min-w-11 tabular-nums ${n === page + 1 ? 'border-accent-foreground bg-accent text-accent-foreground' : ''}`}
+                      aria-label={`Trang ${n}`}
+                      aria-current={n === page + 1 ? 'page' : undefined}
+                      onClick={() => setPage(n - 1)}
+                    >
+                      {n}
+                    </Button>
+                  ),
+                )}
+                <Button variant="outline" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
+                  Sau
+                </Button>
+              </nav>
+            )}
+          </div>
+        )}
+      </section>
+      {source && (
+        <ShiftSourceDialog
+          open={dialog === 'batch-source'}
+          onOpenChange={(open) => !open && setDialog('batch')}
+          subtitle={subtitle}
+          source={source}
+          tasks={shiftTasks}
+          people={people}
+          focusResidentId={focusInShift ? focusResidentId : undefined}
+        />
+      )}
+      {create && source && (
+        <ShiftTaskBatchDialog
+          open={dialog === 'batch'}
+          onOpenChange={(open) => !open && setDialog(null)}
+          subtitle={subtitle}
+          shiftPicker={shiftPicker}
+          shiftId={shiftId}
+          source={source}
+          tasks={shiftTasks}
+          shiftMembers={shiftMembers}
+          people={people}
+          types={types}
+          rows={rows}
+          setRows={setRows}
+          onSaved={saved}
+          onCompare={() => setDialog('batch-source')}
+        />
+      )}
     </div>
   )
 }
