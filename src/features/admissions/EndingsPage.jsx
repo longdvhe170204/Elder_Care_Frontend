@@ -25,7 +25,7 @@ const FILTERS = [
   ['CANCELLED', 'Đã hủy'],
 ]
 
-export function EndingsPage({ role }) {
+export function EndingsPage({ role, onNavigate }) {
   const { can } = usePermissions()
   const [filter, setFilter] = useState('PREPARING')
   const [endings, setEndings] = useState(null)
@@ -168,6 +168,7 @@ export function EndingsPage({ role }) {
           ending={ending}
           role={role}
           canUpdate={can('RESIDENCY_END_DEATH', 'UPDATE')}
+          onNavigate={onNavigate}
           onChanged={(message) => {
             setAnnouncement(message)
             open(ending.id)

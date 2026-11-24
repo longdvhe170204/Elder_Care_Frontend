@@ -18,6 +18,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { SuggestField } from '@/common/SuggestField'
 import { StatusBadge } from '@/common/StatusBadge'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { CONDITION_STATUS, END_CASES, ENDING_STATUS, SELECT, labelOf, newKey, vietnamIso } from './admissionLabels'
@@ -31,40 +32,71 @@ const SETTLEMENT = ['END_H_SETTLEMENT', 'END_H_SETTLEMENT_CONFIRMATION']
 const HANDOVER = 'END_E_HANDOVER'
 const HOUSE_LABEL = 'Điều kiện (h): số dư và tiền cọc đã quyết toán'
 
+// Màn xử lý cho từng điều kiện chưa đạt (demo 2026-11-25): bấm Xử lý mở thẳng màn của feature sở hữu, đã chọn sẵn người
+// cao tuổi khi màn đó nhận tham số. (e) bàn giao ghi ngay trong Xác nhận kết thúc; (f), (g) tự động nên không có nút.
+const HANDLERS = {
+  END_A_COSTS: { page: 'charges', label: 'Chi phí', withResident: false },
+  END_B_BELONGINGS: { page: 'belongings', label: 'Đồ gửi', withResident: true },
+  END_C_STORED_MEDICATION: { page: 'medication', label: 'Thuốc', withResident: true },
+  END_D_ALERTS_INCIDENTS: { page: 'alerts', label: 'Cảnh báo', withResident: false },
+  END_H_SETTLEMENT: { page: 'balance', label: 'Số dư, thu chi', withResident: true },
+  END_H_SETTLEMENT_CONFIRMATION: { page: 'balance', label: 'Số dư, thu chi', withResident: true },
+}
+
 // Trạng thái có màu (Đạt xanh, Chưa đạt đỏ; DESIGN.md mục 3.5). Lý do chỉ hiện khi Chưa đạt: dòng Đạt, Tự động backend
 // trả căn cứ là mã spec (FR-063 …), không phải chữ cho người dùng
-function ConditionLine({ line }) {
+function ConditionRow({ line, residentId, onNavigate }) {
+  const handler = line.status === 'NOT_MET' ? HANDLERS[line.code] : null
   return (
-    <li className="flex flex-col">
-      <span className="flex flex-wrap items-center gap-x-2">
+    <TableRow>
+      <TableCell className="whitespace-normal">
         <span className="type-body-sm">{line.name ?? line.code}</span>
+        {line.status === 'NOT_MET' && line.basis && (
+          <span className="block type-caption text-muted-foreground">{line.basis}</span>
+        )}
+      </TableCell>
+      <TableCell>
         <StatusBadge status={CONDITION_STATUS[line.status] ?? line.status} />
-      </span>
-      {line.status === 'NOT_MET' && line.basis && (
-        <span className="type-caption text-muted-foreground">{line.basis}</span>
-      )}
-    </li>
+      </TableCell>
+      <TableCell className="text-right">
+        {handler && onNavigate && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigate(handler.page, handler.withResident ? { residentId } : {})}
+          >
+            Xử lý ở {handler.label} →
+          </Button>
+        )}
+      </TableCell>
+    </TableRow>
   )
 }
 
-function Conditions({ conditions }) {
+function Conditions({ conditions, residentId, onNavigate }) {
   const settlement = conditions.filter((c) => SETTLEMENT.includes(c.code))
   const rest = conditions.filter((c) => !SETTLEMENT.includes(c.code))
+  const row = (c) => <ConditionRow key={c.code} line={c} residentId={residentId} onNavigate={onNavigate} />
   return (
     <section className="flex flex-col gap-2">
-      <h3 className="type-card-title">Điều kiện kết thúc</h3>
-      <ul className="flex flex-col gap-2">
-        {rest.map((c) => (
-          <ConditionLine key={c.code} line={c} />
-        ))}
-      </ul>
-      {settlement.length > 0 && (
-        <ul role="group" aria-label={HOUSE_LABEL} className="flex flex-col gap-2 border-t pt-2">
-          {settlement.map((c) => (
-            <ConditionLine key={c.code} line={c} />
-          ))}
-        </ul>
-      )}
+      <h3 id="ending-conditions-title" className="type-card-title">
+        Điều kiện kết thúc
+      </h3>
+      <Table aria-labelledby="ending-conditions-title">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Điều kiện</TableHead>
+            <TableHead>Trạng thái</TableHead>
+            <TableHead className="text-right">Việc cần làm</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>{rest.map(row)}</TableBody>
+        {settlement.length > 0 && (
+          <TableBody role="group" aria-label={HOUSE_LABEL} className="border-t">
+            {settlement.map(row)}
+          </TableBody>
+        )}
+      </Table>
     </section>
   )
 }
@@ -216,7 +248,7 @@ function ConfirmEndForm({ ending, onDone, onCancel }) {
   )
 }
 
-export function EndingView({ ending, canUpdate, onChanged }) {
+export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
   const [name, setName] = useState('')
   const [conditions, setConditions] = useState(null)
   const [mode, setMode] = useState(null)
@@ -302,7 +334,7 @@ export function EndingView({ ending, canUpdate, onChanged }) {
         )}
       </div>
       <ProblemAlert problem={failure} />
-      {conditions && <Conditions conditions={conditions} />}
+      {conditions && <Conditions conditions={conditions} residentId={ending.residentId} onNavigate={onNavigate} />}
 
       {preparing && canUpdate && mode === null && (
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4">

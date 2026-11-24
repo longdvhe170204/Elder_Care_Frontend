@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
@@ -42,10 +42,10 @@ const READY = {
   warnings: [],
 }
 
-function renderPage(role = 'OFFICE_STAFF') {
+function renderPage(role = 'OFFICE_STAFF', onNavigate = vi.fn()) {
   return render(
     <PermissionsProvider>
-      <EndingsPage role={role} />
+      <EndingsPage role={role} onNavigate={onNavigate} />
     </PermissionsProvider>,
   )
 }
@@ -94,6 +94,21 @@ describe('EndingsPage', () => {
     expect(screen.getByText('Kế toán đã xác nhận quyết toán')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Điều kiện (h): số dư và tiền cọc đã quyết toán' })).toBeInTheDocument()
     expect(screen.getByText(/Tự động/)).toBeInTheDocument()
+  })
+
+  // Demo 2026-11-25: điều kiện dạng bảng; dòng chưa đạt có nút Xử lý mở thẳng màn xử lý của người cao tuổi đó
+  it('dieuKienChuaDat_coNutXuLy_moManXuLy', async () => {
+    const onNavigate = vi.fn()
+    renderPage('OFFICE_STAFF', onNavigate)
+    await openEnding()
+    const table = screen.getByRole('table', { name: 'Điều kiện kết thúc' })
+    const row = (name) => within(table).getByText(name).closest('tr')
+    fireEvent.click(within(row('Chi phí kỳ cuối đã chốt')).getByRole('button', { name: /Xử lý/ }))
+    expect(onNavigate).toHaveBeenLastCalledWith('charges', {})
+    fireEvent.click(within(row('Số dư và tiền cọc đã quyết toán')).getByRole('button', { name: /Xử lý/ }))
+    expect(onNavigate).toHaveBeenLastCalledWith('balance', { residentId: 5 })
+    expect(within(row('Hợp đồng được xử lý')).queryByRole('button')).toBeNull()
+    expect(within(row('Đã bàn giao người cao tuổi')).queryByRole('button', { name: /Xử lý/ })).toBeNull()
   })
 
   it('FR_063_dieuKien_datMauXanh_chuaDatMauDo_khongHienMaSpec', async () => {
