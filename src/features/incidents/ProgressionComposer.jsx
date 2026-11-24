@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils'
 // sẵn. Trong nhóm, loại thường dùng chọn sẵn; nhóm có nhiều loại thì hiện thêm hàng loại nhỏ. Biện pháp hồi sức chỉ hiện ở
 // sự cố Khẩn cấp và phải bấm mở (cần đối chiếu nguyện vọng trước, FR-048a).
 
-export const PROGRESSION_GROUPS = [
+const PROGRESSION_GROUPS = [
   ['EVALUATION', 'Đánh giá', 'VD: tỉnh, đau hông trái, huyết áp 150/90'],
   ['ACTION', 'Xử lý', 'VD: sơ cứu, chườm lạnh, cho nằm nghỉ'],
   ['NOTIFICATION', 'Gọi, báo tin', 'VD: đã gọi con trai lúc 9:20'],
