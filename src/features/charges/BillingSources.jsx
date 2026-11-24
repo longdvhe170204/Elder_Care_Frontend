@@ -7,6 +7,8 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDate } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { controlClass } from './chargeLabels'
+import { ResidentField } from './ResidentField'
+import { useResidentDirectory } from './useResidentDirectory'
 
 const types = {
   RESIDENCY_DAY: 'Ngày lưu trú',
@@ -23,6 +25,7 @@ const keyOf = (row) => JSON.stringify([row.sourceId, row.billingUnit])
 
 export function BillingSources({ onChanged = () => {} }) {
   const [filter, setFilter] = useState({ residentId: '', type: 'RESIDENCY_DAY', from: '', to: '' })
+  const residents = useResidentDirectory()
   const [loaded, setLoaded] = useState(null)
   const [rows, setRows] = useState(null)
   const [selected, setSelected] = useState([])
@@ -91,17 +94,15 @@ export function BillingSources({ onChanged = () => {} }) {
   return (
     <Card className="space-y-4 p-4">
       <form onSubmit={search} className="grid gap-3 sm:grid-cols-2">
-        <label className="type-body-sm">
-          Mã người cao tuổi
-          <Input
-            type="number"
-            min="1"
-            required
-            value={filter.residentId}
-            disabled={pending}
-            onChange={(e) => change('residentId', e.target.value)}
-          />
-        </label>
+        <ResidentField
+          label="Người cao tuổi"
+          fallbackLabel="Mã người cao tuổi"
+          residents={residents}
+          required
+          value={filter.residentId}
+          disabled={pending}
+          onChange={(value) => change('residentId', value)}
+        />
         <label className="type-body-sm">
           Loại nguồn
           <select

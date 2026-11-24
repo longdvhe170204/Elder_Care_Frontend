@@ -74,6 +74,11 @@ beforeEach(() => {
     ]),
   )
   api.on('GET', '/costs/statements', () => json(200, [{ ...statement, items: undefined }]))
+  api.on(
+    'GET',
+    '/residents',
+    json(200, { items: [{ id: 5, profileCode: 'NCT-0005', personalInfo: { fullName: 'Nguyễn Thị Lan' } }] }),
+  )
   api.on('GET', '/costs/statements/31', () => json(200, statement, { ETag: etag }))
   api.on('GET', '/costs/items/3', () =>
     json(200, {
@@ -235,4 +240,21 @@ it('DBR_17_bang_da_chot_chi_doc_du_co_quyen_cap_nhat', async () => {
   await openStatement()
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Kiểm tra các khoản|Gửi chốt/ })).not.toBeInTheDocument()
+})
+
+// Demo 2026-11-25: bảng chi phí hiện tên người cao tuổi, tìm theo tên hoặc mã hồ sơ thay cho mã số
+it('bangChiPhi_hienTen_timTheoTen', async () => {
+  render(
+    <PermissionsProvider>
+      <ChargesPage />
+    </PermissionsProvider>,
+  )
+  await screen.findByRole('option', { name: /10\/2026/ })
+  fireEvent.change(screen.getByLabelText('Kỳ chi phí'), { target: { value: '10' } })
+  expect(await screen.findByText('Nguyễn Thị Lan (NCT-0005)')).toBeInTheDocument()
+  expect(screen.queryByText('Người cao tuổi mã 5')).toBeNull()
+  fireEvent.change(screen.getByLabelText('Tìm theo tên, mã hồ sơ'), { target: { value: 'thị lan' } })
+  expect(screen.getByRole('button', { name: 'Xem bảng #31' })).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Tìm theo tên, mã hồ sơ'), { target: { value: 'Trần' } })
+  expect(screen.queryByRole('button', { name: 'Xem bảng #31' })).toBeNull()
 })
