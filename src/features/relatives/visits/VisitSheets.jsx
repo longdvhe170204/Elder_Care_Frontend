@@ -303,3 +303,57 @@ export function CancelVisitSheet({ visit, onClose, onDone }) {
     </Sheet>
   )
 }
+
+// Ghi ra (FR-034; test BF-12 2026-11-24): giờ ra thực tế để trống là thời điểm ghi; nhập giờ sớm hơn khi khách đã ra
+// trước lúc ghi. Backend chặn giờ muộn hơn thời điểm ghi.
+export function CheckOutSheet({ visit, onClose, onDone }) {
+  const [time, setTime] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState(null)
+  const [key] = useState(() => crypto.randomUUID())
+
+  async function submit(event) {
+    event.preventDefault()
+    setBusy(true)
+    setFailure(null)
+    try {
+      await postVisitsByIdByCommand({
+        path: { id: visit.id, command: 'check-out' },
+        headers: { 'Idempotency-Key': key },
+        body: time ? { checkOutAt: `${visit.date}T${time}:00+07:00` } : {},
+      })
+      onDone('Đã ghi ra')
+    } catch (error) {
+      setFailure(problemOf(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Sheet open onOpenChange={(next) => !next && onClose()}>
+      <SheetContent className="overflow-y-auto p-6 sm:max-w-xl">
+        <SheetTitle className="type-title">Ghi ra</SheetTitle>
+        <SheetDescription className="type-body-sm text-muted-foreground">
+          Lượt {slotLabel(visit)}. Để trống giờ ra thì ghi theo thời điểm bấm; giờ ra không muộn hơn thời điểm ghi.
+        </SheetDescription>
+        <form onSubmit={submit} noValidate className="mt-4 flex flex-col gap-4">
+          <Field>
+            <FieldLabel htmlFor="visit-check-out-time">Giờ ra thực tế</FieldLabel>
+            <Input
+              id="visit-check-out-time"
+              type="time"
+              className="h-11 w-40"
+              value={time}
+              onChange={(e) => setTime(e.target.value)}
+            />
+          </Field>
+          <ProblemAlert problem={failure} />
+          <Button type="submit" className="h-11 self-start" disabled={busy}>
+            Xác nhận ghi ra
+          </Button>
+        </form>
+      </SheetContent>
+    </Sheet>
+  )
+}

@@ -22,6 +22,7 @@ import { LiveCostsPage } from './live/LiveCostsPage'
 import { LiveFeedbackPage } from './live/LiveFeedbackPage'
 import { LiveNotificationsPage } from './live/LiveNotificationsPage'
 import { FamilyRightsPage } from './live/FamilyRightsPage'
+import { LiveVisitsPage } from './live/LiveVisitsPage'
 
 // Cổng người thân, bản web (DESIGN.md 2.3): đăng nhập xong vào Trang chủ, là trang giới thiệu viện; các màn khác
 // đi từ đầu trang (máy tính) hoặc thanh dưới (điện thoại). Đầu trang cùng kiểu với trang giới thiệu: dải nền trời,
@@ -66,7 +67,8 @@ function FamilyRightsDemo() {
 }
 
 // Có phiên thật: ba màn đọc API của 012 (T028), Chi phí, số dư đọc số dư của 017 (T011), Đồ gửi đọc phần của 013 (T028)
-// do App.jsx truyền vào; Thông báo đọc hộp thông báo của 009; Tài khoản đọc người xem, đổi mật khẩu thật (test BF-12);
+// do App.jsx truyền vào; Thông báo đọc hộp thông báo của 009; Tài khoản đọc người xem, đổi mật khẩu thật, Thăm đăng ký,
+// hủy lượt qua API của 012 (test BF-12);
 // các màn khác còn bản mẫu tới task web của phần đó
 const LIVE_PAGES = {
   today: LiveTodayPage,
@@ -79,6 +81,7 @@ const LIVE_PAGES = {
   'care-schedule': LiveCareSchedulePage,
   account: LiveAccountPage,
   'family-rights': FamilyRightsPage,
+  visits: LiveVisitsPage,
 }
 
 // Người xem từ phiên và người cao tuổi đầu tiên có quan hệ Hiệu lực (chọn người khi có nhiều người: chưa thiết kế,

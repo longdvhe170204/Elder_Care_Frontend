@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { getResidentsByResidentIdRelationships, getVisitSlots, getVisits, postVisitsByIdByCommand } from '@/api'
+import { getResidentsByResidentIdRelationships, getVisitSlots, getVisits } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Field, FieldLabel } from '@/components/ui/field'
@@ -13,7 +13,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { ResidentPicker } from '../FamilyMembersPage'
-import { CancelVisitSheet, CheckInSheet, RegisterVisitSheet } from './VisitSheets'
+import { CancelVisitSheet, CheckInSheet, CheckOutSheet, RegisterVisitSheet } from './VisitSheets'
 import { VISIT_STATUS_LABELS, slotLabel, todayIso } from './visitLabels'
 
 // Đăng ký thăm (012 T025; US4, FR-029 → FR-039; Phụ lục 27 dòng "Đăng ký thăm": Hành chính đăng ký tại quầy, ghi vào,
@@ -69,19 +69,6 @@ export function VisitsPage() {
     setActionFailure(null)
     setAnnouncement(message)
     load(resident.id, date)
-  }
-
-  async function checkOut(visit) {
-    try {
-      await postVisitsByIdByCommand({
-        path: { id: visit.id, command: 'check-out' },
-        headers: { 'Idempotency-Key': crypto.randomUUID() },
-        body: {},
-      })
-      changed('Đã ghi ra')
-    } catch (error) {
-      setActionFailure(problemOf(error))
-    }
   }
 
   if (failure?.status === 403) {
@@ -214,7 +201,7 @@ export function VisitsPage() {
                                 variant="outline"
                                 size="sm"
                                 aria-label={`Ghi ra ${who}`}
-                                onClick={() => checkOut(v)}
+                                onClick={() => setSheet({ kind: 'check-out', visit: v })}
                               >
                                 Ghi ra
                               </Button>
@@ -241,6 +228,9 @@ export function VisitsPage() {
           )}
           {sheet?.kind === 'check-in' && (
             <CheckInSheet visit={sheet.visit} onClose={() => setSheet(null)} onDone={changed} />
+          )}
+          {sheet?.kind === 'check-out' && (
+            <CheckOutSheet visit={sheet.visit} onClose={() => setSheet(null)} onDone={changed} />
           )}
           {sheet?.kind === 'cancel' && (
             <CancelVisitSheet visit={sheet.visit} onClose={() => setSheet(null)} onDone={changed} />
