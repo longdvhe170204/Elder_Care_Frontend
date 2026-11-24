@@ -13,10 +13,13 @@ import { LEDGER_LABELS, TYPE_LABELS, formatMoney, labelOf } from './balanceLabel
 // vào trạng thái Chờ duyệt, Quản lý viện duyệt ở màn Yêu cầu phê duyệt của 000; giới hạn số tiền và người nhận do máy chủ
 // kiểm lúc lập và lúc duyệt (409 REFUND_LIMIT_EXCEEDED, RECIPIENT_NO_LONGER_REPRESENTATIVE…). Hoàn tiền ghi vào sổ số dư,
 // hoàn cọc ghi vào sổ cọc; điều chỉnh chọn sổ, số tiền có dấu và có thể trỏ giao dịch gốc.
+// Demo 2026-11-25 (chủ dự án chốt): thêm "Hoàn số dư và tiền cọc" (gửi hai giao dịch REFUND, DEPOSIT_REFUND, không đổi
+// api-017) và nút "Hoàn toàn bộ" điền sẵn số còn hoàn được; số tiền vẫn sửa tay được.
 
 const TYPE_OPTIONS = [
   { value: 'REFUND', label: 'Hoàn tiền' },
   { value: 'DEPOSIT_REFUND', label: 'Hoàn tiền cọc' },
+  { value: 'BOTH', label: 'Hoàn số dư và tiền cọc' },
   { value: 'ADJUSTMENT', label: 'Điều chỉnh' },
 ]
 const LEDGER_OPTIONS = Object.entries(LEDGER_LABELS).map(([value, label]) => ({ value, label }))
@@ -27,7 +30,15 @@ const METHOD_OPTIONS = [
 ]
 // Ô nào báo vào lỗi nào (họ tên, giấy tờ người nhận khác chung một lỗi)
 const ERROR_KEY = { otherName: 'recipient', otherDocument: 'recipient' }
-const isRefund = (type) => type === 'REFUND' || type === 'DEPOSIT_REFUND'
+const isRefund = (type) => type === 'REFUND' || type === 'DEPOSIT_REFUND' || type === 'BOTH'
+const AMOUNT_ERROR = 'Nhập số tiền là số nguyên khác 0.'
+
+// Số còn hoàn được: số dư dương; tiền cọc sau khi trừ khoản còn nợ (còn nợ thì cấn trừ cọc trước)
+function refundable(balance) {
+  if (!balance) return { balance: 0, deposit: 0 }
+  const debt = balance.balance < 0 ? -balance.balance : 0
+  return { balance: Math.max(balance.balance ?? 0, 0), deposit: Math.max((balance.depositBalance ?? 0) - debt, 0) }
+}
 
 // Giao dịch gốc của điều chỉnh: giao dịch Đã xác nhận cùng sổ, trừ thanh toán bảng chi phí (FR-011; máy chủ vẫn kiểm)
 const originalOptions = (transactions, ledger) =>
@@ -40,11 +51,12 @@ const originalOptions = (transactions, ledger) =>
 
 // representative: người đại diện hiệu lực của sổ (api-017 Balance.representative); có thì người nhận hoàn là người này,
 // không có thì ghi người nhận khác (FR-014)
-export function TransactionForm({ residentId, transactions = [], representative = null, onDone }) {
+export function TransactionForm({ residentId, transactions = [], representative = null, balance = null, onDone }) {
   const [v, setV] = useState({
     type: 'REFUND',
     ledger: 'BALANCE',
     amount: '',
+    depositAmount: '',
     familyMemberId: representative ? String(representative.familyMemberId) : '',
     otherName: '',
     otherDocument: '',
@@ -59,15 +71,38 @@ export function TransactionForm({ residentId, transactions = [], representative 
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const key = useRef(crypto.randomUUID())
+  const depositKey = useRef(crypto.randomUUID())
+  const available = refundable(balance)
+  const suggested =
+    v.type === 'REFUND'
+      ? available.balance
+      : v.type === 'DEPOSIT_REFUND'
+        ? available.deposit
+        : v.type === 'BOTH'
+          ? available.balance + available.deposit
+          : 0
   const set = (name) => (value) => {
     setV((s) => ({ ...s, [name]: value }))
     setTouched((t) => ({ ...t, [ERROR_KEY[name] ?? name]: true }))
   }
 
+  function refundAll() {
+    if (v.type === 'BOTH') {
+      setV((s) => ({ ...s, amount: String(available.balance), depositAmount: String(available.deposit) }))
+      setTouched((t) => ({ ...t, amount: true, depositAmount: true }))
+    } else set('amount')(String(suggested))
+  }
+
   function validate() {
     const found = {}
     const amount = Number(v.amount)
-    if (!/^-?\d+$/.test(v.amount.trim()) || amount === 0) found.amount = 'Nhập số tiền là số nguyên khác 0.'
+    if (v.type === 'BOTH') {
+      const part = (text) => text.trim() === '' || /^\d+$/.test(text.trim())
+      if (!part(v.amount)) found.amount = AMOUNT_ERROR
+      if (!part(v.depositAmount)) found.depositAmount = AMOUNT_ERROR
+      if (!found.amount && !found.depositAmount && !(Number(v.amount) > 0 || Number(v.depositAmount) > 0))
+        found.amount = 'Nhập số tiền hoàn từ số dư hoặc từ tiền cọc.'
+    } else if (!/^-?\d+$/.test(v.amount.trim()) || amount === 0) found.amount = AMOUNT_ERROR
     else if (isRefund(v.type) && amount < 0) found.amount = 'Số tiền hoàn phải lớn hơn 0.'
     if (isRefund(v.type) && !representative && !(v.otherName.trim() && v.otherDocument.trim()))
       found.recipient = 'Nhập họ tên và giấy tờ của người nhận.'
@@ -83,18 +118,29 @@ export function TransactionForm({ residentId, transactions = [], representative 
     setSubmitted(true)
     setFailure(null)
     if (Object.keys(live).length > 0) return
-    const ledger = v.type === 'REFUND' ? 'BALANCE' : v.type === 'DEPOSIT_REFUND' ? 'DEPOSIT' : v.ledger
-    const body = { type: v.type, residentId, ledger, amount: Number(v.amount), reason: v.reason.trim() }
-    if (isRefund(v.type)) {
-      body.recipient = representative
-        ? { familyMemberId: Number(v.familyMemberId) }
-        : { fullName: v.otherName.trim(), identityDocument: v.otherDocument.trim() }
-      body.method = v.method
-    } else if (v.originalId) body.originalTransactionId = Number(v.originalId)
-    if (v.note.trim()) body.note = v.note.trim()
+    const bodyOf = (type, amount) => {
+      const ledger = type === 'REFUND' ? 'BALANCE' : type === 'DEPOSIT_REFUND' ? 'DEPOSIT' : v.ledger
+      const body = { type, residentId, ledger, amount, reason: v.reason.trim() }
+      if (isRefund(type)) {
+        body.recipient = representative
+          ? { familyMemberId: Number(v.familyMemberId) }
+          : { fullName: v.otherName.trim(), identityDocument: v.otherDocument.trim() }
+        body.method = v.method
+      } else if (v.originalId) body.originalTransactionId = Number(v.originalId)
+      if (v.note.trim()) body.note = v.note.trim()
+      return body
+    }
+    // Hai phần dùng hai Idempotency-Key cố định: gửi lại sau lỗi không lập trùng phần đã lập
+    const posts =
+      v.type === 'BOTH'
+        ? [
+            Number(v.amount) > 0 && [key.current, bodyOf('REFUND', Number(v.amount))],
+            Number(v.depositAmount) > 0 && [depositKey.current, bodyOf('DEPOSIT_REFUND', Number(v.depositAmount))],
+          ].filter(Boolean)
+        : [[key.current, bodyOf(v.type, Number(v.amount))]]
     setBusy(true)
     try {
-      await postBalanceTransactions({ headers: { 'Idempotency-Key': key.current }, body })
+      for (const [k, body] of posts) await postBalanceTransactions({ headers: { 'Idempotency-Key': k }, body })
       onDone('Đã gửi duyệt. Quản lý viện duyệt ở màn Yêu cầu phê duyệt.')
     } catch (error) {
       setFailure(problemOf(error))
@@ -116,15 +162,50 @@ export function TransactionForm({ residentId, transactions = [], representative 
             options={LEDGER_OPTIONS}
           />
         )}
-        <MoneyField
-          id="tx-amount"
-          label="Số tiền"
-          value={v.amount}
-          onChange={set('amount')}
-          allowNegative={v.type === 'ADJUSTMENT'}
-          error={errors.amount}
-          hint={v.type === 'ADJUSTMENT' ? 'Điều chỉnh nhập số có dấu: âm để giảm, dương để tăng.' : undefined}
-        />
+        {v.type === 'BOTH' ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <MoneyField
+              id="tx-amount"
+              label="Hoàn từ số dư"
+              value={v.amount}
+              onChange={set('amount')}
+              error={errors.amount}
+            />
+            <MoneyField
+              id="tx-deposit-amount"
+              label="Hoàn từ tiền cọc"
+              value={v.depositAmount}
+              onChange={set('depositAmount')}
+              error={errors.depositAmount}
+            />
+            <p className="type-body sm:col-span-2">
+              Tổng hoàn{' '}
+              <span className="font-semibold tabular-nums">
+                {formatMoney((Number(v.amount) || 0) + (Number(v.depositAmount) || 0))}
+              </span>
+            </p>
+          </div>
+        ) : (
+          <MoneyField
+            id="tx-amount"
+            label="Số tiền"
+            value={v.amount}
+            onChange={set('amount')}
+            allowNegative={v.type === 'ADJUSTMENT'}
+            error={errors.amount}
+            hint={v.type === 'ADJUSTMENT' ? 'Điều chỉnh nhập số có dấu: âm để giảm, dương để tăng.' : undefined}
+          />
+        )}
+        {isRefund(v.type) && suggested > 0 && (
+          <Button type="button" variant="outline" className="h-11 self-start" onClick={refundAll}>
+            Hoàn toàn bộ ({formatMoney(suggested)})
+          </Button>
+        )}
+        {v.type !== 'REFUND' && isRefund(v.type) && balance?.balance < 0 && (
+          <p className="type-body-sm text-muted-foreground">
+            Còn nợ {formatMoney(-balance.balance)}: số gợi ý đã trừ khoản nợ khỏi tiền cọc.
+          </p>
+        )}
         {isRefund(v.type) && (
           <>
             {representative ? (
