@@ -6,6 +6,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { RELATIONSHIP_LABELS } from '../relationshipLabels'
 import { BLOCK_REASON_LABELS, PICKUP_TYPE_LABELS, handoverLabel } from './pickupLabels'
@@ -13,9 +14,10 @@ import { BLOCK_REASON_LABELS, PICKUP_TYPE_LABELS, handoverLabel } from './pickup
 // Ghi đón (012 T021; FR-021 bước 1 → 5, FR-026; chỉ trực tuyến, FR-028): chọn loại đón, người đón (trong danh sách được
 // phép đón tại thời điểm hoặc theo ngoại lệ), đối chiếu giấy tờ xuất trình, nhân viên bàn giao. Thời điểm do backend
 // ghi theo giờ hệ thống (NFR-09). Backend kiểm danh sách, giấy tờ; không đạt thì đã ghi lần chặn và trả 409 kèm
-// blockReason. Không chọn sẵn giá trị nào.
+// blockReason. Không chọn sẵn giá trị nào. Người đón theo ngoại lệ chọn trong các ngoại lệ Hiệu lực (test BF-12 C-2
+// 2026-11-24; trước đây nhập mã ngoại lệ).
 
-const EXCEPTION = 'exception'
+const EXCEPTION = 'exception:'
 const SELECT = 'h-11 w-full rounded-md border border-input bg-transparent px-3'
 
 function Radio({ name, value, current, onChange, children }) {
@@ -40,11 +42,10 @@ function blockOf(error) {
   return error instanceof ApiError ? (error.problem?.blockReason ?? null) : null
 }
 
-export function RecordPickupSheet({ residentId, residentName, pickupList, onClose, onDone }) {
+export function RecordPickupSheet({ residentId, residentName, pickupList, exceptions = [], onClose, onDone }) {
   const [key] = useState(() => crypto.randomUUID())
   const [type, setType] = useState('')
   const [picker, setPicker] = useState('')
-  const [exceptionId, setExceptionId] = useState('')
   const [docType, setDocType] = useState('')
   const [docNumber, setDocNumber] = useState('')
   const [staffId, setStaffId] = useState('')
@@ -56,11 +57,10 @@ export function RecordPickupSheet({ residentId, residentName, pickupList, onClos
   const [blockReason, setBlockReason] = useState(null)
 
   const selfReturn = type === 'SELF_RETURN'
-  const byException = picker === EXCEPTION
+  const byException = picker.startsWith(EXCEPTION)
   const errors = {
     type: !type,
     picker: !selfReturn && !picker,
-    exception: !selfReturn && byException && !/^\d+$/.test(exceptionId.trim()),
     document: !selfReturn && !docNumber.trim(),
     staff: !staffId,
   }
@@ -75,7 +75,7 @@ export function RecordPickupSheet({ residentId, residentName, pickupList, onClos
     setBlockReason(null)
     const body = { type }
     if (!selfReturn) {
-      if (byException) body.exceptionId = Number(exceptionId.trim())
+      if (byException) body.exceptionId = Number(picker.slice(EXCEPTION.length))
       else body.familyMemberId = Number(picker)
       body.presentedIdDocument = docType.trim()
         ? { type: docType.trim(), number: docNumber.trim() }
@@ -138,26 +138,16 @@ export function RecordPickupSheet({ residentId, residentName, pickupList, onClos
                   </span>
                 </Radio>
               ))}
-              <Radio name="pickup-picker" value={EXCEPTION} current={picker} onChange={setPicker}>
-                Người đón theo ngoại lệ
-              </Radio>
+              {exceptions.map((e) => (
+                <Radio key={e.id} name="pickup-picker" value={EXCEPTION + e.id} current={picker} onChange={setPicker}>
+                  {e.fullName}
+                  <span className="type-body-sm text-muted-foreground">
+                    Ngoại lệ, {e.relationship}, giấy tờ {e.idDocumentNumber}, hết hạn {formatDateTime(e.expiresAt)}
+                  </span>
+                </Radio>
+              ))}
               {show('picker') && <p className="type-body-sm text-destructive">Chọn người đón</p>}
             </fieldset>
-          )}
-
-          {!selfReturn && byException && (
-            <Field data-invalid={show('exception') || undefined}>
-              <FieldLabel htmlFor="pickup-exception-id">Mã yêu cầu ngoại lệ</FieldLabel>
-              <Input
-                id="pickup-exception-id"
-                inputMode="numeric"
-                className="h-11"
-                value={exceptionId}
-                onChange={(e) => setExceptionId(e.target.value)}
-                aria-invalid={show('exception') || undefined}
-              />
-              {show('exception') && <FieldError>Nhập mã yêu cầu ngoại lệ</FieldError>}
-            </Field>
           )}
 
           {!selfReturn && (
