@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarDays, CheckCheck, Clock, Eye, FilePenLine, FileSignature, FileText, Funnel, Plus, Search, ShieldCheck } from 'lucide-react'
+import { CalendarDays, Eye, FileSignature, FileText, Funnel, Plus, Search } from 'lucide-react'
 import { getContracts, getResidencyChangeRequests, getResidencyChangeRequestsById, getResidentsById } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -15,7 +15,7 @@ import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
-import { CHANGE_TYPES, REQUEST_STATUS, labelOf } from './admissionLabels'
+import { CHANGE_TYPES, REQUEST_STATUS, labelOf, plain } from './admissionLabels'
 import { ChangeRequestSheet, ChangeRequestView, ConfirmationSheet } from './ChangeParts'
 import { CHANGE_TYPE_ICONS, CHANGE_TYPE_TONES } from './changeTypeIcons'
 import { StatusPill } from './RequestStatusPill'
@@ -29,13 +29,6 @@ import { confirmationState, displayStatus } from './changeRequestRules'
 const awaitingSignature = (r) => r.status === 'APPROVED' && r.addendum?.status === 'PENDING_SIGNATURE'
 // Mỗi trang 10 yêu cầu; ô tìm khớp cả họ tên người cao tuổi (không phân biệt dấu, hoa thường)
 const PAGE_SIZE = 10
-const plain = (text) =>
-  String(text ?? '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D')
-    .toLowerCase()
 
 const FILTERS = [
   ['DRAFT', 'Nháp', (r) => r.status === 'DRAFT'],
@@ -48,63 +41,23 @@ const FILTERS = [
 const STATUS_CARD_CONFIG = {
   DRAFT: {
     hint: 'Đang chỉnh sửa',
-    bg: 'bg-gradient-to-b from-blue-50/80 via-white to-white',
-    border: 'border-blue-200/90',
-    title: 'text-blue-700',
-    count: 'text-blue-950',
-    hintColor: 'text-blue-600',
-    iconBox: 'bg-blue-100 text-blue-600',
-    icon: FilePenLine,
-    activeRing: 'border-2 border-blue-500 shadow-[0_8px_20px_-4px_rgba(59,130,246,0.3)] ring-2 ring-blue-500/15',
-    indicatorBar: 'bg-blue-600',
+    dot: 'bg-blue-600',
   },
   PENDING_APPROVAL: {
     hint: 'Cần xét duyệt',
-    bg: 'bg-gradient-to-b from-amber-50/80 via-white to-white',
-    border: 'border-amber-200/90',
-    title: 'text-amber-800',
-    count: 'text-amber-950',
-    hintColor: 'text-amber-600',
-    iconBox: 'bg-amber-100 text-amber-600',
-    icon: Clock,
-    activeRing: 'border-2 border-amber-500 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.3)] ring-2 ring-amber-500/15',
-    indicatorBar: 'bg-amber-500',
+    dot: 'bg-amber-500',
   },
   PENDING_SIGNATURE: {
     hint: 'Cần ký phụ lục',
-    bg: 'bg-gradient-to-b from-purple-50/80 via-white to-white',
-    border: 'border-purple-200/90',
-    title: 'text-purple-800',
-    count: 'text-purple-950',
-    hintColor: 'text-purple-600',
-    iconBox: 'bg-purple-100 text-purple-600',
-    icon: FileSignature,
-    activeRing: 'border-2 border-purple-500 shadow-[0_8px_20px_-4px_rgba(139,92,246,0.3)] ring-2 ring-purple-500/15',
-    indicatorBar: 'bg-purple-600',
+    dot: 'bg-purple-600',
   },
   APPROVED: {
     hint: 'Chờ có hiệu lực',
-    bg: 'bg-gradient-to-b from-emerald-50/80 via-white to-white',
-    border: 'border-emerald-200/90',
-    title: 'text-emerald-800',
-    count: 'text-emerald-950',
-    hintColor: 'text-emerald-600',
-    iconBox: 'bg-emerald-100 text-emerald-600',
-    icon: ShieldCheck,
-    activeRing: 'border-2 border-emerald-500 shadow-[0_8px_20px_-4px_rgba(16,185,129,0.3)] ring-2 ring-emerald-500/15',
-    indicatorBar: 'bg-emerald-500',
+    dot: 'bg-emerald-600',
   },
   DONE: {
     hint: 'Hoàn tất / đóng',
-    bg: 'bg-gradient-to-b from-cyan-50/80 via-white to-white',
-    border: 'border-cyan-200/90',
-    title: 'text-cyan-800',
-    count: 'text-cyan-950',
-    hintColor: 'text-cyan-700',
-    iconBox: 'bg-cyan-100 text-cyan-700',
-    icon: CheckCheck,
-    activeRing: 'border-2 border-cyan-500 shadow-[0_8px_20px_-4px_rgba(6,182,212,0.3)] ring-2 ring-cyan-500/15',
-    indicatorBar: 'bg-cyan-600',
+    dot: 'bg-teal-600',
   },
 }
 
@@ -274,41 +227,36 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
           const count = (requests ?? []).filter(matches).length
           const isSelected = key === filter
           const cfg = STATUS_CARD_CONFIG[key]
-          const Icon = cfg.icon
           return (
             <ToggleGroupItem
               key={key}
               value={key}
               variant="default"
               className={cn(
-                'relative flex flex-col items-start justify-between h-auto p-4 !rounded-2xl md:!rounded-2xl border text-left transition-all duration-200 min-h-[114px] shadow-2xs hover:shadow-md hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
-                cfg.bg,
+                'relative flex flex-col items-start justify-between h-auto p-4 !rounded-2xl border text-left transition-all duration-200 min-h-[114px] bg-card overflow-hidden shadow-2xs hover:shadow-sm focus-visible:ring-2 focus-visible:ring-primary',
                 isSelected
-                  ? cn(cfg.activeRing, '-translate-y-0.5')
-                  : cn(cfg.border, 'hover:border-primary/40 opacity-90 hover:opacity-100'),
+                  ? 'border-2 border-blue-600 bg-blue-50/20 shadow-xs'
+                  : 'border-border/80 hover:border-border',
               )}
             >
-              <div className="flex w-full items-center justify-between gap-1.5">
-                <span className={cn('text-xs font-bold', cfg.title)}>
+              {/* Hàng 1: Chấm tròn trạng thái + Tên trạng thái */}
+              <div className="flex w-full items-center gap-2">
+                <span
+                  aria-hidden="true"
+                  className={cn('size-2 rounded-full shrink-0', cfg.dot)}
+                />
+                <span className={cn('text-xs font-semibold text-slate-700 truncate', isSelected && 'font-bold text-slate-900')}>
                   {`${label} (${count})`}
                 </span>
-                <div
-                  aria-hidden="true"
-                  className={cn(
-                    'w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-2xs transition-transform',
-                    cfg.iconBox,
-                    isSelected && 'scale-105',
-                  )}
-                >
-                  <Icon className="size-3.5 stroke-[2.2]" />
-                </div>
               </div>
 
-              <span className={cn('text-3xl font-extrabold tracking-tight mt-1 tabular-nums', cfg.count)}>
+              {/* Hàng 2: Số lượng to rõ */}
+              <span className={cn('text-3xl font-extrabold tracking-tight mt-1 tabular-nums', isSelected ? 'text-slate-900' : 'text-slate-600')}>
                 {count}
               </span>
 
-              <span className={cn('text-[11px] font-medium mt-0.5', cfg.hintColor)}>
+              {/* Hàng 3: Gợi ý trạng thái */}
+              <span className="text-[11px] font-normal text-muted-foreground mt-0.5">
                 {cfg.hint}
               </span>
 
@@ -316,7 +264,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
               {isSelected && (
                 <div
                   aria-hidden="true"
-                  className={cn('absolute bottom-1.5 left-4 right-4 h-1 rounded-full', cfg.indicatorBar)}
+                  className="absolute bottom-1.5 left-4 right-4 h-1 rounded-full bg-blue-600"
                 />
               )}
             </ToggleGroupItem>
@@ -480,30 +428,38 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
                       )}
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
+                      <div className="flex flex-col items-start gap-1 py-1">
                         <StatusPill request={r} text={status.text} />
+                        {confirmation && (
+                          <span
+                            className={cn(
+                              'inline-flex items-center gap-1.5 text-xs font-medium leading-tight',
+                              confirmation.done
+                                ? 'text-emerald-700 dark:text-emerald-400'
+                                : confirmation.attention
+                                ? 'text-red-600 dark:text-red-400'
+                                : 'text-amber-800 dark:text-amber-400',
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'size-2 rounded-full shrink-0',
+                                confirmation.done
+                                  ? 'bg-emerald-600'
+                                  : confirmation.attention
+                                  ? 'bg-red-600'
+                                  : 'bg-amber-600',
+                              )}
+                              aria-hidden="true"
+                            />
+                            {confirmation.text}
+                          </span>
+                        )}
                         {status.days !== null && (
                           <span
                             className={`block type-caption ${status.overdue ? 'text-destructive font-semibold' : 'text-muted-foreground'}`}
                           >
                             {`${status.days} ngày từ lúc duyệt`}
-                          </span>
-                        )}
-                        {confirmation && (
-                          <span
-                            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md type-caption font-medium border ${
-                              confirmation.attention
-                                ? 'bg-destructive/10 text-destructive border-destructive/20'
-                                : 'bg-success/15 text-success-foreground border-success/30'
-                            }`}
-                          >
-                            <span
-                              className={`size-1.5 rounded-full ${
-                                confirmation.attention ? 'bg-destructive animate-pulse' : 'bg-success-foreground'
-                              }`}
-                              aria-hidden
-                            />
-                            {confirmation.text}
                           </span>
                         )}
                       </div>

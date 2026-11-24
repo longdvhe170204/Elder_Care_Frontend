@@ -224,3 +224,12 @@ export function absenceLabel(absence) {
 
 // Lượt đăng ký còn mở: được cập nhật, ghi ý kiến
 export const OPEN_STATUSES = ['IN_PROGRESS', 'WAITING']
+
+// Chuẩn hóa chuỗi tìm kiếm tiếng Việt không phân biệt hoa thường và dấu
+export const plain = (text) =>
+  String(text ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()

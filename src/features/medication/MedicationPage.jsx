@@ -66,50 +66,50 @@ const FILTER_BADGES = {
 const KPI_CARD_CONFIG = {
   'Trễ': {
     hint: 'Cần xử lý ngay',
-    bg: 'bg-gradient-to-b from-rose-50/80 via-white to-white',
+    bg: 'bg-white dark:bg-slate-900',
     border: 'border-rose-200/90 hover:border-rose-300',
     title: 'text-rose-700',
-    count: 'text-rose-950',
+    count: 'text-slate-900 dark:text-slate-100',
     hintColor: 'text-rose-600',
-    iconBox: 'bg-rose-100 text-rose-600',
+    iconBox: 'bg-rose-50 text-rose-600 dark:bg-rose-950/50',
     icon: AlertCircle,
-    activeRing: 'border-2 border-rose-500 shadow-[0_8px_20px_-4px_rgba(244,63,94,0.3)] ring-2 ring-rose-500/15',
+    activeRing: 'border-2 border-rose-500',
     indicatorBar: 'bg-rose-500',
   },
   'Đến giờ': {
     hint: 'Cần phát thuốc trong ca',
-    bg: 'bg-gradient-to-b from-amber-50/80 via-white to-white',
+    bg: 'bg-white dark:bg-slate-900',
     border: 'border-amber-200/90 hover:border-amber-300',
     title: 'text-amber-800',
-    count: 'text-amber-950',
+    count: 'text-slate-900 dark:text-slate-100',
     hintColor: 'text-amber-600',
-    iconBox: 'bg-amber-100 text-amber-600',
+    iconBox: 'bg-amber-50 text-amber-600 dark:bg-amber-950/50',
     icon: Hourglass,
-    activeRing: 'border-2 border-amber-500 shadow-[0_8px_20px_-4px_rgba(245,158,11,0.3)] ring-2 ring-amber-500/15',
+    activeRing: 'border-2 border-amber-500',
     indicatorBar: 'bg-amber-500',
   },
   'Chưa đến giờ': {
     hint: 'Các mốc giờ tiếp theo',
-    bg: 'bg-gradient-to-b from-sky-50/80 via-white to-white',
+    bg: 'bg-white dark:bg-slate-900',
     border: 'border-sky-200/90 hover:border-sky-300',
     title: 'text-sky-800',
-    count: 'text-sky-950',
+    count: 'text-slate-900 dark:text-slate-100',
     hintColor: 'text-sky-600',
-    iconBox: 'bg-sky-100 text-sky-600',
+    iconBox: 'bg-sky-50 text-sky-600 dark:bg-sky-950/50',
     icon: Clock,
-    activeRing: 'border-2 border-sky-500 shadow-[0_8px_20px_-4px_rgba(14,165,233,0.3)] ring-2 ring-sky-500/15',
+    activeRing: 'border-2 border-sky-500',
     indicatorBar: 'bg-sky-500',
   },
   'Đã phát xong': {
     hint: 'Đã hoàn thành',
-    bg: 'bg-gradient-to-b from-emerald-50/80 via-white to-white',
+    bg: 'bg-white dark:bg-slate-900',
     border: 'border-emerald-200/90 hover:border-emerald-300',
     title: 'text-emerald-800',
-    count: 'text-emerald-950',
+    count: 'text-slate-900 dark:text-slate-100',
     hintColor: 'text-emerald-600',
-    iconBox: 'bg-emerald-100 text-emerald-600',
+    iconBox: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50',
     icon: CheckCircle2,
-    activeRing: 'border-2 border-emerald-500 shadow-[0_8px_20px_-4px_rgba(16,185,129,0.3)] ring-2 ring-emerald-500/15',
+    activeRing: 'border-2 border-emerald-500',
     indicatorBar: 'bg-emerald-500',
   },
 }
@@ -577,11 +577,11 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
                   type="button"
                   onClick={() => setFilter(isSelected ? 'Tất cả' : filterValue)}
                   className={cn(
-                    'relative flex flex-col justify-between p-4 rounded-2xl border text-left transition-all duration-200 min-h-[114px] shadow-2xs hover:shadow-md hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
+                    'relative flex flex-col justify-between p-4 rounded-2xl border text-left transition-all duration-200 min-h-[114px] shadow-xs hover:border-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary overflow-hidden',
                     cfg.bg,
                     isSelected
                       ? cn(cfg.activeRing, '-translate-y-0.5')
-                      : cn(cfg.border, 'opacity-90 hover:opacity-100'),
+                      : cfg.border,
                   )}
                 >
                   <div className="flex w-full items-center justify-between gap-1.5">

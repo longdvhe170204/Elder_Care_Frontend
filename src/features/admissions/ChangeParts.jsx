@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, FilePlus2 } from 'lucide-react'
+import { ArrowRight, FilePlus2, Search, X } from 'lucide-react'
 import {
   getApprovalRequestsById,
   getBeds,
@@ -39,6 +39,7 @@ import {
   money,
   newKey,
   REQUEST_STATUS,
+  plain,
 } from './admissionLabels'
 import {
   CONFIRMATION_METHODS,
@@ -324,15 +325,25 @@ export function ChangeRequestView({
             <section className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
-                {state.attention && draft ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
-                    <span className="size-1.5 rounded-full bg-warning-foreground animate-pulse" aria-hidden />
-                    Chờ phản hồi
-                  </span>
-                ) : (
+                {state.done ? (
                   <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
                     <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
                     Đã xác nhận
+                  </span>
+                ) : sent?.status === 'AWAITING' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                    <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden />
+                    Chờ phản hồi
+                  </span>
+                ) : sent?.status === 'DECLINED' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive border border-destructive/30">
+                    <span className="size-1.5 rounded-full bg-destructive" aria-hidden />
+                    Từ chối
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
+                    <span className="size-1.5 rounded-full bg-warning-foreground" aria-hidden />
+                    Chưa xác nhận
                   </span>
                 )}
               </div>
@@ -531,6 +542,8 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [residents, setResidents] = useState([])
   const [residentId, setResidentId] = useState(request?.residentId ? String(request.residentId) : '')
   const [contractId, setContractId] = useState(request ? String(request.contractId) : '')
+  const [contractSearch, setContractSearch] = useState('')
+  const [residentSearch, setResidentSearch] = useState('')
   const [types, setTypes] = useState(request?.changeTypes ?? [])
   const [value, setValue] = useState(request?.newValue ?? {})
   const [date, setDate] = useState(request?.requestedEffectiveDate ?? '')
@@ -593,6 +606,20 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   }, [wantsBed, emptyBeds])
 
   const contract = contracts.find((c) => String(c.id) === contractId)
+  const filteredContracts = contracts.filter((c) => {
+    if (String(c.id) === contractId) return true
+    if (!contractSearch.trim()) return true
+    const kw = plain(contractSearch.trim())
+    const resName = names[c.residentId] ?? `Mã ${c.residentId}`
+    return plain(resName).includes(kw) || plain(c.contractNumber).includes(kw)
+  })
+  const filteredResidents = residents.filter((r) => {
+    if (String(r.id) === residentId) return true
+    if (!residentSearch.trim()) return true
+    const kw = plain(residentSearch.trim())
+    const resName = r.personalInfo?.fullName ?? `Mã ${r.id}`
+    return plain(resName).includes(kw)
+  })
   const contractServiceIds = new Set((contract?.services ?? []).map((s) => s.serviceId))
   // Dấu thuộc gói theo hợp đồng hiện hành (R19): chỉ dòng có trong hợp đồng mang dấu thuộc gói
   const inPackageIds = new Set((contract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
@@ -745,6 +772,43 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               <FieldLabel htmlFor="change-resident" className={REQUIRED}>
                 Người cao tuổi
               </FieldLabel>
+              {!editing && (
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                    <Input
+                      id="resident-search-query"
+                      aria-label="Tìm kiếm người cao tuổi"
+                      placeholder="Tìm theo họ tên người cao tuổi..."
+                      className="h-10 rounded-xl pl-9 pr-8 text-xs bg-card"
+                      value={residentSearch}
+                      onChange={(e) => setResidentSearch(e.target.value)}
+                    />
+                    {residentSearch && (
+                      <button
+                        type="button"
+                        aria-label="Xóa tìm kiếm"
+                        onClick={() => setResidentSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 shrink-0 rounded-xl px-3.5 text-xs font-medium"
+                    onClick={() => {
+                      if (filteredResidents.length === 1) {
+                        setResidentId(String(filteredResidents[0].id))
+                      }
+                    }}
+                  >
+                    Tìm
+                  </Button>
+                </div>
+              )}
               <select
                 id="change-resident"
                 className={SELECT}
@@ -752,8 +816,14 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 disabled={editing}
                 onChange={(e) => setResidentId(e.target.value)}
               >
-                <option value="">Người cao tuổi đang lưu trú</option>
-                {residents.map((r) => (
+                <option value="">
+                  {filteredResidents.length === 0
+                    ? 'Không tìm thấy người cao tuổi'
+                    : residentSearch
+                    ? `Người cao tuổi phù hợp (${filteredResidents.length})`
+                    : 'Người cao tuổi đang lưu trú'}
+                </option>
+                {filteredResidents.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.personalInfo?.fullName ?? `Mã ${r.id}`}
                   </option>
@@ -767,6 +837,43 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               <FieldLabel htmlFor="change-contract" className={REQUIRED}>
                 Hợp đồng
               </FieldLabel>
+              {!editing && (
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                    <Input
+                      id="contract-search-query"
+                      aria-label="Tìm kiếm hợp đồng"
+                      placeholder="Tìm theo họ tên hoặc số hợp đồng..."
+                      className="h-10 rounded-xl pl-9 pr-8 text-xs bg-card"
+                      value={contractSearch}
+                      onChange={(e) => setContractSearch(e.target.value)}
+                    />
+                    {contractSearch && (
+                      <button
+                        type="button"
+                        aria-label="Xóa tìm kiếm"
+                        onClick={() => setContractSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 shrink-0 rounded-xl px-3.5 text-xs font-medium"
+                    onClick={() => {
+                      if (filteredContracts.length === 1) {
+                        setContractId(String(filteredContracts[0].id))
+                      }
+                    }}
+                  >
+                    Tìm
+                  </Button>
+                </div>
+              )}
               <select
                 id="change-contract"
                 className={SELECT}
@@ -774,8 +881,14 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 disabled={editing}
                 onChange={(e) => setContractId(e.target.value)}
               >
-                <option value="">Hợp đồng đang hiệu lực</option>
-                {contracts.map((c) => (
+                <option value="">
+                  {filteredContracts.length === 0
+                    ? 'Không tìm thấy hợp đồng phù hợp'
+                    : contractSearch
+                    ? `Hợp đồng phù hợp (${filteredContracts.length})`
+                    : 'Hợp đồng đang hiệu lực'}
+                </option>
+                {filteredContracts.map((c) => (
                   <option key={c.id} value={c.id}>
                     {`${names[c.residentId] ?? `Mã ${c.residentId}`}, ${c.contractNumber}`}
                   </option>
