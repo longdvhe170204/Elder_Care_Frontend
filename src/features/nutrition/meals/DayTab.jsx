@@ -17,7 +17,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { Info, ReasonField, SELECT } from '../NutritionParts'
 import { useCommand, useLoad } from '../useNutrition'
-import { ADJUSTMENT_CHANGE, CLOSING_FLAG, MISSING_DATA, floorName, label } from '../nutritionView'
+import { ADJUSTMENT_CHANGE, CLOSING_FLAG, MISSING_DATA, label, slipGroupName } from '../nutritionView'
 
 // Bữa trong ngày (011 T027; FR-033 → FR-043, BR-M08-01, BR-M08-13): tính sẵn chỉ để xem, nút "Chốt suất" tách riêng và
 // hỏi lại trước khi chốt (mỗi bữa chỉ một lần, hệ thống không tự chốt; Q-306). Phát sinh sau chốt chờ bếp xác nhận;
@@ -27,24 +27,23 @@ function timeOf(iso) {
   return iso ? formatDateTime(iso).slice(11) : null
 }
 
-function ClosingTable({ result, floors, dietName }) {
-  const rows = result?.portionsByFloorArea ?? []
+// Tổng suất theo tầng/khu và phiếu nhân viên (FR-035, Q-445)
+function ClosingTable({ result, floors }) {
+  const rows = result?.portionsByGroup ?? []
   if (rows.length === 0)
     return <p className="type-body-sm text-muted-foreground">Chưa có người được tính suất ở bữa này.</p>
   return (
-    <Table aria-label="Số suất theo tầng/khu và chế độ ăn">
+    <Table aria-label="Số suất theo tầng/khu và phiếu nhân viên">
       <TableHeader>
         <TableRow className="hover:bg-transparent">
           <TableHead>Tầng/khu</TableHead>
-          <TableHead>Chế độ ăn</TableHead>
           <TableHead className="text-right">Số suất</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {rows.map((p) => (
-          <TableRow key={`${p.floorAreaId}-${p.dietId}`}>
-            <TableCell>{floorName(floors, p.floorAreaId)}</TableCell>
-            <TableCell>{dietName(p.dietId)}</TableCell>
+          <TableRow key={p.group === 'STAFF' ? 'staff' : p.floorAreaId}>
+            <TableCell>{slipGroupName(p, floors)}</TableCell>
             <TableCell className="text-right tabular-nums">{p.portionCount}</TableCell>
           </TableRow>
         ))}
@@ -136,7 +135,7 @@ function ExtraPortionForm({ meal, floors, residents, onClose, onDone }) {
   )
 }
 
-function DailyMealDetail({ meal, floors, diets, residents, kitchen, receiver, onChanged, Title, Description }) {
+function DailyMealDetail({ meal, floors, residents, kitchen, receiver, onChanged, Title, Description }) {
   const result = useLoad(
     () => getDailyMealsByIdPrecomputed({ path: { id: meal.dailyMealId } }).then((r) => r.data),
     [meal.dailyMealId, meal.closed],
@@ -150,7 +149,6 @@ function DailyMealDetail({ meal, floors, diets, residents, kitchen, receiver, on
   )
   const [mode, setMode] = useState(null)
   const { busy, failure, run } = useCommand()
-  const dietName = (id) => diets.find((d) => d.id === id)?.name ?? `Chế độ ăn mã ${id}`
   const r = result.data
 
   async function close() {
@@ -195,9 +193,9 @@ function DailyMealDetail({ meal, floors, diets, residents, kitchen, receiver, on
               </AlertDescription>
             </Alert>
           )}
-          <ClosingTable result={r} floors={floors} dietName={dietName} />
+          <ClosingTable result={r} floors={floors} />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Info label="Suất đặc biệt">{r.specialPortions}</Info>
+            <Info label="Suất nhân viên">{r.staffPortions}</Info>
             <Info label="Suất người thân ở lại">{r.familyMealPortions}</Info>
           </div>
         </>
@@ -211,7 +209,7 @@ function DailyMealDetail({ meal, floors, diets, residents, kitchen, receiver, on
             {adjustments.data.map((a) => (
               <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3">
                 <span className="type-body-sm">
-                  {`${label(ADJUSTMENT_CHANGE, a.changeType)} ${a.portionCount > 0 ? '+' : ''}${a.portionCount}, ${floorName(floors, a.floorAreaId)}, ${dietName(a.dietId)}`}
+                  {`${label(ADJUSTMENT_CHANGE, a.changeType)} ${a.portionCount > 0 ? '+' : ''}${a.portionCount}, ${slipGroupName(a, floors)}`}
                   {a.needsDelivery ? ', cần giao' : ''}
                 </span>
                 {a.kitchenConfirmedAt ? (
@@ -220,7 +218,7 @@ function DailyMealDetail({ meal, floors, diets, residents, kitchen, receiver, on
                   <Button
                     size="sm"
                     disabled={busy}
-                    aria-label={`Xác nhận phát sinh ${floorName(floors, a.floorAreaId)}`}
+                    aria-label={`Xác nhận phát sinh ${slipGroupName(a, floors)}`}
                     onClick={async () => {
                       if (await run(postAdjustmentsByIdConfirm, { path: { id: a.id } })) {
                         adjustments.reload()
@@ -283,7 +281,7 @@ function DailyMealDetail({ meal, floors, diets, residents, kitchen, receiver, on
   )
 }
 
-export function DayTab({ meals, floors, diets, residents, kitchen, receiver, openedKey, open, announce, reload }) {
+export function DayTab({ meals, floors, residents, kitchen, receiver, openedKey, open, announce, reload }) {
   function changed(message) {
     announce(message)
     reload()
@@ -295,7 +293,6 @@ export function DayTab({ meals, floors, diets, residents, kitchen, receiver, ope
         key={m.dailyMealId}
         meal={m}
         floors={floors}
-        diets={diets}
         residents={residents}
         kitchen={kitchen}
         receiver={receiver}

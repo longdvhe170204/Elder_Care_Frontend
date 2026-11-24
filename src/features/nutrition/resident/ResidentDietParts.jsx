@@ -61,10 +61,9 @@ function Choices({ label: text, options, value, onChange, error }) {
   )
 }
 
-// Ô lý do chuyên môn và ô "đã xem cảnh báo" mở theo lỗi 409 của lệnh áp dụng (FR-013, FR-016)
-function ApplyExtras({ failure, reason, setReason, seen, setSeen, submitted }) {
+// Ô lý do chuyên môn mở theo lỗi 409 của lệnh áp dụng (FR-013; Q-445 bỏ đối chiếu thực đơn)
+function ApplyExtras({ failure, reason, setReason, submitted }) {
   const needsReason = failure?.errorCode === 'PROFESSIONAL_REASON_REQUIRED'
-  const needsSeen = failure?.errorCode === 'WARNINGS_NOT_CONFIRMED'
   return (
     <>
       {needsReason && (
@@ -75,12 +74,6 @@ function ApplyExtras({ failure, reason, setReason, seen, setSeen, submitted }) {
           onChange={setReason}
           error={submitted && !reason.trim() ? 'Nhập lý do chuyên môn' : null}
         />
-      )}
-      {needsSeen && (
-        <Field orientation="horizontal" data-invalid={(submitted && !seen) || undefined}>
-          <Checkbox id="assignment-seen" checked={seen} onCheckedChange={(c) => setSeen(c === true)} />
-          <FieldLabel htmlFor="assignment-seen">Đã xem các cảnh báo xung đột trên</FieldLabel>
-        </Field>
       )}
     </>
   )
@@ -99,7 +92,6 @@ export function ProposeSheet({ resident, diets, allergens, notices, onClose, onD
   const [submitted, setSubmitted] = useState(false)
   const [result, setResult] = useState(null)
   const [professional, setProfessional] = useState('')
-  const [seen, setSeen] = useState(false)
   const { busy, failure, run } = useCommand()
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
   const errors = {
@@ -134,9 +126,7 @@ export function ProposeSheet({ resident, diets, allergens, notices, onClose, onD
   async function apply() {
     setSubmitted(true)
     if (result.check.professionalReasonRequired && !professional.trim()) return
-    const codes = result.check.warningCodes ?? []
-    if (codes.length > 0 && !seen) return
-    const body = { confirmedWarnings: codes, ...(professional.trim() && { professionalReason: professional.trim() }) }
+    const body = { ...(professional.trim() && { professionalReason: professional.trim() }) }
     if (await run(postDietAssignmentsByIdApply, { path: { id: result.id }, body })) onDone('Đã áp dụng bản gán')
   }
   return (
@@ -148,10 +138,7 @@ export function ProposeSheet({ resident, diets, allergens, notices, onClose, onD
         </SheetDescription>
         {result ? (
           <div className="mt-4 flex flex-col gap-3">
-            <p className="type-body-sm">Đã lập đề xuất. Xem kết quả đối chiếu rồi áp dụng, hoặc đóng để áp dụng sau.</p>
-            {(result.check.allergies?.length ?? 0) > 0 && (
-              <p className="type-body-sm">{`Có ${result.check.allergies.length} món trong thực đơn chưa hết tuần xung đột với người này và chưa có món thay thế phù hợp.`}</p>
-            )}
+            <p className="type-body-sm">Đã lập đề xuất. Áp dụng ngay, hoặc đóng để áp dụng sau.</p>
             {result.check.professionalReasonRequired && (
               <ReasonField
                 id="propose-professional"
@@ -160,12 +147,6 @@ export function ProposeSheet({ resident, diets, allergens, notices, onClose, onD
                 onChange={setProfessional}
                 error={submitted && !professional.trim() ? 'Nhập lý do chuyên môn' : null}
               />
-            )}
-            {(result.check.warningCodes?.length ?? 0) > 0 && (
-              <Field orientation="horizontal" data-invalid={(submitted && !seen) || undefined}>
-                <Checkbox id="propose-seen" checked={seen} onCheckedChange={(c) => setSeen(c === true)} />
-                <FieldLabel htmlFor="propose-seen">{`Đã xem ${result.check.warningCodes.length} cảnh báo xung đột`}</FieldLabel>
-              </Field>
             )}
             <ProblemAlert problem={failure} />
             <div className="flex justify-end gap-2">
@@ -283,20 +264,13 @@ export function PendingAssignment({ assignment, dietName, doctor, onChanged }) {
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
   const [professional, setProfessional] = useState('')
-  const [seen, setSeen] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const { busy, failure, setFailure, run } = useCommand()
-  // Mã cảnh báo FR-016 lấy từ 409 của lần áp dụng trước (unmetConditions; chủ dự án chọn 2026-11-08)
-  const warnings = failure?.errorCode === 'WARNINGS_NOT_CONFIRMED' ? failure.unmetConditions.map((u) => u.code) : []
 
   async function apply() {
     setSubmitted(true)
     if (failure?.errorCode === 'PROFESSIONAL_REASON_REQUIRED' && !professional.trim()) return
-    if (warnings.length > 0 && !seen) return
-    const body = {
-      confirmedWarnings: seen ? warnings : [],
-      ...(professional.trim() && { professionalReason: professional.trim() }),
-    }
+    const body = { ...(professional.trim() && { professionalReason: professional.trim() }) }
     if (await run(postDietAssignmentsByIdApply, { path: { id: assignment.id }, body })) onChanged('Đã áp dụng bản gán')
   }
 
@@ -313,8 +287,6 @@ export function PendingAssignment({ assignment, dietName, doctor, onChanged }) {
           failure={failure}
           reason={professional}
           setReason={setProfessional}
-          seen={seen}
-          setSeen={setSeen}
           submitted={submitted}
         />
       )}

@@ -19,7 +19,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
-import { CheckList, Info, ReasonField, SELECT } from '../NutritionParts'
+import { CheckList, Info, ReasonField } from '../NutritionParts'
 import { useCommand, useLoad } from '../useNutrition'
 import { CATALOG_STATUS, label } from '../nutritionView'
 
@@ -58,14 +58,13 @@ function SheetFrame({ title, description, onClose, failure, busy, submitLabel, o
   )
 }
 
-function DietForm({ allergens, activeDishes, onClose, onDone }) {
+function DietForm({ allergens, onClose, onDone }) {
   const [form, setForm] = useState({
     name: '',
     description: '',
     treatmentRelated: false,
     isDefault: false,
     restrictions: [],
-    safeDishId: '',
   })
   const [submitted, setSubmitted] = useState(false)
   const { busy, failure, run } = useCommand()
@@ -74,13 +73,13 @@ function DietForm({ allergens, activeDishes, onClose, onDone }) {
   async function submit() {
     setSubmitted(true)
     if (!form.name.trim()) return
-    const body = { ...form, name: form.name.trim(), safeDishId: form.safeDishId ? Number(form.safeDishId) : null }
+    const body = { ...form, name: form.name.trim() }
     if (await run(postNutritionDiets, { body })) onDone('Đã thêm chế độ ăn')
   }
   return (
     <SheetFrame
       title="Thêm chế độ ăn"
-      description="Món an toàn là món dùng khi không còn món phù hợp cho người dùng chế độ này (FR-005, FR-037a)."
+      description="Chế độ ăn là ghi chú hồ sơ cho người chăm sóc khi phục vụ bữa ăn (Q-445)."
       onClose={onClose}
       failure={failure}
       busy={busy}
@@ -126,27 +125,11 @@ function DietForm({ allergens, activeDishes, onClose, onDone }) {
         value={form.restrictions}
         onChange={(restrictions) => set({ restrictions })}
       />
-      <Field>
-        <FieldLabel htmlFor="diet-safe-dish">Món an toàn</FieldLabel>
-        <select
-          id="diet-safe-dish"
-          className={SELECT}
-          value={form.safeDishId}
-          onChange={(e) => set({ safeDishId: e.target.value })}
-        >
-          <option value="">Chưa chọn</option>
-          {activeDishes.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-      </Field>
     </SheetFrame>
   )
 }
 
-function DietDetail({ diet, allergens, dishes, doctor, onChanged, Title, Description }) {
+function DietDetail({ diet, allergens, doctor, onChanged, Title, Description }) {
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -167,10 +150,6 @@ function DietDetail({ diet, allergens, dishes, doctor, onChanged, Title, Descrip
       <div className="grid gap-3">
         {diet.description && <Info label="Mô tả">{diet.description}</Info>}
         <Info label="Thành phần hạn chế">{names(diet.restrictions)}</Info>
-        <Info label="Món an toàn">
-          {dishes.find((d) => d.id === diet.safeDishId)?.name ??
-            (diet.safeDishId ? `Món mã ${diet.safeDishId}` : 'Chưa chọn')}
-        </Info>
       </div>
       <ProblemAlert problem={failure} />
       {doctor && diet.status === 'ACTIVE' && !diet.isDefault && (
@@ -254,7 +233,7 @@ function IngredientForm({ onClose, onDone }) {
   )
 }
 
-export function DietsTab({ diets, allergens, dishes, doctor, openedKey, open, announce, reloadShared }) {
+export function DietsTab({ diets, allergens, doctor, openedKey, open, announce, reloadShared }) {
   const [sheet, setSheet] = useState(null)
 
   function changed(message) {
@@ -269,7 +248,6 @@ export function DietsTab({ diets, allergens, dishes, doctor, openedKey, open, an
         key={d.id}
         diet={d}
         allergens={allergens}
-        dishes={dishes}
         doctor={doctor}
         onChanged={changed}
         {...titles}
@@ -298,7 +276,6 @@ export function DietsTab({ diets, allergens, dishes, doctor, openedKey, open, an
       {sheet === 'diet' && (
         <DietForm
           allergens={allergens}
-          activeDishes={dishes.filter((d) => d.status === 'ACTIVE')}
           onClose={() => setSheet(null)}
           onDone={changed}
         />

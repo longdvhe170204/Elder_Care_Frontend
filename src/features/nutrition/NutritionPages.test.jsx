@@ -67,8 +67,8 @@ it('Suất ăn: bếp chốt suất sau bước xác nhận, ghi Idempotency-Key
     'GET',
     '/daily-meals/9/precomputed',
     json(200, {
-      portionsByFloorArea: [{ floorAreaId: 5, dietId: 1, portionCount: 4 }],
-      specialPortions: 0,
+      portionsByGroup: [{ group: 'FLOOR', floorAreaId: 5, portionCount: 4 }],
+      staffPortions: 0,
       familyMealPortions: 0,
       flags: [],
       missingData: [],

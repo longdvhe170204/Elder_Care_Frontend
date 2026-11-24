@@ -78,7 +78,7 @@ export const getFamilyPortalResidents = (params) => request('GET', '/family-port
 /** Thông tin chung: họ tên, ảnh, phòng, trạng thái, lượt vắng, lịch đến/về, lượt thăm và phản hồi của mình, thực đơn chung (bản tin bỏ theo Q-396) (FR-046, FR-047) */
 export const getFamilyPortalResidentsByResidentIdGeneral = (params) => request('GET', '/family-portal/residents/{residentId}/general', params)
 
-/** Lịch chăm sóc hằng ngày (bổ sung 2026-11-22, Q-416): giờ bữa, hoạt động, mốc sinh hoạt, công việc chăm sóc và trạng thái; giá trị đo chỉ khi quyền xem sức khỏe có tác dụng; mặc định hôm nay (FR-076) */
+/** Lịch chăm sóc hằng ngày (bổ sung 2026-11-22, Q-440): giờ bữa, hoạt động, mốc sinh hoạt, công việc chăm sóc và trạng thái; giá trị đo chỉ khi quyền xem sức khỏe có tác dụng; mặc định hôm nay (FR-076) */
 export const getFamilyPortalResidentsByResidentIdDailyCareSchedule = (params) => request('GET', '/family-portal/residents/{residentId}/daily-care-schedule', params)
 
 /** Phần sức khỏe (chỉ khi quyền xem sức khỏe có tác dụng); mỗi lần mở ghi nhật ký lượt xem (FR-046, FR-047, FR-048, BR-M10-01, DBR-03) */
@@ -114,7 +114,7 @@ export const postResidentsByResidentIdVisitPickupWishes = (params) => request('P
 /** Lịch sinh hoạt hôm nay của chính người cao tuổi (hoạt động, lượt thăm, lịch đến/về bán trú) (FR-083, BR-M10-11) */
 export const getResidentChannelToday = (params) => request('GET', '/resident-channel/today', params)
 
-/** Lịch chăm sóc hằng ngày của chính mình (bổ sung 2026-11-22, Q-416): không có giá trị đo, liều thuốc; mặc định hôm nay (FR-083) */
+/** Lịch chăm sóc hằng ngày của chính mình (bổ sung 2026-11-22, Q-440): không có giá trị đo, liều thuốc; mặc định hôm nay (FR-083) */
 export const getResidentChannelDailyCareSchedule = (params) => request('GET', '/resident-channel/daily-care-schedule', params)
 
 /** Thực đơn tuần đã công bố và suất ăn dự kiến của mình (món, món thay thế; không có chế độ ăn, dị ứng) (FR-083, FR-084, BR-M10-11) */

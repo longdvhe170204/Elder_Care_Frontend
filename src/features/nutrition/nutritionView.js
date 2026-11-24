@@ -7,7 +7,6 @@ export const CATALOG_STATUS = { ACTIVE: 'Hiệu lực', INACTIVE: 'Ngừng hiệ
 
 export const DISH_STATUS = {
   DRAFT: 'Nháp',
-  PENDING_CONFIRMATION: 'Chờ xác nhận',
   ACTIVE: 'Hiệu lực',
   INACTIVE: 'Ngừng hiệu lực',
   CANCELLED: 'Đã hủy',
@@ -15,7 +14,7 @@ export const DISH_STATUS = {
 
 export const MENU_STATUS = {
   DRAFT: 'Nháp',
-  PENDING_PUBLICATION: 'Chờ công bố',
+  PENDING_PUBLICATION: 'Chờ duyệt',
   PUBLISHED: 'Đã công bố',
   APPLIED: 'Đã áp dụng',
   CANCELLED: 'Đã hủy',
@@ -68,20 +67,10 @@ export const FAMILY_FOOD_REASON = {
 export const CLOSING_FLAG = {
   NO_MENU: 'Chưa có thực đơn công bố',
   CLOSED_AFTER_MEAL_TIME: 'Chốt sau giờ bữa',
-  MISSING_SUBSTITUTE_DISH: 'Thiếu món thay thế',
-  NO_DIET_ASSIGNED: 'Có người chưa gán chế độ ăn',
 }
 
-// Dấu của suất đặc biệt trên nhãn phiếu (FR-040a, FR-036a, FR-037a)
-export const PORTION_FLAG = {
-  EXPECTED_RETURN: 'Dự kiến trở về',
-  NEEDS_CROSS_CHECK: 'Cần đối chiếu dị ứng loại khác',
-  MISSING_SUBSTITUTE_DISH: 'Thiếu món thay thế',
-  SAFE_DISH: 'Món an toàn',
-  NO_DISH_IN_MENU: 'Thực đơn không có món',
-  NO_DIET_ASSIGNED: 'Chưa gán chế độ ăn',
-  HELD_PORTION: 'Suất giữ',
-}
+// Trạng thái suất giữ trên phiếu của tầng (FR-040a)
+export const HELD_STATUS = { HELD: 'Đang giữ', SERVED: 'Đã phục vụ', DISCARDED: 'Đã hủy bỏ' }
 
 export const ADJUSTMENT_CHANGE = {
   ADDED: 'Thêm suất',
@@ -91,67 +80,49 @@ export const ADJUSTMENT_CHANGE = {
   PORTION_CHANGED: 'Đổi suất',
 }
 
-export const MISSING_DATA = { STAY: 'Chưa đọc được lượt người thân ở lại', TRIP: 'Chưa đọc được chuyến đi ngoài viện' }
+export const MISSING_DATA = {
+  STAY: 'Chưa đọc được lượt người thân ở lại',
+  TRIP: 'Chưa đọc được chuyến đi ngoài viện',
+  SHIFT: 'Chưa đọc được lịch ca nhân viên',
+}
 
 export const REVIEW_SOURCE = { PROLONGED_POOR_EATING: 'Ăn kém kéo dài', WEIGHT_LOSS: 'Sụt cân' }
 
 export const label = (map, code) => (code == null ? '—' : (map[code] ?? code))
 
-// Món đang hiệu lực hiển thị theo nội dung `effective`; món Nháp chưa có thì dùng bản sửa chờ
-export function dishContent(dish) {
-  return dish.effective ?? dish.pendingRevision ?? null
-}
-
-// Lệnh trên món theo bảng trạng thái (FR-004, FR-004a). Bếp lập, Bác sĩ xác nhận; backend kiểm lại.
-export function dishCommands(dish, { kitchen, doctor }) {
-  const out = []
-  const s = dish.status
-  if (kitchen && s === 'DRAFT') out.push('submit', 'cancel')
-  if (kitchen && s === 'PENDING_CONFIRMATION') out.push('withdraw')
-  if (doctor && s === 'PENDING_CONFIRMATION') out.push('confirm', 'return')
-  if (s === 'ACTIVE' && dish.pendingRevision) {
-    if (kitchen) out.push('withdraw-revision')
-    if (doctor) out.push('confirm-revision', 'return-revision')
-  }
-  if (s === 'ACTIVE' && (kitchen || doctor)) out.push('deactivate')
-  return out
+// Lệnh trên món theo bảng trạng thái (FR-004a, Q-445): Nhân viên bếp đưa vào dùng, hủy món Nháp, ngừng món Hiệu lực.
+export function dishCommands(dish, { kitchen }) {
+  if (!kitchen) return []
+  if (dish.status === 'DRAFT') return ['activate', 'cancel']
+  if (dish.status === 'ACTIVE') return ['deactivate']
+  return []
 }
 
 export const DISH_COMMAND = {
-  submit: 'Gửi xác nhận',
+  activate: 'Đưa vào dùng',
   cancel: 'Hủy món',
-  withdraw: 'Rút lại',
-  confirm: 'Xác nhận món',
-  return: 'Trả lại…',
-  'confirm-revision': 'Xác nhận bản sửa',
-  'return-revision': 'Trả lại bản sửa…',
-  'withdraw-revision': 'Rút bản sửa',
   deactivate: 'Ngừng hiệu lực…',
 }
 
-// Lệnh cần lý do (FR-004a: trả lại; ngừng)
-export const DISH_REASON_COMMANDS = new Set(['return', 'return-revision', 'deactivate', 'cancel'])
+// Lệnh cần lý do (FR-004a: ngừng hiệu lực)
+export const DISH_REASON_COMMANDS = new Set(['deactivate'])
 
-export function menuCommands(menu, { kitchen, doctor }) {
+// Lệnh trên thực đơn (FR-029, Q-445): Bếp gửi duyệt, rút lại, hủy; Quản lý viện công bố hoặc trả lại.
+export function menuCommands(menu, { kitchen, manager }) {
   const s = menu.status
   const out = []
   if (kitchen && s === 'DRAFT') out.push('submit', 'cancel')
   if (kitchen && s === 'PENDING_PUBLICATION') out.push('withdraw')
-  if (doctor && s === 'PENDING_PUBLICATION') out.push('publish', 'return')
+  if (manager && s === 'PENDING_PUBLICATION') out.push('publish', 'return')
   return out
 }
 
 export const MENU_COMMAND = {
-  submit: 'Gửi công bố',
+  submit: 'Gửi duyệt',
   cancel: 'Hủy thực đơn…',
   withdraw: 'Rút lại',
   publish: 'Công bố thực đơn',
   return: 'Trả lại…',
-}
-
-// Mã cảnh báo của lần kiểm tra cần xác nhận đã xem trước khi gửi, công bố (FR-025 b, c)
-export function warningCodes(check) {
-  return check?.warningCodes ?? []
 }
 
 // Ngày trong tuần bắt đầu từ thứ Hai (yyyy-MM-dd), ISO 1 = thứ Hai
@@ -181,16 +152,14 @@ export function addDays(date, days) {
   return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10)
 }
 
-// Món của một ô (ngày, bữa, chế độ ăn) trong nội dung thực đơn
-export function cellDishes(content, date, mealId, dietId) {
-  return (content?.dishes ?? []).filter((r) => r.date === date && r.mealId === mealId && r.dietId === dietId)
+// Món của một ô (ngày, bữa) trong thực đơn chung, theo thứ tự (Q-445)
+export function cellDishes(content, date, mealId) {
+  return (content?.dishes ?? []).filter((r) => r.date === date && r.mealId === mealId)
 }
 
-// Tổng suất theo chế độ ăn của kết quả tính sẵn / chốt (cộng các tầng/khu)
-export function portionsByDiet(result) {
-  const totals = new Map()
-  for (const p of result?.portionsByFloorArea ?? []) totals.set(p.dietId, (totals.get(p.dietId) ?? 0) + p.portionCount)
-  return [...totals.entries()].map(([dietId, portionCount]) => ({ dietId, portionCount }))
+// Tên nhóm phiếu: tầng/khu hoặc phiếu nhân viên (FR-044, Q-445)
+export function slipGroupName(slip, floors) {
+  return slip.group === 'STAFF' ? 'Phiếu nhân viên' : (slip.floorArea ?? floorName(floors ?? [], slip.floorAreaId))
 }
 
 // Lệnh trên phiếu theo trạng thái và phía xem (bếp hay tầng; FR-047, FR-048)

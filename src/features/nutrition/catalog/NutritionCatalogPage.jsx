@@ -53,7 +53,7 @@ export function NutritionCatalogPage({ today = todayInVietnam() }) {
 
   const current = tabs.some(([k]) => k === tab) ? tab : tabs[0][0]
   const kitchen = can('DISH_MENU', 'CREATE')
-  const doctor = can('DISH_MENU', 'APPROVE')
+  const manager = can('DISH_MENU', 'APPROVE')
   const data = shared.data ?? { diets: [], dishes: [], meals: [], allergens: [] }
   const activeMeals = data.meals.filter((m) => m.status === 'ACTIVE')
   const props = {
@@ -90,21 +90,19 @@ export function NutritionCatalogPage({ today = todayInVietnam() }) {
         <MenusTab
           today={today}
           meals={activeMeals}
-          diets={data.diets}
           dishes={data.dishes}
           kitchen={kitchen}
-          doctor={doctor}
+          manager={manager}
           {...props}
         />
       )}
       {current === 'dishes' && (
-        <DishesTab allergens={data.allergens} diets={data.diets} kitchen={kitchen} doctor={doctor} {...props} />
+        <DishesTab kitchen={kitchen} {...props} />
       )}
       {current === 'diets' && (
         <DietsTab
           diets={data.diets}
           allergens={data.allergens}
-          dishes={data.dishes}
           doctor={can('DIET', 'CREATE')}
           reloadShared={shared.reload}
           {...props}
