@@ -279,3 +279,16 @@ it('nutGomChiPhiPhatSinh_moManGom', async () => {
   expect(await screen.findByRole('heading', { name: 'Gom chi phí phát sinh' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Gom toàn bộ chi phí chưa lập' })).toBeInTheDocument()
 })
+
+// Demo 2026-11-25 (E, chờ chủ dự án duyệt): bảng kỳ cuối do Hành chính chốt luôn khi gửi; Quản lý viện chỉ được báo
+it('bangKyCuoi_hanhChinhChotLuon_nhanNutVaHopXacNhan', async () => {
+  statement = { ...statement, finalPeriod: true }
+  api.on('POST', '/costs/statements/31/submit-for-finalization', json(200, {}))
+  await openStatement()
+  expect(screen.queryByRole('button', { name: 'Gửi chốt' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Chốt bảng kỳ cuối' }))
+  const dialog = screen.getByRole('dialog', { name: 'Xác nhận chốt bảng kỳ cuối' })
+  expect(within(dialog).getByText(/Khoản nhập tay, mua hộ, điều chỉnh/)).toBeInTheDocument()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận chốt bảng kỳ cuối' }))
+  await waitFor(() => expect(api.calls('POST', '/costs/statements/31/submit-for-finalization')).toHaveLength(1))
+})
