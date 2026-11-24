@@ -424,7 +424,7 @@ function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial 
         {errors.respondentId && <FieldError>{errors.respondentId}</FieldError>}
       </Field>
 
-      <OpinionEditor idPrefix="tw" items={opinions} onChange={setOpinions} error={errors.opinions} />
+      <OpinionEditor idPrefix="tw" residentId={residentId} items={opinions} onChange={setOpinions} error={errors.opinions} />
 
       <FileField
         id="tw-signed-copy"
