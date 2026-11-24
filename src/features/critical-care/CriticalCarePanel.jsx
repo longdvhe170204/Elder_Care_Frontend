@@ -100,7 +100,7 @@ function useCommand(send, onDone) {
   return { busy, problem, done, run }
 }
 
-function RecordFlag({ residentId, onChanged }) {
+function RecordFlag({ residentId, onChanged, onFlagExists }) {
   const [type, setType] = useState('')
   const [assessment, setAssessment] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -113,6 +113,10 @@ function RecordFlag({ residentId, onChanged }) {
       }),
     onChanged,
   )
+  const flagExists = command.problem?.errorCode === 'CRITICAL_FLAG_EXISTS'
+  useEffect(() => {
+    if (flagExists) onFlagExists?.()
+  }, [flagExists, onFlagExists])
   function submit(event) {
     event.preventDefault()
     setSubmitted(true)
@@ -146,7 +150,7 @@ function RecordFlag({ residentId, onChanged }) {
   )
 }
 
-function FlagActions({ flagId, onChanged }) {
+export function FlagActions({ flagId, onChanged, showConfirm = true }) {
   const [removing, setRemoving] = useState(false)
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -166,15 +170,23 @@ function FlagActions({ flagId, onChanged }) {
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        <Button variant="tonal" className="h-11" disabled={confirm.busy || confirm.done} onClick={confirm.run}>
-          Xác nhận dấu tạm
-        </Button>
+        {showConfirm && (
+          <Button variant="tonal" className="h-11" disabled={confirm.busy || confirm.done} onClick={confirm.run}>
+            Xác nhận dấu tạm
+          </Button>
+        )}
         {!removing && (
           <Button variant="outline" className="h-11" onClick={() => setRemoving(true)}>
             Gỡ dấu
           </Button>
         )}
       </div>
+      {showConfirm && (
+        <p className="type-caption text-muted-foreground">
+          "Xác nhận dấu tạm" chỉ dùng khi Điều dưỡng ghi dấu tạm lúc không có Bác sĩ trực; dấu chính thức không cần xác
+          nhận.
+        </p>
+      )}
       <ProblemAlert problem={confirm.problem} />
       {confirm.done && <p role="status">Đã xác nhận dấu.</p>}
       {removing && (
@@ -281,7 +293,7 @@ function useIncidentTypes(enabled) {
   return types
 }
 
-function ExecuteChoice({ alertId, needsIncident, onChanged }) {
+function ExecuteChoice({ alertId, residentId, needsIncident, onChanged }) {
   const [choice, setChoice] = useState('')
   const [reason, setReason] = useState('')
   const [unit, setUnit] = useState('')
@@ -313,6 +325,9 @@ function ExecuteChoice({ alertId, needsIncident, onChanged }) {
       }),
     onChanged,
   )
+  // Backend (BR-M05-16) từ chối thiếu lý do bằng 422; báo ngay tại ô lý do thay vì chỉ ở khung lỗi chung
+  const reasonRequired =
+    command.problem?.status === 422 && /lý do/i.test(command.problem.detail ?? '') && !reason.trim()
   return (
     <form
       noValidate
@@ -372,6 +387,7 @@ function ExecuteChoice({ alertId, needsIncident, onChanged }) {
           />
           <HandoverStaffField
             id="choice-handover-staff"
+            residentId={residentId}
             value={staffId}
             onChange={setStaffId}
             invalid={submitted && !staffId}
@@ -384,6 +400,8 @@ function ExecuteChoice({ alertId, needsIncident, onChanged }) {
         area
         value={reason}
         onChange={setReason}
+        invalid={reasonRequired}
+        error="Nhập lý do: bắt buộc khi không liên lạc được người nào và chưa có nguyện vọng"
       />
       <ProblemAlert problem={command.problem} />
       {command.done && <p role="status">Đã ghi lựa chọn thực hiện.</p>}
@@ -405,11 +423,11 @@ function Section({ title, children }) {
   )
 }
 
-export function CriticalCarePanel({ residentId, alert, onChanged }) {
+export function CriticalCarePanel({ residentId, alert, onChanged, onFlagExists }) {
   if (!alert?.criticalFlagId) {
     return (
       <Section title="Ghi dấu nguy kịch">
-        <RecordFlag residentId={residentId} onChanged={onChanged} />
+        <RecordFlag residentId={residentId} onChanged={onChanged} onFlagExists={onFlagExists} />
       </Section>
     )
   }
@@ -422,7 +440,12 @@ export function CriticalCarePanel({ residentId, alert, onChanged }) {
         <Reconfirmation alertId={alert.id} onChanged={onChanged} />
       </Section>
       <Section title="Thực hiện lựa chọn">
-        <ExecuteChoice alertId={alert.id} needsIncident={!alert.incidentId} onChanged={onChanged} />
+        <ExecuteChoice
+          alertId={alert.id}
+          residentId={residentId}
+          needsIncident={!alert.incidentId}
+          onChanged={onChanged}
+        />
       </Section>
     </div>
   )

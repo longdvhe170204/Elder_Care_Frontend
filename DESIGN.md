@@ -1,9 +1,9 @@
 ---
 name: Elder_Care
-version: 6.22.2
+version: 6.26.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
-updated: 2026-11-21
+updated: 2026-11-23
 direction: Dòng thời gian ca (hướng 3): nền trơn, menu xanh đêm đậm, trạng thái là chữ màu
 colors:
   light:
@@ -163,6 +163,7 @@ Các màn web giống nhau nhờ dùng chung một số kiểu bố cục đã d
 
 - Làm hay sửa một màn: chọn một mẫu trong bảng và ghi tên mẫu trong mô tả PR. Trong một mẫu được đổi thứ tự khối, cột, nhóm lọc, câu chữ; không đổi khung, component dùng chung, cách mở chi tiết.
 - Không mẫu nào hợp, hoặc muốn lai hai mẫu: đề xuất phương án (trang so sánh, mục 13 điều 2) → chủ dự án duyệt → thêm dòng vào bảng này, tăng phiên bản → mới sửa mã. Bố cục chỉ một màn dùng thì ghi là bố cục riêng của màn đó, chưa thành mẫu; khi màn thứ hai cần thì mới thêm vào bảng và tách component ra `src/common`.
+- Bố cục riêng đề xuất, chờ chủ dự án duyệt (6.23.0, Đức Anh 2026-11-23): hồ sơ xử lý cả trang của Sự cố và form ghi theo bước của Sự cố, Cảnh báo (mục 5.4).
 - Bố cục riêng đã duyệt, chưa là mẫu: Tổng quan "Cột chú ý" (`dashboard/DashboardPage.jsx`, mục 5.1, 7.2 `dashboard-attention`); cổng người thân (mục 2.1, 2.3).
 - Chưa có màn tham chiếu: Phòng, giường dạng thẻ phòng (`room-card`, mục 14 "Chưa thiết kế"). Màn chưa áp 6.x (mục 14) không lấy làm mẫu để chép.
 - Skill `/ui-redesign` (mục 12) đi theo mục này khi dùng AI sửa bố cục.
@@ -258,7 +259,7 @@ Cổng người thân là bản web (`src/features/family-portal/`, đường d�
 - **Máy tính (từ 1024px):** 5 mục trên đầu trang dạng viên thuốc (Trang chủ, Hôm nay, Thăm, Thông báo, Thêm; Q-396 bỏ Bản tin). Trang chủ rộng toàn màn như mục 2.1; các màn khác rộng tối đa 960px; Hôm nay chia hai cột, thẻ người cao tuổi chiếm cả hàng.
 - **Điện thoại:** thanh dưới 4 mục (Trang chủ, Hôm nay, Thăm, Thêm), cao 56px, mục đang chọn có nền xanh trời quanh biểu tượng; Thông báo là nút chuông ở đầu trang. Một cột.
 - Số việc chờ người xem (thông báo cần xác nhận đã nhận, việc chờ người đại diện quyết định) hiện trên Thông báo bằng viên xanh đêm, không dùng đỏ.
-- **Hiện theo quyền:** mục người thân không có quyền thì không hiện (spec 012 User Story 5): không có quyền xem sức khỏe thì không có mục Sức khỏe, lịch không có giờ thuốc, công việc chăm sóc; trong sự cố, phần sức khỏe thay bằng dòng khóa của mục 2.2. Chi phí cho người có quyền xem chi phí; hợp đồng, việc chờ quyết định cho người đại diện; đồ gửi cho người đại diện và người được phép đón. Khoản thuốc chỉ hiện mã vật phẩm khi người xem không có quyền xem sức khỏe.
+- **Hiện theo quyền:** mục người thân không có quyền thì không hiện (spec 012 User Story 5): không có quyền xem sức khỏe thì không có mục Sức khỏe, lịch không có giờ thuốc; mục "Lịch chăm sóc hằng ngày" (ở "Thêm", spec 012 FR-076, Q-440) hiện cho mọi người thân có quan hệ Hiệu lực: mốc chung, giờ bữa, hoạt động chỉ giờ và tên, công việc chăm sóc có tên và trạng thái Hoàn thành / Chưa hoàn thành / Không thực hiện, giá trị đo chỉ khi có quyền xem sức khỏe có tác dụng; trong sự cố, phần sức khỏe thay bằng dòng khóa của mục 2.2. Chi phí cho người có quyền xem chi phí; hợp đồng, việc chờ quyết định cho người đại diện; đồ gửi cho người đại diện và người được phép đón. Khoản thuốc chỉ hiện mã vật phẩm khi người xem không có quyền xem sức khỏe.
 - **Trang Tài khoản** liệt kê quyền của người xem (Có, Không) để người thân biết mình được xem gì; không sửa quyền ở đây.
 - **Lệnh của người thân** theo cùng quy tắc form (mục 7.2): từ chối, mở lại bắt buộc lý do; đăng ký thăm từ chối ngay kèm lý do cụ thể, không tạo lượt.
 - **Bản mẫu:** hiện theo một người thân có đủ quyền (người đại diện, người liên hệ chính, có tên trong bản đồng ý) để thấy mọi phần; quy tắc ẩn theo quyền vẫn có trong mã.
@@ -358,7 +359,7 @@ Từ 6.0.0 `StatusBadge` hiện **chữ màu 12/500, không nền, không viền
 | `settled` | Chữ xanh lá | Thông báo Đã xem, Đã xác nhận; liên hệ trực tiếp Đã liên hệ; lượt nhắc gọi Đã có kết quả; kênh thông báo Đang bật; Công việc Hoàn thành; liều thuốc Đã dùng; cảnh báo Đã đóng; bàn giao Đã xác nhận; người cao tuổi Đang lưu trú; lượt thăm Đã duyệt; phản hồi Đã phản hồi; hợp đồng Hiệu lực; quan hệ người thân Hiệu lực; quyết định của người thân Đã đồng ý, Đã xác nhận; yêu cầu phê duyệt Đã duyệt, Đã áp dụng; tài khoản Hoạt động; kết quả đồng bộ Đã nhận; buổi hoạt động Đã điểm danh; lượt ở lại Đã xác nhận; bản ghi đón Đã dùng; yêu cầu mua sắm Đã duyệt, Đã đối chiếu; lịch xe Đã hoàn thành |
 | `held` | Chữ xanh trời đậm, viền cùng màu, nền trong | Giường Đang giữ chỗ (ghi kèm lý do) |
 | `occupied` | Chữ xanh chàm | Giường Đang sử dụng; lượt thăm Đã vào; lượt ở lại Đang ở lại; tài sản Đang sử dụng; lịch xe Đang dùng |
-| `neutral` | Chữ phụ | Thông báo mức Nhẹ, Chờ hết giờ yên tĩnh, Đã gửi, Không gửi; liên hệ trực tiếp Không liên hệ được; kênh thông báo Đã tắt; lỗi gửi (trừ Gửi thất bại); Lưu ý chăm sóc (`CareNote`, chữ chính trên nền phụ, biểu tượng thông tin); công việc Chưa đến hạn, Hoàn thành trễ, Không thực hiện, Hủy; giường Trống, Đang bảo trì, Tạm ngừng sử dụng, Không sử dụng; người cao tuổi ở trạng thái cuối; lượt thăm Đã ra, Không đến, Hủy; quan hệ người thân Đã kết thúc; phản hồi Mới, Đóng; đồ gửi Đang giữ, Đang được người cao tuổi sử dụng; kỳ chi phí Tạm tính, Đã chốt; quyết định Đã từ chối; liều thuốc Chưa đến giờ, Từ chối, Không thực hiện, Tạm dừng, Mang theo, Đã hủy; cảnh báo, sự cố mức Nhẹ; cảnh báo Đã tiếp nhận, Chuyển sự cố; bàn giao Bản nháp, Đã lập; bản ghi Đã đính chính, Đã hủy ghi nhận (`CorrectionBadge`); yêu cầu phê duyệt Nháp, Từ chối, Đã hủy; tài khoản Không hoạt động; quyền Theo ma trận; buổi hoạt động Đã lên lịch, Đã hủy; đăng ký buổi Đã đăng ký, Đã hủy; lượt ở lại Đã kết thúc, Từ chối, Hủy; bản ghi đón Chưa dùng, Không dùng; yêu cầu mua sắm Nháp, Từ chối, Đã hủy; tài sản Sẵn sàng, Đang bảo trì, Đã thanh lý; lịch xe Đã đặt, Đã hủy |
+| `neutral` | Chữ phụ | Thông báo mức Nhẹ, Chờ hết giờ yên tĩnh, Đã gửi, Không gửi; liên hệ trực tiếp Không liên hệ được; kênh thông báo Đã tắt; lỗi gửi (trừ Gửi thất bại); Lưu ý chăm sóc (`CareNote`, chữ chính trên nền phụ, biểu tượng thông tin); công việc Chưa đến hạn, Hoàn thành trễ, Không thực hiện, Hủy; công việc Chưa hoàn thành (Lịch chăm sóc hằng ngày của cổng người thân, Q-440); giường Trống, Đang bảo trì, Tạm ngừng sử dụng, Không sử dụng; người cao tuổi ở trạng thái cuối; lượt thăm Đã ra, Không đến, Hủy; quan hệ người thân Đã kết thúc; phản hồi Mới, Đóng; đồ gửi Đang giữ, Đang được người cao tuổi sử dụng; kỳ chi phí Tạm tính, Đã chốt; quyết định Đã từ chối; liều thuốc Chưa đến giờ, Từ chối, Không thực hiện, Tạm dừng, Mang theo, Đã hủy; cảnh báo, sự cố mức Nhẹ; cảnh báo Đã tiếp nhận, Chuyển sự cố; bàn giao Bản nháp, Đã lập; bản ghi Đã đính chính, Đã hủy ghi nhận (`CorrectionBadge`); yêu cầu phê duyệt Nháp, Từ chối, Đã hủy; tài khoản Không hoạt động; quyền Theo ma trận; buổi hoạt động Đã lên lịch, Đã hủy; đăng ký buổi Đã đăng ký, Đã hủy; lượt ở lại Đã kết thúc, Từ chối, Hủy; bản ghi đón Chưa dùng, Không dùng; yêu cầu mua sắm Nháp, Từ chối, Đã hủy; tài sản Sẵn sàng, Đang bảo trì, Đã thanh lý; lịch xe Đã đặt, Đã hủy |
 | `neutral-outline` | Chữ phụ, viền màu viền điều khiển (`--input`, 3,38:1 trên trắng), nền trong | Tài khoản Đã khóa (tách khỏi Không hoạt động cùng tông trung tính, chủ dự án duyệt 2026-10-20) |
 
 ### 3.6 Ảnh đại diện
@@ -445,11 +446,29 @@ Chủ dự án duyệt 2026-11-17 (6.14.0). Một lượt tiếp nhận là mộ
 - Cột phải: điều kiện Hoàn tất tiếp nhận cùng bộ nhãn "Xong", "Chưa xong", cảnh báo (câu không mang mã spec), ý kiến về việc vào ở kèm nguồn (mục 2.2), nút "Hoàn tất tiếp nhận" (theo `allowedCommands`) mở tab Trạng thái của hồ sơ, là nút phụ khi khối Việc tiếp theo đang có nút chính; dòng "Còn n điều kiện chưa xong". Backend vẫn kiểm mọi lệnh.
 - Chỉ hiện trạng thái đã ghi; không tự làm bước thay người. "Việc tiếp theo" chỉ theo thứ tự bước BF-01 và quyền của người dùng, không xếp hạng hay gợi ý thứ tự khác (Q-306, Q-307).
 
+### 5.4 Hồ sơ xử lý cả trang: Sự cố (đề xuất 2026-11-23, chờ chủ dự án duyệt)
+
+Chi tiết dài, có nhiều khối làm việc cùng lúc thì mở cả trang; chi tiết ngắn giữ khung phải (mục 5 "Khung chi tiết").
+
+| Nội dung | Cách mở |
+| --- | --- |
+| Chi tiết sự cố; cảnh báo nguy kịch (BF-17) | Cả trang (`CasePage`, `src/features/incidents/CasePage.jsx`) |
+| Chi tiết cảnh báo khác | Khung phải (`DetailLayout`), danh sách vẫn thấy |
+| Ghi nhận sự cố, Tạo cảnh báo | Cả trang, theo bước: cột trái các bước và câu đã trả lời, cột phải câu đang trả lời; loại chọn bằng lưới biểu tượng kèm tên |
+| Lệnh ngắn (đóng, đổi mức, giao, chuyển viện, giao việc) | Hộp thoại |
+
+- Đầu trang: đường dẫn "Sự cố / SC-1" (không thêm nút trùng nút "Quay lại" của khung chung), biểu tượng loại, tên, "Mức" và "Trạng thái" có nhãn riêng, thanh tiến trình trạng thái. Đã kết thúc thì thanh chỉ hiện bước đầu và bước cuối vì API không trả lịch sử trạng thái. Chuyển viện, về viện chỉ là dòng trong Diễn biến; đầu trang chỉ thêm một câu việc cần làm khi đang ở bệnh viện hoặc vừa về (sửa 2026-11-24). Chi tiết cảnh báo (khung 420px) không có thanh tiến trình.
+- Hai cột (sửa 2026-11-24, góp ý test demo: quá nhiều khối, quá nhiều chữ): trái là phần cần biết để xử lý (thẻ thông tin khẩn cấp, "Cần gọi điện", Ghi nhận; giờ xảy ra, giờ tiếp nhận, xử lý ban đầu, người được báo gập vào "Xem thêm"); phải Diễn biến rồi Việc tiếp theo. Nút "Ghi diễn biến" và form nằm trong khối Diễn biến. "Cần gọi điện": người nhà hiện đủ, nhân viên chưa xác nhận gom thành một dòng, bấm mới mở danh sách.
+- Lệnh nằm ở thanh lệnh dính chân trang, với chi tiết cảnh báo là chân khung (`CaseActionBar`, sửa 2026-11-24): một nút chính theo trạng thái (Tiếp nhận; Chuyển theo dõi; Đóng sự cố), lệnh hay dùng là nút viền, lệnh ít dùng (Đổi mức, Chuyển cho người khác, Chỉ tiếp nhận, Kết thúc theo dõi sau ngã; Kích hoạt khẩn cấp khi cảnh báo chưa ở mức Khẩn cấp) gom vào "Thêm thao tác". Câu nói rõ hậu quả hiện khi rê chuột; lệnh bị khóa nói lý do bằng một dòng trên thanh hoặc danh sách điều kiện trong khối Diễn biến. Trường chưa ghi gom thành một dòng "Chưa ghi: …".
+- "Cần làm ngay" ở màn Cảnh báo chỉ gồm cảnh báo gấp chưa ai tiếp nhận.
+- SOS (người cao tuổi bấm) và Cần hỗ trợ (nhân viên gửi) khác tên, khác biểu tượng, khác nguồn.
+
 ## 6. Hình khối, độ nổi
 
 - Bề mặt nền trắng, viền 1px màu Đường kẻ, không đổ bóng. Khung chi tiết cố định chỉ có viền trái. Chỉ lớp nổi (menu nổi, `Sheet` mở đè, hộp thoại) có một tầng bóng.
 - Bo góc theo cấp (CĐA 2026-10-28): 6px điểm nhấn, 8px mục menu, 10px ô giường, ô nhập, khối việc, khối dị ứng, 12px bề mặt (bảng, khối, dải cần làm ngay, hộp thoại); nút, chip lọc, nhãn nguồn, ảnh đại diện bo tròn hẳn.
 - Không làm mờ nền, không kính mờ, không gradient, không hiệu ứng trang trí (mục 1 điều 2).
+- Lớp phủ sau hộp thoại (`Dialog`) và `Sheet` mở đè: đen 40% (`bg-black/40`), không làm mờ, đặt ở `src/components/ui/dialog.jsx`, `sheet.jsx` cho mọi màn; đủ tối để lớp nổi tách khỏi nền xám của trang mà vẫn thấy màn phía sau.
 
 ## 7. Component
 
@@ -728,7 +747,10 @@ Mục này nói cách áp các mục chung vào `mobile/`. Màu, chữ, trạng 
 
 ### 15.4 Bố cục
 
-- Điều hướng: thanh dưới (`NavigationBar`), tối đa 5 mục, lấy theo loại tài khoản và quyền backend trả; mục thứ 6 trở đi gom vào mục "Thêm".
+- Điều hướng: thanh dưới (`NavigationBar`), tối đa 5 mục; mục thứ 6 trở đi gom vào mục "Thêm" (từ 6.23.0, chủ dự án duyệt 2026-11-20; chi tiết theo vai trò ở `mobile/docs/superpowers/specs/2026-11-20-role-based-navigation-design.md`):
+  - Nhân viên: khung theo Figma "03 · App nhân viên": **Ca của tôi · [việc chính của vai trò] · Tra cứu · Thông báo · Thêm**. Việc chính: Checklist (Điều dưỡng, Nhân viên chăm sóc), Tầng hôm nay (Trưởng tầng), Người cao tuổi (Bác sĩ, thay luôn Tra cứu), Phiếu bữa ăn (Nhân viên bếp). Vai trò (`GET /me` `roles`) chọn mục; quyền backend (`/me/permissions`) lọc, vai trò chỉ thu hẹp, không mở rộng. Nút Khẩn cấp trên đầu mọi màn có thanh dưới; Đăng xuất ở cuối "Thêm". Quản lý viện, Hành chính, Kế toán chỉ dùng web: app báo "Vai trò của bạn dùng trên web quản trị".
+  - Người thân: 5 tab cố định **Hôm nay · Lịch thăm · Chi phí · Thông báo · Thêm** cho mọi người thân; tab thiếu quyền vẫn hiện, mở ra là câu nói rõ quyền còn thiếu và cách được cấp. Người thân của nhiều người cao tuổi chọn người ở đầu màn.
+  - Người cao tuổi: không có thanh dưới (15.6).
 - Mỗi màn có thanh tiêu đề nói phạm vi bằng câu bình thường (như page-header, mục 5), một việc chính và một nút chính.
 - Nền màn trơn `#EEF2F6` (mục 3.1). Đầu màn là khối xanh đêm đậm `#142B45` liền với thanh trạng thái, chứa tiêu đề và một trong: giờ hiện tại kèm "còn x giờ" và thanh tiến độ ca (màn trong ca), ô tìm nền trắng (màn danh sách), ảnh, họ tên, mã, phòng (hồ sơ). Chữ trên khối này theo mục 3.2 (CĐA 2026-10-28).
 - Dưới đầu màn: chip lọc cuộn ngang một hàng, rồi nhóm "Quá hạn" (Checklist ca) hoặc "Cần làm ngay" (Phát thuốc) có nhãn đỏ, rồi các nhóm còn lại ("Bây giờ", "Sau đó"; nhãn chữ phụ). Danh sách người cao tuổi là một danh sách theo bộ lọc trạng thái, không có nhóm nhãn đỏ. Dòng việc ở Checklist ca hiện đủ trường của `task-block` (spec 005 FR-030), cao theo nội dung.
@@ -813,6 +835,10 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.26.0 | 2026-11-23 | Đề xuất của Đức Anh (BF-06), chờ chủ dự án duyệt: mục 5.4 hồ sơ xử lý cả trang của Sự cố, form ghi theo bước có lưới biểu tượng; chi tiết cảnh báo vẫn ở khung phải; "Cần làm ngay" của Cảnh báo chỉ gồm việc chưa ai tiếp nhận. Sửa 2026-11-24 (góp ý test demo): thay các ô lệnh bằng thanh lệnh chân trang một nút chính, lệnh ít dùng vào "Thêm thao tác"; trái phần cần biết, phải Diễn biến; phần ít xem gập "Xem thêm". Không thêm màu, không thêm component dùng chung |
+| 6.25.0 | 2026-11-23 | Mục 6 thêm lớp phủ sau `Dialog`, `Sheet`: đen 40% thay 10% mặc định của shadcn, vì modal có thân nền xám bị lẫn với nền trang (màn Lập công việc ca). Áp cho mọi màn web |
+| 6.24.0 | 2026-11-22 | Chủ dự án chốt Q-440 (luồng chăm sóc hằng ngày): mục 2.3 thêm "Lịch chăm sóc hằng ngày" ở "Thêm" của cổng người thân cho mọi người thân có quan hệ Hiệu lực (công việc chăm sóc và trạng thái không còn phụ thuộc quyền xem sức khỏe; giá trị đo vẫn phụ thuộc); mục 3.5 thêm công việc "Chưa hoàn thành" vào tông neutral. Không thêm màu |
+| 6.23.0 | 2026-11-20 | Chủ dự án duyệt điều hướng app theo vai trò: mục 15.4 thay câu "lấy theo loại tài khoản và quyền" bằng khung nhân viên theo Figma (Ca của tôi · việc chính · Tra cứu · Thông báo · Thêm; vai trò chọn, quyền lọc; nút Khẩn cấp; ba vai trò chỉ dùng web), người thân 5 tab cố định có câu thiếu quyền. Không thêm màu. |
 | 6.22.2 | 2026-11-21 | Đổi tên hiển thị chức năng "Thay đổi lưu trú" thành "Điều chỉnh hợp đồng" (Q-425 của nghiep-vu.md): mục menu, tiêu đề màn, nhãn loại yêu cầu ở Yêu cầu phê duyệt, nhãn quyền; tên trong mã, đường dẫn màn (`residency-changes`) giữ nguyên. Không đổi bố cục, không thêm màu. |
 | 6.22.1 | 2026-11-21 | Chủ dự án yêu cầu khi test tay luồng thay đổi lưu trú: số thông báo chưa xem cạnh mục menu "Thông báo" (mục 5 "Menu"). Không thêm màu (dùng cặp `--sidebar-primary`, `--sidebar-primary-foreground` đã có), không đổi màn nào. |
 | 6.22.0 | 2026-11-21 | Nhóm A BF-01 (chủ dự án chọn các phương án gợi ý): thêm `family-declared-table` (Gia đình khai dạng bảng theo chủ đề, lưu một lần) và `admission-start` (một nút "Lập đăng ký", tìm hồ sơ trước, không thấy thì tạo mới) ở mục 7.2 |

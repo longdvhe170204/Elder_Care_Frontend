@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getAlertsByIdCall115Info,
   getIncidentsByIdCall115Info,
@@ -26,7 +26,7 @@ function Line({ label, value }) {
   return (
     <div className="flex flex-col">
       <dt className="type-caption text-muted-foreground">{label}</dt>
-      <dd className="type-body-sm">{value || 'Chưa có'}</dd>
+      <dd className="type-body">{value || 'Chưa có'}</dd>
     </div>
   )
 }
@@ -59,7 +59,8 @@ function OperatorInfo({ info }) {
   )
 }
 
-export function Call115Panel({ subject = 'alerts', id, dial = (href) => window.location.assign(href) }) {
+// triggerEvent: nút gọi nằm ở nơi khác (ô Gọi 115 đầu hồ sơ sự cố) phát sự kiện này; khối không vẽ nút gọi riêng
+export function Call115Panel({ subject = 'alerts', id, dial = (href) => window.location.assign(href), triggerEvent = null }) {
   const api = SOURCES[subject]
   const [pressKey] = useState(() => crypto.randomUUID())
   const [info, setInfo] = useState(null)
@@ -82,12 +83,35 @@ export function Call115Panel({ subject = 'alerts', id, dial = (href) => window.l
 
   const loadInfo = () => run(async () => setInfo((await api.info({ path: { id } })).data))
 
+  // Thông tin đọc cho tổng đài hiện sẵn (đề xuất 2026-11-24): lúc gọi không phải bấm thêm. Lỗi thì còn nút xem lại
+  useEffect(() => {
+    let live = true
+    api.info({ path: { id } }).then(
+      ({ data }) => live && setInfo(data),
+      () => {},
+    )
+    return () => {
+      live = false
+    }
+  }, [api, id])
+
   const call = () =>
     run(async () => {
       const { data } = await api.press({ path: { id }, headers: { 'Idempotency-Key': pressKey } })
       setAttempt(data)
       dial('tel:115')
     })
+
+  const callRef = useRef(call)
+  useEffect(() => {
+    callRef.current = call
+  })
+  useEffect(() => {
+    if (!triggerEvent) return undefined
+    const handler = () => callRef.current()
+    window.addEventListener(triggerEvent, handler)
+    return () => window.removeEventListener(triggerEvent, handler)
+  }, [triggerEvent])
 
   const record = (value) =>
     run(async () => {
@@ -98,16 +122,27 @@ export function Call115Panel({ subject = 'alerts', id, dial = (href) => window.l
   return (
     <section aria-label="Gọi 115" className="flex flex-col gap-3">
       <div className="flex flex-wrap gap-2">
-        <Button variant="destructive" className="h-11" onClick={call} disabled={busy || attempt != null}>
-          Gọi 115
-        </Button>
+        {!triggerEvent && (
+          <Button
+            className="h-12 bg-destructive px-6 text-base text-white hover:bg-destructive/90"
+            onClick={call}
+            disabled={busy || attempt != null}
+          >
+            Gọi 115
+          </Button>
+        )}
         {!info && (
           <Button variant="outline" className="h-11" onClick={loadInfo} disabled={busy}>
             Xem thông tin đọc cho tổng đài
           </Button>
         )}
       </div>
-      {info && <OperatorInfo info={info} />}
+      {info && (
+        <div className="flex flex-col gap-2 rounded-lg bg-muted/60 p-3">
+          <span className="type-caption text-muted-foreground uppercase">Đọc cho tổng đài</span>
+          <OperatorInfo info={info} />
+        </div>
+      )}
       {attempt && !result && (
         <div className="flex flex-col gap-2">
           <p className="type-body-sm">Sau cuộc gọi, chọn kết quả:</p>

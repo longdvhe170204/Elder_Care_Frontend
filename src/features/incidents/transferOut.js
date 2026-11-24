@@ -21,6 +21,13 @@ export async function submitTransferOut(incidentId, body) {
   return data
 }
 
+// Lấy phiếu PDF để xem trước trên web; reprint = true ghi nhật ký in lại (bản có dấu "Bản in lại").
+export async function loadTransferDocument(summaryId, reprint = false) {
+  const call = reprint ? postTransferSummariesByIdReprint : getTransferSummariesByIdDocument
+  const { data } = await call({ path: { id: summaryId }, responseType: 'blob' })
+  return URL.createObjectURL(data)
+}
+
 // Tải bản tóm tắt (PDF); in lại ghi nhật ký in (POST reprint).
 export async function downloadTransferDocument(summaryId, reprint) {
   const call = reprint ? postTransferSummariesByIdReprint : getTransferSummariesByIdDocument

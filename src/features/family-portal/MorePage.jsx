@@ -1,10 +1,10 @@
-import { ChevronRight, FileText, HeartPulse, LogOut, MessageSquare, Package, Receipt, UserRound } from 'lucide-react'
+import { CalendarClock, ChevronRight, FileText, HeartPulse, LogOut, MessageSquare, Package, Receipt, UserRound } from 'lucide-react'
 import { PageHeader } from '@/common/PageHeader'
 import { PortalCard } from './PortalParts'
 import { MORE_ITEMS } from './portalNav'
 
 // Mục "Thêm": chỉ liệt kê mục người xem có quyền; mục không có quyền không hiện (012 FR-046, FR-046b).
-const ICONS = { health: HeartPulse, costs: Receipt, feedback: MessageSquare, deposits: Package, contract: FileText, account: UserRound }
+const ICONS = { 'care-schedule': CalendarClock, health: HeartPulse, costs: Receipt, feedback: MessageSquare, deposits: Package, contract: FileText, account: UserRound }
 
 export function MorePage({ viewer, onNavigate, onExit }) {
   const items = MORE_ITEMS.filter((i) => i.allowed(viewer))

@@ -3,6 +3,7 @@ import {
   ApiError,
   getAdmissionApplications,
   getAdmissionApplicationsByIdAdmissionConditions,
+  getResidencyEndings,
   getResidentsByIdConditionsByCommand,
   getResidentsByIdStatusHistory,
   postResidentsByIdCancelAdmission,
@@ -23,21 +24,22 @@ import { ChoiceTray } from '@/common/ChoiceTray'
 import { STATUS_COMMAND_REASONS } from '@/common/quickChoices'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
-import { formatDateTime } from '@/common/dateTime'
+import { formatDate, formatDateTime } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { FileField } from '../consents/ConsentTab'
 import { STATUS_LABELS } from '../residents/residentLabels'
 import { uploadProblem } from '../wishes/wishUtils'
 import { OpinionBlock } from '../admissions/ApplicationParts'
-import { OPEN_STATUSES } from '../admissions/admissionLabels'
+import { OPEN_STATUSES, vietnamIso } from '../admissions/admissionLabels'
 import {
   BASIS_KINDS,
-  COMMAND_EFFECTS,
   COMMAND_LABELS,
   COMMAND_ORDER,
   FINAL_STATUSES,
   HISTORY_COMMAND_LABELS,
+  commandEffect,
+  reasonField,
 } from './statusLabels'
 
 // Tab "Trạng thái" trong khung chi tiết hồ sơ (001 T052; US4; FR-044 → FR-047b; bố cục do B giao cho Claude quyết định
@@ -121,6 +123,10 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
   const [basisText, setBasisText] = useState('')
   const [evidence, setEvidence] = useState(null)
   const [documents, setDocuments] = useState([])
+  // Kết thúc lưu trú: hồ sơ kết thúc Đang chuẩn bị (004) và thời điểm kết thúc, backend bắt buộc trong details
+  // (residencyEndingId, effectiveAt; thời điểm phải trong ngày kết thúc dự kiến, 004 FR-066)
+  const [ending, setEnding] = useState(null)
+  const [endAt, setEndAt] = useState('')
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -150,7 +156,22 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
     loadConditions()
   }, [loadConditions])
 
+  useEffect(() => {
+    if (command !== 'END_RESIDENCY') return
+    let cancelled = false
+    // không có hồ sơ Đang chuẩn bị thì xem trước điều kiện của backend đã báo và khóa nút
+    getResidencyEndings({ query: { residentId, status: ['PREPARING'] } })
+      .then(({ data }) => {
+        if (!cancelled) setEnding((data ?? [])[0] ?? null)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [residentId, command])
+
   function detailsOf(evidenceFileId) {
+    if (command === 'END_RESIDENCY') return { residencyEndingId: ending.id, effectiveAt: vietnamIso(endAt) }
     if (command === 'TRANSFER_OUT') {
       const kind = BASIS_KINDS.find((k) => k.value === basisKind)
       const value = basisText.trim()
@@ -163,7 +184,8 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
   async function submit(event) {
     event.preventDefault()
     const next = {}
-    if (!reason.trim()) next.reason = 'Nhập lý do của lệnh'
+    if (!reason.trim()) next.reason = reasonField(command, status).error
+    if (command === 'END_RESIDENCY' && !endAt) next.endAt = 'Nhập thời điểm kết thúc'
     if (command === 'TRANSFER_OUT') {
       const kind = BASIS_KINDS.find((k) => k.value === basisKind)
       const value = basisText.trim()
@@ -198,7 +220,8 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
       if (fileMessage) {
         setErrors(command === 'RECORD_DEATH' ? { evidence: fileMessage } : { documents: fileMessage })
       } else if (error instanceof ApiError && error.status === 422) {
-        if (problem.errorCode === 'REASON_REQUIRED') setErrors({ reason: problem.detail || 'Nhập lý do của lệnh' })
+        if (problem.errorCode === 'REASON_REQUIRED')
+          setErrors({ reason: problem.detail || reasonField(command, status).error })
         else if (problem.errorCode === 'BASIS_REQUIRED') setErrors({ basis: 'Chọn và nhập căn cứ chuyển viện' })
         else if (problem.errorCode === 'EVIDENCE_REQUIRED') {
           setErrors({ evidence: 'Phải kèm giấy tờ bằng chứng khi Hành chính ghi nhận qua đời ngoài viện' })
@@ -213,7 +236,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
   }
 
   const unmet = conditions ?? []
-  const blocked = conditions === null || unmet.length > 0
+  const blocked = conditions === null || unmet.length > 0 || (command === 'END_RESIDENCY' && !ending)
 
   return (
     <form
@@ -223,7 +246,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
       className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
     >
       <h3 className="type-card-title">{label}</h3>
-      <p className="type-body-sm text-muted-foreground">{COMMAND_EFFECTS[command]}</p>
+      <p className="type-body-sm text-muted-foreground">{commandEffect(command, status)}</p>
 
       {command === 'COMPLETE_ADMISSION' && <AdmissionOpinion residentId={residentId} />}
 
@@ -242,7 +265,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
         {STATUS_COMMAND_REASONS[command] ? (
           <ChoiceTray
             id={`status-reason-${command}`}
-            label="Lý do của lệnh (bắt buộc)"
+            label={reasonField(command, status).label}
             options={STATUS_COMMAND_REASONS[command]}
             value={reason}
             onChange={setReason}
@@ -250,10 +273,11 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
           />
         ) : (
           <>
-            <FieldLabel htmlFor={`status-reason-${command}`}>Lý do của lệnh (bắt buộc)</FieldLabel>
+            <FieldLabel htmlFor={`status-reason-${command}`}>{reasonField(command, status).label}</FieldLabel>
             <Textarea
               id={`status-reason-${command}`}
               rows={3}
+              placeholder={reasonField(command, status).placeholder}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               aria-invalid={!!errors.reason || undefined}
@@ -262,6 +286,26 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
         )}
         {errors.reason && <FieldError>{errors.reason}</FieldError>}
       </Field>
+
+      {command === 'END_RESIDENCY' && (
+        <Field data-invalid={!!errors.endAt || undefined}>
+          <FieldLabel htmlFor="status-end-at">Thời điểm kết thúc (bắt buộc)</FieldLabel>
+          <Input
+            id="status-end-at"
+            type="datetime-local"
+            className="h-11"
+            value={endAt}
+            onChange={(e) => setEndAt(e.target.value)}
+            aria-invalid={!!errors.endAt || undefined}
+          />
+          {ending && (
+            <p className="type-caption text-muted-foreground">
+              Trong ngày kết thúc dự kiến {formatDate(ending.expectedEndDate)} của hồ sơ kết thúc lưu trú.
+            </p>
+          )}
+          {errors.endAt && <FieldError>{errors.endAt}</FieldError>}
+        </Field>
+      )}
 
       {command === 'TRANSFER_OUT' && (
         <Field data-invalid={!!errors.basis || undefined}>

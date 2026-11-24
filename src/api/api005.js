@@ -54,6 +54,9 @@ export const postCareTasksByIdClaim = (params) => request('POST', '/care-tasks/{
 /** Phân lại công việc chưa đóng (Trưởng tầng; Người phụ trách ca trong phạm vi ca) (FR-031, FR-045, BR-M09-01) */
 export const postCareTasksByIdReassign = (params) => request('POST', '/care-tasks/{id}/reassign', params)
 
+/** Lịch sử công việc đã lập, không theo ca, ngày (màn Lập công việc ca) (FR-017) */
+export const getCareTasks = (params) => request('GET', '/care-tasks', params)
+
 /** Danh sách công việc Quá hạn (tầng của người gọi; Quản lý viện toàn viện) (FR-045) */
 export const getCareTasksOverdue = (params) => request('GET', '/care-tasks/overdue', params)
 
@@ -86,6 +89,18 @@ export const putTaskTypesById = (params) => request('PUT', '/task-types/{id}', p
 
 /** Ngừng hiệu lực loại công việc (FR-038) */
 export const postTaskTypesByIdDeactivate = (params) => request('POST', '/task-types/{id}/deactivate', params)
+
+/** Mốc sinh hoạt cố định (giá trị mới nhất kèm ngày bắt đầu áp dụng) (FR-056) */
+export const getDailyRoutines = (params) => request('GET', '/daily-routines', params)
+
+/** Thêm mốc sinh hoạt (Quản lý viện); áp dụng từ ngày hôm sau (FR-056) */
+export const postDailyRoutines = (params) => request('POST', '/daily-routines', params)
+
+/** Sửa mốc sinh hoạt; áp dụng từ ngày hôm sau (FR-056) */
+export const putDailyRoutinesById = (params) => request('PUT', '/daily-routines/{id}', params)
+
+/** Ngừng mốc sinh hoạt; từ ngày hôm sau không còn hiện (FR-056) */
+export const postDailyRoutinesByIdDeactivate = (params) => request('POST', '/daily-routines/{id}/deactivate', params)
 
 /** Danh mục loại lý do Không thực hiện (bổ sung 2026-10-18) (FR-028a) */
 export const getNonPerformanceReasonTypes = (params) => request('GET', '/non-performance-reason-types', params)
@@ -123,7 +138,7 @@ export const getShiftsByShiftIdCareTasks = (params) => request('GET', '/shifts/{
 /** Lập công việc của ca theo lô (FR-002, FR-006, FR-017, FR-018, FR-021, FR-023, FR-024, FR-029, BR-M04-01, BR-M04-02, BR-M04-24, BR-M04-26, BR-M04-28, BR-M09-01) */
 export const postShiftsByShiftIdCareTasksPlan = (params) => request('POST', '/shifts/{shiftId}/care-tasks/plan', params)
 
-/** Tạo công việc phát sinh (Trưởng tầng, Điều dưỡng) (FR-025, FR-023) */
+/** Tạo công việc phát sinh (Trưởng tầng, Điều dưỡng); căn cứ AD_HOC hoặc INCIDENT_FOLLOW_UP (FR-025, FR-023) */
 export const postCareTasksAdHoc = (params) => request('POST', '/care-tasks/ad-hoc', params)
 
 /** Lập công việc làm lại sau kiểm tra chất lượng Không đạt (người kiểm tra của 014) (FR-026a, BR-M04-23) */
