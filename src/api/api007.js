@@ -117,6 +117,15 @@ export const postIncidents = (params) => request('POST', '/incidents', params)
 /** Hồ sơ sự cố (nội dung, diễn biến, đổi mức, người xử lý, người được thông báo từ 009, allowedCommands[]) (FR-040, FR-048b) */
 export const getIncidentsById = (params) => request('GET', '/incidents/{id}', params)
 
+/** Việc tiếp theo của sự cố và kết quả (công việc 005 có căn cứ INCIDENT_FOLLOW_UP, POST_FALL_MONITORING của sự cố) (FR-045b) */
+export const getIncidentsByIdFollowUpTasks = (params) => request('GET', '/incidents/{id}/follow-up-tasks', params)
+
+/** Tầng chọn được khi ghi sự cố cơ sở vật chất, gửi yêu cầu hỗ trợ (tầng đang trực trước, rồi các tầng đang có ca) (FR-040, FR-047i) */
+export const getIncidentFloors = (params) => request('GET', '/incident-floors', params)
+
+/** Tìm người cao tuổi khi gửi yêu cầu hỗ trợ, ghi sự cố (trong toàn viện; chỉ họ tên, mã, phòng, tầng) (FR-040, FR-047i) */
+export const getIncidentResidents = (params) => request('GET', '/incident-residents', params)
+
 /** Tiếp nhận xử lý (Mới → Đang xử lý) (FR-044, FR-045) */
 export const postIncidentsByIdReceive = (params) => request('POST', '/incidents/{id}/receive', params)
 
@@ -237,7 +246,7 @@ export const postSosByIdPlace = (params) => request('POST', '/sos/{id}/place', p
 /** App người cao tuổi gửi vị trí GPS cho lần bấm SOS (bổ sung 2026-10-22, Q-373) (FR-047h, BR-M05-28) */
 export const postSosByIdLocation = (params) => request('POST', '/sos/{id}/location', params)
 
-/** Nhân viên đang trong ca bấm nút hỗ trợ khẩn cấp; tạo hoặc gộp cảnh báo Khẩn cấp STAFF_ASSIST_REQUEST (FR-026, FR-047i, BR-M05-29) */
+/** Nhân viên bấm nút hỗ trợ khẩn cấp; tạo hoặc gộp cảnh báo Khẩn cấp STAFF_ASSIST_REQUEST (FR-026, FR-047i, BR-M05-29) */
 export const postEmergencyAssist = (params) => request('POST', '/emergency-assist', params)
 
 /** Trạng thái cảnh báo nút hỗ trợ đang mở gần nhất của người bấm (đang tới, đã tới) (FR-047j) */
@@ -246,11 +255,23 @@ export const getEmergencyAssistCurrent = (params) => request('GET', '/emergency-
 /** Người bấm chọn loại sự việc, tầng, nơi, người cao tuổi sau khi gửi (mỗi trường đặt một lần) (FR-047i) */
 export const postEmergencyAssistByIdDetails = (params) => request('POST', '/emergency-assist/{id}/details', params)
 
+/** Đổi tầng xảy ra sau khi gửi (người bấm hoặc người phụ trách) (FR-047i) */
+export const postEmergencyAssistByIdFloor = (params) => request('POST', '/emergency-assist/{id}/floor', params)
+
+/** Người bấm nhắn thêm tình hình (ví dụ "cụ đã tỉnh", "cần cáng") (FR-047i) */
+export const postEmergencyAssistByIdMessages = (params) => request('POST', '/emergency-assist/{id}/messages', params)
+
+/** Người bấm rút yêu cầu khi bấm nhầm, chỉ khi chưa ai tiếp nhận (FR-047i) */
+export const postEmergencyAssistByIdWithdraw = (params) => request('POST', '/emergency-assist/{id}/withdraw', params)
+
 /** App nhân viên gửi vị trí GPS cho lần bấm nút hỗ trợ (như /sos/{id}/location) (FR-047h, BR-M05-28) */
 export const postEmergencyAssistByIdLocation = (params) => request('POST', '/emergency-assist/{id}/location', params)
 
 /** Người phụ trách ghi "Đã tới nơi" (cảnh báo từ nút SOS hoặc nút hỗ trợ; một lần; không đổi trạng thái) (FR-047j, FR-029, BR-M05-30) */
 export const postAlertsByIdMarkArrived = (params) => request('POST', '/alerts/{id}/mark-arrived', params)
+
+/** Tôi đến giúp (cảnh báo từ nút SOS hoặc nút hỗ trợ đang mở) (FR-047j, FR-041) */
+export const postAlertsByIdJoinHelp = (params) => request('POST', '/alerts/{id}/join-help', params)
 
 /** Thông tin đọc cho tổng đài 115 (cảnh báo Khẩn cấp) (FR-047k) */
 export const getAlertsByIdCall115Info = (params) => request('GET', '/alerts/{id}/call-115-info', params)
@@ -269,6 +290,9 @@ export const postCall115AttemptsByIdResult = (params) => request('POST', '/call-
 
 /** Thông tin hiện ở màn lệnh Chuyển viện (nguyện vọng khi điều trị, nguyện vọng cuối đời, người liên hệ chính); không gợi ý cơ sở (FR-049) */
 export const getIncidentsByIdTransferOutInfo = (params) => request('GET', '/incidents/{id}/transfer-out/info', params)
+
+/** Nhân viên đang trong ca ở tầng của người cao tuổi, để chọn người bàn giao cho lệnh Chuyển viện (Điều dưỡng, Bác sĩ) (FR-049) */
+export const getResidentsByResidentIdHandoverStaff = (params) => request('GET', '/residents/{residentId}/handover-staff', params)
 
 /** Tải phiếu tóm tắt chuyển viện PDF đã lưu (đúng file đã dựng trong lệnh) (FR-050h, BR-M05-32) */
 export const getTransferSummariesByIdDocument = (params) => request('GET', '/transfer-summaries/{id}/document', params)

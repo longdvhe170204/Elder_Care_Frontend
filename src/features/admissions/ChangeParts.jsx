@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, FilePlus2 } from 'lucide-react'
+import { ArrowRight, FilePlus2, Search, X } from 'lucide-react'
 import {
   getApprovalRequestsById,
   getBeds,
   getContracts,
+  getRoomTypes,
+  getRooms,
   getResidents,
   getResidentsById,
   getResidentsByIdAssessments,
@@ -37,6 +39,7 @@ import {
   money,
   newKey,
   REQUEST_STATUS,
+  plain,
 } from './admissionLabels'
 import {
   CONFIRMATION_METHODS,
@@ -86,7 +89,7 @@ function useFamilyMemberName(residentId, familyMemberId) {
         const found = (data ?? []).find((r) => r.familyMember?.id === familyMemberId)
         if (live) setName(found?.familyMember?.fullName ?? null)
       })
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       live = false
     }
@@ -110,22 +113,24 @@ function confirmationText(c, confirmerName) {
 function ChangeRow({ type, content }) {
   const Icon = CHANGE_TYPE_ICONS[type]
   return (
-    <li className="flex flex-col gap-2 rounded-xl border bg-muted/40 p-3 transition-colors hover:border-primary/40 hover:bg-accent/40 sm:flex-row sm:items-center sm:justify-between">
-      <span className="flex items-center gap-2 type-label font-semibold">
-        {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[type]}`} />}
-        {labelOf(CHANGE_TYPES, type)}
-      </span>
-      <span className="flex flex-wrap items-center gap-2 type-body-sm tabular-nums">
+    <li className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent/30 shadow-2xs">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-2 type-label font-semibold text-foreground">
+          {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[type]}`} />}
+          {labelOf(CHANGE_TYPES, type)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-2 type-body-sm tabular-nums">
         <span className="sr-only">Trước:</span>
-        <span className="rounded-md bg-card px-2.5 py-1 text-muted-foreground ring-1 ring-border">
+        <span className="flex-1 rounded-md bg-card px-2.5 py-1.5 text-center text-muted-foreground ring-1 ring-border shadow-2xs font-medium truncate">
           {changeValueText(type, content.previousValue)}
         </span>
-        <ArrowRight aria-hidden className="size-4 text-primary" />
+        <ArrowRight aria-hidden className="size-4 shrink-0 text-primary" />
         <span className="sr-only">Sau:</span>
-        <span className="rounded-md bg-primary px-2.5 py-1 font-semibold text-primary-foreground shadow-sm">
+        <span className="flex-1 rounded-md bg-primary px-2.5 py-1.5 text-center font-semibold text-primary-foreground shadow-sm truncate">
           {changeValueText(type, content.newValue)}
         </span>
-      </span>
+      </div>
     </li>
   )
 }
@@ -158,18 +163,20 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
       {content.costImpact?.length > 0 && (
         <section className={`flex flex-col ${cards ? 'gap-3' : 'gap-2'}`}>
           <h3 className={headingClassName}>Ảnh hưởng chi phí</h3>
-          <ul className="flex flex-col gap-1">
+          <ul className="flex flex-col gap-1.5">
             {content.costImpact.map((c) =>
               cards ? (
                 <li
                   key={c.item}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2 type-body-sm tabular-nums"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border/80 bg-card p-3 shadow-2xs type-body-sm tabular-nums"
                 >
-                  <span>{costItemLabel(c.item)}</span>
-                  <span className="flex items-center gap-2">
-                    <span className="text-muted-foreground">{money(c.previousUnitPrice)}</span>
-                    <ArrowRight aria-hidden className="size-4 text-primary" />
-                    <span className="font-semibold text-primary">{money(c.newUnitPrice)}</span>
+                  <span className="font-medium text-foreground">{costItemLabel(c.item)}</span>
+                  <span className="flex items-center gap-2 whitespace-nowrap shrink-0">
+                    <span className="text-muted-foreground line-through">{money(c.previousUnitPrice)}</span>
+                    <ArrowRight aria-hidden className="size-4 text-primary shrink-0" />
+                    <span className="rounded-md bg-success/15 px-2 py-0.5 font-bold text-success-foreground border border-success/30">
+                      {money(c.newUnitPrice)}
+                    </span>
                   </span>
                 </li>
               ) : (
@@ -190,7 +197,7 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
             <Button
               variant="outline"
               className="h-11 self-start"
-              onClick={() => openFile(confirmation.evidenceFileId).catch(() => {})}
+              onClick={() => openFile(confirmation.evidenceFileId).catch(() => { })}
             >
               Xem bằng chứng
             </Button>
@@ -250,7 +257,7 @@ export function ChangeRequestView({
     if (!decidable) return
     getApprovalRequestsById({ path: { id: request.approvalRequestId } })
       .then(({ data }) => live && setFetched({ key: commandsKey, commands: data?.allowedCommands ?? [] }))
-      .catch(() => {})
+      .catch(() => { })
     return () => {
       live = false
     }
@@ -288,140 +295,221 @@ export function ChangeRequestView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 [&_svg]:stroke-[2.5]">
-      <div className="flex flex-col gap-1">
-        <Title className="type-title">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
-        <Description className="type-body-sm text-muted-foreground">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden [&_svg]:stroke-[2.5]">
+      {/* 1. HEADER (Cố định trên cùng) */}
+      <div className="shrink-0 flex flex-col gap-1 border-b border-border/60 pb-3 pr-8">
+        <Title className="type-title font-bold text-foreground">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
+        <Description className="type-body-sm text-muted-foreground leading-relaxed">
           {`${REQUEST_STATUS[request.status] ?? request.status}. Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}${contractNumber ? `. Hợp đồng ${contractNumber}` : ''}`}
         </Description>
       </div>
-      <ChangeProgress progress={changeSteps(request)} />
-      <div className="flex flex-col gap-5">
-        <div className="rounded-xl border-l-4 border-primary bg-muted/60 p-4">
-          <Info label="Lý do">{request.reason}</Info>
-        </div>
-        <ChangeContent content={request} variant="cards" />
-        {request.representativeConfirmation?.recordedAt && (
-          <p className="type-caption text-muted-foreground">
-            {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
-          </p>
-        )}
 
-        {request.minorChange && (
-          <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
-        )}
-        {state && (draft || sent) && (
-          <section className="flex flex-col gap-1 rounded-xl border p-4">
-            <h3 className="type-card-title">Xác nhận của người đại diện</h3>
-            {state.attention && draft ? (
-              <Alert variant="attention">
-                <AlertTitle>{state.text}</AlertTitle>
-              </Alert>
-            ) : (
-              <p className="type-body-sm font-medium">{state.text}</p>
-            )}
-            {sent && <p className="type-body-sm">{confirmationRequestText(sent)}</p>}
-            {draft && needsConfirmation && (
-              <p className="type-caption text-muted-foreground">
-                {canConfirm
-                  ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
-                  : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
-              </p>
-            )}
-          </section>
-        )}
-        {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
-          <p className="type-body-sm">
-            Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
-          </p>
-        )}
-        {warnings.length > 0 && (
-          <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
-            {warnings.map((w) => (
-              <AlertDescription key={w}>{w}</AlertDescription>
-            ))}
-          </Alert>
-        )}
-        {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
-          <p className="type-caption text-muted-foreground">
-            {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
-          </p>
-        )}
-        <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
-        {pendingSignature && (
-          <Alert variant="attention">
-            <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>
-            <AlertDescription>
-              In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
-            </AlertDescription>
-          </Alert>
-        )}
-        {addendum ? (
-          <section className="flex flex-col gap-1 rounded-xl border p-4" aria-label="Phụ lục hợp đồng">
-            <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
-            <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
-            <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
-            {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
-            {addendum.signedFileId && (
-              <Button variant="outline" className="h-11 self-start" onClick={() => openFile(addendum.signedFileId).catch(() => {})}>
-                Xem bản đã ký
-              </Button>
-            )}
-          </section>
-        ) : (
-          request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
-        )}
-        <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
-        <ProblemAlert problem={failure} />
+      {/* 2. BODY (Khu vực cuộn độc lập) */}
+      <div className="flex-1 min-h-0 overflow-y-auto py-4 pr-1 flex flex-col gap-5">
+        <ChangeProgress progress={changeSteps(request)} />
+        <div className="flex flex-col gap-5">
+          <div className="rounded-xl border-l-4 border-primary bg-muted/50 p-4 shadow-2xs">
+            <Info label="Lý do">{request.reason}</Info>
+          </div>
+          <ChangeContent content={request} variant="cards" />
+          {request.representativeConfirmation?.recordedAt && (
+            <p className="type-caption text-muted-foreground">
+              {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
+            </p>
+          )}
+
+          {request.minorChange && (
+            <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
+          )}
+          {state && (draft || sent) && (
+            <section className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
+                {state.done ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
+                    <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
+                    Đã xác nhận
+                  </span>
+                ) : sent?.status === 'AWAITING' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                    <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden />
+                    Chờ phản hồi
+                  </span>
+                ) : sent?.status === 'DECLINED' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive border border-destructive/30">
+                    <span className="size-1.5 rounded-full bg-destructive" aria-hidden />
+                    Từ chối
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
+                    <span className="size-1.5 rounded-full bg-warning-foreground" aria-hidden />
+                    Chưa xác nhận
+                  </span>
+                )}
+              </div>
+              {state.attention && draft ? (
+                <Alert variant="attention">
+                  <AlertTitle>{state.text}</AlertTitle>
+                </Alert>
+              ) : (
+                <p className="type-body-sm font-medium">{state.text}</p>
+              )}
+              {sent && (
+                <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5 type-body-sm">
+                  {confirmationRequestText(sent)}
+                </div>
+              )}
+              {draft && needsConfirmation && (
+                <p className="type-caption text-muted-foreground leading-relaxed">
+                  {canConfirm
+                    ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
+                    : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
+                </p>
+              )}
+            </section>
+          )}
+          {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
+            <p className="type-body-sm">
+              Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
+            </p>
+          )}
+          {warnings.length > 0 && (
+            <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
+              {warnings.map((w) => (
+                <AlertDescription key={w}>{w}</AlertDescription>
+              ))}
+            </Alert>
+          )}
+          {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
+            <p className="type-caption text-muted-foreground">
+              {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
+            </p>
+          )}
+          <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
+          {pendingSignature && (
+            <Alert variant="attention">
+              <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>
+              <AlertDescription>
+                In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
+              </AlertDescription>
+            </Alert>
+          )}
+          {addendum ? (
+            <section className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Phụ lục hợp đồng">
+              <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
+              <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
+              <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
+              {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
+              {addendum.signedFileId && (
+                <Button variant="outline" className="h-11 self-start rounded-xl" onClick={() => openFile(addendum.signedFileId).catch(() => { })}>
+                  Xem bản đã ký
+                </Button>
+              )}
+            </section>
+          ) : (
+            request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
+          )}
+          <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
+          <ProblemAlert problem={failure} />
+        </div>
       </div>
+
+      {/* 3. FOOTER (Cố định ở đáy, không đè lên Body) */}
       <div
         role="group"
         aria-label="Lệnh của yêu cầu"
-        className="sticky bottom-0 -mx-6 -mb-6 mt-auto flex flex-wrap justify-end gap-2 border-t bg-card px-6 py-4"
+        className="shrink-0 border-t border-border bg-card pt-3 mt-auto flex flex-col gap-2"
       >
-        <Button variant="ghost" className="h-11" onClick={onReload}>
-          Tải lại
-        </Button>
-        {draft && canUpdate && (
-          <Button variant="outline" className="h-11" onClick={() => onEdit(request)}>
-            Sửa yêu cầu nháp
+        {/* Hàng 1: Các nút tác vụ chính và phụ gọn gàng trên 1-2 hàng */}
+        <div className="flex flex-wrap items-center gap-2">
+          {draft && canUpdate && canConfirm && needsConfirmation && (
+            <Button
+              className="h-10 flex-1 min-w-[150px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={busy || !etag}
+              onClick={sendToRepresentative}
+            >
+              {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
+            </Button>
+          )}
+          {pendingSignature && canConfirm && (
+            <Button
+              className="h-10 flex-1 min-w-[150px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={!etag}
+              onClick={() => setAction('sign')}
+            >
+              Ghi nhận phụ lục đã ký
+            </Button>
+          )}
+          {draft && canUpdate && !needsConfirmation && (
+            <Button
+              className="h-10 flex-1 min-w-[140px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={busy || !etag}
+              onClick={() => setAction('submit')}
+            >
+              Gửi duyệt
+            </Button>
+          )}
+          {draft && canUpdate && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[130px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onEdit(request)}
+            >
+              Sửa yêu cầu nháp
+            </Button>
+          )}
+          {draft && canUpdate && canConfirm && needsConfirmation && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[140px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onConfirm(request)}
+            >
+              Ghi xác nhận trực tiếp
+            </Button>
+          )}
+          {addendum && onPrint && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[110px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onPrint(request)}
+            >
+              In phụ lục
+            </Button>
+          )}
+          {request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft') && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[110px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              disabled={!etag}
+              onClick={() => setAction('return-to-draft')}
+            >
+              Trả về nháp
+            </Button>
+          )}
+        </div>
+
+        {/* Hàng 2: Tiện ích & Hủy (Tải lại và Hủy) */}
+        <div className="flex items-center justify-between border-t border-border/50 pt-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
+            onClick={onReload}
+          >
+            Tải lại
           </Button>
-        )}
-        {draft && canUpdate && canConfirm && needsConfirmation && (
-          <Button variant="outline" className="h-11" onClick={() => onConfirm(request)}>
-            Ghi xác nhận trực tiếp
-          </Button>
-        )}
-        {draft && canUpdate && canConfirm && needsConfirmation && (
-          <Button className="h-11" disabled={busy || !etag} onClick={sendToRepresentative}>
-            {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
-          </Button>
-        )}
-        {addendum && onPrint && (
-          <Button variant="outline" className="h-11" onClick={() => onPrint(request)}>
-            In phụ lục
-          </Button>
-        )}
-        {pendingSignature && canConfirm && (
-          <Button className="h-11" disabled={!etag} onClick={() => setAction('sign')}>
-            Ghi nhận phụ lục đã ký
-          </Button>
-        )}
-        {request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft') && (
-          <Button variant="outline" className="h-11" disabled={!etag} onClick={() => setAction('return-to-draft')}>
-            Trả về nháp
-          </Button>
-        )}
-        {((open && canUpdate) || (request.status === 'APPROVED' && allowed.includes('cancel'))) && (
-          <Button variant="outline" className="h-11" disabled={!etag} onClick={() => setAction('cancel')}>
-            Hủy yêu cầu
-          </Button>
-        )}
-        {draft && canUpdate && !needsConfirmation && (
-          <Button className="h-11" disabled={busy || !etag} onClick={() => setAction('submit')}>
-            Gửi duyệt
-          </Button>
-        )}
+          {((open && canUpdate) || (request.status === 'APPROVED' && allowed.includes('cancel'))) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground font-medium"
+              disabled={!etag}
+              onClick={() => setAction('cancel')}
+            >
+              Hủy yêu cầu
+            </Button>
+          )}
+        </div>
       </div>
       {action === 'sign' && <SignatureSheet request={request} etag={etag} onClose={closeAction} onDone={actionDone} />}
       {action === 'submit' && <SubmitSheet request={request} etag={etag} onClose={closeAction} onDone={actionDone} />}
@@ -442,6 +530,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [names, setNames] = useState({})
   const [catalog, setCatalog] = useState([])
   const [emptyBeds, setEmptyBeds] = useState(null)
+  // Loại phòng của từng phòng (GET /rooms, /room-types): loại thay đổi "Loại phòng" (mã BED) chỉ dùng khi đổi sang loại
+  // phòng khác (FR-043l, R22); null là chưa tải, {} là không đọc được (khi đó không lọc, backend vẫn kiểm)
+  const [roomTypeOf, setRoomTypeOf] = useState(null)
+  const [roomTypes, setRoomTypes] = useState([])
+  const [newRoomTypeId, setNewRoomTypeId] = useState(null)
   // Phụ lục 27: trong những người lập được yêu cầu, chỉ Bác sĩ không xem được hợp đồng; Bác sĩ chọn người cao tuổi và chỉ
   // lập yêu cầu đổi mức chăm sóc (FR-039). Hành chính xác nhận với người đại diện, kèm bằng chứng (2026-11-20)
   const { status: permissionStatus, can } = usePermissions()
@@ -449,6 +542,8 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [residents, setResidents] = useState([])
   const [residentId, setResidentId] = useState(request?.residentId ? String(request.residentId) : '')
   const [contractId, setContractId] = useState(request ? String(request.contractId) : '')
+  const [contractSearch, setContractSearch] = useState('')
+  const [residentSearch, setResidentSearch] = useState('')
   const [types, setTypes] = useState(request?.changeTypes ?? [])
   const [value, setValue] = useState(request?.newValue ?? {})
   const [date, setDate] = useState(request?.requestedEffectiveDate ?? '')
@@ -478,18 +573,19 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         for (const c of active)
           getResidentsById({ path: { id: c.residentId } })
             .then(({ data: r }) => setNames((n) => ({ ...n, [c.residentId]: r.personalInfo?.fullName })))
-            .catch(() => {})
+            .catch(() => { })
       })
       .catch((e) => setFailure(problemOf(e)))
     getServices({ query: {} })
       .then(({ data }) => setCatalog(data ?? []))
-      .catch(() => {})
+      .catch(() => { })
   }, [permissionStatus, seesContracts])
 
   const activeTypes = seesContracts ? types : ['CARE_LEVEL']
   const wantsBed = activeTypes.includes('BED')
 
-  // Giường mới chọn trong các giường đang Trống (bảng giường api-003); chỉ tải khi chọn loại Giường
+  // Giường mới chọn trong các giường đang Trống (bảng giường api-003), lọc theo loại phòng mới; chỉ tải khi chọn loại
+  // thay đổi Loại phòng
   useEffect(() => {
     if (!wantsBed || emptyBeds !== null) return
     getBeds({ query: { status: ['EMPTY'] } })
@@ -498,13 +594,47 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         setEmptyBeds([])
         setFailure(problemOf(e))
       })
+    Promise.all([getRooms({ query: {} }), getRoomTypes({ query: {} })])
+      .then(([rooms, types]) => {
+        const names = Object.fromEntries((types.data ?? []).map((t) => [t.id, t.name]))
+        setRoomTypes(types.data ?? [])
+        setRoomTypeOf(
+          Object.fromEntries((rooms.data ?? []).map((r) => [r.id, { id: r.roomTypeId, name: names[r.roomTypeId] }])),
+        )
+      })
+      .catch(() => setRoomTypeOf({}))
   }, [wantsBed, emptyBeds])
 
   const contract = contracts.find((c) => String(c.id) === contractId)
+  const filteredContracts = contracts.filter((c) => {
+    if (String(c.id) === contractId) return true
+    if (!contractSearch.trim()) return true
+    const kw = plain(contractSearch.trim())
+    const resName = names[c.residentId] ?? `Mã ${c.residentId}`
+    return plain(resName).includes(kw) || plain(c.contractNumber).includes(kw)
+  })
+  const filteredResidents = residents.filter((r) => {
+    if (String(r.id) === residentId) return true
+    if (!residentSearch.trim()) return true
+    const kw = plain(residentSearch.trim())
+    const resName = r.personalInfo?.fullName ?? `Mã ${r.id}`
+    return plain(resName).includes(kw)
+  })
   const contractServiceIds = new Set((contract?.services ?? []).map((s) => s.serviceId))
   // Dấu thuộc gói theo hợp đồng hiện hành (R19): chỉ dòng có trong hợp đồng mang dấu thuộc gói
   const inPackageIds = new Set((contract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
   const subjectId = contract?.residentId ?? (residentId ? Number(residentId) : null)
+
+  // Loại phòng (FR-043l, R22): chỉ các loại phòng khác loại phòng của hợp đồng và còn giường trống; chuyển sang giường cùng
+  // loại phòng dùng Chuyển giường trực tiếp (7.4), không lập yêu cầu
+  const knowsRoomTypes = !!roomTypeOf && Object.keys(roomTypeOf).length > 0
+  const roomTypeOfBed = (bed) => roomTypeOf?.[bed?.location?.roomId]?.id ?? null
+  const currentRoomTypeId = contract?.roomTypeId ?? null
+  const otherRoomTypes = roomTypes.filter(
+    (t) => t.id !== currentRoomTypeId && (emptyBeds ?? []).some((b) => roomTypeOfBed(b) === t.id),
+  )
+  const chosenRoomTypeId =
+    newRoomTypeId ?? (value.newBedId ? roomTypeOfBed((emptyBeds ?? []).find((b) => b.id === value.newBedId)) : null)
 
   useEffect(() => {
     let live = true
@@ -542,9 +672,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
       services: lineOf(id)
         ? pickedServices.filter((s) => s.serviceId !== id)
         : [
-            ...pickedServices,
-            { serviceId: id, action: contractServiceIds.has(id) ? 'REMOVE' : 'ADD' },
-          ],
+          ...pickedServices,
+          { serviceId: id, action: contractServiceIds.has(id) ? 'REMOVE' : 'ADD' },
+        ],
     })
   const setRow = (i, patch) =>
     set({ arrivalSchedule: (value.arrivalSchedule ?? []).map((r, j) => (j === i ? { ...r, ...patch } : r)) })
@@ -555,6 +685,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const errors = {
     contract: seesContracts ? !contractId && 'Chọn hợp đồng' : !residentId && 'Chọn người cao tuổi',
     ...changeErrors,
+    newRoomTypeId: activeTypes.includes('BED') && knowsRoomTypes && !chosenRoomTypeId && 'Chọn loại phòng mới',
     reason: !reason.trim() && 'Nhập lý do',
   }
   const shown = (key) => (submitted ? errors[key] || null : null)
@@ -562,10 +693,13 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     ? requiredCompanions(contract?.residenceType, value.residenceType)
     : []
   // Sửa nháp: giường đã chọn có thể không còn Trống, vẫn hiện để không mất giá trị
+  const candidateBeds = knowsRoomTypes
+    ? (emptyBeds ?? []).filter((b) => chosenRoomTypeId && roomTypeOfBed(b) === chosenRoomTypeId)
+    : (emptyBeds ?? [])
   const bedOptions =
     value.newBedId && emptyBeds && !emptyBeds.some((b) => b.id === value.newBedId)
-      ? [{ id: value.newBedId, location: { label: `Giường mã ${value.newBedId} (không còn trống)` } }, ...emptyBeds]
-      : (emptyBeds ?? [])
+      ? [{ id: value.newBedId, location: { label: `Giường mã ${value.newBedId} (không còn trống)` } }, ...candidateBeds]
+      : candidateBeds
 
   async function save() {
     setSubmitted(true)
@@ -612,26 +746,69 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
 
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg [&_svg]:stroke-[2.5]">
-        <div className="flex items-center gap-3 pr-10">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
-            <FilePlus2 aria-hidden className="size-5" />
-          </span>
-          <SheetTitle className="type-title text-primary">
-            {editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}
-          </SheetTitle>
+      <SheetContent className="flex h-full flex-col p-0 overflow-hidden sm:max-w-lg [&_svg]:stroke-[2.5]">
+        {/* 1. HEADER (Cố định trên cùng) */}
+        <div className="shrink-0 flex flex-col gap-1.5 p-6 pb-4 border-b border-border/60">
+          <div className="flex items-center gap-3 pr-10">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+              <FilePlus2 aria-hidden className="size-5" />
+            </span>
+            <SheetTitle className="type-title text-primary">
+              {editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}
+            </SheetTitle>
+          </div>
+          <SheetDescription className="text-xs text-muted-foreground leading-relaxed">
+            {seesContracts
+              ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
+              : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
+          </SheetDescription>
         </div>
-        <SheetDescription>
-          {seesContracts
-            ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
-            : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
-        </SheetDescription>
-        <FieldGroup className="mt-4">
+
+        {/* 2. BODY (Khu vực cuộn độc lập) */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+          <FieldGroup>
           {!seesContracts && (
             <Field data-invalid={!!shown('contract') || undefined}>
               <FieldLabel htmlFor="change-resident" className={REQUIRED}>
                 Người cao tuổi
               </FieldLabel>
+              {!editing && (
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                    <Input
+                      id="resident-search-query"
+                      aria-label="Tìm kiếm người cao tuổi"
+                      placeholder="Tìm theo họ tên người cao tuổi..."
+                      className="h-10 rounded-xl pl-9 pr-8 text-xs bg-card"
+                      value={residentSearch}
+                      onChange={(e) => setResidentSearch(e.target.value)}
+                    />
+                    {residentSearch && (
+                      <button
+                        type="button"
+                        aria-label="Xóa tìm kiếm"
+                        onClick={() => setResidentSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 shrink-0 rounded-xl px-3.5 text-xs font-medium"
+                    onClick={() => {
+                      if (filteredResidents.length === 1) {
+                        setResidentId(String(filteredResidents[0].id))
+                      }
+                    }}
+                  >
+                    Tìm
+                  </Button>
+                </div>
+              )}
               <select
                 id="change-resident"
                 className={SELECT}
@@ -639,8 +816,14 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 disabled={editing}
                 onChange={(e) => setResidentId(e.target.value)}
               >
-                <option value="">Người cao tuổi đang lưu trú</option>
-                {residents.map((r) => (
+                <option value="">
+                  {filteredResidents.length === 0
+                    ? 'Không tìm thấy người cao tuổi'
+                    : residentSearch
+                    ? `Người cao tuổi phù hợp (${filteredResidents.length})`
+                    : 'Người cao tuổi đang lưu trú'}
+                </option>
+                {filteredResidents.map((r) => (
                   <option key={r.id} value={r.id}>
                     {r.personalInfo?.fullName ?? `Mã ${r.id}`}
                   </option>
@@ -654,6 +837,43 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               <FieldLabel htmlFor="change-contract" className={REQUIRED}>
                 Hợp đồng
               </FieldLabel>
+              {!editing && (
+                <div className="mb-2 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-slate-400" />
+                    <Input
+                      id="contract-search-query"
+                      aria-label="Tìm kiếm hợp đồng"
+                      placeholder="Tìm theo họ tên hoặc số hợp đồng..."
+                      className="h-10 rounded-xl pl-9 pr-8 text-xs bg-card"
+                      value={contractSearch}
+                      onChange={(e) => setContractSearch(e.target.value)}
+                    />
+                    {contractSearch && (
+                      <button
+                        type="button"
+                        aria-label="Xóa tìm kiếm"
+                        onClick={() => setContractSearch('')}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 shrink-0 rounded-xl px-3.5 text-xs font-medium"
+                    onClick={() => {
+                      if (filteredContracts.length === 1) {
+                        setContractId(String(filteredContracts[0].id))
+                      }
+                    }}
+                  >
+                    Tìm
+                  </Button>
+                </div>
+              )}
               <select
                 id="change-contract"
                 className={SELECT}
@@ -661,8 +881,14 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 disabled={editing}
                 onChange={(e) => setContractId(e.target.value)}
               >
-                <option value="">Hợp đồng đang hiệu lực</option>
-                {contracts.map((c) => (
+                <option value="">
+                  {filteredContracts.length === 0
+                    ? 'Không tìm thấy hợp đồng phù hợp'
+                    : contractSearch
+                    ? `Hợp đồng phù hợp (${filteredContracts.length})`
+                    : 'Hợp đồng đang hiệu lực'}
+                </option>
+                {filteredContracts.map((c) => (
                   <option key={c.id} value={c.id}>
                     {`${names[c.residentId] ?? `Mã ${c.residentId}`}, ${c.contractNumber}`}
                   </option>
@@ -675,7 +901,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                     contract.careLevel && `mức ${labelOf(CARE_LEVELS, contract.careLevel)}`,
                     contract.startDate && `bắt đầu ${formatDate(contract.startDate)}`,
                     (contract.currentEndDate ?? contract.endDate) &&
-                      `kết thúc ${formatDate(contract.currentEndDate ?? contract.endDate)}`,
+                    `kết thúc ${formatDate(contract.currentEndDate ?? contract.endDate)}`,
                   ]
                     .filter(Boolean)
                     .join(', ')}
@@ -780,9 +1006,37 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               {shown('endDate') && <FieldError>{shown('endDate')}</FieldError>}
             </Field>
           )}
+          {activeTypes.includes('BED') && knowsRoomTypes && (
+            <Field data-invalid={!!shown('newRoomTypeId') || undefined}>
+              <FieldLabel htmlFor="change-room-type">Loại phòng mới</FieldLabel>
+              <select
+                id="change-room-type"
+                className={SELECT}
+                value={chosenRoomTypeId ?? ''}
+                onChange={(e) => {
+                  setNewRoomTypeId(e.target.value === '' ? null : Number(e.target.value))
+                  set({ newBedId: undefined })
+                }}
+              >
+                <option value="">
+                  {otherRoomTypes.length ? 'Chọn loại phòng khác loại phòng hiện tại' : 'Không có loại phòng khác còn giường trống'}
+                </option>
+                {otherRoomTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <FieldDescription>
+                Chỉ dùng khi đổi sang loại phòng khác (đổi phí lưu trú, phải ký phụ lục). Chuyển sang giường khác cùng loại
+                phòng thì dùng Chuyển giường trực tiếp ở màn Giường, không cần lập yêu cầu.
+              </FieldDescription>
+              {shown('newRoomTypeId') && <FieldError>{shown('newRoomTypeId')}</FieldError>}
+            </Field>
+          )}
           {activeTypes.includes('BED') && (
             <Field data-invalid={!!shown('newBedId') || undefined}>
-              <FieldLabel htmlFor="change-bed">Giường mới</FieldLabel>
+              <FieldLabel htmlFor="change-bed">{knowsRoomTypes ? 'Giường trong loại phòng mới' : 'Giường mới'}</FieldLabel>
               <select
                 id="change-bed"
                 className={SELECT}
@@ -792,9 +1046,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 <option value="">
                   {emptyBeds === null
                     ? 'Đang tải…'
-                    : bedOptions.length
-                      ? 'Chọn giường đang trống'
-                      : 'Không có giường trống'}
+                    : knowsRoomTypes && !chosenRoomTypeId
+                      ? 'Chọn loại phòng mới trước'
+                      : bedOptions.length
+                        ? 'Chọn giường đang trống'
+                        : 'Không có giường trống'}
                 </option>
                 {bedOptions.map((b) => (
                   <option key={b.id} value={b.id}>
@@ -802,7 +1058,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
-              <FieldDescription>Giường phải còn trống và hợp mức chăm sóc lúc duyệt; kiểm khi duyệt.</FieldDescription>
+              <FieldDescription>
+                Giữ trước giường này tới ngày hiệu lực; giường phải còn trống và hợp mức chăm sóc lúc duyệt.
+              </FieldDescription>
               {shown('newBedId') && <FieldError>{shown('newBedId')}</FieldError>}
             </Field>
           )}
@@ -949,14 +1207,21 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         <div className="mt-4">
           <ProblemAlert problem={failure} />
         </div>
-        <div className="sticky bottom-0 -mx-6 -mb-6 mt-4 flex justify-end gap-2 border-t bg-background px-6 py-4">
-          <Button variant="outline" className="h-11 px-6" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button className="h-11 px-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg" disabled={busy || (editing && !etag)} onClick={save}>
-            Lưu yêu cầu
-          </Button>
-        </div>
+      </div>
+
+      {/* 3. FOOTER (Cố định ở đáy, không đè lên Body) */}
+      <div className="shrink-0 sticky bottom-0 flex items-center justify-end gap-2.5 border-t border-border bg-card px-6 py-3.5 mt-auto">
+        <Button variant="outline" className="h-10 px-5 font-semibold" onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          className="h-10 px-6 font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+          disabled={busy || (editing && !etag)}
+          onClick={save}
+        >
+          Lưu yêu cầu
+        </Button>
+      </div>
       </SheetContent>
     </Sheet>
   )

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getStaffByStaffIdHeldBelongings } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,20 +12,30 @@ import { amountText, statusLabel } from './belongingLabels'
 // Đồ có giá trị một nhân viên đang giữ (013 T015; FR-014a; api-013 GET /staff/{staffId}/held-belongings), dùng khi lập
 // bàn giao ca. GET /me của 002 không trả mã hồ sơ nhân viên nên nhập mã; backend cho xem đồ của chính mình hoặc khi có
 // quyền "Đồ gửi".
-export function HeldBelongings({ catalogs }) {
-  const [staffId, setStaffId] = useState('')
+// initialStaffId: mở từ nhắc còn giữ đồ khi hết ca (hoàn thiện BF-14, 2026-11-23), tải ngay
+export function HeldBelongings({ catalogs, initialStaffId = null }) {
+  const [staffId, setStaffId] = useState(initialStaffId ? String(initialStaffId) : '')
   const [state, setState] = useState({ status: 'idle', items: [] })
 
-  async function load(event) {
-    event.preventDefault()
-    if (!/^[1-9]\d*$/.test(staffId)) return
+  const fetchHeld = useCallback(async (id) => {
     setState({ status: 'loading', items: [] })
     try {
-      const { data } = await getStaffByStaffIdHeldBelongings({ path: { staffId } })
+      const { data } = await getStaffByStaffIdHeldBelongings({ path: { staffId: id } })
       setState({ status: 'ready', items: data })
     } catch (error) {
       setState({ status: 'error', items: [], problem: problemOf(error) })
     }
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- tải ngay khi mở từ thông báo
+    if (initialStaffId) fetchHeld(String(initialStaffId))
+  }, [initialStaffId, fetchHeld])
+
+  function load(event) {
+    event.preventDefault()
+    if (!/^[1-9]\d*$/.test(staffId)) return
+    fetchHeld(staffId)
   }
 
   return (

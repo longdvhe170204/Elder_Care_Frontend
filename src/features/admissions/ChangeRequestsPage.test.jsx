@@ -438,7 +438,7 @@ describe('ChangeRequestsPage', () => {
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Giường' }))
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Loại phòng' }))
     await within(dialog).findByRole('option', { name: 'Khu A – Tầng 1 – Phòng 102 – G3' })
     expect(new URL(api.calls('GET', '/beds')[0][0], 'http://x').searchParams.getAll('status')).toEqual(['EMPTY'])
     expect(within(dialog).queryByRole('button', { name: /Gợi ý lý do/ })).not.toBeInTheDocument()
@@ -451,6 +451,78 @@ describe('ChangeRequestsPage', () => {
     expect(JSON.parse(api.calls('POST', '/residency-change-requests')[0][1].body)).toMatchObject({
       changeTypes: ['BED'],
       newValue: { newBedId: 9005 },
+    })
+  })
+
+  it('R22_loaiPhong_chiHienLoaiPhongKhac_vaGiuongCuaLoaiDo', async () => {
+    api.on(
+      'GET',
+      '/contracts',
+      json(200, [
+        {
+          id: 31,
+          residentId: 5,
+          contractNumber: 'HD-031',
+          status: 'ACTIVE',
+          residenceType: 'LONG_TERM_RESIDENTIAL',
+          careLevel: 'REGULAR',
+          roomTypeId: 1,
+        },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/beds',
+      json(200, {
+        beds: [
+          { id: 9101, code: 'G1', location: { roomId: 101, label: 'Phòng 101 – G1' } },
+          { id: 9201, code: 'G1', location: { roomId: 201, label: 'Phòng 201 – G1' } },
+        ],
+        residentsWithoutBed: [],
+      }),
+    )
+    api.on(
+      'GET',
+      '/rooms',
+      json(200, [
+        { id: 101, roomTypeId: 1 },
+        { id: 201, roomTypeId: 2 },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/room-types',
+      json(200, [
+        { id: 1, name: 'Phòng bốn giường' },
+        { id: 2, name: 'Phòng đôi' },
+      ]),
+    )
+    api.on('POST', '/residency-change-requests', json(201, REQUEST))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: /HD-031/ })
+    fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Loại phòng' }))
+
+    const roomType = await within(dialog).findByLabelText('Loại phòng mới')
+    await within(roomType).findByRole('option', { name: 'Phòng đôi' })
+    expect(within(roomType).queryByRole('option', { name: 'Phòng bốn giường' })).not.toBeInTheDocument()
+    expect(within(dialog).getByText(/Chuyển giường trực tiếp/)).toBeInTheDocument()
+
+    fireEvent.change(roomType, { target: { value: '2' } })
+    const bed = within(dialog).getByLabelText('Giường trong loại phòng mới')
+    expect(within(bed).getByRole('option', { name: 'Phòng 201 – G1' })).toBeInTheDocument()
+    expect(within(bed).queryByRole('option', { name: 'Phòng 101 – G1' })).not.toBeInTheDocument()
+    fireEvent.change(bed, { target: { value: '9201' } })
+    fireEvent.change(within(dialog).getByLabelText('Ngày hiệu lực mong muốn'), { target: { value: '2026-11-20' } })
+    fireEvent.change(within(dialog).getByLabelText('Lý do'), { target: { value: 'Gia đình muốn lên phòng đôi' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu yêu cầu' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residency-change-requests')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residency-change-requests')[0][1].body)).toMatchObject({
+      changeTypes: ['BED'],
+      newValue: { newBedId: 9201 },
     })
   })
 

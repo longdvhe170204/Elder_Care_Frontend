@@ -138,7 +138,7 @@ export const getShiftsByShiftIdCareTasks = (params) => request('GET', '/shifts/{
 /** Lập công việc của ca theo lô (FR-002, FR-006, FR-017, FR-018, FR-021, FR-023, FR-024, FR-029, BR-M04-01, BR-M04-02, BR-M04-24, BR-M04-26, BR-M04-28, BR-M09-01) */
 export const postShiftsByShiftIdCareTasksPlan = (params) => request('POST', '/shifts/{shiftId}/care-tasks/plan', params)
 
-/** Tạo công việc phát sinh (Trưởng tầng, Điều dưỡng) (FR-025, FR-023) */
+/** Tạo công việc phát sinh (Trưởng tầng, Điều dưỡng); căn cứ AD_HOC hoặc INCIDENT_FOLLOW_UP (FR-025, FR-023) */
 export const postCareTasksAdHoc = (params) => request('POST', '/care-tasks/ad-hoc', params)
 
 /** Lập công việc làm lại sau kiểm tra chất lượng Không đạt (người kiểm tra của 014) (FR-026a, BR-M04-23) */

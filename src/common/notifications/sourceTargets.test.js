@@ -25,6 +25,10 @@ describe('SOURCE_TARGETS (thông báo đồ gửi)', () => {
       { tab: 'inventory', checkId: 10 },
     ])
     expect(await SOURCE_TARGETS['M12.STORAGE_LOCATION'].resolve('9702')).toEqual(['belongings', { tab: 'inventory' }])
+    expect(await SOURCE_TARGETS['M12.STAFF_HELD_BELONGINGS'].resolve('9005')).toEqual([
+      'belongings',
+      { tab: 'held', staffId: 9005 },
+    ])
   })
 
   it('xacNhanNguoiNhan_timNguoiCaoTuoiTheoMa', async () => {

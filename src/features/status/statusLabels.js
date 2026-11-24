@@ -41,6 +41,36 @@ export const COMMAND_EFFECTS = {
   RECORD_DEATH: 'Hồ sơ chuyển sang Qua đời và chỉ còn xem được; người liên hệ chính được báo ở mức Khẩn cấp.',
 }
 
+// Trở về từ bệnh viện có thêm tác động riêng (5.6, BR-M07-09, BR-M01-02); sự cố chuyển viện được ghi lúc về
+const HOSPITAL_RETURN_EFFECT =
+  'Người cao tuổi trở lại Đang lưu trú. Thuốc cũ vẫn tạm dừng tới khi phiếu đối chiếu thuốc được xác nhận; Điều dưỡng, Bác sĩ được báo lập phiếu đối chiếu, Bác sĩ được báo cần đánh giá lại; sự cố đã chuyển viện được ghi lúc về.'
+
+export function commandEffect(command, status) {
+  if (command === 'RECORD_RETURN' && status === 'HOSPITALIZED') return HOSPITAL_RETURN_EFFECT
+  return COMMAND_EFFECTS[command]
+}
+
+// Nhãn ô lý do theo từng lệnh, thay cho "Lý do của lệnh" chung (góp ý test demo 2026-11-23). Trường gửi đi vẫn là reason.
+const REASON_FIELD = {
+  COMPLETE_ADMISSION: { label: 'Ghi chú khi hoàn tất tiếp nhận' },
+  CANCEL_ADMISSION: { label: 'Lý do hủy tiếp nhận' },
+  GRANT_TEMPORARY_ABSENCE: { label: 'Lý do tạm vắng' },
+  RECORD_RETURN: { label: 'Ghi chú khi về', placeholder: 'Ví dụ: Con gái đưa về lúc 17:00, cụ khỏe' },
+  TRANSFER_OUT: { label: 'Lý do chuyển viện' },
+  END_RESIDENCY: { label: 'Lý do kết thúc lưu trú' },
+  RECORD_DEATH: { label: 'Ghi chú khi ghi nhận qua đời' },
+}
+const HOSPITAL_RETURN_FIELD = {
+  label: 'Tình trạng khi về (kết luận của bệnh viện)',
+  placeholder: 'Ví dụ: Chụp phim không gãy xương, bầm hông trái, kê thuốc giảm đau 5 ngày',
+}
+
+export function reasonField(command, status) {
+  const field = command === 'RECORD_RETURN' && status === 'HOSPITALIZED' ? HOSPITAL_RETURN_FIELD : REASON_FIELD[command]
+  const label = field?.label ?? 'Lý do của lệnh'
+  return { label: `${label} (bắt buộc)`, placeholder: field?.placeholder, error: `Nhập ${label.toLowerCase()}` }
+}
+
 export const FINAL_STATUSES = ['RESIDENCY_ENDED', 'DECEASED', 'ADMISSION_CANCELLED']
 
 export const BASIS_KINDS = [

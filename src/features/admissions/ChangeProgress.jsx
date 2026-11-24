@@ -24,7 +24,7 @@ export function ChangeProgress({ progress }) {
     .join(' ')
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-3.5 shadow-2xs">
       <div
         role="progressbar"
         aria-label="Tiến trình yêu cầu"
@@ -32,15 +32,15 @@ export function ChangeProgress({ progress }) {
         aria-valuemax={total}
         aria-valuenow={position}
         aria-valuetext={headline}
-        className="grid gap-1"
+        className="grid gap-1.5"
         style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }}
       >
         {steps.map((s) => (
-          <span key={s.key} className={cn('h-1.5 rounded-full border', SEGMENT[s.state])} />
+          <span key={s.key} className={cn('h-2 rounded-full border transition-all duration-300', SEGMENT[s.state])} />
         ))}
       </div>
-      <p className="type-label">{headline}</p>
-      {caption && <p className="type-caption text-muted-foreground">{caption}</p>}
+      <p className="type-label font-bold text-foreground">{headline}</p>
+      {caption && <p className="type-caption text-muted-foreground leading-relaxed">{caption}</p>}
     </div>
   )
 }

@@ -305,10 +305,10 @@ const TABS = [
 ]
 
 // residentId, belongingId, tab, checkId: mở từ thông báo (NotificationDetail; hoàn thiện BF-14, 2026-11-23)
-export function BelongingsPage({ role, residentId, belongingId, tab: initialTab, checkId }) {
+export function BelongingsPage({ role, residentId, belongingId, tab: initialTab, checkId, staffId }) {
   const catalogs = useBelongingCatalogs()
   const [resident, setResident] = useState(null)
-  const [tab, setTab] = useState(initialTab === 'inventory' ? 'inventory' : 'resident')
+  const [tab, setTab] = useState(['inventory', 'held'].includes(initialTab) ? initialTab : 'resident')
 
   useEffect(() => {
     if (!residentId) return
@@ -359,7 +359,7 @@ export function BelongingsPage({ role, residentId, belongingId, tab: initialTab,
           initialBelongingId={Number(resident.id) === Number(residentId) && belongingId ? Number(belongingId) : null}
         />
       )}
-      {tab === 'held' && <HeldBelongings catalogs={catalogs} />}
+      {tab === 'held' && <HeldBelongings catalogs={catalogs} initialStaffId={staffId ? Number(staffId) : null} />}
       {tab === 'inventory' && <InventoryChecks catalogs={catalogs} initialCheckId={checkId ? Number(checkId) : null} />}
     </div>
   )
