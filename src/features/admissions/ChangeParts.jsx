@@ -294,145 +294,150 @@ export function ChangeRequestView({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-5 [&_svg]:stroke-[2.5]">
-      <div className="flex flex-col gap-1 border-b border-border/60 pb-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden [&_svg]:stroke-[2.5]">
+      {/* 1. HEADER (Cố định trên cùng) */}
+      <div className="shrink-0 flex flex-col gap-1 border-b border-border/60 pb-3 pr-8">
         <Title className="type-title font-bold text-foreground">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
         <Description className="type-body-sm text-muted-foreground leading-relaxed">
           {`${REQUEST_STATUS[request.status] ?? request.status}. Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}${contractNumber ? `. Hợp đồng ${contractNumber}` : ''}`}
         </Description>
       </div>
-      <ChangeProgress progress={changeSteps(request)} />
-      <div className="flex flex-col gap-5">
-        <div className="rounded-xl border-l-4 border-primary bg-muted/50 p-4 shadow-2xs">
-          <Info label="Lý do">{request.reason}</Info>
-        </div>
-        <ChangeContent content={request} variant="cards" />
-        {request.representativeConfirmation?.recordedAt && (
-          <p className="type-caption text-muted-foreground">
-            {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
-          </p>
-        )}
 
-        {request.minorChange && (
-          <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
-        )}
-        {state && (draft || sent) && (
-          <section className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
-              {state.attention && draft ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
-                  <span className="size-1.5 rounded-full bg-warning-foreground animate-pulse" aria-hidden />
-                  Chờ phản hồi
-                </span>
-              ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
-                  <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
-                  Đã xác nhận
-                </span>
-              )}
-            </div>
-            {state.attention && draft ? (
-              <Alert variant="attention">
-                <AlertTitle>{state.text}</AlertTitle>
-              </Alert>
-            ) : (
-              <p className="type-body-sm font-medium">{state.text}</p>
-            )}
-            {sent && (
-              <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5 type-body-sm">
-                {confirmationRequestText(sent)}
+      {/* 2. BODY (Khu vực cuộn độc lập) */}
+      <div className="flex-1 min-h-0 overflow-y-auto py-4 pr-1 flex flex-col gap-5">
+        <ChangeProgress progress={changeSteps(request)} />
+        <div className="flex flex-col gap-5">
+          <div className="rounded-xl border-l-4 border-primary bg-muted/50 p-4 shadow-2xs">
+            <Info label="Lý do">{request.reason}</Info>
+          </div>
+          <ChangeContent content={request} variant="cards" />
+          {request.representativeConfirmation?.recordedAt && (
+            <p className="type-caption text-muted-foreground">
+              {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
+            </p>
+          )}
+
+          {request.minorChange && (
+            <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
+          )}
+          {state && (draft || sent) && (
+            <section className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
+                {state.attention && draft ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
+                    <span className="size-1.5 rounded-full bg-warning-foreground animate-pulse" aria-hidden />
+                    Chờ phản hồi
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
+                    <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
+                    Đã xác nhận
+                  </span>
+                )}
               </div>
-            )}
-            {draft && needsConfirmation && (
-              <p className="type-caption text-muted-foreground leading-relaxed">
-                {canConfirm
-                  ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
-                  : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
-              </p>
-            )}
-          </section>
-        )}
-        {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
-          <p className="type-body-sm">
-            Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
-          </p>
-        )}
-        {warnings.length > 0 && (
-          <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
-            {warnings.map((w) => (
-              <AlertDescription key={w}>{w}</AlertDescription>
-            ))}
-          </Alert>
-        )}
-        {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
-          <p className="type-caption text-muted-foreground">
-            {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
-          </p>
-        )}
-        <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
-        {pendingSignature && (
-          <Alert variant="attention">
-            <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>
-            <AlertDescription>
-              In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
-            </AlertDescription>
-          </Alert>
-        )}
-        {addendum ? (
-          <section className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Phụ lục hợp đồng">
-            <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
-            <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
-            <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
-            {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
-            {addendum.signedFileId && (
-              <Button variant="outline" className="h-11 self-start rounded-xl" onClick={() => openFile(addendum.signedFileId).catch(() => { })}>
-                Xem bản đã ký
-              </Button>
-            )}
-          </section>
-        ) : (
-          request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
-        )}
-        <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
-        <ProblemAlert problem={failure} />
+              {state.attention && draft ? (
+                <Alert variant="attention">
+                  <AlertTitle>{state.text}</AlertTitle>
+                </Alert>
+              ) : (
+                <p className="type-body-sm font-medium">{state.text}</p>
+              )}
+              {sent && (
+                <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5 type-body-sm">
+                  {confirmationRequestText(sent)}
+                </div>
+              )}
+              {draft && needsConfirmation && (
+                <p className="type-caption text-muted-foreground leading-relaxed">
+                  {canConfirm
+                    ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
+                    : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
+                </p>
+              )}
+            </section>
+          )}
+          {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
+            <p className="type-body-sm">
+              Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
+            </p>
+          )}
+          {warnings.length > 0 && (
+            <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
+              {warnings.map((w) => (
+                <AlertDescription key={w}>{w}</AlertDescription>
+              ))}
+            </Alert>
+          )}
+          {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
+            <p className="type-caption text-muted-foreground">
+              {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
+            </p>
+          )}
+          <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
+          {pendingSignature && (
+            <Alert variant="attention">
+              <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>
+              <AlertDescription>
+                In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
+              </AlertDescription>
+            </Alert>
+          )}
+          {addendum ? (
+            <section className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Phụ lục hợp đồng">
+              <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
+              <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
+              <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
+              {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
+              {addendum.signedFileId && (
+                <Button variant="outline" className="h-11 self-start rounded-xl" onClick={() => openFile(addendum.signedFileId).catch(() => { })}>
+                  Xem bản đã ký
+                </Button>
+              )}
+            </section>
+          ) : (
+            request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
+          )}
+          <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
+          <ProblemAlert problem={failure} />
+        </div>
       </div>
+
+      {/* 3. FOOTER (Cố định ở đáy, không đè lên Body) */}
       <div
         role="group"
         aria-label="Lệnh của yêu cầu"
-        className="mt-6 flex flex-col gap-2.5 border-t border-border pt-4"
+        className="shrink-0 border-t border-border bg-card pt-3 mt-auto flex flex-col gap-2"
       >
-        {/* Hàng 1: Nút hành động chính (Primary CTA) */}
-        {draft && canUpdate && canConfirm && needsConfirmation && (
-          <Button
-            className="h-11 w-full font-bold shadow-sm hover:shadow-md transition-all duration-200"
-            disabled={busy || !etag}
-            onClick={sendToRepresentative}
-          >
-            {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
-          </Button>
-        )}
-        {pendingSignature && canConfirm && (
-          <Button
-            className="h-11 w-full font-bold shadow-sm hover:shadow-md transition-all duration-200"
-            disabled={!etag}
-            onClick={() => setAction('sign')}
-          >
-            Ghi nhận phụ lục đã ký
-          </Button>
-        )}
-        {draft && canUpdate && !needsConfirmation && (
-          <Button
-            className="h-11 w-full font-bold shadow-sm hover:shadow-md transition-all duration-200"
-            disabled={busy || !etag}
-            onClick={() => setAction('submit')}
-          >
-            Gửi duyệt
-          </Button>
-        )}
-
-        {/* Hàng 2: Các nút tác vụ nghiệp vụ (Secondary Actions) */}
+        {/* Hàng 1: Các nút tác vụ chính và phụ gọn gàng trên 1-2 hàng */}
         <div className="flex flex-wrap items-center gap-2">
+          {draft && canUpdate && canConfirm && needsConfirmation && (
+            <Button
+              className="h-10 flex-1 min-w-[150px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={busy || !etag}
+              onClick={sendToRepresentative}
+            >
+              {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
+            </Button>
+          )}
+          {pendingSignature && canConfirm && (
+            <Button
+              className="h-10 flex-1 min-w-[150px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={!etag}
+              onClick={() => setAction('sign')}
+            >
+              Ghi nhận phụ lục đã ký
+            </Button>
+          )}
+          {draft && canUpdate && !needsConfirmation && (
+            <Button
+              className="h-10 flex-1 min-w-[140px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={busy || !etag}
+              onClick={() => setAction('submit')}
+            >
+              Gửi duyệt
+            </Button>
+          )}
           {draft && canUpdate && (
             <Button
               variant="outline"
@@ -445,7 +450,7 @@ export function ChangeRequestView({
           {draft && canUpdate && canConfirm && needsConfirmation && (
             <Button
               variant="outline"
-              className="h-10 flex-1 min-w-[150px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              className="h-10 flex-1 min-w-[140px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
               onClick={() => onConfirm(request)}
             >
               Ghi xác nhận trực tiếp
@@ -454,7 +459,7 @@ export function ChangeRequestView({
           {addendum && onPrint && (
             <Button
               variant="outline"
-              className="h-10 flex-1 min-w-[120px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              className="h-10 flex-1 min-w-[110px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
               onClick={() => onPrint(request)}
             >
               In phụ lục
@@ -463,7 +468,7 @@ export function ChangeRequestView({
           {request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft') && (
             <Button
               variant="outline"
-              className="h-10 flex-1 min-w-[120px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              className="h-10 flex-1 min-w-[110px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
               disabled={!etag}
               onClick={() => setAction('return-to-draft')}
             >
@@ -472,12 +477,12 @@ export function ChangeRequestView({
           )}
         </div>
 
-        {/* Hàng 3: Tiện ích & Hủy (Tải lại và Hủy) */}
-        <div className="flex items-center justify-between border-t border-border/60 pt-2">
+        {/* Hàng 2: Tiện ích & Hủy (Tải lại và Hủy) */}
+        <div className="flex items-center justify-between border-t border-border/50 pt-2">
           <Button
             variant="ghost"
             size="sm"
-            className="h-9 px-3 text-muted-foreground hover:text-foreground text-xs"
+            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
             onClick={onReload}
           >
             Tải lại
@@ -486,7 +491,7 @@ export function ChangeRequestView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-9 px-3 text-muted-foreground hover:bg-muted/60 hover:text-foreground text-xs font-medium"
+              className="h-8 px-2.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground font-medium"
               disabled={!etag}
               onClick={() => setAction('cancel')}
             >
@@ -714,21 +719,27 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
 
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg [&_svg]:stroke-[2.5]">
-        <div className="flex items-center gap-3 pr-10">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
-            <FilePlus2 aria-hidden className="size-5" />
-          </span>
-          <SheetTitle className="type-title text-primary">
-            {editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}
-          </SheetTitle>
+      <SheetContent className="flex h-full flex-col p-0 overflow-hidden sm:max-w-lg [&_svg]:stroke-[2.5]">
+        {/* 1. HEADER (Cố định trên cùng) */}
+        <div className="shrink-0 flex flex-col gap-1.5 p-6 pb-4 border-b border-border/60">
+          <div className="flex items-center gap-3 pr-10">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+              <FilePlus2 aria-hidden className="size-5" />
+            </span>
+            <SheetTitle className="type-title text-primary">
+              {editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}
+            </SheetTitle>
+          </div>
+          <SheetDescription className="text-xs text-muted-foreground leading-relaxed">
+            {seesContracts
+              ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
+              : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
+          </SheetDescription>
         </div>
-        <SheetDescription>
-          {seesContracts
-            ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
-            : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
-        </SheetDescription>
-        <FieldGroup className="mt-4">
+
+        {/* 2. BODY (Khu vực cuộn độc lập) */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
+          <FieldGroup>
           {!seesContracts && (
             <Field data-invalid={!!shown('contract') || undefined}>
               <FieldLabel htmlFor="change-resident" className={REQUIRED}>
@@ -1083,14 +1094,21 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
         <div className="mt-4">
           <ProblemAlert problem={failure} />
         </div>
-        <div className="sticky bottom-0 -mx-6 -mb-6 mt-4 flex justify-end gap-2 border-t bg-background px-6 py-4">
-          <Button variant="outline" className="h-11 px-6" onClick={onClose}>
-            Hủy
-          </Button>
-          <Button className="h-11 px-6 shadow-md transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg" disabled={busy || (editing && !etag)} onClick={save}>
-            Lưu yêu cầu
-          </Button>
-        </div>
+      </div>
+
+      {/* 3. FOOTER (Cố định ở đáy, không đè lên Body) */}
+      <div className="shrink-0 sticky bottom-0 flex items-center justify-end gap-2.5 border-t border-border bg-card px-6 py-3.5 mt-auto">
+        <Button variant="outline" className="h-10 px-5 font-semibold" onClick={onClose}>
+          Hủy
+        </Button>
+        <Button
+          className="h-10 px-6 font-bold shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+          disabled={busy || (editing && !etag)}
+          onClick={save}
+        >
+          Lưu yêu cầu
+        </Button>
+      </div>
       </SheetContent>
     </Sheet>
   )
