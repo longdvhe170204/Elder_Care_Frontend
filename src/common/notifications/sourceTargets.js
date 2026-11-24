@@ -33,6 +33,10 @@ export const SOURCE_TARGETS = {
       return ['belongings', { residentId: found.residentId }]
     },
   },
+  'M12.STAFF_HELD_BELONGINGS': {
+    label: 'Mở đồ nhân viên đang giữ',
+    resolve: async (id) => ['belongings', { tab: 'held', staffId: Number(id) }],
+  },
   'M12.INVENTORY_CHECK': {
     label: 'Mở phiếu kiểm kê',
     resolve: async (id) => ['belongings', { tab: 'inventory', checkId: Number(id) }],
