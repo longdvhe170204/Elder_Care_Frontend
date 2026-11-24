@@ -88,6 +88,34 @@ describe('EndingsPage', () => {
     expect(screen.getByText(/Tự động/)).toBeInTheDocument()
   })
 
+  it('FR_063_dieuKien_datMauXanh_chuaDatMauDo_khongHienMaSpec', async () => {
+    api.on(
+      'GET',
+      '/residency-endings/14/conditions',
+      json(200, {
+        conditions: [
+          { code: 'END_B_BELONGINGS', name: 'Không còn đồ gửi cần nhận', status: 'MET', basis: 'FR-063 (b)' },
+          {
+            code: 'END_E_HANDOVER',
+            name: 'Đã ghi nhận bàn giao người cao tuổi',
+            status: 'NOT_MET',
+            basis: 'Chưa ghi nhận bàn giao người cao tuổi',
+          },
+          { code: 'END_G_BED', name: 'Giường được giải phóng', status: 'AUTOMATIC', basis: 'FR-063 (g), FR-065' },
+        ],
+        warnings: [],
+      }),
+    )
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
+    await screen.findByText('Không còn đồ gửi cần nhận')
+
+    expect(screen.getByText('Đạt')).toHaveClass('text-success-foreground')
+    expect(screen.getByText('Chưa đạt')).toHaveClass('text-destructive')
+    expect(screen.getByText('Chưa ghi nhận bàn giao người cao tuổi')).toBeInTheDocument()
+    expect(screen.queryByText(/FR-063/)).not.toBeInTheDocument()
+  })
+
   it('FR_064_xinNgoaiLe_khongCoChoDieuKienBanGiao_vaXacNhanQuyetToan', async () => {
     renderPage()
     await openEnding()
@@ -141,6 +169,27 @@ describe('EndingsPage', () => {
       handoverAt: '2026-11-20T09:00:00+07:00',
       handoverStaffId: 9,
       pickupRecordId: 7001,
+    })
+  })
+
+  it('FR_063_banGiao_hanhChinhKhongXemDuocNhanVien_nguoiGhiLaNhanVienBanGiao', async () => {
+    // Hành chính không xem được hồ sơ nhân viên (Phụ lục 27): GET /staff trả rỗng; backend lấy chính người ghi
+    api.on('GET', '/staff', json(200, []))
+    api.on('POST', '/residency-endings/14/handover', json(201, {}))
+    renderPage()
+    await openEnding()
+    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận bàn giao…' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Người thân' }))
+    fireEvent.change(await screen.findByLabelText('Người thân nhận'), { target: { value: '41' } })
+    fireEvent.change(screen.getByLabelText('Thời điểm bàn giao'), { target: { value: '2026-11-20T09:00' } })
+    expect(await screen.findByText(/Chính bạn, người ghi bàn giao/)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residency-endings/14/handover')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residency-endings/14/handover')[0][1].body)).toEqual({
+      recipientType: 'FAMILY_MEMBER',
+      familyMemberId: 41,
+      handoverAt: '2026-11-20T09:00:00+07:00',
     })
   })
 

@@ -38,14 +38,18 @@ import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 const SETTLEMENT = ['END_H_SETTLEMENT', 'END_H_SETTLEMENT_CONFIRMATION']
 const HOUSE_LABEL = 'Điều kiện (h): số dư và tiền cọc đã quyết toán'
 
+// Trạng thái có màu (Đạt xanh, Chưa đạt đỏ; DESIGN.md mục 3.5). Lý do chỉ hiện khi Chưa đạt: dòng Đạt, Tự động backend
+// trả căn cứ là mã spec (FR-063 …), không phải chữ cho người dùng
 function ConditionLine({ line }) {
   return (
     <li className="flex flex-col">
-      <span className="type-body-sm">{line.name ?? line.code}</span>
-      <span className="type-caption text-muted-foreground">
-        {CONDITION_STATUS[line.status] ?? line.status}
-        {line.basis ? `, ${line.basis}` : ''}
+      <span className="flex flex-wrap items-center gap-x-2">
+        <span className="type-body-sm">{line.name ?? line.code}</span>
+        <StatusBadge status={CONDITION_STATUS[line.status] ?? line.status} />
       </span>
+      {line.status === 'NOT_MET' && line.basis && (
+        <span className="type-caption text-muted-foreground">{line.basis}</span>
+      )}
     </li>
   )
 }
@@ -75,7 +79,9 @@ function Conditions({ conditions }) {
 function HandoverForm({ ending, onDone, onCancel }) {
   const [type, setType] = useState('')
   const [members, setMembers] = useState([])
-  const [staff, setStaff] = useState([])
+  // null: đang tải. Rỗng: người ghi không xem được hồ sơ nhân viên (Hành chính, Phụ lục 27) thì nhân viên bàn giao là
+  // chính người ghi, backend tự lấy (BF-10 bước 6, phương án A 2026-11-24)
+  const [staff, setStaff] = useState(null)
   const [memberId, setMemberId] = useState('')
   const [facility, setFacility] = useState('')
   const [at, setAt] = useState('')
@@ -90,17 +96,18 @@ function HandoverForm({ ending, onDone, onCancel }) {
       .then(({ data }) => setMembers(data.filter((r) => r.status === 'ACTIVE')))
       .catch(() => {})
     getStaff({ query: { status: 'WORKING' } })
-      .then(({ data }) => setStaff(data))
-      .catch(() => {})
+      .then(({ data }) => setStaff(data ?? []))
+      .catch(() => setStaff([]))
   }, [ending.residentId])
 
   const family = type === 'FAMILY_MEMBER'
+  const recorderIsStaff = staff !== null && staff.length === 0
   const errors = {
     type: !type && 'Chọn người nhận',
     member: family && !memberId && 'Chọn người thân nhận',
     facility: type === 'RECEIVING_FACILITY' && !facility.trim() && 'Nhập tên cơ sở tiếp nhận',
     at: !at && 'Nhập thời điểm bàn giao',
-    staff: !staffId && 'Chọn nhân viên bàn giao',
+    staff: !recorderIsStaff && !staffId && 'Chọn nhân viên bàn giao',
   }
 
   async function save() {
@@ -116,7 +123,7 @@ function HandoverForm({ ending, onDone, onCancel }) {
           recipientType: type,
           ...(family ? { familyMemberId: Number(memberId) } : { facilityName: facility.trim() }),
           handoverAt: vietnamIso(at),
-          handoverStaffId: Number(staffId),
+          ...(!recorderIsStaff && { handoverStaffId: Number(staffId) }),
           ...(family && pickup && { pickupRecordId: Number(pickup) }),
         },
       })
@@ -192,18 +199,22 @@ function HandoverForm({ ending, onDone, onCancel }) {
           />
           {shown('at') && <FieldError>{shown('at')}</FieldError>}
         </Field>
-        <Field data-invalid={!!shown('staff') || undefined}>
-          <FieldLabel htmlFor="handover-staff">Nhân viên bàn giao</FieldLabel>
-          <select id="handover-staff" className={SELECT} value={staffId} onChange={(e) => setStaffId(e.target.value)}>
-            <option value="">Chọn nhân viên</option>
-            {staff.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.fullName ?? s.name ?? `Mã ${s.id}`}
-              </option>
-            ))}
-          </select>
-          {shown('staff') && <FieldError>{shown('staff')}</FieldError>}
-        </Field>
+        {recorderIsStaff ? (
+          <Info label="Nhân viên bàn giao">Chính bạn, người ghi bàn giao</Info>
+        ) : (
+          <Field data-invalid={!!shown('staff') || undefined}>
+            <FieldLabel htmlFor="handover-staff">Nhân viên bàn giao</FieldLabel>
+            <select id="handover-staff" className={SELECT} value={staffId} onChange={(e) => setStaffId(e.target.value)}>
+              <option value="">Chọn nhân viên</option>
+              {(staff ?? []).map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.fullName ?? s.name ?? `Mã ${s.id}`}
+                </option>
+              ))}
+            </select>
+            {shown('staff') && <FieldError>{shown('staff')}</FieldError>}
+          </Field>
+        )}
       </FieldGroup>
       <ProblemAlert problem={failure} />
       <div className="flex justify-end gap-2">
