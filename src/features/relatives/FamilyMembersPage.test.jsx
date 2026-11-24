@@ -141,4 +141,68 @@ describe('FamilyMembersPage', () => {
     expect(within(minh).queryAllByLabelText('Nhận thông báo khẩn')).toHaveLength(0)
     expect(within(minh).queryAllByLabelText('Được yêu cầu thay đổi dịch vụ')).toHaveLength(0)
   })
+
+  // Test BF-12 C-1 (2026-11-24): sửa hồ sơ người thân (thêm giấy tờ) qua PUT /family-members/{id} có If-Match (FR-001)
+  it('FR_001_suaThongTinLienHe_guiIfMatch_vaDuTruong', async () => {
+    const table = await openResident()
+    fireEvent.click(within(table).getByRole('button', { name: /Trần Thu Hà/ }))
+    api.on(
+      'GET',
+      '/family-members/32',
+      json(
+        200,
+        { familyMember: { ...HA.familyMember, address: 'Số 1 đường Thử' }, relationships: [] },
+        { ETag: '"4"' },
+      ),
+    )
+    api.on('PUT', '/family-members/32', json(200, { id: 32 }, { ETag: '"5"' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sửa thông tin liên hệ' }))
+    expect(await screen.findByDisplayValue('Số 1 đường Thử')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'CCCD' } })
+    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: 'THU-001' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thông tin liên hệ' }))
+
+    expect(await screen.findByText('Đã sửa thông tin liên hệ')).toBeInTheDocument()
+    const [, init] = api.calls('PUT', '/family-members/32')[0]
+    expect(init.headers['If-Match']).toBe('"4"')
+    expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
+    expect(JSON.parse(init.body)).toEqual({
+      fullName: 'Trần Thu Hà',
+      phoneNumber: '0901000222',
+      idDocumentType: 'CCCD',
+      idDocumentNumber: 'THU-001',
+      address: 'Số 1 đường Thử',
+    })
+  })
+
+  it('FR_007_boGiayToCuaNguoiDuocPhepDon_409HienGoiY', async () => {
+    const table = await openResident()
+    fireEvent.click(within(table).getByRole('button', { name: /Trần Văn Minh/ }))
+    api.on(
+      'GET',
+      '/family-members/31',
+      json(200, { familyMember: MINH.familyMember, relationships: [] }, { ETag: '"0"' }),
+    )
+    api.on(
+      'PUT',
+      '/family-members/31',
+      problem(409, 'ID_DOCUMENT_REQUIRED', {
+        detail: 'Người được phép đón phải có loại và số giấy tờ tùy thân (FR-007)',
+      }),
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Sửa thông tin liên hệ' }))
+    fireEvent.change(await screen.findByLabelText('Số giấy tờ'), { target: { value: '' } })
+    fireEvent.change(screen.getByLabelText('Số điện thoại'), { target: { value: ' ' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thông tin liên hệ' }))
+    expect(await screen.findByText('Nhập số điện thoại')).toBeInTheDocument()
+    expect(api.calls('PUT', '/family-members/31')).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Số điện thoại'), { target: { value: '0901000111' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thông tin liên hệ' }))
+    expect(await screen.findByText(/phải có loại và số giấy tờ tùy thân \(FR-007\)/)).toBeInTheDocument()
+    expect(screen.queryByText('Người được phép đón phải có loại và số giấy tờ tùy thân.')).not.toBeInTheDocument()
+    expect(JSON.parse(api.calls('PUT', '/family-members/31')[0][1].body).idDocumentNumber).toBeNull()
+  })
 })
