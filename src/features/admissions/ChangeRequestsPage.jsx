@@ -167,6 +167,8 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
       detailKey={openedId}
       onClose={() => setShown(null)}
       label="Chi tiết yêu cầu điều chỉnh hợp đồng"
+      panelGridClassName="grid-cols-[minmax(0,1fr)_520px]"
+      sheetClassName="sm:max-w-[520px]"
       renderDetail={(titles) =>
         shown && (
           <ChangeRequestView

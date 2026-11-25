@@ -194,6 +194,33 @@ describe('ChangeRequestView: form xem chi tiết', () => {
     const footer = within(view).getByRole('group', { name: 'Lệnh của yêu cầu' })
     expect(within(footer).getByRole('button', { name: 'Tải lại' })).toBeInTheDocument()
   })
+
+  it('thanh5Buoc_noiCoDinhTrenDau_vaFormNamChungMotKhungCuon', async () => {
+    const view = await openDetail()
+    const bar = within(view).getByRole('progressbar', { name: 'Tiến trình yêu cầu' })
+    const stickyBar = bar.parentElement.parentElement
+    expect(stickyBar.className).toMatch(/sticky/)
+    expect(stickyBar.className).toMatch(/top-0/)
+    // Không tách khung cuộn riêng cho thân và chân trang
+    expect(view.querySelector('.overflow-y-auto')).toBeNull()
+    expect(view.querySelector('.overflow-hidden')).toBeNull()
+    // Khung chi tiết rộng 520px dễ nhìn hơn mặc định 420px
+    expect(view.parentElement.className).toMatch(/520px/)
+  })
+
+  it('nutHanhDongNhieuCap_nutChinhRongHetHang_huyChuDo', async () => {
+    const draft = { ...BASE, approvalRequestId: 12, status: 'DRAFT', representativeConfirmationRequired: true }
+    api.on('GET', '/residency-change-requests', json(200, [draft]))
+    api.on('GET', '/residency-change-requests/12', json(200, draft, { ETag: '"2"' }))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Xem yêu cầu mã 12' }))
+    const view = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    const footer = within(view).getByRole('group', { name: 'Lệnh của yêu cầu' })
+    expect(within(footer).getByRole('button', { name: 'Gửi người đại diện xác nhận' }).className).toMatch(/w-full/)
+    expect(within(footer).getByRole('button', { name: 'Sửa yêu cầu nháp' }).className).toMatch(/rounded-lg/)
+    expect(within(footer).getByRole('button', { name: 'Ghi xác nhận trực tiếp' }).className).toMatch(/rounded-lg/)
+    expect(within(footer).getByRole('button', { name: 'Hủy yêu cầu' }).className).toMatch(/text-red-600/)
+  })
 })
 
 describe('ChangeRequestsPage: tìm theo tên và phân trang', () => {

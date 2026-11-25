@@ -9,7 +9,16 @@ import { useWide } from './useWide'
 // khi đã chọn một mục; mở thì focus vào khung, có nút Đóng và Esc, đóng thì focus trở về mục đã mở (WCAG 2.1.2).
 // Hẹp hơn: Sheet mở đè (Sheet tự trả focus). renderDetail nhận { Title, Description } để khung và Sheet có đúng
 // tiêu đề cho trình đọc màn hình; detailKey đổi khi chọn mục khác.
-export function DetailLayout({ open, detailKey, onClose, label, renderDetail, children }) {
+export function DetailLayout({
+  open,
+  detailKey,
+  onClose,
+  label,
+  renderDetail,
+  panelGridClassName = 'grid-cols-[minmax(0,1fr)_420px]',
+  sheetClassName,
+  children,
+}) {
   const wide = useWide()
   const panelOpen = wide && open
   const panelRef = useRef(null)
@@ -31,7 +40,7 @@ export function DetailLayout({ open, detailKey, onClose, label, renderDetail, ch
     <div
       className={cn(
         'mx-auto flex w-full max-w-[1600px] flex-col gap-5',
-        panelOpen && 'grid grid-cols-[minmax(0,1fr)_420px] items-start gap-0',
+        panelOpen && cn('grid items-start gap-0', panelGridClassName),
       )}
     >
       <div className={cn('flex min-w-0 flex-col gap-5', panelOpen && 'pr-8')}>{children}</div>
@@ -56,7 +65,7 @@ export function DetailLayout({ open, detailKey, onClose, label, renderDetail, ch
 
       <Sheet open={!wide && open} onOpenChange={(next) => !next && onClose()}>
         {/* Nút đóng của Sheet nằm đè góc phải: tiêu đề chừa lề để không chạy xuống dưới nút */}
-        <SheetContent className="overflow-y-auto p-6 sm:max-w-lg [&_[data-slot=sheet-title]]:pr-8">
+        <SheetContent className={cn('overflow-y-auto p-6 sm:max-w-lg [&_[data-slot=sheet-title]]:pr-8', sheetClassName)}>
           {!wide && open && renderDetail({ Title: SheetTitle, Description: SheetDescription })}
         </SheetContent>
       </Sheet>
