@@ -41,4 +41,31 @@ describe('problemOf', () => {
     expect(p.title).toBe('Máy chủ gặp lỗi')
     expect(p.detail).toBe('Thử lại sau ít phút. Nếu vẫn lỗi, báo cho quản trị hệ thống.')
   })
+
+  it('loiKyThuat_chuyenThanhThongBaoRoNghia', () => {
+    const p = problemOf(
+      new ApiError(409, {
+        errorCode: 'DAY_CARE_CAPACITY_UNSET',
+        detail: 'Viện chưa đặt CFG-M03-01',
+      }),
+    )
+    expect(p.detail).toBe(
+      'Viện chưa thiết lập sức chứa khu nghỉ bán trú. Vui lòng cấu hình tham số sức chứa trước khi duyệt yêu cầu bán trú.',
+    )
+  })
+
+  it('loiCoMaNghiepVu_loaiBoMaKyThuat', () => {
+    const p = problemOf(
+      new ApiError(409, {
+        detail: 'Ngày hiệu lực sớm hơn ngày bắt đầu hợp đồng gốc (FR-040, DBR-07)',
+        unmetConditions: [
+          { code: 'FR-041', description: 'Người bán trú không có giường để đổi (FR-041)' },
+          { code: 'Q-415', description: 'Cần chọn người đại diện đã xác nhận (Q-415)' },
+        ],
+      }),
+    )
+    expect(p.detail).toBe('Ngày hiệu lực sớm hơn ngày bắt đầu hợp đồng gốc')
+    expect(p.unmetConditions[0].description).toBe('Người bán trú không có giường để đổi')
+    expect(p.unmetConditions[1].description).toBe('Cần chọn người đại diện đã xác nhận')
+  })
 })
