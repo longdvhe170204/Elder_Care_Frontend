@@ -320,9 +320,9 @@ export function CaseDialog({ title, description, problem, wide, paper = false, o
       <DialogContent
         showCloseButton={false}
         className={cn(
-          'max-h-[94vh] overflow-y-auto',
+          !paper && 'max-h-[94vh] overflow-y-auto',
           paper
-            ? 'w-fit border-0 bg-transparent p-0 shadow-none ring-0 sm:max-w-fit'
+            ? 'top-0 left-0 h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-muted p-0 shadow-none ring-0 sm:max-w-none'
             : cn('p-6', wide ? 'sm:max-w-3xl' : 'sm:max-w-xl'),
         )}
       >

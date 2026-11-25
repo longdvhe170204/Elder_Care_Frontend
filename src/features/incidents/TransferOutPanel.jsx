@@ -94,33 +94,36 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
   }
 
   if (summaryId) {
-    // Chỉ hiện tờ giấy: ẩn thanh công cụ, cột trang thu nhỏ của trình xem PDF và vừa khít một trang A4 (BF-06)
+    // Màn in toàn màn hình như xem trước của máy in: thanh công cụ ở trên, tờ A4 to ở giữa trên nền xám (BF-06)
     return (
-      <div className="flex flex-col items-center gap-3">
-        {problem && <ProblemAlert problem={problem} />}
-        {pdfUrl ? (
-          <iframe
-            ref={frameRef}
-            title="Phiếu tóm tắt chuyển viện"
-            src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
-            className="aspect-[210/297] h-[74vh] max-w-full border-0 bg-white"
-          />
-        ) : (
-          <Skeleton className="aspect-[210/297] h-[74vh] max-w-full" />
-        )}
-        <div className="flex flex-wrap justify-center gap-2">
-          <Button className="h-11" disabled={!pdfUrl || busy} onClick={printPdf}>
-            In phiếu
+      <div className="flex h-dvh flex-col">
+        <div className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-2">
+          <Button variant="secondary" className="h-11" onClick={onDone}>
+            Xong
+          </Button>
+          <p className="type-label mr-auto ml-2 hidden sm:block">Phiếu tóm tắt thông tin sức khoẻ</p>
+          <Button variant="secondary" className="h-11" disabled={busy} onClick={reprint}>
+            In lại (ghi nhật ký)
           </Button>
           <Button variant="secondary" className="h-11" disabled={!pdfUrl} onClick={savePdf}>
             Tải về
           </Button>
-          <Button variant="secondary" className="h-11" disabled={busy} onClick={reprint}>
-            In lại (ghi nhật ký)
+          <Button className="h-11 px-6" disabled={!pdfUrl || busy} onClick={printPdf}>
+            In phiếu
           </Button>
-          <Button variant="secondary" className="h-11" onClick={onDone}>
-            Xong
-          </Button>
+        </div>
+        {problem && <ProblemAlert problem={problem} />}
+        <div className="flex min-h-0 flex-1 justify-center overflow-auto p-4">
+          {pdfUrl ? (
+            <iframe
+              ref={frameRef}
+              title="Phiếu tóm tắt chuyển viện"
+              src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
+              className="aspect-[210/297] h-full max-w-full border-0 bg-white shadow-md"
+            />
+          ) : (
+            <Skeleton className="aspect-[210/297] h-full max-w-full" />
+          )}
         </div>
       </div>
     )
