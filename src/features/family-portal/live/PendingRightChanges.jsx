@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getRightChangeRequests, postRightChangeRequestsByIdByCommand } from '@/api'
+import {
+  getPickupExceptions,
+  getRightChangeRequests,
+  postPickupExceptionsByIdByCommand,
+  postRightChangeRequestsByIdByCommand,
+} from '@/api'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
@@ -9,7 +14,8 @@ import { PortalCard } from '../PortalParts'
 
 // Yêu cầu thay đổi quyền chờ người đại diện xác nhận (012 FR-013, FR-015, FR-050; api-012 `GET /right-change-requests`
 // lọc Chờ xác nhận, `POST /right-change-requests/{id}/confirm|reject`). Test BF-16 (2026-11-22): trước đây chỉ bản mẫu
-// có mục "Chờ bạn quyết định". Từ chối bắt buộc lý do. Tải lỗi thì không hiện mục.
+// có mục "Chờ bạn quyết định". Từ chối bắt buộc lý do. Tải lỗi thì không hiện mục. Test BF-12 C-5 (2026-11-24): thêm
+// ngoại lệ đón Chờ xác nhận (`GET /pickup-exceptions`, `POST /pickup-exceptions/{id}/confirm|reject`; FR-024).
 
 const RIGHTS = {
   VIEW_HEALTH: 'Xem sức khỏe',
@@ -22,7 +28,8 @@ const RIGHTS = {
 
 function describe(request) {
   const value = request.newValue ? 'Bật' : 'Tắt'
-  const person = request.newPicker?.fullName ?? 'người thân'
+  // familyMemberName: họ tên người bị tác động backend trả (thêm 2026-11-24, test BF-12)
+  const person = request.familyMemberName ?? request.newPicker?.fullName ?? 'người thân'
   switch (request.type) {
     case 'RIGHT':
       return `${value} quyền ${RIGHTS[request.right] ?? request.right} cho ${person}`
@@ -37,7 +44,7 @@ function describe(request) {
   }
 }
 
-function PendingRequest({ request, onDecided }) {
+function PendingItem({ item, onDecided }) {
   const [rejecting, setRejecting] = useState(false)
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -54,12 +61,12 @@ function PendingRequest({ request, onDecided }) {
     setFailure(null)
     setBusy(true)
     try {
-      await postRightChangeRequestsByIdByCommand({
-        path: { id: request.id, command },
+      await item.post({
+        path: { id: item.id, command },
         headers: { 'Idempotency-Key': keys.current[command] },
         body: command === 'reject' ? { reason: reason.trim() } : {},
       })
-      onDecided(command === 'confirm' ? 'Đã xác nhận yêu cầu.' : 'Đã từ chối yêu cầu.')
+      onDecided(item.done[command])
     } catch (error) {
       setFailure(problemOf(error))
     } finally {
@@ -69,13 +76,17 @@ function PendingRequest({ request, onDecided }) {
 
   return (
     <li className="flex flex-col gap-2 border-t py-3 first:border-t-0 first:pt-0 last:pb-0">
-      <span className="type-label">{describe(request)}</span>
-      {request.reason && <span className="text-muted-foreground">{`Lý do: ${request.reason}`}</span>}
+      <span className="type-label">{item.title}</span>
+      {item.lines.map((line) => (
+        <span key={line} className="text-muted-foreground">
+          {line}
+        </span>
+      ))}
       <ProblemAlert problem={failure} title="Chưa gửi được quyết định" />
       {!rejecting ? (
         <div className="flex flex-wrap gap-2">
           <Button disabled={busy} onClick={() => send('confirm')}>
-            Xác nhận yêu cầu
+            {item.confirmLabel}
           </Button>
           <Button variant="outline" disabled={busy} onClick={() => setRejecting(true)}>
             Từ chối
@@ -91,9 +102,9 @@ function PendingRequest({ request, onDecided }) {
           }}
         >
           <Field data-invalid={missingReason || undefined}>
-            <FieldLabel htmlFor={`right-reject-${request.id}`}>Lý do từ chối</FieldLabel>
+            <FieldLabel htmlFor={`${item.key}-reject`}>Lý do từ chối</FieldLabel>
             <Textarea
-              id={`right-reject-${request.id}`}
+              id={`${item.key}-reject`}
               rows={2}
               maxLength={2000}
               value={reason}
@@ -116,23 +127,55 @@ function PendingRequest({ request, onDecided }) {
   )
 }
 
+function rightItem(request) {
+  return {
+    key: `right-${request.id}`,
+    id: request.id,
+    title: describe(request),
+    lines: request.reason ? [`Lý do: ${request.reason}`] : [],
+    confirmLabel: 'Xác nhận yêu cầu',
+    post: postRightChangeRequestsByIdByCommand,
+    done: { confirm: 'Đã xác nhận yêu cầu.', reject: 'Đã từ chối yêu cầu.' },
+  }
+}
+
+function exceptionItem(exception) {
+  return {
+    key: `pickup-exception-${exception.id}`,
+    id: exception.id,
+    title: `Ngoại lệ đón: ${exception.fullName} (${exception.relationship})`,
+    lines: [
+      `Giấy tờ: ${exception.idDocumentNumber}`,
+      `Lý do: ${exception.reason}`,
+      'Xác nhận thì người này được đón đúng một lượt trong thời hạn của ngoại lệ.',
+    ],
+    confirmLabel: 'Xác nhận ngoại lệ',
+    post: postPickupExceptionsByIdByCommand,
+    done: { confirm: 'Đã xác nhận ngoại lệ đón.', reject: 'Đã từ chối ngoại lệ đón.' },
+  }
+}
+
 export function PendingRightChanges({ residentId }) {
-  const [items, setItems] = useState([])
+  const [requests, setRequests] = useState([])
+  const [exceptions, setExceptions] = useState([])
   const [message, setMessage] = useState('')
 
-  const load = useCallback(async () => {
-    try {
-      const { data } = await getRightChangeRequests({ query: { residentId, status: 'PENDING_CONFIRMATION' } })
-      setItems(data ?? [])
-    } catch {
-      setItems([])
-    }
+  // Hai danh sách tải riêng: một danh sách lỗi hay chậm không chặn danh sách kia
+  const load = useCallback(() => {
+    const query = { residentId, status: 'PENDING_CONFIRMATION' }
+    getRightChangeRequests({ query })
+      .then(({ data }) => setRequests(data ?? []))
+      .catch(() => setRequests([]))
+    getPickupExceptions({ query })
+      .then(({ data }) => setExceptions(data ?? []))
+      .catch(() => setExceptions([]))
   }, [residentId])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- tải khi mở màn
     load()
   }, [load])
+
+  const items = [...requests.map(rightItem), ...exceptions.map(exceptionItem)]
 
   return (
     <>
@@ -142,10 +185,10 @@ export function PendingRightChanges({ residentId }) {
       {items.length > 0 && (
         <PortalCard title="Chờ bạn quyết định">
           <ul className="flex flex-col">
-            {items.map((request) => (
-              <PendingRequest
-                key={request.id}
-                request={request}
+            {items.map((item) => (
+              <PendingItem
+                key={item.key}
+                item={item}
                 onDecided={(text) => {
                   setMessage(text)
                   load()

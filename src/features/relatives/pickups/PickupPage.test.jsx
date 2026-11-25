@@ -65,6 +65,40 @@ const WISHES = {
   conflictingRights: [],
 }
 
+// api-012 `GET /pickup-exceptions` (thêm 2026-11-24, test BF-12 C-2): thay nhập mã ngoại lệ
+const EXCEPTIONS = [
+  {
+    id: 81,
+    residentId: 5,
+    fullName: 'Ngô Hàng Xóm',
+    idDocumentNumber: '0099',
+    relationship: 'Hàng xóm',
+    reason: 'Con gái ốm, nhờ hàng xóm đón',
+    status: 'PENDING_CONFIRMATION',
+    createdAt: '2026-11-05T08:00:00Z',
+    method: null,
+    decisionReason: null,
+    effectiveAt: null,
+    expiresAt: null,
+    pickupRecordId: null,
+  },
+  {
+    id: 82,
+    residentId: 5,
+    fullName: 'Phạm Văn Nam',
+    idDocumentNumber: '0011',
+    relationship: 'Cháu họ',
+    reason: 'Đón đi khám',
+    status: 'EFFECTIVE',
+    createdAt: '2026-11-05T07:00:00Z',
+    method: 'MANAGER_APPROVAL',
+    decisionReason: 'Đã gọi xác minh',
+    effectiveAt: '2026-11-05T07:30:00Z',
+    expiresAt: '2026-11-05T11:30:00Z',
+    pickupRecordId: null,
+  },
+]
+
 function permissions(list) {
   api.on(
     'GET',
@@ -90,6 +124,7 @@ beforeEach(() => {
   api.on('GET', '/residents/5/pickup-records', json(200, RECORDS))
   api.on('GET', '/residents/5/visit-pickup-wishes', json(200, WISHES))
   api.on('GET', '/staff', json(200, [{ id: 9003, fullName: 'Lê Thị Mai', position: 'Hành chính' }]))
+  api.on('GET', '/pickup-exceptions', json(200, EXCEPTIONS))
 })
 
 afterEach(() => {
@@ -168,6 +203,24 @@ describe('Quy trình đón', () => {
     expect(await screen.findByText('Đã ghi đón')).toBeInTheDocument()
   })
 
+  // Test BF-12 (2026-11-24): Hành chính không có ca nên /staff rỗng; người ghi chọn chính mình làm người bàn giao
+  it('FR_021_khongCoNguoiCungCa_chonToiLamNguoiBanGiao', async () => {
+    permissions([['PICKUP', 'CREATE']])
+    api.on('GET', '/staff', json(200, []))
+    api.on('GET', '/me', json(200, { accountId: 7, type: 'STAFF', fullName: 'Bùi Thị Hạnh', staffId: 9010 }))
+    await openResident()
+    const sheet = await openRecordSheet()
+    api.on('POST', '/residents/5/pickups', json(201, { ...RECORDS[0], id: 55, type: 'SELF_RETURN' }))
+
+    fireEvent.click(within(sheet).getByRole('radio', { name: 'Tự về' }))
+    expect(await within(sheet).findByRole('option', { name: 'Tôi (Bùi Thị Hạnh)' })).toBeInTheDocument()
+    fireEvent.change(within(sheet).getByLabelText('Nhân viên tiễn'), { target: { value: '9010' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Ghi bản ghi đón' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residents/5/pickups')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residents/5/pickups')[0][1].body).handoverStaffId).toBe(9010)
+  })
+
   it('FR_021_tuVe_khongCoNguoiDonVaGiayTo', async () => {
     permissions([['PICKUP', 'CREATE']])
     await openResident()
@@ -209,18 +262,17 @@ describe('Quy trình đón', () => {
     expect(within(sheet).getByLabelText('Số giấy tờ xuất trình')).toHaveValue('999')
   })
 
-  it('FR_021_nguoiDonTheoNgoaiLe_guiMaNgoaiLe', async () => {
+  // Test BF-12 C-2 (2026-11-24): chọn ngoại lệ Hiệu lực trong danh sách thay nhập mã; ngoại lệ Chờ xác nhận không hiện
+  it('FR_021_nguoiDonTheoNgoaiLe_chonNgoaiLeHieuLuc', async () => {
     permissions([['PICKUP', 'CREATE']])
     await openResident()
     const sheet = await openRecordSheet()
     api.on('POST', '/residents/5/pickups', json(201, { ...RECORDS[1], id: 55 }))
 
     fireEvent.click(within(sheet).getByRole('radio', { name: 'Bán trú về' }))
-    fireEvent.click(within(sheet).getByRole('radio', { name: 'Người đón theo ngoại lệ' }))
-    fireEvent.click(within(sheet).getByRole('button', { name: 'Ghi bản ghi đón' }))
-    expect(await within(sheet).findByText('Nhập mã yêu cầu ngoại lệ')).toBeInTheDocument()
-
-    fireEvent.change(within(sheet).getByLabelText('Mã yêu cầu ngoại lệ'), { target: { value: '81' } })
+    expect(within(sheet).queryByRole('radio', { name: /Ngô Hàng Xóm/ })).not.toBeInTheDocument()
+    fireEvent.click(await within(sheet).findByRole('radio', { name: /Phạm Văn Nam/ }))
+    expect(within(sheet).queryByLabelText('Mã yêu cầu ngoại lệ')).not.toBeInTheDocument()
     fireEvent.change(within(sheet).getByLabelText('Số giấy tờ xuất trình'), { target: { value: '0011' } })
     fireEvent.change(await within(sheet).findByLabelText('Nhân viên bàn giao'), { target: { value: '9003' } })
     fireEvent.click(within(sheet).getByRole('button', { name: 'Ghi bản ghi đón' }))
@@ -228,7 +280,7 @@ describe('Quy trình đón', () => {
     await waitFor(() => expect(api.calls('POST', '/residents/5/pickups')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/residents/5/pickups')[0][1].body)).toEqual({
       type: 'DAY_CARE_DEPARTURE',
-      exceptionId: 81,
+      exceptionId: 82,
       presentedIdDocument: { number: '0011' },
       handoverStaffId: 9003,
     })
@@ -259,10 +311,11 @@ describe('Quy trình đón', () => {
       relationship: 'Hàng xóm',
       reason: 'Con gái ốm, nhờ hàng xóm đón',
     })
-    expect(await screen.findByText(/Đã lập yêu cầu ngoại lệ, mã 81/)).toBeInTheDocument()
+    expect(await screen.findByText(/Đã lập yêu cầu ngoại lệ đón cho Phạm Văn Nam/)).toBeInTheDocument()
   })
 
-  it('FR_024_quanLyDuyetNgoaiLe_batBuocLyDo', async () => {
+  // Test BF-12 C-2 (2026-11-24, chủ dự án chọn phương án A): bảng ngoại lệ, bấm hàng mở khung chi tiết có lệnh
+  it('FR_024_bangNgoaiLe_quanLyDuyetTrongKhungChiTiet_batBuocLyDo', async () => {
     permissions([
       ['PICKUP', 'VIEW'],
       ['PICKUP', 'APPROVE'],
@@ -270,21 +323,42 @@ describe('Quy trình đón', () => {
     await openResident()
     api.on('POST', '/pickup-exceptions/81/approve', json(200, { id: 81 }))
 
-    const form = screen.getByRole('form', { name: 'Xử lý yêu cầu ngoại lệ' })
-    fireEvent.change(within(form).getByLabelText('Mã yêu cầu ngoại lệ'), { target: { value: '81' } })
-    fireEvent.click(within(form).getByRole('radio', { name: 'Duyệt' }))
-    fireEvent.click(within(form).getByRole('button', { name: 'Thực hiện lệnh' }))
-    expect(await within(form).findByText('Nhập lý do')).toBeInTheDocument()
+    const table = await screen.findByRole('table', { name: 'Yêu cầu ngoại lệ đón' })
+    expect(screen.queryByLabelText('Mã yêu cầu ngoại lệ')).not.toBeInTheDocument()
+    const row = within(table).getByRole('row', { name: /Ngô Hàng Xóm/ })
+    expect(within(row).getByText('0099')).toBeInTheDocument()
+    expect(within(row).getByText('Chờ xác nhận')).toBeInTheDocument()
+    fireEvent.click(within(row).getByRole('button', { name: /Ngô Hàng Xóm/ }))
+
+    await screen.findByRole('heading', { name: 'Ngoại lệ đón: Ngô Hàng Xóm' })
+    expect(screen.getByText('Con gái ốm, nhờ hàng xóm đón')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Duyệt' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận duyệt' }))
+    expect(await screen.findByText('Nhập lý do')).toBeInTheDocument()
     expect(api.calls('POST', '/pickup-exceptions/81/approve')).toHaveLength(0)
 
-    fireEvent.change(within(form).getByLabelText('Lý do'), { target: { value: 'Đã gọi xác minh với con gái' } })
-    fireEvent.click(within(form).getByRole('button', { name: 'Thực hiện lệnh' }))
+    fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Đã gọi xác minh với con gái' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận duyệt' }))
 
     await waitFor(() => expect(api.calls('POST', '/pickup-exceptions/81/approve')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/pickup-exceptions/81/approve')[0][1].body)).toEqual({
       reason: 'Đã gọi xác minh với con gái',
     })
-    expect(await screen.findByText('Đã duyệt yêu cầu ngoại lệ 81')).toBeInTheDocument()
+    expect(await screen.findByText('Đã duyệt yêu cầu ngoại lệ đón của Ngô Hàng Xóm')).toBeInTheDocument()
+  })
+
+  it('FR_024_ngoaiLeHieuLuc_chiCoHuy', async () => {
+    permissions([
+      ['PICKUP', 'VIEW'],
+      ['PICKUP', 'APPROVE'],
+    ])
+    await openResident()
+    const table = await screen.findByRole('table', { name: 'Yêu cầu ngoại lệ đón' })
+    fireEvent.click(within(table).getByRole('button', { name: /Phạm Văn Nam/ }))
+
+    await screen.findByRole('heading', { name: 'Ngoại lệ đón: Phạm Văn Nam' })
+    expect(screen.getByRole('button', { name: 'Hủy ngoại lệ' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Duyệt' })).not.toBeInTheDocument()
   })
 
   it('khongCoQuyenXem_hienKhongCoQuyen', async () => {

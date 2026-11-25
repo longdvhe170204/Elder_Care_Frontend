@@ -230,6 +230,52 @@ describe('StatusTab', () => {
     })
   })
 
+  // Test BF-12 (2026-11-24): Cho tạm vắng gửi đủ details của 004 (loại vắng, dự kiến trở lại, bản ghi đón của 012, người
+  // đón, nhân viên bàn giao, mang thuốc); điều kiện "bản ghi đón" của xem trước không khóa nút vì form chọn bản ghi đón
+  it('Cho tạm vắng chọn bản ghi đón, gửi đủ chi tiết (004 FR-048, 012 FR-021)', async () => {
+    routes({
+      conditions: [{ code: 'ABS_PICKUP_RECORD', description: 'Người đón chưa có bản ghi đón hợp lệ (feature 012)' }],
+    })
+    api.on(
+      'GET',
+      '/residents/5/pickup-records',
+      json(200, [
+        { id: 53, type: 'TEMPORARY_ABSENCE', familyMemberId: 32, status: 'UNUSED', at: '2026-11-24T09:00:00Z' },
+        { id: 54, type: 'TEMPORARY_ABSENCE', basis: 'MANAGER_EXCEPTION', status: 'UNUSED', at: '2026-11-24T09:05:00Z' },
+        { id: 50, type: 'TEMPORARY_ABSENCE', familyMemberId: 32, status: 'USED', at: '2026-11-20T09:00:00Z' },
+      ]),
+    )
+    api.on('GET', '/residents/5/pickup-list', json(200, [{ familyMemberId: 32, fullName: 'Trần Thu Hà' }]))
+    api.on('GET', '/staff', json(200, []))
+    api.on('GET', '/me', json(200, { accountId: 7, type: 'STAFF', fullName: 'Bùi Thị Hạnh', staffId: 9010 }))
+    api.on('POST', '/residents/5/grant-temporary-absence', result('TEMPORARILY_ABSENT'))
+    open({ allowedCommands: ['GRANT_TEMPORARY_ABSENCE'] })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cho tạm vắng' }))
+    fireEvent.change(await screen.findByLabelText('Lý do tạm vắng (bắt buộc)'), {
+      target: { value: 'Gia đình đón về chơi' },
+    })
+    fireEvent.click(screen.getByRole('radio', { name: 'Về nhà' }))
+    fireEvent.change(screen.getByLabelText('Dự kiến trở lại'), { target: { value: '2026-11-26T17:00' } })
+    const record = await screen.findByLabelText('Bản ghi đón')
+    expect(within(record).queryByRole('option', { name: /20\/11/ })).not.toBeInTheDocument()
+    fireEvent.change(record, { target: { value: '53' } })
+    expect(await screen.findByRole('option', { name: 'Tôi (Bùi Thị Hạnh)' })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Nhân viên bàn giao'), { target: { value: '9010' } })
+    fireEvent.click(screen.getByText('Có mang thuốc theo'))
+    await submitReady('Xác nhận cho tạm vắng')
+
+    await waitFor(() => expect(api.calls('POST', '/residents/5/grant-temporary-absence')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residents/5/grant-temporary-absence')[0][1].body).details).toEqual({
+      absenceType: 'HOME_VISIT',
+      expectedReturnAt: '2026-11-26T17:00:00+07:00',
+      pickupRecordId: 53,
+      pickedUpById: 32,
+      handoverStaffId: 9010,
+      takesMedication: true,
+    })
+  })
+
   it('Kết thúc lưu trú thiếu thời điểm kết thúc thì báo tại ô và không gửi', async () => {
     routes()
     open({ allowedCommands: ['END_RESIDENCY'] })
@@ -277,20 +323,21 @@ describe('StatusTab', () => {
   })
 
   it('gửi lệnh: POST có Idempotency-Key và lý do; xong báo kết quả và nạp lại', async () => {
+    // Test BF-12 (2026-11-24): đổi từ Cho tạm vắng (nay cần chi tiết riêng, test ở trên) sang Ghi nhận trở về
     routes()
-    api.on('POST', '/residents/5/grant-temporary-absence', result('TEMPORARILY_ABSENT'))
+    api.on('POST', '/residents/5/record-return', result('IN_RESIDENCE'))
     const onChanged = vi.fn()
-    open({ allowedCommands: ['GRANT_TEMPORARY_ABSENCE'], onChanged })
+    open({ status: 'TEMPORARILY_ABSENT', allowedCommands: ['RECORD_RETURN'], onChanged })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Cho tạm vắng' }))
-    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Gia đình đón cuối tuần' } })
-    await submitReady('Xác nhận cho tạm vắng')
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
+    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Gia đình đưa về sau cuối tuần' } })
+    await submitReady('Xác nhận ghi nhận trở về')
 
-    await waitFor(() => expect(api.calls('POST', '/residents/5/grant-temporary-absence')).toHaveLength(1))
-    const [, init] = api.calls('POST', '/residents/5/grant-temporary-absence')[0]
+    await waitFor(() => expect(api.calls('POST', '/residents/5/record-return')).toHaveLength(1))
+    const [, init] = api.calls('POST', '/residents/5/record-return')[0]
     expect(new Headers(init.headers).get('Idempotency-Key')).toBeTruthy()
-    expect(JSON.parse(init.body)).toMatchObject({ reason: 'Gia đình đón cuối tuần' })
-    expect(await screen.findByRole('status')).toHaveTextContent('Đã chuyển sang Tạm vắng')
+    expect(JSON.parse(init.body)).toMatchObject({ reason: 'Gia đình đưa về sau cuối tuần' })
+    expect(await screen.findByRole('status')).toHaveTextContent('Đã chuyển sang Đang lưu trú')
     expect(onChanged).toHaveBeenCalled()
   })
 

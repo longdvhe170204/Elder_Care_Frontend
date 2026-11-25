@@ -48,6 +48,9 @@ export const getResidentsByResidentIdPickupRecords = (params) => request('GET', 
 /** Lập yêu cầu ngoại lệ đón cho người ngoài danh sách (FR-024, FR-025, BR-M10-03) */
 export const postResidentsByResidentIdPickupExceptions = (params) => request('POST', '/residents/{residentId}/pickup-exceptions', params)
 
+/** Yêu cầu ngoại lệ đón (lọc người cao tuổi, trạng thái); người đại diện thấy ngoại lệ của người cao tuổi mình đại diện (FR-024, FR-050) */
+export const getPickupExceptions = (params) => request('GET', '/pickup-exceptions', params)
+
 /** Xác nhận (người đại diện qua cổng), duyệt (Quản lý viện), từ chối, hủy (lý do) (FR-024) */
 export const postPickupExceptionsByIdByCommand = (params) => request('POST', '/pickup-exceptions/{id}/{command}', params)
 
@@ -75,10 +78,13 @@ export const postFamilyStaysByIdByCommand = (params) => request('POST', '/family
 /** Người cao tuổi mà người thân đang đăng nhập có quan hệ Hiệu lực, kèm quyền có tác dụng (FR-046, BR-M10-01) */
 export const getFamilyPortalResidents = (params) => request('GET', '/family-portal/residents', params)
 
+/** Người thân Hiệu lực của người cao tuổi để lập yêu cầu đổi quyền trên cổng (thêm 2026-11-24, test BF-12): người đại diện thấy mọi người, người thân khác chỉ thấy chính mình; mỗi dòng relationshipId, fullName, relationship, representative, primaryContact, self, rights (mỗi quyền enabled, effective như Relationship.rights); không có số điện thoại, giấy tờ (FR-013, FR-014, FR-050) */
+export const getFamilyPortalResidentsByResidentIdFamilyMembers = (params) => request('GET', '/family-portal/residents/{residentId}/family-members', params)
+
 /** Thông tin chung: họ tên, ảnh, phòng, trạng thái, lượt vắng, lịch đến/về, lượt thăm và phản hồi của mình, thực đơn chung (bản tin bỏ theo Q-396) (FR-046, FR-047) */
 export const getFamilyPortalResidentsByResidentIdGeneral = (params) => request('GET', '/family-portal/residents/{residentId}/general', params)
 
-/** Lịch chăm sóc hằng ngày (bổ sung 2026-11-22, Q-416): giờ bữa, hoạt động, mốc sinh hoạt, công việc chăm sóc và trạng thái; giá trị đo chỉ khi quyền xem sức khỏe có tác dụng; mặc định hôm nay (FR-076) */
+/** Lịch chăm sóc hằng ngày (bổ sung 2026-11-22, Q-440): giờ bữa, hoạt động, mốc sinh hoạt, công việc chăm sóc và trạng thái; giá trị đo chỉ khi quyền xem sức khỏe có tác dụng; mặc định hôm nay (FR-076) */
 export const getFamilyPortalResidentsByResidentIdDailyCareSchedule = (params) => request('GET', '/family-portal/residents/{residentId}/daily-care-schedule', params)
 
 /** Phần sức khỏe (chỉ khi quyền xem sức khỏe có tác dụng); mỗi lần mở ghi nhật ký lượt xem (FR-046, FR-047, FR-048, BR-M10-01, DBR-03) */
@@ -114,7 +120,7 @@ export const postResidentsByResidentIdVisitPickupWishes = (params) => request('P
 /** Lịch sinh hoạt hôm nay của chính người cao tuổi (hoạt động, lượt thăm, lịch đến/về bán trú) (FR-083, BR-M10-11) */
 export const getResidentChannelToday = (params) => request('GET', '/resident-channel/today', params)
 
-/** Lịch chăm sóc hằng ngày của chính mình (bổ sung 2026-11-22, Q-416): không có giá trị đo, liều thuốc; mặc định hôm nay (FR-083) */
+/** Lịch chăm sóc hằng ngày của chính mình (bổ sung 2026-11-22, Q-440): không có giá trị đo, liều thuốc; mặc định hôm nay (FR-083) */
 export const getResidentChannelDailyCareSchedule = (params) => request('GET', '/resident-channel/daily-care-schedule', params)
 
 /** Thực đơn tuần đã công bố và suất ăn dự kiến của mình (món, món thay thế; không có chế độ ăn, dị ứng) (FR-083, FR-084, BR-M10-11) */

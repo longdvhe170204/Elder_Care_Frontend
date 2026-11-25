@@ -9,6 +9,8 @@ export const MORE_ITEMS = [
   { key: 'deposits', label: 'Đồ gửi', allowed: (v) => v.representative || v.perms.pickup },
   { key: 'contract', label: 'Hợp đồng, dịch vụ', allowed: (v) => v.representative },
   { key: 'account', label: 'Tài khoản, quyền của tôi', allowed: () => true },
+  // Test BF-12 (2026-11-24, 012 FR-014, FR-050): mọi người thân; người đại diện thấy cả gia đình, người khác chỉ thấy mình
+  { key: 'family-rights', label: 'Gia đình và quyền', allowed: () => true },
 ]
 
 export function allowedPage(page, viewer) {

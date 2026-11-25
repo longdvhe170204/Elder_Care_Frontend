@@ -33,5 +33,16 @@ export function handoverLabel(type) {
   return 'Nhân viên bàn giao'
 }
 
-export const EXCEPTION_COMMAND_LABELS = { approve: 'Duyệt', reject: 'Từ chối', cancel: 'Hủy' }
-export const EXCEPTION_COMMAND_DONE = { approve: 'Đã duyệt', reject: 'Đã từ chối', cancel: 'Đã hủy' }
+// Trạng thái, cách có hiệu lực của ngoại lệ đón (api-012 `PickupException`; FR-024)
+export const EXCEPTION_STATUS_LABELS = {
+  PENDING_CONFIRMATION: 'Chờ xác nhận',
+  EFFECTIVE: 'Hiệu lực',
+  USED: 'Đã dùng',
+  EXPIRED: 'Hết hạn',
+  REJECTED: 'Từ chối',
+  CANCELLED: 'Đã hủy',
+}
+export const EXCEPTION_METHOD_LABELS = {
+  PORTAL: 'Người đại diện xác nhận qua cổng',
+  MANAGER_APPROVAL: 'Quản lý viện duyệt',
+}

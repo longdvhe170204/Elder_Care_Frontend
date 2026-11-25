@@ -179,9 +179,16 @@ describe('Đăng ký thăm', () => {
     api.on('POST', '/visits/82/check-out', json(200, { id: 82 }))
     api.on('POST', '/visits/81/cancel', problem(409, 'START_TIME_PASSED', { detail: 'Đã qua giờ bắt đầu khung thăm' }))
 
+    // Test BF-12 (2026-11-24): Ghi ra mở khung có giờ ra thực tế (FR-034), không ghi ngay khi bấm
     fireEvent.click(within(table).getByRole('button', { name: 'Ghi ra lượt 15:00–17:00 của Trần Văn Minh' }))
+    const out = await screen.findByRole('dialog', { name: 'Ghi ra' })
+    expect(api.calls('POST', '/visits/82/check-out')).toHaveLength(0)
+    fireEvent.change(within(out).getByLabelText('Giờ ra thực tế'), { target: { value: '17:00' } })
+    fireEvent.click(within(out).getByRole('button', { name: 'Xác nhận ghi ra' }))
     await waitFor(() => expect(api.calls('POST', '/visits/82/check-out')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/visits/82/check-out')[0][1].body)).toEqual({})
+    expect(JSON.parse(api.calls('POST', '/visits/82/check-out')[0][1].body)).toEqual({
+      checkOutAt: '2026-11-06T17:00:00+07:00',
+    })
 
     fireEvent.click(within(table).getByRole('button', { name: 'Hủy lượt 09:00–11:00 của Trần Văn Minh' }))
     const sheet = await screen.findByRole('dialog', { name: 'Hủy lượt thăm' })

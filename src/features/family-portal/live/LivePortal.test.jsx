@@ -183,6 +183,29 @@ describe('Cổng người thân, phiên thật', () => {
     expect(screen.queryByText(/bản mẫu/)).not.toBeInTheDocument()
   })
 
+  // Test BF-12 (2026-11-24): trang Tài khoản dùng dữ liệu thật, đủ sáu quyền (FR-007), đổi mật khẩu lưu thật
+  it('BF12_taiKhoan_tenQuanHeQuyenThat_doiMatKhauGoiApi', async () => {
+    signedIn([resident({ relationship: 'GRANDCHILD', rights: RIGHTS({ RECEIVE_URGENT: true }) })])
+    api.on('POST', '/auth/change-password', json(200, {}))
+    await openMore()
+    fireEvent.click(await screen.findByRole('button', { name: /Tài khoản/ }))
+
+    expect(await screen.findByText('Nguyễn Thị Lan')).toBeInTheDocument()
+    expect(screen.getByText('Cháu')).toBeInTheDocument()
+    expect(screen.queryByText(/\[Họ tên/)).not.toBeInTheDocument()
+    const urgent = screen.getByText('Nhận thông báo khẩn').closest('li')
+    expect(within(urgent).getByText('Có')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Mật khẩu hiện tại'), { target: { value: 'Cu123456' } })
+    fireEvent.change(screen.getByLabelText('Mật khẩu mới'), { target: { value: 'Moi123456' } })
+    fireEvent.change(screen.getByLabelText('Nhập lại mật khẩu mới'), { target: { value: 'Moi123456' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Đổi mật khẩu' }))
+
+    expect(await screen.findByText('Đã đổi mật khẩu.')).toBeInTheDocument()
+    const [, init] = api.calls('POST', '/auth/change-password')[0]
+    expect(JSON.parse(init.body)).toEqual({ currentPassword: 'Cu123456', newPassword: 'Moi123456' })
+  })
+
   it('US5_1_bi_tuChoi_hienDongKhoa_khongLoNoiDung', async () => {
     signedIn([resident({ rights: RIGHTS({ VIEW_HEALTH: true }) })])
     api.on(

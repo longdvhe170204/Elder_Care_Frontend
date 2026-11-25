@@ -24,6 +24,13 @@ export const FEEDBACK_STATUS = {
 
 export const PRIORITY = { HIGH: 'Cao', NORMAL: 'Thường' }
 
+// Cách đóng (api-012 Feedback.closeMethod; FR-064, FR-066; test BF-12 2026-11-24)
+export const CLOSE_METHODS = {
+  SENDER: 'Người gửi đồng ý đóng',
+  AUTO: 'Tự đóng khi người gửi không xác nhận trong thời hạn',
+  RECORDED_ON_BEHALF: 'Ghi thay người gửi',
+}
+
 // Vai trò người nhận giao lại (FR-060; api-012 AssignableStaff)
 export const ASSIGNEE_ROLES = { FLOOR_MANAGER: 'Trưởng tầng', NURSING_STAFF: 'Điều dưỡng', OFFICE_STAFF: 'Hành chính' }
 
