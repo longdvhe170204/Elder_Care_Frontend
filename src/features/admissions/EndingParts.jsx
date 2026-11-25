@@ -78,9 +78,15 @@ function ConditionRow({ line, residentId, onNavigate }) {
   )
 }
 
+// Demo 2026-11-26 (E): (f) hợp đồng, (g) giường do hệ thống tự làm khi kết thúc nên không hiện; (e) bàn giao ở dòng cuối vì
+// ghi ngay trong Xác nhận kết thúc, sau khi các điều kiện khác đã đạt
+const AUTOMATIC = ['END_F_CONTRACT', 'END_G_BED']
+
 function Conditions({ conditions, residentId, onNavigate }) {
-  const settlement = conditions.filter((c) => SETTLEMENT.includes(c.code))
-  const rest = conditions.filter((c) => !SETTLEMENT.includes(c.code))
+  const shown = conditions.filter((c) => !AUTOMATIC.includes(c.code))
+  const settlement = shown.filter((c) => SETTLEMENT.includes(c.code))
+  const handover = shown.filter((c) => c.code === HANDOVER)
+  const rest = shown.filter((c) => !SETTLEMENT.includes(c.code) && c.code !== HANDOVER)
   const row = (c) => <ConditionRow key={c.code} line={c} residentId={residentId} onNavigate={onNavigate} />
   return (
     <section className="flex flex-col gap-2">
@@ -101,6 +107,7 @@ function Conditions({ conditions, residentId, onNavigate }) {
             {settlement.map(row)}
           </TableBody>
         )}
+        {handover.length > 0 && <TableBody className="border-t">{handover.map(row)}</TableBody>}
       </Table>
     </section>
   )
