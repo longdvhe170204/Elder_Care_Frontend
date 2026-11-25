@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getResidentsById } from '@/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PageHeader } from '@/common/PageHeader'
@@ -26,11 +27,25 @@ const SECTIONS = [
   { value: 'resident', label: 'Theo người cao tuổi', function: 'BALANCE_LEDGER' },
 ]
 
-// residentId: mở từ bước Đặt cọc của Hồ sơ tiếp nhận, vào thẳng Ghi nhận tiền nộp với người cao tuổi đó (audit 2026-11-18)
-export function BalancePage({ residentId = null } = {}) {
+// residentId: mở từ bước Đặt cọc của Hồ sơ tiếp nhận, vào thẳng Ghi nhận tiền nộp với người cao tuổi đó (audit 2026-11-18).
+// focus="resident" (demo 2026-11-26): mở từ điều kiện (h) của Kết thúc lưu trú, vào thẳng số dư, giao dịch, quyết toán của
+// người đó; Hành chính chỉ xem cũng mở được (trước đây rơi vào Tình trạng số dư, chỉ Kế toán, Quản lý viện xem được).
+export function BalancePage({ residentId = null, focus = null } = {}) {
   const { status, hasFunction, can } = usePermissions()
-  const [section, setSection] = useState(residentId != null ? 'payments' : 'resident')
+  const focused = residentId != null && focus === 'resident'
+  const [section, setSection] = useState(residentId != null && !focused ? 'payments' : 'resident')
   const [resident, setResident] = useState(null)
+
+  useEffect(() => {
+    if (!focused) return
+    let live = true
+    getResidentsById({ path: { id: residentId } })
+      .then(({ data }) => live && setResident({ residentId, fullName: data.personalInfo?.fullName ?? data.fullName }))
+      .catch(() => live && setResident({ residentId, fullName: `mã ${residentId}` }))
+    return () => {
+      live = false
+    }
+  }, [focused, residentId])
 
   if (status === 'loading') return <Skeleton className="mx-auto h-32 w-full max-w-[1600px]" />
   if (!['BALANCE_LEDGER', 'PAYMENT_NOTICE', 'STATEMENT_REPORT', 'SETTLEMENT_RECORD'].some(hasFunction))
@@ -59,7 +74,7 @@ export function BalancePage({ residentId = null } = {}) {
       {current === 'exports' && <BalanceExports />}
       {current === 'resident' && (
         <div className="flex flex-col gap-5">
-          <ResidentPicker onPick={setResident} />
+          {!focused && <ResidentPicker onPick={setResident} />}
           {resident && (
             <ResidentBalance key={resident.residentId} residentId={resident.residentId} fullName={resident.fullName} />
           )}

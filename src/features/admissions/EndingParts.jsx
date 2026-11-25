@@ -39,8 +39,8 @@ const HANDLERS = {
   END_B_BELONGINGS: { page: 'belongings', label: 'Đồ gửi', withResident: true },
   END_C_STORED_MEDICATION: { page: 'medication', label: 'Thuốc', withResident: true },
   END_D_ALERTS_INCIDENTS: { page: 'alerts', label: 'Cảnh báo', withResident: false },
-  END_H_SETTLEMENT: { page: 'balance', label: 'Số dư, thu chi', withResident: true },
-  END_H_SETTLEMENT_CONFIRMATION: { page: 'balance', label: 'Số dư, thu chi', withResident: true },
+  END_H_SETTLEMENT: { page: 'balance', label: 'Số dư, thu chi', withResident: true, focus: 'resident' },
+  END_H_SETTLEMENT_CONFIRMATION: { page: 'balance', label: 'Số dư, thu chi', withResident: true, focus: 'resident' },
 }
 
 // Trạng thái có màu (Đạt xanh, Chưa đạt đỏ; DESIGN.md mục 3.5). Lý do chỉ hiện khi Chưa đạt: dòng Đạt, Tự động backend
@@ -63,7 +63,12 @@ function ConditionRow({ line, residentId, onNavigate }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onNavigate(handler.page, handler.withResident ? { residentId } : {})}
+            onClick={() =>
+              onNavigate(
+                handler.page,
+                handler.withResident ? { residentId, ...(handler.focus && { focus: handler.focus }) } : {},
+              )
+            }
           >
             Xử lý ở {handler.label} →
           </Button>
