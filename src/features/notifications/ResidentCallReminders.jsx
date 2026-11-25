@@ -12,7 +12,7 @@ const POLL_MS = 30_000
 // không có lượt nào thì không hiện gì. Hỏi lại mỗi 30 giây như yêu cầu nền.
 // Đề xuất 2026-11-24 (góp ý test demo: khối quá dài): người nhà hiện đủ; nhân viên chưa xác nhận gom thành một dòng, bấm mới
 // mở danh sách.
-export function ResidentCallReminders({ residentId, residentName }) {
+export function ResidentCallReminders({ residentId, residentName, onFamilyReached }) {
   const id = useId()
   const [items, setItems] = useState([])
   const [opened, setOpened] = useState(null)
@@ -78,6 +78,7 @@ export function ResidentCallReminders({ residentId, residentName }) {
               key={opened.id}
               id={opened.id}
               startRecording={opened.startRecording}
+              onReached={(reminder) => reminder.personToCall?.type !== 'STAFF' && onFamilyReached?.(reminder)}
               onChanged={() => setVersion((v) => v + 1)}
             />
           )}

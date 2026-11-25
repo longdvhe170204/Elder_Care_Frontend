@@ -58,6 +58,7 @@ import {
   loadIncidentBoard,
   loadLinkedAlerts,
   loadResidentStatus,
+  recordFamilyNotice,
   runIncidentCommand,
 } from './incidents'
 import {
@@ -507,6 +508,8 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const [mode, setMode] = useState(null)
   // Đang xem trước phiếu chuyển viện: hộp chỉ hiện tờ giấy, không khung (BF-06)
   const [paper, setPaper] = useState(false)
+  // Tăng khi vừa tự ghi đã báo người nhà từ kết quả gọi, để khung Báo người nhà đọc lại
+  const [familyTick, setFamilyTick] = useState(0)
   const [busy, setBusy] = useState(false)
 
   // Trạng thái người cao tuổi, tải lại mỗi khi sự cố được tải lại (sau chuyển viện thì khóa nút Chuyển viện)
@@ -587,6 +590,17 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
     commands.includes('transfer-out')
   const statusBlocksTransfer = residentStatus != null && !TRANSFERABLE_STATUS.includes(residentStatus)
   const canTransfer = transferOffered && !statusBlocksTransfer
+
+  // Gọi được người nhà ở "Cần gọi điện" thì tự ghi đã báo người nhà (gọi điện) cho sự cố, không bắt ghi hai lần (BF-06)
+  async function onFamilyReached() {
+    if (!commands.includes('family-notice')) return
+    try {
+      await recordFamilyNotice(incident.id, { method: 'PHONE', note: 'Ghi theo kết quả gọi người nhà' })
+    } catch {
+      // đã ghi trước đó hoặc không đủ điều kiện: giữ nguyên trạng thái hiện có
+    }
+    setFamilyTick((t) => t + 1)
+  }
 
   // Ghi diễn biến mở ngay trong khối Diễn biến để vẫn thấy các lần ghi trước; lệnh khác mở hộp
   const inDialog = mode != null && !['progressions', 'follow-up'].includes(mode)
@@ -760,7 +774,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       {problem && !inDialog && <ProblemAlert problem={problem} />}
       {content.residentId != null && isOpen(incident) && <CriticalNotice residentId={content.residentId} />}
       {content.residentId != null && (
-        <FamilyNoticePanel incidentId={incident.id} canRecord={commands.includes('family-notice')} />
+        <FamilyNoticePanel key={familyTick} incidentId={incident.id} canRecord={commands.includes('family-notice')} />
       )}
       {/* Trái: cần biết để xử lý (thẻ khẩn cấp, gọi điện, ghi nhận); phải: Diễn biến (đề xuất 2026-11-24) */}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
@@ -771,7 +785,11 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
             call115
           )}
           {content.residentId != null && isOpen(incident) && (
-            <ResidentCallReminders residentId={content.residentId} residentName={name} />
+            <ResidentCallReminders
+              residentId={content.residentId}
+              residentName={name}
+              onFamilyReached={onFamilyReached}
+            />
           )}
           <CaseBlock title="Ghi nhận">
             <CaseFacts
