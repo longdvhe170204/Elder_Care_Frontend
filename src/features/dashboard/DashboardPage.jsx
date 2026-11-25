@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ChevronRight, Pause, Play, RefreshCw } from 'lucide-react'
-import { ApiError, getAlerts, getDashboard, getFloors, getMetricCatalog } from '@/api'
+import { ApiError, getAlerts, getDashboard, getFloors, getMeNotifications, getMetricCatalog } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -11,6 +11,7 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { BreakdownChart } from '@/common/charts/BreakdownChart'
 import { chartKind } from '@/common/charts/chartRules'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { SOURCE_PAGES } from '@/common/notifications/sourceTargets'
 import { problemOf } from '@/common/problem'
 import { MetricCatalogNotice } from '@/features/reports/MetricCatalogNotice'
 import { MetricDetailSheet } from '@/features/reports/MetricDetailSheet'
@@ -139,7 +140,41 @@ function MetricRow({ value, metric, floors, onOpen }) {
   )
 }
 
-function AttentionCard({ rows, checked, asOf, onOpen, onNavigate }) {
+const ASSIGNED_LIMIT = 5
+
+// Việc người khác gửi tới mình (demo 2026-11-25, góp ý nhóm): thông báo chưa xem của chính người dùng, mỗi dòng có nút Xử
+// lý mở thẳng màn của nguồn (SOURCE_PAGES) hoặc mở chi tiết thông báo (có nút tới bản ghi nguồn).
+function AssignedWork({ inbox, onNavigate }) {
+  if (!inbox || inbox.items.length === 0) return null
+  const open = (n) => {
+    const target = SOURCE_PAGES[n.sourceRecord?.type]
+    if (target && n.sourceRecord?.id) onNavigate?.(target[0], { [target[1]]: Number(n.sourceRecord.id) })
+    else onNavigate?.('notifications', { notificationId: n.id })
+  }
+  return (
+    <div className="mt-3 flex flex-col border-t pt-3">
+      <h3 className="type-label">{`Việc gửi tới bạn (${inbox.unreadCount ?? inbox.items.length})`}</h3>
+      {inbox.items.slice(0, ASSIGNED_LIMIT).map((n) => (
+        <div key={n.id} className="flex items-center gap-3 border-t px-2 py-2.5 first-of-type:border-t-0">
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="type-body">{n.content?.find((c) => c.content)?.content ?? n.title}</span>
+            <span className="type-caption text-muted-foreground">{n.title}</span>
+          </span>
+          <Button variant="outline" size="sm" className="shrink-0" onClick={() => open(n)}>
+            Xử lý →
+          </Button>
+        </div>
+      ))}
+      {(inbox.unreadCount ?? 0) > ASSIGNED_LIMIT && (
+        <Button variant="link" className="self-start" onClick={() => onNavigate?.('notifications')}>
+          Xem tất cả thông báo
+        </Button>
+      )}
+    </div>
+  )
+}
+
+function AttentionCard({ rows, checked, asOf, onOpen, onNavigate, inbox }) {
   return (
     <Card role="region" aria-labelledby="dashboard-attention">
       <CardHeader>
@@ -148,7 +183,7 @@ function AttentionCard({ rows, checked, asOf, onOpen, onNavigate }) {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col">
-        {rows.length === 0 ? (
+        {rows.length === 0 && inbox?.items.length > 0 ? null : rows.length === 0 ? (
           <div className="flex flex-col gap-1">
             <p className="type-body text-success-foreground">Không có việc tồn trong phạm vi của bạn.</p>
             {checked > 0 && (
@@ -176,6 +211,7 @@ function AttentionCard({ rows, checked, asOf, onOpen, onNavigate }) {
             </button>
           ))
         )}
+        <AssignedWork inbox={inbox} onNavigate={onNavigate} />
       </CardContent>
     </Card>
   )
@@ -224,6 +260,7 @@ export function DashboardPage({ role, onNavigate }) {
   const [paused, setPaused] = useState(false)
   const [openGroups, setOpenGroups] = useState(readOpenGroups)
   const [catalogFailed, setCatalogFailed] = useState(false)
+  const [inbox, setInbox] = useState(null)
   const etag = useRef(null)
   const catalogs = useRef({ metrics: false })
   const canViewFloors = usePermissions().can('ROOM_BED_CONFIGURATION', 'VIEW')
@@ -284,6 +321,18 @@ export function DashboardPage({ role, onNavigate }) {
     // tải khi mở màn
     load()
   }, [load])
+
+  // Việc gửi tới bạn: thông báo chưa xem, tải lại cùng nhịp với tổng quan (asOf đổi); lỗi thì không hiện phần này
+  const asOfKey = state.dashboard?.asOf
+  useEffect(() => {
+    let active = true
+    getMeNotifications({ query: { unread: true } })
+      .then(({ data }) => active && setInbox({ unreadCount: data?.unreadCount, items: data?.items ?? [] }))
+      .catch(() => active && setInbox(null))
+    return () => {
+      active = false
+    }
+  }, [asOfKey])
 
   useEffect(() => {
     // làm mới định kỳ (FR-021) trừ khi người dùng tạm dừng
@@ -373,6 +422,9 @@ export function DashboardPage({ role, onNavigate }) {
           </ProblemAlert>
         </section>
       )}
+      {state.status === 'ready' && dashboard.blocks.length === 0 && inbox?.items.length > 0 && (
+        <AttentionCard rows={[]} checked={0} asOf="" onOpen={setOpened} onNavigate={onNavigate} inbox={inbox} />
+      )}
       {state.status === 'ready' && dashboard.blocks.length === 0 && (
         <section className="rounded-2xl border bg-card p-4 md:p-5">
           <Empty>
@@ -395,6 +447,7 @@ export function DashboardPage({ role, onNavigate }) {
               asOf={TIME.format(new Date(dashboard.asOf))}
               onOpen={setOpened}
               onNavigate={onNavigate}
+              inbox={inbox}
             />
             {hasSituation && (
               <Card role="region" aria-labelledby="dashboard-situation">
