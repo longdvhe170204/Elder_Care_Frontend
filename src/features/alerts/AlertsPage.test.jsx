@@ -442,10 +442,20 @@ describe('AlertsPage', () => {
     expect(JSON.parse(api.calls('POST', '/alerts/3/follow-ups')[0][1].body)).toEqual({ content: 'Đo lại 140/90' })
   })
 
-  it('FR_029_409_hienDieuKienChuaThoa', async () => {
+  it('BF_06_tiepNhanKhiNguoiKhacDaNhan_baoRoVaLamMoi_khongHienLoi', async () => {
     api.on('POST', '/alerts/1/receive', problem(409, 'ALREADY_RECEIVED'))
     render(<AlertsPage role="NURSING_STAFF" />)
     fireEvent.click(await screen.findByRole('button', { name: 'Tiếp nhận cảnh báo của Trần Thị Mai' }))
+    expect(await screen.findByText(/Đã có người nhận cảnh báo của Trần Thị Mai/)).toBeTruthy()
+    await waitFor(() => expect(api.calls('GET', '/alerts').length).toBeGreaterThan(1))
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('FR_029_409_cacLenhKhac_hienDieuKienChuaThoa', async () => {
+    api.on('POST', '/alerts/1/start-handling', problem(409, 'CONFLICT'))
+    api.on('GET', '/alerts', json(200, [{ ...ALERT_MEDIUM, status: 'RECEIVED', allowedCommands: ['start-handling'] }]))
+    render(<AlertsPage role="NURSING_STAFF" />)
+    fireEvent.click(await screen.findByRole('button', { name: /Bắt đầu xử lý/ }))
     expect(await screen.findByRole('alert')).toBeTruthy()
   })
 

@@ -174,6 +174,8 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
 const CRITICAL_CLOSE_MIN = 10
 // Màn tự hỏi lại để thấy cảnh báo mới, cảnh báo vừa được người khác đóng mà không phải tải lại trang
 const REFRESH_MS = 15000
+// Bấm Tiếp nhận mà người khác đã nhận trước (409 hoặc 422): báo rõ rồi làm mới thay vì hiện lỗi (BF-06)
+const takenByOther = (command, error) => [command].flat().includes('receive') && [409, 422].includes(error?.status)
 // Yêu cầu hỗ trợ ghi Ngã hoặc Ngừng tim, ngất: thường phải ghi sự cố để theo dõi, nhắc khi đóng (chỉ nhắc, không chặn)
 const FOLLOW_UP_EVENTS = ['FALL', 'CARDIAC_ARREST_OR_FAINTING']
 const DIALOG_TITLE = {
@@ -360,7 +362,14 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
       await reload()
       onChanged(message, name)
     } catch (error) {
-      setProblem(problemOf(error))
+      if (takenByOther(command, error)) {
+        // Người khác nhận trước vài giây: báo rõ và làm mới, nút Tiếp nhận biến mất (BF-06)
+        setProblem(null)
+        await reload().catch(() => null)
+        onChanged('Đã có người nhận cảnh báo này, màn đã cập nhật', name)
+      } else {
+        setProblem(problemOf(error))
+      }
     } finally {
       setBusy(false)
     }
@@ -982,7 +991,14 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
       setAnnouncement(`${message}: ${typeLabel(alert.type)}, ${name}.`)
       await load()
     } catch (error) {
-      setProblem(problemOf(error))
+      if (takenByOther(cmd, error)) {
+        // Người khác nhận trước vài giây: báo rõ và làm mới danh sách, nút Tiếp nhận biến mất (BF-06)
+        setProblem(null)
+        setAnnouncement(`Đã có người nhận cảnh báo của ${name}. Danh sách đã cập nhật.`)
+        await load().catch(() => null)
+      } else {
+        setProblem(problemOf(error))
+      }
     } finally {
       setBusy(false)
     }

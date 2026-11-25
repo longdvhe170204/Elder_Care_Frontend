@@ -555,6 +555,12 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       onChanged(message)
       return true
     } catch (error) {
+      if (command === 'receive' && [409, 422].includes(error?.status)) {
+        // Người khác nhận trước vài giây: báo rõ và làm mới, nút Tiếp nhận biến mất (BF-06)
+        setState(await loadIncident(incident.id).catch(() => state))
+        onChanged('Đã có người nhận sự cố này, màn đã cập nhật')
+        return false
+      }
       setProblem(problemOf(error))
       return false
     } finally {
