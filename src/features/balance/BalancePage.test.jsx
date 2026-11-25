@@ -106,10 +106,21 @@ describe('BalancePage (017)', () => {
     expect(await screen.findByText('Không có hồ sơ Sắp hết tiền, Còn nợ')).toBeInTheDocument()
   })
 
-  it('FR_005_hanhChinhChiXem_khongCoPhanGhiNhanTienNop', async () => {
-    setup([{ function: 'BALANCE_LEDGER', operation: 'VIEW' }])
-    expect(await screen.findByRole('button', { name: 'Tình trạng số dư' })).toBeInTheDocument()
+  // Demo 2026-11-26: Tình trạng số dư, Giao dịch chờ duyệt chỉ Kế toán, Quản lý viện xem được (backend chặn theo vai trò,
+  // FR-013, FR-028); Hành chính không thấy hai nút này, vào thẳng Theo người cao tuổi
+  it('FR_005_hanhChinhChiXem_khongCoGhiNhanTienNop_tinhTrang_choDuyet', async () => {
+    setup([{ function: 'BALANCE_LEDGER', operation: 'VIEW' }], { role: 'OFFICE_STAFF' })
+    expect(await screen.findByRole('button', { name: 'Theo người cao tuổi' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Tìm người cao tuổi')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi nhận tiền nộp' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Tình trạng số dư' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Giao dịch chờ duyệt' })).not.toBeInTheDocument()
+  })
+
+  it('FR_013_keToan_vanThayTinhTrang_choDuyet', async () => {
+    setup(ALL, { role: 'ACCOUNTANT' })
+    expect(await screen.findByRole('button', { name: 'Tình trạng số dư' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Giao dịch chờ duyệt' })).toBeInTheDocument()
   })
 
   // Demo 2026-11-26: nút Xử lý ở điều kiện (h) của Kết thúc lưu trú mở thẳng số dư, quyết toán của đúng người; Hành chính
