@@ -178,8 +178,9 @@ export function vietnamIso(local) {
   return local ? `${local}:00+07:00` : ''
 }
 
-// Giá trị của một loại thay đổi lưu trú thành chữ: trước, sau của yêu cầu và của phụ lục (giường lưu bedId hoặc newBedId)
-export function changeValueText(type, value) {
+// Giá trị của một loại thay đổi lưu trú thành chữ: trước, sau của yêu cầu và của phụ lục (giường lưu bedId hoặc newBedId;
+// loại "Loại phòng" có giá trị trước là roomTypeId, Q-445). `names` từ useBedChangeNames; chưa có tên thì ghi mã.
+export function changeValueText(type, value, names = {}) {
   if (!value) return '—'
   switch (type) {
     case 'RESIDENCE_TYPE':
@@ -190,7 +191,9 @@ export function changeValueText(type, value) {
       return value.endDate ? formatDate(value.endDate) : '—'
     case 'BED': {
       const bed = value.newBedId ?? value.bedId
-      return bed ? `Giường mã ${bed}` : '—'
+      if (bed) return names.beds?.[bed] ?? `Giường mã ${bed}`
+      if (value.roomTypeId) return names.roomTypes?.[value.roomTypeId] ?? `Loại phòng mã ${value.roomTypeId}`
+      return '—'
     }
     case 'SERVICE':
       return `${(value.services ?? []).length} dịch vụ`

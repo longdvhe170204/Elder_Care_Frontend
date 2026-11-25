@@ -162,6 +162,32 @@ describe('ContractsPage', () => {
     expect(api.calls('GET', '/contracts/33/content')[0][0]).toMatch(/date=\d{4}-\d{2}-\d{2}/)
   })
 
+  // Góp ý test BF-12 (2026-11-25): phụ lục "Loại phòng" (mã BED, Q-445) ghi tên loại phòng cũ và nhãn giường mới
+  it('Q445_phuLucLoaiPhong_hienTenLoaiPhongVaNhanGiuong', async () => {
+    api.on(
+      'GET',
+      '/contracts/33/addenda',
+      json(200, [
+        {
+          id: 8,
+          approvalRequestId: 9,
+          changeTypes: ['BED'],
+          contentBefore: { bedId: null, roomTypeId: 9001 },
+          contentAfter: { bedId: 9010, roomTypeId: 9002 },
+          effectiveDate: '2026-11-25',
+          status: 'APPLIED',
+        },
+      ]),
+    )
+    api.on('GET', '/room-types', json(200, [{ id: 9001, name: 'Phòng 2 giường' }]))
+    api.on('GET', '/beds/9010', json(200, { id: 9010, location: { label: 'Khu A – Tầng 2 – Phòng 202 – G2' } }))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Hiệu lực 1' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Phạm Thị Mai' }))
+
+    expect(await screen.findByText('Loại phòng: Phòng 2 giường → Khu A – Tầng 2 – Phòng 202 – G2')).toBeInTheDocument()
+  })
+
   it('FR_025_guiKy409_hienDieuKienChuaThoa', async () => {
     api.on(
       'POST',
