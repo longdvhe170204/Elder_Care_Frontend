@@ -344,10 +344,31 @@ export function ChangeRequestView({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden [&_svg]:stroke-[2.5]">
       {/* 1. HEADER (Cố định trên cùng) */}
-      <div className="shrink-0 flex flex-col gap-1 border-b border-border/60 pb-3 pr-8">
+      <div className="shrink-0 flex flex-col gap-1.5 border-b border-border/60 pb-3 pr-8">
         <Title className="type-title font-bold text-foreground">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
-        <Description className="type-body-sm text-muted-foreground leading-relaxed">
-          {`${REQUEST_STATUS[request.status] ?? request.status}. Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}${contractNumber ? `. Hợp đồng ${contractNumber}` : ''}`}
+        <Description className="flex flex-col gap-1 type-body-sm text-muted-foreground leading-relaxed">
+          <span className="block">
+            Trạng thái:{' '}
+            <strong className="font-semibold text-foreground">
+              {REQUEST_STATUS[request.status] ?? request.status}
+            </strong>
+          </span>
+          <span className="block">
+            Ngày hiệu lực mong muốn:{' '}
+            <strong className="font-semibold text-foreground tabular-nums">
+              {formatDate(request.requestedEffectiveDate)}
+            </strong>
+          </span>
+          {request.requestedBy && (
+            <span className="block">
+              Lập bởi: <strong className="font-semibold text-foreground">{request.requestedBy}</strong>
+            </span>
+          )}
+          {contractNumber && (
+            <span className="block">
+              Hợp đồng: <strong className="font-semibold text-foreground tabular-nums">{contractNumber}</strong>
+            </span>
+          )}
         </Description>
       </div>
 
@@ -406,11 +427,9 @@ export function ChangeRequestView({
                   {confirmationRequestText(sent)}
                 </div>
               )}
-              {draft && needsConfirmation && (
+              {draft && needsConfirmation && !canConfirm && (
                 <p className="type-caption text-muted-foreground leading-relaxed">
-                  {canConfirm
-                    ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
-                    : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
+                  Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.
                 </p>
               )}
             </section>
@@ -990,17 +1009,40 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 ))}
               </select>
               {effectiveContract && (
-                <FieldDescription>
-                  {[
-                    effectiveContract.residenceType && `Hiện tại: ${labelOf(RESIDENCE_TYPES, effectiveContract.residenceType)}`,
-                    effectiveContract.careLevel && `mức ${labelOf(CARE_LEVELS, effectiveContract.careLevel)}`,
-                    effectiveContract.startDate && `bắt đầu ${formatDate(effectiveContract.startDate)}`,
-                    (effectiveContract.currentEndDate ?? effectiveContract.endDate) &&
-                    `kết thúc ${formatDate(effectiveContract.currentEndDate ?? effectiveContract.endDate)}`,
-                  ]
-                    .filter(Boolean)
-                    .join(', ')}
-                </FieldDescription>
+                <div className="mt-2 flex flex-col gap-1 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  {effectiveContract.residenceType && (
+                    <div>
+                      Hiện tại:{' '}
+                      <strong className="font-semibold text-foreground">
+                        {labelOf(RESIDENCE_TYPES, effectiveContract.residenceType)}
+                      </strong>
+                    </div>
+                  )}
+                  {effectiveContract.careLevel && (
+                    <div>
+                      Mức chăm sóc:{' '}
+                      <strong className="font-semibold text-foreground">
+                        {labelOf(CARE_LEVELS, effectiveContract.careLevel)}
+                      </strong>
+                    </div>
+                  )}
+                  {effectiveContract.startDate && (
+                    <div>
+                      Ngày bắt đầu:{' '}
+                      <strong className="font-semibold text-foreground tabular-nums">
+                        {formatDate(effectiveContract.startDate)}
+                      </strong>
+                    </div>
+                  )}
+                  {(effectiveContract.currentEndDate ?? effectiveContract.endDate) && (
+                    <div>
+                      Ngày kết thúc:{' '}
+                      <strong className="font-semibold text-foreground tabular-nums">
+                        {formatDate(effectiveContract.currentEndDate ?? effectiveContract.endDate)}
+                      </strong>
+                    </div>
+                  )}
+                </div>
               )}
               {shown('contract') && <FieldError>{shown('contract')}</FieldError>}
             </Field>

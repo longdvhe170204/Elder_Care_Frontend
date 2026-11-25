@@ -178,7 +178,8 @@ describe('ChangeRequestView: form xem chi tiết', () => {
   it('dauKhung_hienHopDong_trangThai_ngayHieuLuc', async () => {
     const view = await openDetail()
     expect(within(view).getByRole('heading', { level: 2, name: 'Nguyễn Thị Lan' })).toBeInTheDocument()
-    expect(within(view).getByText('Đã áp dụng. Ngày hiệu lực mong muốn 20/11/2026', { exact: false })).toBeInTheDocument()
+    expect(within(view).getByText('Đã áp dụng')).toBeInTheDocument()
+    expect(within(view).getByText('20/11/2026')).toBeInTheDocument()
   })
 
   it('noiDungThayDoi_hienTruocVaSauThanhHaiO', async () => {

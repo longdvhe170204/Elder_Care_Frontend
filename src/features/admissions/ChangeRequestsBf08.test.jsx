@@ -513,7 +513,7 @@ describe('BF-08 sửa đổi', () => {
     const dialog = screen.getByRole('dialog')
     await within(dialog).findByRole('option', { name: /HD-031/ })
     fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
-    await within(dialog).findByText(/Hiện tại: Bán trú/)
+    await within(dialog).findByText('Bán trú', { selector: 'strong' })
     fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Loại lưu trú' }))
     expect(within(dialog).queryByRole('button', { name: 'Bán trú' })).not.toBeInTheDocument()
     expect(within(dialog).getByRole('button', { name: 'Nội trú dài hạn' })).toBeInTheDocument()
