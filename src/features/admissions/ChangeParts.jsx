@@ -73,6 +73,7 @@ import {
   SignatureSheet,
   SubmitSheet,
 } from './ChangeActions'
+import { useBedChangeNames } from './useBedChangeNames'
 
 // Yêu cầu thay đổi lưu trú (004 T047; US5, FR-037 → FR-047). Lập, sửa ở Nháp; gửi duyệt ở màn này hoặc màn Yêu cầu phê
 // duyệt (api-000). Giá trị trước và ảnh hưởng chi phí do hệ thống điền (FR-038). Yêu cầu do Hành chính hoặc Bác sĩ lập chỉ
@@ -110,7 +111,7 @@ function confirmationText(c, confirmerName) {
 // Nội dung thay đổi (trước, sau theo loại) và ảnh hưởng chi phí; dùng ở màn này và màn Yêu cầu phê duyệt (nội dung yêu cầu
 // phê duyệt loại M02.RESIDENCY_CHANGE cùng các trường changeTypes, previousValue, newValue, costImpact).
 // Một loại thay đổi dạng thẻ: biểu tượng, tên loại, giá trị trước và giá trị sau (variant "cards" của ChangeContent)
-function ChangeRow({ type, content }) {
+function ChangeRow({ type, content, names }) {
   const Icon = CHANGE_TYPE_ICONS[type]
   return (
     <li className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent/30 shadow-2xs">
@@ -123,12 +124,12 @@ function ChangeRow({ type, content }) {
       <div className="flex items-center justify-between gap-2 type-body-sm tabular-nums">
         <span className="sr-only">Trước:</span>
         <span className="flex-1 rounded-md bg-card px-2.5 py-1.5 text-center text-muted-foreground ring-1 ring-border shadow-2xs font-medium truncate">
-          {changeValueText(type, content.previousValue)}
+          {changeValueText(type, content.previousValue, names)}
         </span>
         <ArrowRight aria-hidden className="size-4 shrink-0 text-primary" />
         <span className="sr-only">Sau:</span>
         <span className="flex-1 rounded-md bg-primary px-2.5 py-1.5 text-center font-semibold text-primary-foreground shadow-sm truncate">
-          {changeValueText(type, content.newValue)}
+          {changeValueText(type, content.newValue, names)}
         </span>
       </div>
     </li>
@@ -141,6 +142,7 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
   const types = content.changeTypes ?? []
   const confirmation = content.representativeConfirmation
   const confirmerName = useFamilyMemberName(content.residentId, confirmation?.representativeFamilyMemberId)
+  const names = useBedChangeNames(types.includes('BED') ? [content.previousValue, content.newValue] : [])
   return (
     <>
       <section className={`flex flex-col ${cards ? 'gap-3' : 'gap-2'}`}>
@@ -148,12 +150,12 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
         <ul className="flex flex-col gap-2">
           {types.map((type) =>
             cards ? (
-              <ChangeRow key={type} type={type} content={content} />
+              <ChangeRow key={type} type={type} content={content} names={names} />
             ) : (
               <li key={type} className="flex flex-col">
                 <span className="type-body-sm">{labelOf(CHANGE_TYPES, type)}</span>
                 <span className="type-caption text-muted-foreground">
-                  {`Trước: ${changeValueText(type, content.previousValue)}; sau: ${changeValueText(type, content.newValue)}`}
+                  {`Trước: ${changeValueText(type, content.previousValue, names)}; sau: ${changeValueText(type, content.newValue, names)}`}
                 </span>
               </li>
             ),

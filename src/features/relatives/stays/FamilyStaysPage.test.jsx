@@ -150,6 +150,29 @@ describe('Người thân ở lại', () => {
     expect(await screen.findByText('Đã xác nhận lượt ở lại')).toBeInTheDocument()
   })
 
+  // Góp ý test BF-12 (2026-11-25): lượt đã xác nhận hiện lại ý kiến người cùng phòng đã ghi (backend chỉ trả cho nhân viên)
+  it('FR_040_daXacNhan_hienYKienNguoiCungPhong', async () => {
+    permissions([['FAMILY_STAY', 'VIEW']])
+    api.on(
+      'GET',
+      '/family-stays',
+      json(200, [
+        {
+          ...PENDING,
+          status: 'CONFIRMED',
+          roommateOpinion: { askedPerson: 'Võ Thị Hòa', result: 'AGREED', note: 'Không phiền' },
+        },
+      ]),
+    )
+    renderPage('FLOOR_MANAGER')
+    fireEvent.click(await screen.findByRole('button', { name: 'Đã xác nhận 1' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Trần Văn Minh/ }))
+    const detail = await screen.findByRole('dialog', { name: 'Trần Văn Minh ở lại với Nguyễn Thị Lan' })
+
+    expect(within(detail).getByText('Ý kiến người cùng phòng')).toBeInTheDocument()
+    expect(within(detail).getByText('Võ Thị Hòa: Đồng ý. Không phiền')).toBeInTheDocument()
+  })
+
   it('FR_045_tuChoi_batBuocLyDo', async () => {
     permissions([['FAMILY_STAY', 'VIEW']])
     const table = await renderPage('NURSING_HOME_MANAGER')
