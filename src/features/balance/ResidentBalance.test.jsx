@@ -270,6 +270,8 @@ describe('ResidentBalance (017)', () => {
     api.on('POST', '/residents/7/deposit-offsets', json(201, [{ id: 20 }, { id: 21 }]))
     fireEvent.click(await screen.findByRole('button', { name: 'Cấn trừ tiền cọc' }))
     fill('Số tiền cấn trừ', '1250000')
+    // Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ
+    expect(screen.getByLabelText('Số tiền cấn trừ')).toHaveValue('1.250.000')
     fireEvent.click(screen.getByRole('button', { name: 'Cấn trừ' }))
     await waitFor(() => expect(api.calls('POST', '/residents/7/deposit-offsets')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/residents/7/deposit-offsets')[0][1].body)).toEqual({ amount: 1250000 })
