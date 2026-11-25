@@ -228,3 +228,30 @@ describe('AccountList', () => {
     expect(within(sheet).getByText('Chưa thực hiện được')).toBeInTheDocument()
   })
 })
+
+// Demo 2026-11-25: chọn nhân viên chưa có tài khoản theo tên khi tạo tài khoản, thay cho ô nhập mã hồ sơ
+describe('AccountList: chọn nhân viên theo tên', () => {
+  it('taoTaiKhoan_chonNhanVienChuaCoTaiKhoan', async () => {
+    api.on('GET', '/accounts', json(200, { items: [], nextCursor: null }))
+    api.on(
+      'GET',
+      '/staff',
+      json(200, [
+        { id: 110, fullName: 'Ngô Văn Mới', position: 'Nhân viên chăm sóc' },
+        { id: 111, fullName: 'Đã Có Tài Khoản', position: 'Điều dưỡng', accountId: 9 },
+      ]),
+    )
+    api.on('POST', '/accounts', json(201, { ...account(10), temporaryPassword: 'Moi98765wxyz' }))
+    render(<DetailHost>{(host) => <AccountList canCreate {...host} />}</DetailHost>)
+    fireEvent.click(await screen.findByRole('button', { name: 'Tạo tài khoản nhân viên' }))
+    const sheet = await screen.findByRole('dialog')
+    await within(sheet).findByRole('option', { name: 'Ngô Văn Mới (Nhân viên chăm sóc)' })
+    expect(within(sheet).queryByRole('option', { name: /Đã Có Tài Khoản/ })).toBeNull()
+    fireEvent.change(within(sheet).getByLabelText('Nhân viên'), { target: { value: '110' } })
+    fireEvent.change(within(sheet).getByLabelText('Tên đăng nhập'), { target: { value: 'nv-10' } })
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: 'Nhân viên chăm sóc' }))
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Tạo tài khoản' }))
+    await within(sheet).findByTestId('temporary-password')
+    expect(JSON.parse(api.calls('POST', '/accounts')[0][1].body).staffId).toBe(110)
+  })
+})

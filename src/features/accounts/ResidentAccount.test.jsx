@@ -261,3 +261,25 @@ describe('Tài khoản người cao tuổi', () => {
     expect(body.submitImmediately).toBe(true)
   })
 })
+
+// Demo 2026-11-25: đọc được danh sách thì chọn nhân viên đã nghe, người thân đề nghị theo tên thay cho ô nhập mã
+describe('Tài khoản người cao tuổi: chọn theo tên', () => {
+  it('chonNhanVienVaNguoiThanTheoTen', async () => {
+    api.on('GET', '/staff', json(200, [{ id: 7, fullName: 'Lê Thị Nghe', position: 'Hành chính' }]))
+    api.on(
+      'GET',
+      '/residents/501/relationships',
+      json(200, [{ id: 1, status: 'ACTIVE', familyMember: { id: 55, fullName: 'Trần Văn Con' } }]),
+    )
+    api.on('POST', '/approval-requests', json(201, { id: 88, status: 'PENDING' }))
+    const sheet = await openDetail(residentAccount({ residentId: 501 }))
+    fireEvent.click(await within(sheet).findByRole('button', { name: 'Lập đề nghị khóa theo lời người thân' }))
+    await within(sheet).findByRole('option', { name: 'Trần Văn Con' })
+    expect(within(sheet).queryByLabelText('Mã hồ sơ người thân đề nghị')).toBeNull()
+    fireEvent.change(within(sheet).getByLabelText('Người thân đề nghị'), { target: { value: '55' } })
+    fireEvent.change(within(sheet).getByLabelText('Lý do'), { target: { value: 'Con trai đề nghị khóa' } })
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Gửi Quản lý viện duyệt' }))
+    await waitFor(() => expect(api.calls('POST', '/approval-requests')).toHaveLength(1))
+    expect(bodyOf('POST', '/approval-requests').content.requestingFamilyMemberId).toBe(55)
+  })
+})
