@@ -93,7 +93,26 @@ describe('EndingsPage', () => {
     expect(screen.getByText('Số dư và tiền cọc đã quyết toán')).toBeInTheDocument()
     expect(screen.getByText('Kế toán đã xác nhận quyết toán')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Điều kiện (h): số dư và tiền cọc đã quyết toán' })).toBeInTheDocument()
-    expect(screen.getByText(/Tự động/)).toBeInTheDocument()
+    // Demo 2026-11-26: (f) hợp đồng, (g) giường tự động nên không hiện
+    expect(screen.queryByText(/Tự động/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Hợp đồng được xử lý')).not.toBeInTheDocument()
+  })
+
+  // Demo 2026-11-26: điều kiện bàn giao ở dòng cuối, sau quyết toán
+  it('dieuKien_banGiaoODongCuoi', async () => {
+    renderPage()
+    await openEnding()
+    const table = screen.getByRole('table', { name: 'Điều kiện kết thúc' })
+    const names = within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => r.querySelector('td')?.querySelector('span')?.textContent)
+    expect(names).toEqual([
+      'Chi phí kỳ cuối đã chốt',
+      'Số dư và tiền cọc đã quyết toán',
+      'Kế toán đã xác nhận quyết toán',
+      'Đã bàn giao người cao tuổi',
+    ])
   })
 
   // Demo 2026-11-25: điều kiện dạng bảng; dòng chưa đạt có nút Xử lý mở thẳng màn xử lý của người cao tuổi đó
@@ -107,7 +126,6 @@ describe('EndingsPage', () => {
     expect(onNavigate).toHaveBeenLastCalledWith('charges', {})
     fireEvent.click(within(row('Số dư và tiền cọc đã quyết toán')).getByRole('button', { name: /Xử lý/ }))
     expect(onNavigate).toHaveBeenLastCalledWith('balance', { residentId: 5, focus: 'resident' })
-    expect(within(row('Hợp đồng được xử lý')).queryByRole('button')).toBeNull()
     expect(within(row('Đã bàn giao người cao tuổi')).queryByRole('button', { name: /Xử lý/ })).toBeNull()
   })
 
