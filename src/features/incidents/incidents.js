@@ -6,6 +6,7 @@ import {
   getIncidentTypes,
   getIncidents,
   getIncidentsById,
+  getIncidentsByIdFamilyNotice,
   getIncidentsByIdFollowUpTasks,
   getProgressionTypes,
   postIncidents,
@@ -13,6 +14,7 @@ import {
   postIncidentsByIdChangeLevel,
   postIncidentsByIdConfirmWishCheck,
   postIncidentsByIdEndPostFallMonitoring,
+  postIncidentsByIdFamilyNotice,
   postIncidentsByIdClose,
   postIncidentsByIdJoinHandling,
   postIncidentsByIdMoveToMonitoring,
@@ -130,4 +132,14 @@ export function runIncidentCommand(id, command, body) {
 export async function recordIncident(body) {
   const { data } = await postIncidents({ headers: key(), body })
   return data
+}
+
+// Báo người nhà của sự cố (BF-06, đề xuất 2026-11-24): đọc tình trạng, ghi đã báo (ai, lúc nào, cách nào)
+export async function loadFamilyNotice(id) {
+  const { data } = await getIncidentsByIdFamilyNotice({ path: { id } })
+  return data
+}
+
+export function recordFamilyNotice(id, body) {
+  return postIncidentsByIdFamilyNotice({ path: { id }, headers: key(), body })
 }

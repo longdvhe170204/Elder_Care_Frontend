@@ -132,6 +132,12 @@ export const postIncidentsByIdReceive = (params) => request('POST', '/incidents/
 /** Giao người xử lý (Mới → Đang xử lý; hoặc giao lại khi Đang xử lý, Đang theo dõi) (FR-045, FR-045a, FR-044) */
 export const postIncidentsByIdAssignHandler = (params) => request('POST', '/incidents/{id}/assign-handler', params)
 
+/** Tình trạng báo người nhà của sự cố (đề xuất BF-06, 2026-11-24) */
+export const getIncidentsByIdFamilyNotice = (params) => request('GET', '/incidents/{id}/family-notice', params)
+
+/** Ghi nhận đã báo người nhà (ai, lúc nào, cách nào); Bác sĩ, Điều dưỡng, Trưởng tầng hoặc người được giao thay (đề xuất BF-06, 2026-11-24) */
+export const postIncidentsByIdFamilyNotice = (params) => request('POST', '/incidents/{id}/family-notice', params)
+
 /** Tham gia xử lý sự cố Khẩn cấp đang mở (không tạo sự cố mới) (FR-041, FR-048b) */
 export const postIncidentsByIdJoinHandling = (params) => request('POST', '/incidents/{id}/join-handling', params)
 

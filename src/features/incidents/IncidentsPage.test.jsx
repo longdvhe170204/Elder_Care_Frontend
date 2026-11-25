@@ -104,7 +104,7 @@ async function rows() {
 }
 
 // Báo sự việc (một form thay "Ghi nhận sự cố" và "Tạo cảnh báo"); người không có quyền tạo cảnh báo luôn ghi sự cố
-const openReport = () => fireEvent.click(screen.getByRole('button', { name: 'Báo sự việc' }))
+const openReport = () => fireEvent.click(screen.getByRole('button', { name: 'Ghi sự cố' }))
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Lưu/ }))
 
 describe('IncidentsPage', () => {
@@ -252,7 +252,7 @@ describe('IncidentsPage', () => {
     const list = await rows()
     expect(list).toHaveLength(2)
     expect(within(list[0]).getByText('Trần Thị Mai')).toBeTruthy()
-    expect(within(list[0]).getByText('Ngã · Khẩn cấp')).toBeTruthy()
+    expect(within(list[0]).getByText(/Ngã · Khẩn cấp/)).toBeTruthy()
     expect(within(list[0]).getByText('Chưa ai nhận')).toBeTruthy()
     expect(within(list[1]).getByText('Trần Thu Hà xử lý')).toBeTruthy()
   })
@@ -280,16 +280,15 @@ describe('IncidentsPage', () => {
     fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
     expect(await screen.findByText(/Đã gọi điều dưỡng/)).toBeTruthy()
     // Ô ghi luôn mở (đề xuất 2026-11-24): nhóm còn thiếu được chọn sẵn, chỉ còn gõ nội dung
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu diễn biến' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu đánh giá' }))
     expect(await screen.findByText('Nhập nội dung')).toBeTruthy()
     expect(api.calls('POST', '/incidents/12/progressions')).toHaveLength(0)
-    fireEvent.click(screen.getByRole('radio', { name: /^Gọi, báo tin/ }))
-    fireEvent.change(screen.getByLabelText('Nội dung diễn biến'), { target: { value: 'Đã báo bác sĩ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu diễn biến' }))
+    fireEvent.change(screen.getByLabelText('Nội dung diễn biến'), { target: { value: 'Tỉnh, đau hông trái' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu đánh giá' }))
     await waitFor(() => expect(api.calls('POST', '/incidents/12/progressions')).toHaveLength(1))
     const [, init] = api.calls('POST', '/incidents/12/progressions')[0]
     expect(new Headers(init.headers).get('Idempotency-Key')).toBeTruthy()
-    expect(JSON.parse(init.body)).toEqual({ progressionTypeId: 51, content: 'Đã báo bác sĩ' })
+    expect(JSON.parse(init.body)).toEqual({ progressionTypeId: 52, content: 'Tỉnh, đau hông trái' })
   })
 
   it('FR_045_chuyenTheoDoi_noiRoConThieuGi_vaKhoaNutKhiThieu', async () => {
@@ -300,9 +299,8 @@ describe('IncidentsPage', () => {
     const toMonitoring = await screen.findByRole('button', { name: 'Chuyển theo dõi' })
     expect(toMonitoring).toBeDisabled()
     expect(toMonitoring.title).toMatch(/Cần thêm diễn biến đánh giá và xử lý/)
-    // Nhóm còn thiếu có dấu "còn thiếu" và nhóm đầu tiên còn thiếu được chọn sẵn
-    expect(screen.getByRole('radio', { name: /^Đánh giá.*còn thiếu/ })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: /^Xử lý.*còn thiếu/ })).toBeTruthy()
+    // Dòng trạng thái nói còn thiếu gì
+    expect(screen.getByText(/Còn thiếu để Chuyển theo dõi: đánh giá, xử lý/)).toBeTruthy()
   })
 
   it('FR_045_ghiDienBien_chiaNhomDeChonNhanh', async () => {
@@ -310,11 +308,12 @@ describe('IncidentsPage', () => {
     const list = await rows()
     fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
     // Không còn nút "Ghi diễn biến" riêng: ô ghi nằm sẵn trong khối Diễn biến
-    expect(await screen.findByRole('radiogroup', { name: 'Loại diễn biến' })).toBeTruthy()
+    expect(await screen.findByRole('button', { name: 'Lưu đánh giá' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Lưu xử lý' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Ghi diễn biến' })).toBeNull()
-    expect(screen.getByRole('radio', { name: /^Đánh giá.*còn thiếu/ })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /^Xử lý/ })).toBeTruthy()
-    expect(screen.getByRole('radio', { name: /^Gọi, báo tin/ })).toBeTruthy()
+    // Gọi, báo tin người nhà đã nằm ở khối Báo người nhà, không còn là nhóm ở đây
+    fireEvent.click(screen.getByRole('button', { name: 'Loại khác' }))
+    expect(screen.queryByRole('radio', { name: /^Gọi, báo tin/ })).toBeNull()
   })
 
   it('FR_045_dongSuCo_canKetQua_409HienDieuKien', async () => {
@@ -343,6 +342,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Trung bình' }))
     fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Trượt chân' } })
     save()
@@ -465,6 +465,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Ngã lần hai' } })
     save()
     const note = await screen.findByText(/SC-11/, { selector: 'strong' })
@@ -487,6 +488,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Ngã lần hai, phòng khác' } })
     save()
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo sự cố riêng' }))
@@ -654,7 +656,8 @@ describe('IncidentsPage', () => {
     const list = await rows()
     // Sự cố Trung bình: không có biện pháp hồi sức
     fireEvent.click(within(list[1]).getByRole('button', { name: /Lê Văn Bình/ }))
-    fireEvent.click(await screen.findByRole('radio', { name: /^Xử lý/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Loại khác' }))
+    fireEvent.click(screen.getByRole('radio', { name: /^Xử lý/ }))
     expect(screen.queryByRole('button', { name: /Cấp cứu hồi sức/ })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeNull()
   })
@@ -663,7 +666,8 @@ describe('IncidentsPage', () => {
     render(<IncidentsPage />)
     const list = await rows()
     fireEvent.click(within(list[0]).getByRole('button', { name: /Trần Thị Mai/ }))
-    fireEvent.click(await screen.findByRole('radio', { name: /^Xử lý/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Loại khác' }))
+    fireEvent.click(screen.getByRole('radio', { name: /^Xử lý/ }))
     expect(screen.queryByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: /Cấp cứu hồi sức/ }))
     expect(screen.getByRole('button', { name: 'Dùng thuốc cấp cứu' })).toBeTruthy()
@@ -676,6 +680,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Nhà vệ sinh' }))
     expect(screen.getByRole('button', { name: 'Nhà vệ sinh' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByLabelText('Xử lý ban đầu')).toBeNull()

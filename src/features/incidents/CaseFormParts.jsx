@@ -20,7 +20,7 @@ export function ResidentChoices({ residents, query, onQuery, onPick }) {
       {residents.length > SEARCH_FROM && (
         <Input
           className="h-11 bg-card"
-          placeholder="Gõ tên hoặc mã để tìm"
+          placeholder="Gõ tên, mã hoặc số phòng để tìm"
           aria-label="Tìm người cao tuổi"
           value={query}
           onChange={(e) => onQuery(e.target.value)}

@@ -84,6 +84,7 @@ export function handlerText(alert) {
     if (alert.pressedByMe) return 'Bạn gửi, đang chờ người khác nhận'
     return alert.assignee ? `Chờ ${alert.assignee} nhận` : 'Chưa giao ai, người đang trực nhận được'
   }
+  if (alert.status === 'RECEIVED') return `${alert.assignee ?? 'Có người'} đã tiếp nhận, chưa bắt đầu xử lý`
   if (isOpen(alert)) return `Đang xử lý: ${alert.assignee ?? 'chưa rõ người'}`
   return alert.assignee ? `Người xử lý: ${alert.assignee}` : 'Không có người xử lý'
 }
@@ -136,4 +137,16 @@ export function sortAlerts(alerts) {
 
 export function residentName(profile) {
   return profile?.personalInfo?.fullName ?? 'Người cao tuổi'
+}
+
+// Vì sao cảnh báo ở mức này (BF-06): mức do hệ thống đặt theo loại việc, người xem không phải đoán
+const LEVEL_WHY = {
+  OVERDUE_CARE_TASK: 'Việc chăm sóc bắt buộc đã quá hạn',
+  LOW_WATER_INTAKE: 'Uống nước chưa đủ so với mức cần',
+  PROLONGED_POOR_EATING: 'Ăn kém nhiều bữa liên tiếp',
+  PROLONGED_NEGATIVE_MOOD: 'Tâm trạng xấu nhiều ngày liên tiếp',
+}
+
+export function levelWhy(alert) {
+  return LEVEL_WHY[alert.type]
 }

@@ -10,14 +10,14 @@ import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { CHOICE_LABELS } from '@/features/wishes/wishLabels'
 import { HandoverStaffField } from './HandoverStaffField'
-import { vietnamIso } from './incidentView'
+import { vietnamIso, vietnamNowLocal } from './incidentView'
 import { loadTransferDocument, loadTransferInfo, submitTransferOut } from './transferOut'
 
 // Chuyển viện từ sự cố (007 T105; FR-049, FR-050; BR-M05-14, Q-383, Q-384): đơn vị nhận, thời điểm, người đi cùng; hỏi
 // người liên hệ chính trước khi phiếu điều trị có yêu cầu hỏi trước, chưa hỏi được thì ghi lý do (trừ sự cố Khẩn cấp).
 // Xong thì tải, in bản tóm tắt chuyển viện (PDF); in lại ghi nhật ký.
 
-export function TransferOutPanel({ incidentId, residentId = null, onDone, onCancel }) {
+export function TransferOutPanel({ incidentId, residentId = null, onDone, onCancel, onPreview, reopen = false }) {
   const [info, setInfo] = useState(null)
   const [problem, setProblem] = useState(null)
   const [unit, setUnit] = useState('')
@@ -44,13 +44,18 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
   useEffect(() => {
     let cancelled = false
     loadTransferInfo(incidentId).then(
-      (data) => !cancelled && setInfo(data),
+      (data) => {
+        if (cancelled) return
+        setInfo(data)
+        // Mở xem lại phiếu đã lập (sau khi đã đóng màn in): vào thẳng màn phiếu
+        if (reopen && data?.summaryId) setSummaryId(data.summaryId)
+      },
       (error) => !cancelled && setProblem(problemOf(error)),
     )
     return () => {
       cancelled = true
     }
-  }, [incidentId])
+  }, [incidentId, reopen])
 
   const [pdfUrl, setPdfUrl] = useState(null)
   const frameRef = useRef(null)
@@ -63,6 +68,11 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
       .catch((error) => setProblem(problemOf(error)))
     return () => url && URL.revokeObjectURL(url)
   }, [summaryId])
+
+  // Báo khung ngoài biết đang xem trước phiếu để chỉ hiện tờ giấy (BF-06)
+  useEffect(() => {
+    onPreview?.(Boolean(summaryId))
+  }, [summaryId, onPreview])
 
   function printPdf() {
     frameRef.current?.contentWindow?.print()
@@ -89,36 +99,36 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
   }
 
   if (summaryId) {
+    // Màn in toàn màn hình như xem trước của máy in: thanh công cụ ở trên, tờ A4 to ở giữa trên nền xám (BF-06)
     return (
-      <div className="flex flex-col gap-3">
-        <h3 className="type-card-title">Đã chuyển viện · Xem trước phiếu</h3>
-        <p className="type-body-sm text-muted-foreground">
-          Kiểm tra phiếu rồi In hoặc Tải về. Thông tin sai thì sửa ở hồ sơ, không sửa trên phiếu.
-        </p>
-        {problem && <ProblemAlert problem={problem} />}
-        {pdfUrl ? (
-          <iframe
-            ref={frameRef}
-            title="Phiếu tóm tắt chuyển viện"
-            src={pdfUrl}
-            className="h-[60vh] w-full rounded-md border"
-          />
-        ) : (
-          <Skeleton className="h-[60vh] w-full" />
-        )}
-        <div className="flex flex-wrap gap-2">
-          <Button className="h-11" disabled={!pdfUrl || busy} onClick={printPdf}>
-            In phiếu
-          </Button>
-          <Button variant="outline" className="h-11" disabled={!pdfUrl} onClick={savePdf}>
-            Tải về
-          </Button>
-          <Button variant="outline" className="h-11" disabled={busy} onClick={reprint}>
-            In lại (ghi nhật ký)
-          </Button>
-          <Button variant="ghost" className="h-11" onClick={onDone}>
+      <div className="flex h-dvh flex-col">
+        <div className="flex flex-wrap items-center gap-2 border-b bg-card px-4 py-2">
+          <Button variant="secondary" className="h-11" onClick={onDone}>
             Xong
           </Button>
+          <p className="type-label mr-auto ml-2 hidden sm:block">Phiếu tóm tắt thông tin sức khoẻ</p>
+          <Button variant="secondary" className="h-11" disabled={busy} onClick={reprint}>
+            In lại (ghi nhật ký)
+          </Button>
+          <Button variant="secondary" className="h-11" disabled={!pdfUrl} onClick={savePdf}>
+            Tải về
+          </Button>
+          <Button className="h-11 px-6" disabled={!pdfUrl || busy} onClick={printPdf}>
+            In phiếu
+          </Button>
+        </div>
+        {problem && <ProblemAlert problem={problem} />}
+        <div className="flex min-h-0 flex-1 justify-center overflow-auto p-4">
+          {pdfUrl ? (
+            <iframe
+              ref={frameRef}
+              title="Phiếu tóm tắt chuyển viện"
+              src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
+              className="aspect-[210/297] h-full max-w-full border-0 bg-white shadow-md"
+            />
+          ) : (
+            <Skeleton className="aspect-[210/297] h-full max-w-full" />
+          )}
         </div>
       </div>
     )
@@ -282,6 +292,7 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
                   id="transfer-return"
                   type="datetime-local"
                   value={returnAt}
+                  min={atNow ? vietnamNowLocal() : at}
                   onChange={(e) => setReturnAt(e.target.value)}
                 />
               </Field>

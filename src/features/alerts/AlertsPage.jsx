@@ -66,6 +66,7 @@ import {
   statusTone,
   typeLabel,
   handlerText,
+  levelWhy,
 } from './alertView'
 
 // Màn Cảnh báo (spec 007 User Story 3, FR-027 → FR-036; T031 phần web): danh sách theo phạm vi đọc từ api-007
@@ -98,6 +99,8 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
   const commands = alert.allowedCommands ?? []
   // Người xử lý (không phải Quản lý viện) tiếp nhận xong thường xử lý ngay: một nút làm cả hai lệnh (FR-029 giữ hai trạng thái)
   const handler = commands.includes('activate-emergency')
+  // Khẩn cấp: một chạm "Nhận" làm cả hai lệnh; cảnh báo thường giữ hai bước Tiếp nhận rồi Bắt đầu xử lý (BF-06)
+  const oneTap = handler && alert.level === 'CRITICAL'
   const chip = timeChip(alert)
   const reconcile = onReconcile && alert.type === 'CHUA_DOI_CHIEU' && alert.residentId && isOpen(alert)
   return (
@@ -124,6 +127,9 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
             {typeLabel(alert.type)}
             {alert.residentId == null && alert.floorName && `, ${alert.floorName}`}
           </span>
+          {alert.eventType && EVENT_LABEL[alert.eventType] && (
+            <span> · {[EVENT_LABEL[alert.eventType], PLACE_LABEL[alert.chosenPlace]].filter(Boolean).join(', ')}</span>
+          )}
           {alert.occurrenceCount > 1 && <span> · {alert.occurrenceCount} lần gộp</span>}
         </span>
       </div>
@@ -148,10 +154,10 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
             variant={urgent ? 'default' : 'tonal'}
             className="h-11 px-5"
             disabled={busy}
-            onClick={() => onReceive(alert, handler)}
-            aria-label={handler ? `Nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
+            onClick={() => onReceive(alert, oneTap)}
+            aria-label={oneTap ? `Nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
           >
-            {handler ? 'Nhận' : 'Tiếp nhận'}
+            {oneTap ? 'Nhận' : 'Tiếp nhận'}
           </Button>
         )}
         {commands.includes('start-handling') && (
@@ -174,6 +180,8 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
 const CRITICAL_CLOSE_MIN = 10
 // Màn tự hỏi lại để thấy cảnh báo mới, cảnh báo vừa được người khác đóng mà không phải tải lại trang
 const REFRESH_MS = 15000
+// Bấm Tiếp nhận mà người khác đã nhận trước (409 hoặc 422): báo rõ rồi làm mới thay vì hiện lỗi (BF-06)
+const takenByOther = (command, error) => [command].flat().includes('receive') && [409, 422].includes(error?.status)
 // Yêu cầu hỗ trợ ghi Ngã hoặc Ngừng tim, ngất: thường phải ghi sự cố để theo dõi, nhắc khi đóng (chỉ nhắc, không chặn)
 const FOLLOW_UP_EVENTS = ['FALL', 'CARDIAC_ARREST_OR_FAINTING']
 const DIALOG_TITLE = {
@@ -253,6 +261,8 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   const converting = mode === 'convert-to-incident' || mode === 'activate-emergency'
   const levelChoices = LEVEL_ORDER.filter((l) => l !== alert.level)
   // Đóng cảnh báo Khẩn cấp: kết quả phải nêu lý do không kích hoạt khẩn cấp, tối thiểu ít chữ để không đóng bằng "ok"
+  // Nhân viên chăm sóc đóng và cảnh báo việc quá hạn cần lý do; dùng luôn dòng kết quả đã nhập
+  const reasonNeeded = !can('INCIDENT_EMERGENCY', 'UPDATE') || alert.type === 'OVERDUE_CARE_TASK'
   const criticalClose = mode === 'close' && alert.level === 'CRITICAL'
   const textMissing = criticalClose ? text.trim().length < CRITICAL_CLOSE_MIN : !text.trim()
   const pressed = ['SOS', 'ASSIST_BUTTON'].includes(alert.origin)
@@ -264,18 +274,27 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   const followUpEvent = FOLLOW_UP_EVENTS.includes(alert.eventType)
   // Người xử lý (không phải Quản lý viện): tiếp nhận xong thường xử lý ngay nên một nút làm cả hai lệnh
   const handler = commands.includes('activate-emergency')
+  const mayHandle = can('INCIDENT_EMERGENCY', 'UPDATE')
+  // Chưa ở bước đóng được nhưng người xử lý đã làm xong: tiếp nhận, bắt đầu xử lý và đóng trong một lần (BF-06)
+  const closeInOne =
+    mayHandle &&
+    !commands.includes('close') &&
+    (commands.includes('receive') || commands.includes('start-handling')) &&
+    alert.level !== 'CRITICAL' &&
+    alert.criticalFlagId == null
+  const oneTap = handler && alert.level === 'CRITICAL'
   // Thanh lệnh ở chân khung (đề xuất 2026-11-24, góp ý test demo): nút chính là bước kế tiếp của trạng thái; hai cách kết
   // thúc (chuyển sự cố, đóng) ngang nhau, người xử lý tự chọn. Kích hoạt khẩn cấp luôn thấy ở cảnh báo Khẩn cấp; lệnh ít
   // dùng gom vào "Thêm thao tác"
   const steps = [
     commands.includes('receive') && {
       icon: ClipboardCheck,
-      label: handler ? 'Nhận và xử lý' : 'Tiếp nhận',
-      hint: handler ? 'Báo đã nhận và bắt đầu xử lý ngay.' : 'Báo đã nhận để dừng leo thang.',
+      label: oneTap ? 'Nhận và xử lý' : 'Tiếp nhận',
+      hint: oneTap ? 'Báo đã nhận và bắt đầu xử lý ngay.' : 'Báo đã nhận để dừng leo thang.',
       primary: true,
       disabled: busy,
       onSelect: () =>
-        handler
+        oneTap
           ? quick(['receive', 'start-handling'], 'Đã tiếp nhận và bắt đầu xử lý')
           : quick('receive', 'Đã tiếp nhận cảnh báo'),
     },
@@ -306,6 +325,12 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
       label: 'Chuyển thành sự cố',
       hint: 'Cần ghi nhận chính thức để theo dõi, ghi diễn biến, chuyển viện.',
       onSelect: () => openConvert('convert-to-incident'),
+    },
+    closeInOne && {
+      icon: CircleCheck,
+      label: 'Đã xử lý, đóng',
+      hint: 'Tiếp nhận, xử lý và đóng trong một bước, ghi kết quả.',
+      onSelect: () => setMode('close'),
     },
     commands.includes('close') && {
       icon: CircleCheck,
@@ -360,7 +385,14 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
       await reload()
       onChanged(message, name)
     } catch (error) {
-      setProblem(problemOf(error))
+      if (takenByOther(command, error)) {
+        // Người khác nhận trước vài giây: báo rõ và làm mới, nút Tiếp nhận biến mất (BF-06)
+        setProblem(null)
+        await reload().catch(() => null)
+        onChanged('Đã có người nhận cảnh báo này, màn đã cập nhật', name)
+      } else {
+        setProblem(problemOf(error))
+      }
     } finally {
       setBusy(false)
     }
@@ -419,7 +451,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
         : command === 'activate-emergency'
           ? 'Đã kích hoạt khẩn cấp'
           : 'Đã chuyển thành sự cố'
-      onChanged(`${what}${incidentId ? ` SC-${incidentId}` : ''}${taken ? ', bạn đang xử lý' : ''}`, name)
+      onChanged(`${what}${incidentId ? ` SC-${incidentId}` : ''}${taken ? ', bạn đang xử lý' : ''}`, picked?.name ?? name)
       // Khẩn cấp: sang thẳng sự cố để thấy thẻ thông tin khẩn cấp và Gọi 115, không bắt tìm lại ở menu
       if (command === 'activate-emergency' && incidentId && onNavigate) onNavigate('incidents', { incidentId })
     } catch (error) {
@@ -460,11 +492,16 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
     if (textMissing || (mode === 'change-level' && !level) || (mode === 'assign' && !staffId)) return
     setBusy(true)
     try {
+      // Đóng một lần: làm nốt các bước còn thiếu trước khi đóng
+      if (mode === 'close' && closeInOne) {
+        if (commands.includes('receive')) await runAlertCommand(alert.id, 'receive')
+        await runAlertCommand(alert.id, 'start-handling')
+      }
       await runAlertCommand(
         alert.id,
         mode,
         mode === 'close'
-          ? { resolution: text.trim() }
+          ? { resolution: text.trim(), ...(reasonNeeded && { reason: text.trim() }) }
           : mode === 'assign'
             ? { staffId: Number(staffId), note: text.trim() }
             : { newLevel: level, reason: text.trim() },
@@ -620,7 +657,15 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
                       )}
                       onClick={() => setTarget(i.id)}
                     >
-                      Cùng vụ: gắn vào SC-{i.id}, {INCIDENT_STATUS[i.status]?.toLowerCase()}
+                      Cùng vụ: gắn vào SC-{i.id}
+                      {[
+                        incidentTypes.find((t) => t.id === i.currentTypeId)?.name,
+                        i.content?.discoveredAt && formatDateTime(i.content.discoveredAt),
+                        INCIDENT_STATUS[i.status]?.toLowerCase(),
+                      ]
+                        .filter(Boolean)
+                        .map((part) => `, ${part}`)
+                        .join('')}
                     </Button>
                   ))}
                   <Button
@@ -828,6 +873,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
           rows={[
             ['Mô tả', alert.description || undefined, true],
             ['Người xử lý', handlerText(alert)],
+            ['Vì sao mức này', levelWhy(alert)],
             ['Kết quả', !isOpen(alert) ? alert.resolution || undefined : undefined, true],
             ['Người đóng', !isOpen(alert) ? alert.closedBy || undefined : undefined],
             ['Tầng', alert.floorName || undefined],
@@ -982,7 +1028,14 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
       setAnnouncement(`${message}: ${typeLabel(alert.type)}, ${name}.`)
       await load()
     } catch (error) {
-      setProblem(problemOf(error))
+      if (takenByOther(cmd, error)) {
+        // Người khác nhận trước vài giây: báo rõ và làm mới danh sách, nút Tiếp nhận biến mất (BF-06)
+        setProblem(null)
+        setAnnouncement(`Đã có người nhận cảnh báo của ${name}. Danh sách đã cập nhật.`)
+        await load().catch(() => null)
+      } else {
+        setProblem(problemOf(error))
+      }
     } finally {
       setBusy(false)
     }
@@ -1019,12 +1072,20 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
   if (creating) {
     return (
       <ReportForm
+        defaultKind="alert"
+        onOpenAlert={(id) => {
+          setCreating(false)
+          setOpenId(id)
+        }}
         onClose={() => setCreating(false)}
         onOpenIncident={onNavigate && ((incidentId) => onNavigate('incidents', { incidentId }))}
         onDone={({ kind, id, message }) => {
-          // Sự cố mở ở màn Sự cố để thấy ngay thẻ khẩn cấp, Gọi 115; cảnh báo về danh sách
+          // Sự cố mở ở màn Sự cố để thấy ngay thẻ khẩn cấp, Gọi 115; cảnh báo ở lại màn này và mở chi tiết
           if (kind === 'incident' && id != null && onNavigate) onNavigate('incidents', { incidentId: id })
-          else created(message)
+          else {
+            created(message)
+            if (id != null) setOpenId(id)
+          }
         }}
       />
     )
@@ -1116,7 +1177,7 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
                 }}
               >
                 <Plus aria-hidden="true" />
-                Báo sự việc
+                Tạo cảnh báo
               </Button>
             )}
           </div>
