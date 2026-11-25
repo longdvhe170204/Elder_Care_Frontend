@@ -178,6 +178,29 @@ export function vietnamIso(local) {
   return local ? `${local}:00+07:00` : ''
 }
 
+const WEEKDAY_SHORT = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' }
+const WEEKDAY_LONG = {
+  1: 'Thứ Hai',
+  2: 'Thứ Ba',
+  3: 'Thứ Tư',
+  4: 'Thứ Năm',
+  5: 'Thứ Sáu',
+  6: 'Thứ Bảy',
+  7: 'Chủ nhật',
+}
+
+export function arrivalLineText(row) {
+  if (!row) return '—'
+  const day = row.date ? formatDate(row.date) : (WEEKDAY_LONG[row.dayOfWeek] ?? `Thứ ${row.dayOfWeek}`)
+  const from = String(row.arrivalTime ?? '').slice(0, 5)
+  const to = String(row.departureTime ?? '').slice(0, 5)
+  return from && to ? `${day}: ${from} – ${to}` : day
+}
+
+export function arrivalScheduleLines(value) {
+  return (value?.arrivalSchedule ?? []).map(arrivalLineText)
+}
+
 // Giá trị của một loại thay đổi lưu trú thành chữ: trước, sau của yêu cầu và của phụ lục (giường lưu bedId hoặc newBedId)
 export function changeValueText(type, value) {
   if (!value) return '—'
@@ -194,8 +217,23 @@ export function changeValueText(type, value) {
     }
     case 'SERVICE':
       return `${(value.services ?? []).length} dịch vụ`
-    default:
-      return `${(value.arrivalSchedule ?? []).length} dòng lịch`
+    default: {
+      const rows = value.arrivalSchedule ?? []
+      if (rows.length === 0) return 'Chưa có lịch'
+      if (rows.length === 1) {
+        const row = rows[0]
+        const day = row.date ? formatDate(row.date) : (WEEKDAY_LONG[row.dayOfWeek] ?? `Thứ ${row.dayOfWeek}`)
+        const from = String(row.arrivalTime ?? '').slice(0, 5)
+        const to = String(row.departureTime ?? '').slice(0, 5)
+        return from && to ? `${day} (${from}–${to})` : day
+      }
+      if (rows.every((r) => r.dayOfWeek != null)) {
+        return rows.length <= 3
+          ? rows.map((r) => WEEKDAY_SHORT[r.dayOfWeek] ?? `T${r.dayOfWeek}`).join(', ')
+          : `${rows.length} ngày/tuần`
+      }
+      return `${rows.length} lịch đến`
+    }
   }
 }
 

@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { ChangeRequestsPage } from './ChangeRequestsPage'
+import { changeValueText } from './admissionLabels'
 import { validateChange, withCompanions } from './changeRequestRules'
 
 // BF-08 sửa đổi (004 FR-043d → FR-043j; Q-415 → Q-424; plan-bf08 W1 → W13): phụ lục Chờ ký và ghi nhận đã ký, bộ lọc
@@ -565,5 +566,57 @@ describe('BF-08 sửa đổi', () => {
         contract: dayCare,
       }).arrivalSchedule,
     ).toBeUndefined()
+  })
+
+  it('A_lichDen_hienTomTatDeHieu_vaDropdownXemChiTietLich', async () => {
+    expect(
+      changeValueText('ARRIVAL_SCHEDULE', {
+        arrivalSchedule: [{ dayOfWeek: 1, arrivalTime: '07:30:00', departureTime: '17:00:00' }],
+      }),
+    ).toBe('Thứ Hai (07:30–17:00)')
+    expect(
+      changeValueText('ARRIVAL_SCHEDULE', {
+        arrivalSchedule: [
+          { dayOfWeek: 1, arrivalTime: '07:30', departureTime: '17:00' },
+          { dayOfWeek: 3, arrivalTime: '07:30', departureTime: '17:00' },
+          { dayOfWeek: 5, arrivalTime: '07:30', departureTime: '17:00' },
+        ],
+      }),
+    ).toBe('T2, T4, T6')
+    expect(
+      changeValueText('ARRIVAL_SCHEDULE', {
+        arrivalSchedule: [1, 2, 3, 4].map((dayOfWeek) => ({ dayOfWeek, arrivalTime: '07:30', departureTime: '17:00' })),
+      }),
+    ).toBe('4 ngày/tuần')
+
+    const scheduleReq = {
+      ...BASE,
+      changeTypes: ['ARRIVAL_SCHEDULE'],
+      previousValue: { arrivalSchedule: [{ dayOfWeek: 1, arrivalTime: '07:30:00', departureTime: '17:00:00' }] },
+      newValue: {
+        arrivalSchedule: [
+          { dayOfWeek: 1, arrivalTime: '07:30', departureTime: '17:00' },
+          { dayOfWeek: 2, arrivalTime: '08:00', departureTime: '16:30' },
+        ],
+      },
+      status: 'DRAFT',
+      representativeConfirmationRequired: false,
+    }
+    api.on('GET', '/residency-change-requests', json(200, [scheduleReq]))
+    api.on('GET', '/residency-change-requests/12', json(200, scheduleReq, { ETag: '"3"' }))
+    renderPage({ id: 12 })
+
+    const panel = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    expect(within(panel).getByText('Thứ Hai (07:30–17:00)')).toBeInTheDocument()
+    expect(within(panel).getByText('T2, T3')).toBeInTheDocument()
+
+    const toggle = within(panel).getByRole('button', { name: 'Xem chi tiết' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(within(panel).getByText('Lịch hiện tại')).toBeInTheDocument()
+    expect(within(panel).getByText('Lịch muốn đổi')).toBeInTheDocument()
+    expect(within(panel).getAllByText('Thứ Hai: 07:30 – 17:00')).toHaveLength(2)
+    expect(within(panel).getByText('Thứ Ba: 08:00 – 16:30')).toBeInTheDocument()
   })
 })

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, FilePlus2, Search, X } from 'lucide-react'
+import { ArrowRight, ChevronDown, FilePlus2, Search, X } from 'lucide-react'
 import {
   getApprovalRequestsById,
   getBeds,
@@ -34,6 +34,7 @@ import {
   CHANGE_TYPES,
   RESIDENCE_TYPES,
   SELECT,
+  arrivalScheduleLines,
   changeValueText,
   costItemLabel,
   labelOf,
@@ -113,13 +114,28 @@ function confirmationText(c, confirmerName) {
 // Một loại thay đổi dạng thẻ: biểu tượng, tên loại, giá trị trước và giá trị sau (variant "cards" của ChangeContent)
 function ChangeRow({ type, content }) {
   const Icon = CHANGE_TYPE_ICONS[type]
+  const [expanded, setExpanded] = useState(false)
+  const prevLines = type === 'ARRIVAL_SCHEDULE' ? arrivalScheduleLines(content.previousValue) : []
+  const nextLines = type === 'ARRIVAL_SCHEDULE' ? arrivalScheduleLines(content.newValue) : []
+  const expandable = type === 'ARRIVAL_SCHEDULE' && (prevLines.length > 0 || nextLines.length > 0)
   return (
     <li className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent/30 shadow-2xs">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="flex items-center gap-2 type-label font-semibold text-foreground">
           {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[type]}`} />}
           {labelOf(CHANGE_TYPES, type)}
         </span>
+        {expandable && (
+          <button
+            type="button"
+            aria-expanded={expanded}
+            onClick={() => setExpanded((v) => !v)}
+            className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
+          >
+            {expanded ? 'Thu gọn' : 'Xem chi tiết'}
+            <ChevronDown aria-hidden className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+          </button>
+        )}
       </div>
       <div className="flex items-center justify-between gap-2 type-body-sm tabular-nums">
         <span className="sr-only">Trước:</span>
@@ -132,6 +148,34 @@ function ChangeRow({ type, content }) {
           {changeValueText(type, content.newValue)}
         </span>
       </div>
+      {expandable && expanded && (
+        <div className="grid gap-2 rounded-lg border border-border/70 bg-card/80 p-2.5 text-xs sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <span className="font-semibold text-muted-foreground">Lịch hiện tại</span>
+            {prevLines.length > 0 ? (
+              <ul className="flex flex-col gap-0.5 text-muted-foreground tabular-nums">
+                {prevLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-muted-foreground">Chưa có lịch</span>
+            )}
+          </div>
+          <div className="flex flex-col gap-1">
+            <span className="font-semibold text-foreground">Lịch muốn đổi</span>
+            {nextLines.length > 0 ? (
+              <ul className="flex flex-col gap-0.5 font-medium text-foreground tabular-nums">
+                {nextLines.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-muted-foreground">Chưa có lịch</span>
+            )}
+          </div>
+        </div>
+      )}
     </li>
   )
 }
@@ -154,7 +198,9 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
               <li key={type} className="flex flex-col">
                 <span className="type-body-sm">{labelOf(CHANGE_TYPES, type)}</span>
                 <span className="type-caption text-muted-foreground">
-                  {`Trước: ${changeValueText(type, content.previousValue)}; sau: ${changeValueText(type, content.newValue)}`}
+                  {type === 'ARRIVAL_SCHEDULE'
+                    ? `Trước: ${arrivalScheduleLines(content.previousValue).join(', ') || 'Chưa có lịch'}; sau: ${arrivalScheduleLines(content.newValue).join(', ') || 'Chưa có lịch'}`
+                    : `Trước: ${changeValueText(type, content.previousValue)}; sau: ${changeValueText(type, content.newValue)}`}
                 </span>
               </li>
             ),
