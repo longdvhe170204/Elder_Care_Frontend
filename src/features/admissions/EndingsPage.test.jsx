@@ -106,7 +106,7 @@ describe('EndingsPage', () => {
     fireEvent.click(within(row('Chi phí kỳ cuối đã chốt')).getByRole('button', { name: /Xử lý/ }))
     expect(onNavigate).toHaveBeenLastCalledWith('charges', {})
     fireEvent.click(within(row('Số dư và tiền cọc đã quyết toán')).getByRole('button', { name: /Xử lý/ }))
-    expect(onNavigate).toHaveBeenLastCalledWith('balance', { residentId: 5 })
+    expect(onNavigate).toHaveBeenLastCalledWith('balance', { residentId: 5, focus: 'resident' })
     expect(within(row('Hợp đồng được xử lý')).queryByRole('button')).toBeNull()
     expect(within(row('Đã bàn giao người cao tuổi')).queryByRole('button', { name: /Xử lý/ })).toBeNull()
   })
