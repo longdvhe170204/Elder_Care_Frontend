@@ -22,7 +22,7 @@ async function fill() {
   fireEvent.change(screen.getByLabelText('Ngày phát sinh'), { target: { value: '2026-11-05' } })
   fireEvent.change(screen.getByLabelText('Số lượng'), { target: { value: '1' } })
   fireEvent.change(screen.getByLabelText('Đơn vị'), { target: { value: 'lần' } })
-  fireEvent.change(screen.getByLabelText('Đơn giá (đồng)'), { target: { value: '500000' } })
+  fireEvent.change(screen.getByLabelText('Đơn giá'), { target: { value: '500000' } })
   fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Theo điều khoản hợp đồng' } })
 }
 
@@ -87,7 +87,7 @@ it('chonNguoiCaoTuoiTheoTen_guiDungMa', async () => {
   fireEvent.change(screen.getByLabelText('Ngày phát sinh'), { target: { value: '2026-11-05' } })
   fireEvent.change(screen.getByLabelText('Số lượng'), { target: { value: '1' } })
   fireEvent.change(screen.getByLabelText('Đơn vị'), { target: { value: 'lần' } })
-  fireEvent.change(screen.getByLabelText('Đơn giá (đồng)'), { target: { value: '500000' } })
+  fireEvent.change(screen.getByLabelText('Đơn giá'), { target: { value: '500000' } })
   fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Theo điều khoản hợp đồng' } })
   fireEvent.submit(screen.getByLabelText('Mô tả').closest('form'))
   await waitFor(() => expect(postCostsItemsManual).toHaveBeenCalled())

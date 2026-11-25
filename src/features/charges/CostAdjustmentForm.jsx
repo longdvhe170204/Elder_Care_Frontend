@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react'
 import { postCostsItemsByIdAdjust } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { controlClass } from './chargeLabels'
+import { MoneyInput } from '@/common/MoneyInput'
 
 export function CostAdjustmentForm({ itemId, sourceChangeId, onCreated = () => {} }) {
   const [amount, setAmount] = useState('')
@@ -70,17 +70,15 @@ export function CostAdjustmentForm({ itemId, sourceChangeId, onCreated = () => {
         </select>
       </label>
       <label className="block type-body-sm">
-        Số tiền điều chỉnh (đồng)
-        <Input
-          type="number"
-          step="1"
-          min="-999999999999999"
-          max="999999999999999"
+        Số tiền điều chỉnh
+        {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ; điều chỉnh có dấu (âm để giảm) */}
+        <MoneyInput
+          allowNegative
           required
           value={amount}
           disabled={pending}
-          onChange={(e) => {
-            setAmount(e.target.value)
+          onChange={(value) => {
+            setAmount(value)
             nonce.current = null
           }}
         />

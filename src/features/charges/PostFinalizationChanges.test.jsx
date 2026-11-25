@@ -6,11 +6,9 @@ import { PostFinalizationChanges } from './PostFinalizationChanges'
 vi.mock('@/api', () => ({
   getCostsPostFinalizationChanges: vi.fn(),
   postCostsItemsByIdAdjust: vi.fn(),
-  getResidents: vi
-    .fn()
-    .mockResolvedValue({
-      data: { items: [{ id: 42, profileCode: 'NCT-0042', personalInfo: { fullName: 'Nguyễn Văn Tư' } }] },
-    }),
+  getResidents: vi.fn().mockResolvedValue({
+    data: { items: [{ id: 42, profileCode: 'NCT-0042', personalInfo: { fullName: 'Nguyễn Văn Tư' } }] },
+  }),
 }))
 
 it('FR_027_showsBedReleaseBeforeAndAfterWithoutSuggestingAnAdjustmentAmount', async () => {
@@ -33,7 +31,7 @@ it('FR_027_showsBedReleaseBeforeAndAfterWithoutSuggestingAnAdjustmentAmount', as
   expect(await screen.findByText('Chưa giải phóng')).toBeInTheDocument()
   expect(screen.getByText('Đã giải phóng')).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Điều chỉnh khoản #7' }))
-  expect(screen.getByLabelText('Số tiền điều chỉnh (đồng)')).toHaveValue(null)
+  expect(screen.getByLabelText('Số tiền điều chỉnh')).toHaveValue('')
 })
 
 // Demo 2026-11-25: lọc theo người cao tuổi chọn theo tên; dòng biến động hiện tên

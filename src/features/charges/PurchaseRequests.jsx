@@ -18,6 +18,7 @@ import { StaffSelectField } from '@/common/StaffSelectField'
 import { useFamilyMembers } from '@/common/useFamilyMembers'
 import { ResidentField } from './ResidentField'
 import { useResidentDirectory } from './useResidentDirectory'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Demo 2026-11-25: mua gấp chỉ do Bác sĩ, Điều dưỡng đang làm việc yêu cầu (backend vẫn kiểm), chọn theo tên
 const CLINICAL = ['Bác sĩ', 'Điều dưỡng']
@@ -301,17 +302,13 @@ function PurchaseDetail({ row, familyMode, onChanged, onDenied }) {
           </p>
           {['additional', 'purchased'].includes(command) && (
             <label>
-              Số tiền (đồng, bắt buộc)
-              <Input
-                type="number"
-                min="0"
-                max="999999999999999"
-                step="1"
+              Số tiền (bắt buộc)
+              <MoneyInput
                 required
                 disabled={pending}
                 value={amount}
-                onChange={(e) => {
-                  setAmount(e.target.value)
+                onChange={(value) => {
+                  setAmount(value)
                   nonce.current = null
                 }}
               />
@@ -484,14 +481,13 @@ function PurchaseCreate({ residentId, onChanged, onDenied }) {
       {[
         ['description', 'Mô tả mục cần mua', 'text'],
         ['quantity', 'Số lượng', 'number'],
-        ['estimatedAmount', 'Số tiền dự kiến (đồng)', 'number'],
       ].map(([key, label, type]) => (
         <label key={key}>
           {label} (bắt buộc)
           <Input
             type={type}
             required
-            min={type === 'number' ? (key === 'estimatedAmount' ? 0 : key === 'quantity' ? 0.001 : 1) : undefined}
+            min={type === 'number' ? 0.001 : undefined}
             step={key === 'quantity' ? '0.001' : undefined}
             value={values[key]}
             onChange={(e) => update(key, e.target.value)}
@@ -499,6 +495,16 @@ function PurchaseCreate({ residentId, onChanged, onDenied }) {
           />
         </label>
       ))}
+      <label>
+        Số tiền dự kiến (bắt buộc)
+        {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ */}
+        <MoneyInput
+          required
+          value={values.estimatedAmount}
+          onChange={(value) => update('estimatedAmount', value)}
+          disabled={pending}
+        />
+      </label>
       <label>
         Vật phẩm trong danh mục (nếu có)
         <select

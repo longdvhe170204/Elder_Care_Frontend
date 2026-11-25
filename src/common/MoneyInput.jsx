@@ -24,7 +24,8 @@ function moneyDisplay(raw) {
 
 export function MoneyInput({ value, onChange, allowNegative = false, className, ...props }) {
   return (
-    <div className="relative">
+    // Chữ "đ" vẽ bằng CSS (::after), không là chữ trong trang: ô đặt trong <label> bọc ngoài vẫn có tên đúng
+    <div className="relative after:pointer-events-none after:absolute after:inset-y-0 after:right-3 after:flex after:items-center after:text-muted-foreground after:content-['đ']">
       <Input
         inputMode="numeric"
         autoComplete="off"
@@ -33,12 +34,6 @@ export function MoneyInput({ value, onChange, allowNegative = false, className, 
         onChange={(e) => onChange(moneyDigits(e.target.value, allowNegative))}
         {...props}
       />
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-muted-foreground"
-      >
-        đ
-      </span>
     </div>
   )
 }
