@@ -45,6 +45,7 @@ import { CONTRACT_REASONS } from '@/common/quickChoices'
 const FIXED_SERVICE_TYPES = ['CARE', 'RESIDENCY_FEE']
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 import { FileInput } from '@/common/FileInput'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Hôm nay ở Việt Nam, dạng yyyy-MM-dd (en-CA định dạng đúng kiểu này)
 const vietnamToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
@@ -507,7 +508,7 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
     () => new Map((contract?.services ?? []).map((s) => [s.serviceId, !!s.inPackage])),
   )
   const [noDeposit, setNoDeposit] = useState(!!contract?.noDepositRequired)
-  const [deposit, setDeposit] = useState(contract?.depositAmount ?? '')
+  const [deposit, setDeposit] = useState(contract?.depositAmount != null ? String(contract.depositAmount) : '')
   const [schedule, setSchedule] = useState(contract?.arrivalSchedule ?? [])
   const [roomTypes, setRoomTypes] = useState(null)
   const [roomTypeId, setRoomTypeId] = useState(contract?.roomTypeId ? String(contract.roomTypeId) : '')
@@ -888,15 +889,9 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
                 </Field>
                 {!noDeposit && (
                   <Field>
-                    <FieldLabel htmlFor="contract-deposit">Khoản đặt cọc (đồng)</FieldLabel>
-                    <Input
-                      id="contract-deposit"
-                      type="number"
-                      min="0"
-                      className="h-11"
-                      value={deposit}
-                      onChange={(e) => setDeposit(e.target.value)}
-                    />
+                    <FieldLabel htmlFor="contract-deposit">Khoản đặt cọc</FieldLabel>
+                    {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ */}
+                    <MoneyInput id="contract-deposit" value={deposit} onChange={setDeposit} />
                   </Field>
                 )}
               </>

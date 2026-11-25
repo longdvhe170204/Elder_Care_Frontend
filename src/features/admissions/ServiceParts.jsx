@@ -17,6 +17,7 @@ import { formatDate } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { CARE_LEVELS, SELECT, SERVICE_BILLING_PERIODS, SERVICE_TYPES, labelOf, money, newKey } from './admissionLabels'
 import { Choices, Info, ReasonField } from './FormParts'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Khung chi tiết và form của dịch vụ, đơn giá (004 T068; US9, FR-034 → FR-036, DBR-08, Q-297). Phiên bản đơn giá không có
 // lệnh sửa; ngừng hiệu lực và sửa dịch vụ gửi If-Match theo version.
@@ -54,15 +55,9 @@ function PriceVersionForm({ serviceId, onDone, onCancel }) {
     <div className="flex flex-col gap-3 border-t pt-4">
       <FieldGroup>
         <Field data-invalid={(submitted && !!errors.price) || undefined}>
-          <FieldLabel htmlFor="price-amount">Đơn giá (đồng)</FieldLabel>
-          <Input
-            id="price-amount"
-            type="number"
-            min="0"
-            className="h-11"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
+          <FieldLabel htmlFor="price-amount">Đơn giá</FieldLabel>
+          {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ */}
+          <MoneyInput id="price-amount" value={price} onChange={setPrice} />
           {submitted && errors.price && <FieldError>{errors.price}</FieldError>}
         </Field>
         <Field data-invalid={(submitted && !!errors.from) || undefined}>
