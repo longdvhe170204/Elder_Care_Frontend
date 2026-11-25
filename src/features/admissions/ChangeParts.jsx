@@ -390,48 +390,50 @@ export function ChangeRequestView({
             <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
           )}
           {state && (draft || sent) && (
-            <section className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
+            <section className="flex flex-col gap-2" aria-label="Xác nhận của người đại diện">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
                 {state.done ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
                     <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
                     Đã xác nhận
                   </span>
                 ) : sent?.status === 'AWAITING' ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/30">
                     <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden />
                     Chờ phản hồi
                   </span>
                 ) : sent?.status === 'DECLINED' ? (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive border border-destructive/30">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive border border-destructive/30">
                     <span className="size-1.5 rounded-full bg-destructive" aria-hidden />
                     Từ chối
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
                     <span className="size-1.5 rounded-full bg-warning-foreground" aria-hidden />
                     Chưa xác nhận
                   </span>
                 )}
               </div>
-              {state.attention && draft ? (
-                <Alert variant="attention">
-                  <AlertTitle>{state.text}</AlertTitle>
-                </Alert>
-              ) : (
-                <p className="type-body-sm font-medium">{state.text}</p>
-              )}
-              {sent && (
-                <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5 type-body-sm">
-                  {confirmationRequestText(sent)}
-                </div>
-              )}
-              {draft && needsConfirmation && !canConfirm && (
-                <p className="type-caption text-muted-foreground leading-relaxed">
-                  Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.
-                </p>
-              )}
+              <div className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs">
+                {state.attention && draft ? (
+                  <Alert variant="attention">
+                    <AlertTitle>{state.text}</AlertTitle>
+                  </Alert>
+                ) : (
+                  <p className="type-body-sm font-medium">{state.text}</p>
+                )}
+                {sent && (
+                  <div className="rounded-lg border border-border/60 bg-muted/40 p-2.5 type-body-sm">
+                    {confirmationRequestText(sent)}
+                  </div>
+                )}
+                {draft && needsConfirmation && !canConfirm && (
+                  <p className="type-caption text-muted-foreground leading-relaxed">
+                    Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.
+                  </p>
+                )}
+              </div>
             </section>
           )}
           {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
@@ -439,19 +441,12 @@ export function ChangeRequestView({
               Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
             </p>
           )}
-          {warnings.length > 0 && (
-            <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
-              {warnings.map((w) => (
-                <AlertDescription key={w}>{w}</AlertDescription>
-              ))}
-            </Alert>
-          )}
           {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
             <p className="type-caption text-muted-foreground">
               {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
             </p>
           )}
-          <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
+          <ResidentOpinions request={request} canRecord={canRecordOpinion} warnings={warnings} onChanged={onReload} />
           {pendingSignature && (
             <Alert variant="attention">
               <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>

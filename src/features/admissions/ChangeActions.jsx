@@ -9,6 +9,7 @@ import {
   postResidencyChangeRequestsByIdAddendumSignature,
   postResidencyChangeRequestsByIdResidentOpinions,
 } from '@/api'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
@@ -225,7 +226,7 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
 // Nhãn nguồn ý kiến ở danh sách đã ghi (ý kiến không sửa, xóa: DESIGN.md 2.2); nhãn ở form chọn nguồn là OPINION_SOURCES
 const OPINION_SOURCE_BADGES = { RESIDENT: 'Theo lời người cao tuổi', STAFF_OBSERVATION: 'Nhân viên quan sát' }
 
-export function ResidentOpinions({ request, canRecord, onChanged }) {
+export function ResidentOpinions({ request, canRecord, warnings = [], onChanged }) {
   const [items, setItems] = useState(null)
   const [opinion, setOpinion] = useState('')
   const [source, setSource] = useState('RESIDENT')
@@ -268,16 +269,24 @@ export function ResidentOpinions({ request, canRecord, onChanged }) {
   }
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Ý kiến người cao tuổi">
-      <div className="flex items-center justify-between">
+    <section className="flex flex-col gap-2" aria-label="Ý kiến người cao tuổi">
+      <div className="flex items-center justify-between gap-2">
         <h3 className="type-card-title font-bold text-foreground">Ý kiến người cao tuổi</h3>
-        <span className="rounded-md bg-muted/60 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+        <span className="shrink-0 whitespace-nowrap rounded-full border border-border/60 bg-muted/70 px-2.5 py-0.5 text-xs font-semibold text-muted-foreground">
           {items?.length ? `${items.length} ghi nhận` : 'Chưa ghi'}
         </span>
       </div>
-      {items === null ? null : items.length === 0 ? (
-        <p className="type-body-sm text-muted-foreground">Chưa ghi ý kiến của người cao tuổi.</p>
-      ) : (
+      <div className="flex flex-col gap-3 rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs">
+        {warnings.length > 0 && (
+          <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
+            {warnings.map((w) => (
+              <AlertDescription key={w}>{w}</AlertDescription>
+            ))}
+          </Alert>
+        )}
+        {items === null ? null : items.length === 0 ? (
+          warnings.length === 0 && <p className="type-body-sm text-muted-foreground">Chưa ghi ý kiến của người cao tuổi.</p>
+        ) : (
         <ul className="flex flex-col gap-2">
           {items.map((o, i) => (
             <li key={o.id} className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/30 p-2.5">
@@ -388,6 +397,7 @@ export function ResidentOpinions({ request, canRecord, onChanged }) {
           </div>
         </div>
       )}
+      </div>
     </section>
   )
 }
