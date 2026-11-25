@@ -104,7 +104,7 @@ async function rows() {
 }
 
 // Báo sự việc (một form thay "Ghi nhận sự cố" và "Tạo cảnh báo"); người không có quyền tạo cảnh báo luôn ghi sự cố
-const openReport = () => fireEvent.click(screen.getByRole('button', { name: 'Báo sự việc' }))
+const openReport = () => fireEvent.click(screen.getByRole('button', { name: 'Ghi sự cố' }))
 const save = () => fireEvent.click(screen.getByRole('button', { name: /^Lưu/ }))
 
 describe('IncidentsPage', () => {
@@ -343,6 +343,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Trung bình' }))
     fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Trượt chân' } })
     save()
@@ -465,6 +466,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Ngã lần hai' } })
     save()
     const note = await screen.findByText(/SC-11/, { selector: 'strong' })
@@ -487,6 +489,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.change(screen.getByLabelText('Ghi chú'), { target: { value: 'Ngã lần hai, phòng khác' } })
     save()
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo sự cố riêng' }))
@@ -676,6 +679,7 @@ describe('IncidentsPage', () => {
     openReport()
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ngã' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Đang xử lý/ }))
     fireEvent.click(screen.getByRole('button', { name: 'Nhà vệ sinh' }))
     expect(screen.getByRole('button', { name: 'Nhà vệ sinh' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.queryByLabelText('Xử lý ban đầu')).toBeNull()

@@ -1120,7 +1120,7 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
                 }}
               >
                 <Plus aria-hidden="true" />
-                Báo sự việc
+                Tạo cảnh báo
               </Button>
             )}
           </div>

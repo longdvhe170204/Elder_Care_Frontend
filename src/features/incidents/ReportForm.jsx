@@ -12,7 +12,7 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { createAlert, loadIncidentTypes } from '@/features/alerts/alerts'
-import { getIncidentResidents } from '@/api/api007'
+import { getIncidentResidents, postEmergencyAssist } from '@/api/api007'
 import { LevelChoices } from './CaseFormParts'
 import { CasePage } from './CasePage'
 import { IncidentTypePicker } from './IncidentTypePicker'
@@ -20,7 +20,7 @@ import { loadFloorChoices, loadResidentChoices, recordIncident, runIncidentComma
 import { FAMILY_METHODS, LEVEL_LABEL, needsLowerReason, presetLevel, vietnamIso, vietnamNowLocal } from './incidentView'
 
 // Báo sự việc (đề xuất 2026-11-24, góp ý demo BF-06): một form thay cho "Tạo cảnh báo" và "Ghi nhận sự cố" vốn giống hệt
-// nhau. Người dùng chọn "Ghi thành gì?": Sự cố (đã xảy ra, BF-06 bước 7, FR-040) hoặc Cảnh báo (dấu hiệu cần người xem)
+// nhau. Trang Cảnh báo mở form "Tạo cảnh báo", trang Sự cố mở form "Ghi sự cố"; đổi qua lại bằng một dòng nhỏ khi cả hai làm được
 // (bước 1, FR-026). Loại không phải sức khỏe (đồ gửi, cơ sở vật chất) và người không có quyền
 // tạo cảnh báo luôn ghi sự cố; người chỉ có quyền tạo cảnh báo luôn tạo cảnh báo. Mức chọn sẵn theo mặc định của loại,
 // mức thấp hơn mặc định của sự cố cần lý do (FR-042). Mô tả để trống thì ghép tên loại và nơi xảy ra (backend bắt buộc).
@@ -167,7 +167,9 @@ export function ReportForm({
   const [occurredAt, setOccurredAt] = useState('')
   const [initialResponse, setInitialResponse] = useState('')
   // Ghi nhận sau (BF-06): việc đã xảy ra và đã xử lý xong, chỉ lưu hồ sơ, không báo khẩn; phải nói rõ đã báo người nhà chưa
-  const [later, setLater] = useState(false)
+  const [status, setStatus] = useState('')
+  const [resolution, setResolution] = useState('')
+  const [needHelp, setNeedHelp] = useState(false)
   const [familyState, setFamilyState] = useState('')
   const [familyMethod, setFamilyMethod] = useState('PHONE')
   const [familyAt, setFamilyAt] = useState(() => vietnamNowLocal())
@@ -212,7 +214,12 @@ export function ReportForm({
   // Chỉ tạo được cảnh báo (không có quyền ghi sự cố) thì luôn là cảnh báo; còn lại mặc định ghi sự cố
   const alertOnly = canAlert && !canIncident
   const kind = alertOnly || (ask && wantAlert) ? 'alert' : 'incident'
-  const isLater = later && kind === 'incident' && residentId != null
+  // Tình trạng chỉ hỏi khi ghi sự cố cho một người cao tuổi; không chọn sẵn (BF-06): ĐANG XỬ LÝ hay ĐÃ XỬ LÝ XONG
+  const needsStatus = kind === 'incident' && residentId != null
+  const isLater = needsStatus && status === 'DONE'
+  // Chỉ người có quyền xử lý sự cố mới đóng được; người khác chỉ Lưu, chờ người có chuyên môn đóng
+  const canClose = can('INCIDENT_EMERGENCY', 'UPDATE')
+  const closeNow = isLater && canClose
   const lowerNeeded = kind === 'incident' && needsLowerReason(level, type)
   const description = note.trim() || [type?.name, place.trim()].filter(Boolean).join(', ')
   const errors = {
@@ -222,6 +229,8 @@ export function ReportForm({
     level: !level,
     lowerReason: lowerNeeded && !lowerReason.trim(),
     family: isLater && !familyState,
+    status: needsStatus && !status,
+    resolution: closeNow && !resolution.trim(),
   }
 
   function pickType(value) {
@@ -266,6 +275,7 @@ export function ReportForm({
         ...(isLater
           ? {
               recordedLater: true,
+              ...(closeNow ? { closeNow: true, resolution: resolution.trim() } : {}),
               familyNotice:
                 familyState === 'INFORMED'
                   ? { state: 'INFORMED', method: familyMethod, at: vietnamIso(familyAt) }
@@ -273,11 +283,15 @@ export function ReportForm({
             }
           : {}),
       })
+      // Cần thêm người đến giúp: gửi thêm yêu cầu Cần hỗ trợ (cùng cách bấm nút Cần hỗ trợ); lỗi không làm mất sự cố đã ghi
+      if (needHelp && !isLater) {
+        await postEmergencyAssist({ headers: { 'Idempotency-Key': crypto.randomUUID() } }).catch(() => null)
+      }
       onDone({
         kind,
         id: recorded?.incident?.id ?? recorded?.id ?? null,
         level,
-        message: `${isLater ? 'Đã ghi nhận sau' : 'Đã ghi'} sự cố ${type.name.toLowerCase()}, ${who}`,
+        message: `${closeNow ? 'Đã ghi và đóng' : isLater ? 'Đã ghi nhận sau' : 'Đã ghi'} sự cố ${type.name.toLowerCase()}, ${who}`,
       })
     } catch (error) {
       // FR-041: người đã có sự cố Khẩn cấp đang mở thì chỉ ra sự cố đó, không tự gộp
@@ -311,11 +325,12 @@ export function ReportForm({
       : level === 'LOW'
         ? ['border-border', 'text-foreground']
         : ['border-warning-foreground', 'text-warning-foreground']
+  const title = kind === 'alert' ? 'Tạo cảnh báo' : 'Ghi sự cố'
   const resultText = `${kind === 'incident' ? 'Sự cố' : 'Cảnh báo'}${level ? ` · ${LEVEL_LABEL[level]}` : ''}`
 
   return (
-    <CasePage label="Báo sự việc" backLabel="Quay lại" here="Báo sự việc" onBack={onClose} returnFocusId={returnFocusId}>
-      <h1 className="type-page text-primary">Báo sự việc</h1>
+    <CasePage label={title} backLabel="Quay lại" here={title} onBack={onClose} returnFocusId={returnFocusId}>
+      <h1 className="type-page text-primary">{title}</h1>
       <form
         noValidate
         onSubmit={(event) => {
@@ -410,26 +425,36 @@ export function ReportForm({
               <Skeleton className="h-28 w-full" />
             )}
             {submitted && errors.type && <FieldError>Chọn chuyện gì</FieldError>}
+            {ask && (
+              <Button
+                type="button"
+                variant="link"
+                className="h-9 self-start px-0"
+                onClick={() => setWantAlert(kind !== 'alert')}
+              >
+                {kind === 'alert' ? 'Việc đã xảy ra? Ghi sự cố' : 'Việc chưa xảy ra? Tạo cảnh báo'}
+              </Button>
+            )}
           </Section>
         </div>
 
         <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6">
-          {ask && (
-            <Section title="Ghi thành gì?">
-              <div role="group" aria-label="Ghi thành gì?" className="grid grid-cols-2 gap-2">
+          {needsStatus && (
+            <Section title="Tình trạng (chọn một)">
+              <div role="group" aria-label="Tình trạng" className="grid grid-cols-2 gap-2">
                 {[
-                  [true, 'Cảnh báo', 'Mới là dấu hiệu, cần người xem'],
-                  [false, 'Sự cố', 'Đã xảy ra, ghi hồ sơ (cụ đã ngã, đã nghẹn…)'],
+                  ['ACTIVE', 'Đang xử lý', 'Cần người xem ngay, báo theo mức'],
+                  ['DONE', 'Đã xử lý xong', 'Chỉ ghi hồ sơ, không báo khẩn'],
                 ].map(([value, label, hint]) => (
                   <Button
-                    key={label}
+                    key={value}
                     type="button"
                     variant="outline"
-                    aria-pressed={wantAlert === value}
-                    onClick={() => setWantAlert(value)}
+                    aria-pressed={status === value}
+                    onClick={() => setStatus(value)}
                     className={cn(
                       'h-auto min-h-16 flex-col items-start gap-0.5 rounded-lg bg-card px-3 py-2 text-left whitespace-normal',
-                      wantAlert === value && 'border-2 border-primary bg-accent',
+                      status === value && 'border-2 border-primary bg-accent',
                     )}
                   >
                     <span className="type-label">{label}</span>
@@ -437,31 +462,34 @@ export function ReportForm({
                   </Button>
                 ))}
               </div>
+              {submitted && errors.status && <FieldError>Chọn tình trạng</FieldError>}
+              {status === 'ACTIVE' && (
+                <>
+                  <p className="type-body-sm text-muted-foreground">
+                    Bác sĩ, Điều dưỡng ghi sự cố đang xử lý thì được ghi là người xử lý, không cần bấm Tiếp nhận.
+                  </p>
+                  <label className="flex items-center gap-2 type-body">
+                    <input type="checkbox" checked={needHelp} onChange={(e) => setNeedHelp(e.target.checked)} />
+                    Cần thêm người đến giúp
+                  </label>
+                </>
+              )}
             </Section>
           )}
-          {kind === 'incident' && residentId != null && (
-            <Section title="Việc đang xảy ra hay đã xong?">
-              <div role="group" aria-label="Việc đang xảy ra hay đã xong?" className="grid grid-cols-2 gap-2">
-                {[
-                  [false, 'Đang xử lý', 'Cần người xem ngay, báo theo mức'],
-                  [true, 'Đã xử lý xong', 'Chỉ ghi nhận hồ sơ, không báo khẩn'],
-                ].map(([value, label, hint]) => (
-                  <Button
-                    key={label}
-                    type="button"
-                    variant="outline"
-                    aria-pressed={later === value}
-                    onClick={() => setLater(value)}
-                    className={cn(
-                      'h-auto min-h-16 flex-col items-start gap-0.5 rounded-lg bg-card px-3 py-2 text-left whitespace-normal',
-                      later === value && 'border-2 border-primary bg-accent',
-                    )}
-                  >
-                    <span className="type-label">{label}</span>
-                    <span className="type-caption font-normal text-muted-foreground">{hint}</span>
-                  </Button>
-                ))}
-              </div>
+          {closeNow && (
+            <Section title="Kết quả xử lý">
+              <Field data-invalid={(submitted && errors.resolution) || undefined}>
+                <Textarea
+                  id="report-resolution"
+                  aria-label="Kết quả xử lý"
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="VD: cụ ngã nhẹ, đã kiểm tra, không đau, đã đỡ về giường"
+                  value={resolution}
+                  onChange={(e) => setResolution(e.target.value)}
+                />
+                {submitted && errors.resolution && <FieldError>Nhập kết quả xử lý</FieldError>}
+              </Field>
             </Section>
           )}
           {isLater && (
@@ -657,7 +685,7 @@ export function ReportForm({
                 )}
                 disabled={busy}
               >
-                {kind === 'incident' && level === 'CRITICAL' && !isLater ? 'Lưu và mở khẩn cấp' : 'Lưu'}
+                {kind === 'incident' && level === 'CRITICAL' && !isLater ? 'Lưu và mở khẩn cấp' : closeNow ? 'Lưu và đóng' : 'Lưu'}
               </Button>
               <Button type="button" variant="ghost" className="h-11" disabled={busy} onClick={onClose}>
                 Hủy

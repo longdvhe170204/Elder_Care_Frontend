@@ -1099,7 +1099,7 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
               }}
             >
               <Plus aria-hidden="true" />
-              Báo sự việc
+              Ghi sự cố
             </Button>
           </div>
         }
