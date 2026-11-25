@@ -189,6 +189,7 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
       {isAllowed(plan, 'replaceRiskAgreements') ? (
         <CareRiskAgreementsForm
           key={`risks-${reload}`}
+          residentId={plan.residentId}
           agreements={plan.riskAgreements ?? []}
           busy={busy || problem?.status === 412}
           onSave={(rows) => command(putCarePlansByIdRiskAgreements, rows, true)}

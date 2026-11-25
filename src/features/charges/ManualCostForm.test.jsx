@@ -1,24 +1,28 @@
 import { expect, it, vi, beforeEach } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { postCostsItemsManual } from '@/api'
+import { getResidents, postCostsItemsManual } from '@/api'
 import { uploadFile } from '@/common/files'
 import { ManualCostForm } from './ManualCostForm'
 
 vi.mock('@/api', async (importOriginal) => ({
   ApiError: (await importOriginal()).ApiError,
   postCostsItemsManual: vi.fn(),
+  getResidents: vi.fn(),
 }))
 vi.mock('@/common/files', () => ({ uploadFile: vi.fn() }))
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  getResidents.mockRejectedValue(new Error('403'))
+})
 
-function fill() {
-  fireEvent.change(screen.getByLabelText('Mã người cao tuổi'), { target: { value: '7' } })
+async function fill() {
+  fireEvent.change(await screen.findByLabelText('Mã người cao tuổi'), { target: { value: '7' } })
   fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Phí chấm dứt sớm' } })
   fireEvent.change(screen.getByLabelText('Ngày phát sinh'), { target: { value: '2026-11-05' } })
   fireEvent.change(screen.getByLabelText('Số lượng'), { target: { value: '1' } })
   fireEvent.change(screen.getByLabelText('Đơn vị'), { target: { value: 'lần' } })
-  fireEvent.change(screen.getByLabelText('Đơn giá (đồng)'), { target: { value: '500000' } })
+  fireEvent.change(screen.getByLabelText('Đơn giá'), { target: { value: '500000' } })
   fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Theo điều khoản hợp đồng' } })
 }
 
@@ -26,7 +30,7 @@ it('FR_021_sendsManualItemWithEvidenceUploadedOnce', async () => {
   uploadFile.mockResolvedValue(31)
   postCostsItemsManual.mockResolvedValue({ status: 201 })
   render(<ManualCostForm today="2026-11-10" />)
-  fill()
+  await fill()
   const file = new File(['x'], 'hop-dong.pdf', { type: 'application/pdf' })
   fireEvent.change(screen.getByLabelText('Bằng chứng (nếu có)'), { target: { files: [file] } })
   fireEvent.click(screen.getByRole('button', { name: 'Lập khoản nhập tay' }))
@@ -57,7 +61,7 @@ it('BR_M11_04_catalogConflictKeepsInputAndDoesNotAnnounceSuccess', async () => {
     body: { title: 'Mục có trong danh mục: Gạc vô trùng; lập khoản theo bản ghi nguồn hoặc đề nghị mua hộ' },
   })
   render(<ManualCostForm today="2026-11-10" />)
-  fill()
+  await fill()
   fireEvent.click(screen.getByRole('button', { name: 'Lập khoản nhập tay' }))
   await waitFor(() => expect(postCostsItemsManual).toHaveBeenCalledTimes(1))
   expect(screen.getByLabelText('Mô tả')).toHaveValue('Phí chấm dứt sớm')
@@ -67,4 +71,25 @@ it('BR_M11_04_catalogConflictKeepsInputAndDoesNotAnnounceSuccess', async () => {
 it('FR_021_incurredDateCannotBeAfterToday', () => {
   render(<ManualCostForm today="2026-11-10" />)
   expect(screen.getByLabelText('Ngày phát sinh')).toHaveAttribute('max', '2026-11-10')
+})
+
+// Demo 2026-11-25: đọc được danh sách thì chọn người cao tuổi theo tên
+it('chonNguoiCaoTuoiTheoTen_guiDungMa', async () => {
+  getResidents.mockResolvedValue({
+    data: { items: [{ id: 42, profileCode: 'NCT-0042', personalInfo: { fullName: 'Nguyễn Văn Tư' } }] },
+  })
+  postCostsItemsManual.mockResolvedValue({ status: 201 })
+  render(<ManualCostForm today="2026-11-10" />)
+  await screen.findByRole('option', { name: 'Nguyễn Văn Tư (NCT-0042)' })
+  expect(screen.queryByLabelText('Mã người cao tuổi')).toBeNull()
+  fireEvent.change(screen.getByLabelText('Người cao tuổi'), { target: { value: '42' } })
+  fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Phí chấm dứt sớm' } })
+  fireEvent.change(screen.getByLabelText('Ngày phát sinh'), { target: { value: '2026-11-05' } })
+  fireEvent.change(screen.getByLabelText('Số lượng'), { target: { value: '1' } })
+  fireEvent.change(screen.getByLabelText('Đơn vị'), { target: { value: 'lần' } })
+  fireEvent.change(screen.getByLabelText('Đơn giá'), { target: { value: '500000' } })
+  fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Theo điều khoản hợp đồng' } })
+  fireEvent.submit(screen.getByLabelText('Mô tả').closest('form'))
+  await waitFor(() => expect(postCostsItemsManual).toHaveBeenCalled())
+  expect(postCostsItemsManual.mock.calls[0][0].body.residentId).toBe(42)
 })

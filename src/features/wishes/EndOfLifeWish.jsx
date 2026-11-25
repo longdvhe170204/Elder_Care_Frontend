@@ -21,6 +21,9 @@ import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { FileField, Row } from '../consents/ConsentTab'
 import { POSITIVE_INTEGER, today, uploadProblem, toRequestOpinion } from './wishUtils'
+import { FamilyMemberSelect } from '@/common/FamilyMemberSelect'
+import { StaffSelectField } from '@/common/StaffSelectField'
+import { useFamilyMembers } from '@/common/useFamilyMembers'
 import { OpinionEditor, OpinionList } from './Opinions'
 import { DiscardDraftForm, DraftCard } from './WishDraft'
 import { useWishDraft } from './useWishDraft'
@@ -129,6 +132,8 @@ function TextField({ id, label, value, onChange, error, hint, inputMode, type })
 
 function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = null }) {
   const verify = mode === 'verify'
+  // Demo 2026-11-25: người ký, Bác sĩ nhận định chọn theo tên thay cho ô nhập mã
+  const members = useFamilyMembers(residentId)
   const [v, setV] = useState({
     choice: initial?.choice ?? null,
     firstContact: initial?.firstContact ?? '',
@@ -171,14 +176,14 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
     const next = {}
     if (!v.choice) next.choice = 'Chọn một lựa chọn'
     if (!v.firstContact.trim()) next.firstContact = WISH_ERRORS.FIRST_CONTACT_REQUIRED[1]
-    if (!POSITIVE_INTEGER.test(v.doctorId.trim())) next.doctorId = 'Nhập mã tài khoản Bác sĩ nhận định'
+    if (!POSITIVE_INTEGER.test(v.doctorId.trim())) next.doctorId = 'Chọn Bác sĩ nhận định'
     if (v.canSelf === null) next.canSelf = 'Chọn nhận định của Bác sĩ'
     if (!v.supportMethod.trim()) next.supportMethod = 'Nhập cách đã hỗ trợ người cao tuổi hiểu thông tin'
     if (!v.reviewDate) next.reviewDate = 'Chọn ngày xem lại nhận định'
     else if (v.reviewDate < today()) next.reviewDate = WISH_ERRORS.INVALID_REVIEW_DATE[1]
     if (v.canSelf === false) {
       if (!v.signerType) next.signerType = 'Chọn người ký thay'
-      if (!POSITIVE_INTEGER.test(v.signerId.trim())) next.signerId = 'Nhập mã người thân là người ký'
+      if (!POSITIVE_INTEGER.test(v.signerId.trim())) next.signerId = 'Chọn người thân là người ký'
       if (!v.relationship.trim()) next.relationship = 'Nhập quan hệ với người cao tuổi'
       if (patientRep && !v.selection) next.selection = WISH_ERRORS.REPRESENTATIVE_SELECTION_REQUIRED[1]
       if (legal) {
@@ -293,14 +298,15 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
 
       <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
         <legend className="type-label px-1">Nhận định của Bác sĩ cho phiếu này</legend>
-        <TextField
+        <StaffSelectField
           id="eol-doctor"
-          label="Mã tài khoản Bác sĩ nhận định"
-          inputMode="numeric"
+          label="Bác sĩ nhận định"
+          valueKey="accountId"
+          positions={['Bác sĩ']}
           value={v.doctorId}
           onChange={set('doctorId')}
-          error={errors.doctorId}
-          hint="Tạm thời nhập mã tới khi hồ sơ nhân viên (feature 008) có danh sách. Hệ thống kiểm người này là Bác sĩ."
+          invalid={!!errors.doctorId}
+          errorText={errors.doctorId}
         />
         <RadioRow
           label="Người cao tuổi tự quyết được việc chọn này"
@@ -354,14 +360,14 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
             onChange={set('signerType')}
             error={errors.signerType}
           />
-          <TextField
+          <FamilyMemberSelect
             id="eol-signer-id"
-            label="Mã người thân là người ký"
-            inputMode="numeric"
+            label="Người thân là người ký"
+            members={members}
             value={v.signerId}
             onChange={set('signerId')}
             error={errors.signerId}
-            hint="Tạm thời nhập mã tới khi hồ sơ người thân (feature 012) có danh sách. Người này cũng là người trả lời phiếu."
+            hint="Người này cũng là người trả lời phiếu."
           />
           <TextField
             id="eol-relationship"
@@ -439,7 +445,13 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
         />
       )}
 
-      <OpinionEditor idPrefix="eol" items={opinions} onChange={setOpinions} error={errors.opinions} />
+      <OpinionEditor
+        idPrefix="eol"
+        residentId={residentId}
+        items={opinions}
+        onChange={setOpinions}
+        error={errors.opinions}
+      />
 
       <ProblemAlert problem={failure} />
 
@@ -485,6 +497,7 @@ function DraftDetails({ draft }) {
 // BR-M01-15); người trả lời là người cao tuổi hoặc người đại diện; bản ký nếu đã có. Hợp đồng không trả người trả lời của
 // Nháp nên sửa Nháp phải chọn lại người trả lời.
 function EndOfLifeDraftForm({ residentId, initial, onCancel, onDone }) {
+  const members = useFamilyMembers(residentId)
   const [v, setV] = useState({
     choice: initial?.choice ?? null,
     firstContact: initial?.firstContact ?? '',
@@ -505,7 +518,7 @@ function EndOfLifeDraftForm({ residentId, initial, onCancel, onDone }) {
   async function submit(event) {
     event.preventDefault()
     const next = {}
-    if (representative && !POSITIVE_INTEGER.test(v.respondentId.trim())) next.respondentId = 'Nhập mã người thân trả lời'
+    if (representative && !POSITIVE_INTEGER.test(v.respondentId.trim())) next.respondentId = 'Chọn người thân trả lời'
     if (representative && !v.relationship.trim()) next.relationship = 'Nhập quan hệ với người cao tuổi'
     setErrors(next)
     if (Object.keys(next).length > 0) return
@@ -551,8 +564,8 @@ function EndOfLifeDraftForm({ residentId, initial, onCancel, onDone }) {
     >
       <h3 className="type-card-title">Bản Nháp tự khai phiếu nguyện vọng cuối đời</h3>
       <p className="type-body-sm text-muted-foreground">
-        Ghi theo lời người cao tuổi hoặc gia đình. Bản Nháp chưa có hiệu lực tới khi Bác sĩ hoặc Điều dưỡng kiểm chứng; nhận
-        định người cao tuổi có tự quyết được hay không do Bác sĩ ghi khi kiểm chứng.
+        Ghi theo lời người cao tuổi hoặc gia đình. Bản Nháp chưa có hiệu lực tới khi Bác sĩ hoặc Điều dưỡng kiểm chứng;
+        nhận định người cao tuổi có tự quyết được hay không do Bác sĩ ghi khi kiểm chứng.
       </p>
       <RadioRow
         label="Lựa chọn khi nguy kịch"
@@ -583,10 +596,10 @@ function EndOfLifeDraftForm({ residentId, initial, onCancel, onDone }) {
       />
       {representative && (
         <div className="grid gap-4 sm:grid-cols-2">
-          <TextField
+          <FamilyMemberSelect
             id="eol-draft-respondent-id"
-            label="Mã người thân trả lời"
-            inputMode="numeric"
+            label="Người thân trả lời"
+            members={members}
             value={v.respondentId}
             onChange={set('respondentId')}
             error={errors.respondentId}
@@ -600,7 +613,13 @@ function EndOfLifeDraftForm({ residentId, initial, onCancel, onDone }) {
           />
         </div>
       )}
-      <OpinionEditor idPrefix="eol-draft" items={opinions} onChange={setOpinions} error={errors.opinions} />
+      <OpinionEditor
+        idPrefix="eol-draft"
+        residentId={residentId}
+        items={opinions}
+        onChange={setOpinions}
+        error={errors.opinions}
+      />
       <FileField
         id="eol-draft-signed-copy"
         label="Bản ký đã scan (nếu đã có)"
@@ -630,11 +649,11 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
   const [draftMode, setDraftMode] = useState(null)
   const canDraft = allowedCommands.includes('DRAFT_END_OF_LIFE_WISH') && !FINAL_STATUSES.includes(status)
   const canRecord = allowedCommands.includes('RECORD_END_OF_LIFE_WISH') && !FINAL_STATUSES.includes(status)
-  const { draft, setDraft, reload: reloadDraft } = useWishDraft(
-    getResidentsByIdEndOfLifeWishDraft,
-    residentId,
-    canDraft || canRecord,
-  )
+  const {
+    draft,
+    setDraft,
+    reload: reloadDraft,
+  } = useWishDraft(getResidentsByIdEndOfLifeWishDraft, residentId, canDraft || canRecord)
 
   const load = useCallback(async () => {
     try {
@@ -659,7 +678,9 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
   async function finished() {
     setFormOpen(false)
     setDraftMode(null)
-    setDone(draft ? 'Đã kiểm chứng phiếu nguyện vọng cuối đời; phiếu có hiệu lực.' : 'Đã ghi phiếu nguyện vọng cuối đời.')
+    setDone(
+      draft ? 'Đã kiểm chứng phiếu nguyện vọng cuối đời; phiếu có hiệu lực.' : 'Đã ghi phiếu nguyện vọng cuối đời.',
+    )
     reloadDraft()
     await load()
     onChanged?.()
@@ -737,7 +758,9 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
     return (
       <section aria-labelledby="eol-title" className="flex flex-col gap-2 rounded-lg border p-4">
         {heading}
-        <p className="type-body-sm">{hasWish ? 'Đã có phiếu nguyện vọng cuối đời.' : 'Chưa có phiếu nguyện vọng cuối đời.'}</p>
+        <p className="type-body-sm">
+          {hasWish ? 'Đã có phiếu nguyện vọng cuối đời.' : 'Chưa có phiếu nguyện vọng cuối đời.'}
+        </p>
         <p className="type-body-sm text-muted-foreground">
           Vai trò của bạn chỉ thấy phiếu đã có hay chưa, không xem được nội dung.
         </p>
@@ -856,7 +879,9 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
               <li key={wish.id} className="flex flex-col gap-3 rounded-lg border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={END_OF_LIFE_STATUS_LABELS[wish.status]} />
-                  <span className="type-caption text-muted-foreground tabular-nums">{formatDateTime(wish.signedAt)}</span>
+                  <span className="type-caption text-muted-foreground tabular-nums">
+                    {formatDateTime(wish.signedAt)}
+                  </span>
                 </div>
                 <WishDetails wish={wish} />
               </li>

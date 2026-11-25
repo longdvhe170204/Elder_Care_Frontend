@@ -382,9 +382,6 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Trả Áo len A, mã 18' }))
     fireEvent.change(screen.getByLabelText('Mức tình trạng lúc trả của Áo len A'), { target: { value: '11' } })
     fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'OTHER_PERSON' } })
-    fireEvent.change(screen.getByLabelText('Họ tên người nhận'), { target: { value: 'Lê Văn Nam' } })
-    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'CCCD' } })
-    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: '079000000102' } })
     return section
   }
 
@@ -431,6 +428,8 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
     })
     const section = await openReturn()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập xác nhận ngay' }))
+    fireEvent.change(screen.getByLabelText('Họ tên người nhận khác'), { target: { value: 'Lê Văn Nam' } })
+    fireEvent.change(screen.getByLabelText('Giấy tờ của người nhận'), { target: { value: 'CCCD 079000000102' } })
     fireEvent.change(screen.getByLabelText('Bản ký của người đại diện (không bắt buộc)'), {
       target: { files: [new File(['k'], 'dong-y.pdf', { type: 'application/pdf' })] },
     })

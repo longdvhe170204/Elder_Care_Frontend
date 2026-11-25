@@ -22,8 +22,11 @@ function renderForm(onDone = vi.fn()) {
 function fill({ type, description = 'Áo len', amount = '5' }) {
   fireEvent.change(screen.getByLabelText('Loại đồ'), { target: { value: String(type) } })
   fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: description } })
-  const amountLabel = TYPES.find((t) => t.id === type).hasCashAmount ? 'Số tiền (đồng)' : 'Số lượng'
+  const cash = TYPES.find((t) => t.id === type).hasCashAmount
+  const amountLabel = cash ? 'Số tiền' : 'Số lượng'
   fireEvent.change(screen.getByLabelText(amountLabel), { target: { value: amount } })
+  // Demo 2026-11-25: số tiền mặt hiện dạng xxx.xxx.xxx đ
+  if (cash) expect(screen.getByLabelText(amountLabel)).toHaveValue(Number(amount).toLocaleString('vi-VN'))
   fireEvent.change(screen.getByLabelText('Mức tình trạng'), { target: { value: '11' } })
   fireEvent.change(screen.getByLabelText('Người giao'), { target: { value: 'OTHER_PERSON' } })
   fireEvent.change(screen.getByLabelText('Họ tên người giao'), { target: { value: 'Trần Văn Bình' } })
@@ -122,5 +125,28 @@ describe('IntakeForm (013 T011, US1)', () => {
     expect(await screen.findByText('Nhập giấy tờ của người giao.')).toBeInTheDocument()
     expect(screen.getByText('Chọn vị trí lưu giữ.')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/7/belongings')).toHaveLength(0)
+  })
+
+  // Demo 2026-11-25: người thân giao đồ chọn theo tên, không có ô mã, họ tên, giấy tờ
+  it('nguoiThanGiao_chonTheoTen_khongNhapMaHoTenGiayTo', async () => {
+    const api = mockRoutes()
+    api.on(
+      'GET',
+      '/residents/7/relationships',
+      json(200, [{ id: 1, familyMember: { id: 33, fullName: 'Trần Văn Bình' }, representative: true, rights: {} }]),
+    )
+    api.on('POST', '/residents/7/belongings', json(201, { id: 1 }))
+    const onDone = renderForm()
+    fill({ type: 1 })
+    fireEvent.change(screen.getByLabelText('Người giao'), { target: { value: 'FAMILY_MEMBER' } })
+    fireEvent.change(await screen.findByLabelText('Người thân giao'), { target: { value: '33' } })
+    expect(screen.queryByLabelText('Họ tên người giao')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Giấy tờ người giao')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Lưu/ }))
+    await waitFor(() => expect(onDone).toHaveBeenCalled())
+    expect(JSON.parse(api.calls('POST', '/residents/7/belongings')[0][1].body).giver).toEqual({
+      type: 'FAMILY_MEMBER',
+      id: 33,
+    })
   })
 })

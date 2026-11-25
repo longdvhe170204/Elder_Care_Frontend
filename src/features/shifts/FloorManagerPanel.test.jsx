@@ -35,3 +35,21 @@ it('FR_024_rutNganGiaoPhaiCoLyDo', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Xác nhận rút ngắn' }))
   await waitFor(() => expect(body?.reason).toBe('Nghỉ dài ngày, giao tạm người thay'))
 })
+// Demo 2026-11-25: chọn tầng, khu vực theo tên thay cho ô nhập mã; dòng giao hiện tên tầng
+const PLACES = { FLOOR: { 5: 'Tầng 5' }, AREA: { 9: 'Khu phục hồi' } }
+it('FR_024_chonTangKhuTheoTen_dongGiaoHienTen', async () => {
+  api.on('GET', '/floor-manager-assignments', json(200, [{ id: 8, staffId: 10, floorAreaId: 5, from: '2026-11-01' }]))
+  let body
+  api.on('POST', '/floor-manager-assignments', (_url, options) => {
+    body = JSON.parse(options.body)
+    return json(201, {})
+  })
+  render(<FloorManagerPanel canCreate places={PLACES} staff={[{ id: 10, fullName: '[Trưởng tầng kiểm thử]' }]} />)
+  expect(await screen.findByText(/Tầng 5/, { selector: 'p' })).toBeInTheDocument()
+  expect(screen.queryByText(/#5/)).toBeNull()
+  expect(screen.queryByLabelText('Mã tầng / khu vực được giao')).toBeNull()
+  fireEvent.change(screen.getByLabelText('Tầng / khu vực được giao'), { target: { value: '9' } })
+  fireEvent.change(screen.getByLabelText('Ngày bắt đầu giao'), { target: { value: '2026-11-01' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Giao Trưởng tầng' }))
+  await waitFor(() => expect(body).toEqual({ staffId: 10, floorAreaId: 9, from: '2026-11-01' }))
+})

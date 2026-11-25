@@ -186,7 +186,9 @@ describe('Yêu cầu mua sắm', () => {
     )
     const panel = await openRequest(table, 'Yêu cầu #42')
     fireEvent.click(within(panel).getByRole('button', { name: 'Ghi đã mua…' }))
-    fireEvent.change(within(panel).getByLabelText('Số tiền thực tế (đồng)'), { target: { value: '2500000' } })
+    fireEvent.change(within(panel).getByLabelText('Số tiền thực tế'), { target: { value: '2500000' } })
+    // Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ
+    expect(within(panel).getByLabelText('Số tiền thực tế')).toHaveValue('2.500.000')
     fireEvent.change(within(panel).getByLabelText('Ngày mua'), { target: { value: '2026-11-05' } })
     fireEvent.change(within(panel).getByLabelText('Nhà cung cấp'), { target: { value: 'Chợ Bến Thành' } })
     fireEvent.click(within(panel).getByRole('button', { name: 'Lưu đã mua' }))

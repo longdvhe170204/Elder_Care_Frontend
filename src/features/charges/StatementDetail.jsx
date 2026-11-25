@@ -273,7 +273,7 @@ export function StatementDetail({ id, Title, Description, onChanged, onDenied })
           )}
           {statement.status === 'OPEN' && can('PERIOD_CLOSING', 'UPDATE') && (
             <Button variant="outline" disabled={pending || stale} onClick={() => open('SUBMIT')}>
-              Gửi chốt
+              {statement.finalPeriod ? 'Chốt bảng kỳ cuối' : 'Gửi chốt'}
             </Button>
           )}
           {statement.status === 'AWAITING_FINALIZATION' && can('PERIOD_CLOSING', 'FINALIZE') && (

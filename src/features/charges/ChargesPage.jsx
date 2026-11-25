@@ -23,6 +23,7 @@ import { PurchaseRequests } from './PurchaseRequests'
 import { ManualCostForm } from './ManualCostForm'
 import { AccountingExport } from './AccountingExport'
 import { controlClass, money, periodLabel, STATEMENT_STATUS } from './chargeLabels'
+import { residentLabel, residentMatches, useResidentDirectory } from './useResidentDirectory'
 
 // 010 T019: chỉ đọc dữ liệu thật qua client sinh; không lập sẵn bảng, không tự chọn khoản.
 export function ChargesPage({ role }) {
@@ -33,6 +34,7 @@ export function ChargesPage({ role }) {
   const [rows, setRows] = useState(null)
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
+  const residents = useResidentDirectory()
   const [opened, setOpened] = useState(null)
   const [failure, setFailure] = useState(null)
   const [denied, setDenied] = useState(false)
@@ -94,8 +96,7 @@ export function ChargesPage({ role }) {
 
   if (denied || (status === 'ready' && !canView) || status === 'error') return <PermissionDeniedState label="Chi phí" />
   const visible = (rows ?? []).filter(
-    (row) =>
-      (filter === 'ALL' || row.status === filter) && (!search.trim() || String(row.residentId).includes(search.trim())),
+    (row) => (filter === 'ALL' || row.status === filter) && residentMatches(residents, row.residentId, search),
   )
   function changed(message) {
     setAnnouncement(message)
@@ -119,7 +120,7 @@ export function ChargesPage({ role }) {
         <PageHeader
           title={
             workspace === 'sources'
-              ? 'Lập khoản từ nguồn'
+              ? 'Gom chi phí phát sinh'
               : workspace === 'manual'
                 ? 'Lập khoản nhập tay'
                 : 'Biến động sau chốt'
@@ -158,7 +159,7 @@ export function ChargesPage({ role }) {
       )}
       {can('COST_ADJUSTMENT', 'CREATE') && (
         <div className="flex gap-3">
-          <Button onClick={() => setWorkspace('sources')}>Lập khoản từ nguồn</Button>
+          <Button onClick={() => setWorkspace('sources')}>Gom chi phí phát sinh</Button>
           <Button variant="outline" onClick={() => setWorkspace('manual')}>
             Lập khoản nhập tay
           </Button>
@@ -191,7 +192,7 @@ export function ChargesPage({ role }) {
             </select>
           </Field>
           <Field>
-            <FieldLabel htmlFor="charge-resident">Tìm theo mã người cao tuổi</FieldLabel>
+            <FieldLabel htmlFor="charge-resident">Tìm theo tên, mã hồ sơ</FieldLabel>
             <Input
               id="charge-resident"
               inputMode="numeric"
@@ -269,7 +270,9 @@ export function ChargesPage({ role }) {
                           >
                             Bảng #{row.id}
                           </Button>
-                          <p className="type-body-sm text-muted-foreground">Người cao tuổi mã {row.residentId}</p>
+                          <p className="type-body-sm text-muted-foreground">
+                            {residentLabel(residents, row.residentId)}
+                          </p>
                         </TableCell>
                         <TableCell>
                           {row.statementType === 'REGULAR' ? 'Bảng thường' : 'Bảng bổ sung'}

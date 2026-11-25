@@ -41,11 +41,23 @@ const OLD = {
   consentedAt: '2026-04-01T02:00:00Z',
   evidenceFileId: 71,
   status: 'WITHDRAWN',
-  withdrawal: { at: '2026-10-10T02:00:00Z', reason: 'Được thay thế bởi bản đồng ý mới', evidenceFileId: null, supersededById: 12 },
+  withdrawal: {
+    at: '2026-10-10T02:00:00Z',
+    reason: 'Được thay thế bởi bản đồng ý mới',
+    evidenceFileId: null,
+    supersededById: 12,
+  },
 }
+
+// Người thân có quan hệ Hiệu lực: chọn theo tên thay cho ô nhập mã (demo 2026-11-25)
+const MEMBERS = [
+  { id: 1, status: 'ACTIVE', familyMember: { id: 31, fullName: 'Trần Văn Minh' } },
+  { id: 2, status: 'ACTIVE', familyMember: { id: 41, fullName: 'Lê Thị Hoa' } },
+]
 
 function routes({ consents = [ACTIVE, OLD], forbidden = false } = {}) {
   api.on('GET', '/residents/5/consents', forbidden ? problem(403, 'PERMISSION_DENIED') : json(200, consents))
+  api.on('GET', '/residents/5/relationships', json(200, MEMBERS))
 }
 
 function open(props = {}) {
@@ -67,7 +79,7 @@ describe('ConsentTab', () => {
     const now = screen.getByRole('region', { name: 'Bản đồng ý hiện hành' })
     expect(within(now).getByText('Hiệu lực')).toBeInTheDocument()
     expect(within(now).getByText('Người cao tuổi')).toBeInTheDocument()
-    expect(within(now).getByText(/31, 32/)).toBeInTheDocument()
+    expect(await within(now).findByText('Trần Văn Minh, người thân mã 32')).toBeInTheDocument()
     const history = screen.getByRole('list', { name: 'Lịch sử bản đồng ý' })
     expect(within(history).getByText('Đã rút lại')).toBeInTheDocument()
     expect(within(history).getByText(/Được thay thế bởi bản đồng ý mới/)).toBeInTheDocument()
@@ -109,7 +121,7 @@ describe('ConsentTab', () => {
     expect(await screen.findByText('Không có quyền xem bản đồng ý')).toBeInTheDocument()
   })
 
-  it('ghi nhận bản của người cao tuổi: tải bản ký lên rồi gửi mã tệp, mã người thân và hai lựa chọn', async () => {
+  it('ghi nhận bản của người cao tuổi: tải bản ký lên rồi gửi mã tệp, người thân chọn theo tên và hai lựa chọn', async () => {
     routes({ consents: [] })
     api.on('POST', '/files', json(201, { fileId: 90 }))
     api.on('POST', '/residents/5/consents', json(201, ACTIVE))
@@ -118,8 +130,8 @@ describe('ConsentTab', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận bản đồng ý' }))
     choose('Bản ký đã scan', pdf())
-    fireEvent.change(screen.getByLabelText('Mã người thân được xem sức khỏe'), { target: { value: '31' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
+    expect(screen.queryByLabelText('Mã người thân được xem sức khỏe')).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Trần Văn Minh được xem sức khỏe' }))
     fireEvent.click(screen.getByRole('checkbox', { name: 'Đồng ý dùng hình ảnh' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản đồng ý' }))
 
@@ -170,22 +182,18 @@ describe('ConsentTab', () => {
     expect(api.calls('POST', '/residents/5/consents')).toHaveLength(0)
   })
 
-  it('thiếu bản ký hoặc mã người thân sai thì báo tại ô và không gọi backend', async () => {
+  it('thiếu bản ký thì báo tại ô và không gọi backend', async () => {
     routes({ consents: [] })
     open({ allowedCommands: ['RECORD_CONSENT'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận bản đồng ý' }))
-    fireEvent.change(screen.getByLabelText('Mã người thân được xem sức khỏe'), { target: { value: 'abc' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
-    expect(await screen.findByText('Mã người thân là số nguyên dương')).toBeInTheDocument()
-
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản đồng ý' }))
     expect(await screen.findByText('Chọn tệp bản ký đã scan')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/consents')).toHaveLength(0)
     expect(api.calls('POST', '/files')).toHaveLength(0)
   })
 
-  it('người đại diện theo pháp luật: bắt buộc mã người ký và đủ quyết định của Tòa án, gửi kèm tệp quyết định', async () => {
+  it('người đại diện theo pháp luật: bắt buộc chọn người ký và đủ quyết định của Tòa án, gửi kèm tệp quyết định', async () => {
     routes({ consents: [] })
     api.on('POST', '/files', () => json(201, { fileId: 100 + api.calls('POST', '/files').length }))
     api.on('POST', '/residents/5/consents', json(201, OLD))
@@ -195,12 +203,13 @@ describe('ConsentTab', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện theo pháp luật' }))
     choose('Bản ký đã scan', pdf())
     fireEvent.click(screen.getByRole('button', { name: 'Lưu bản đồng ý' }))
-    expect(await screen.findByText('Nhập mã người thân là người ký')).toBeInTheDocument()
+    expect(await screen.findByText('Chọn người thân là người ký')).toBeInTheDocument()
     expect(screen.getByText('Nhập số quyết định')).toBeInTheDocument()
     expect(screen.getByText('Chọn tệp quyết định của Tòa án')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/consents')).toHaveLength(0)
 
-    fireEvent.change(screen.getByLabelText('Mã người thân là người ký'), { target: { value: '41' } })
+    await screen.findByRole('option', { name: 'Lê Thị Hoa' })
+    fireEvent.change(screen.getByLabelText('Người thân là người ký'), { target: { value: '41' } })
     fireEvent.change(screen.getByLabelText('Số quyết định'), { target: { value: '12/2026/QĐ-TA' } })
     fireEvent.change(screen.getByLabelText('Ngày quyết định'), { target: { value: '2026-03-05' } })
     fireEvent.change(screen.getByLabelText('Tòa án'), { target: { value: 'Tòa án nhân dân quận 1' } })
@@ -211,12 +220,16 @@ describe('ConsentTab', () => {
     const body = JSON.parse(api.calls('POST', '/residents/5/consents')[0][1].body)
     expect(body.consenterType).toBe('LEGAL_REPRESENTATIVE')
     expect(body.consenterFamilyMemberId).toBe(41)
-    expect(body.courtDecision).toMatchObject({ number: '12/2026/QĐ-TA', date: '2026-03-05', court: 'Tòa án nhân dân quận 1' })
+    expect(body.courtDecision).toMatchObject({
+      number: '12/2026/QĐ-TA',
+      date: '2026-03-05',
+      court: 'Tòa án nhân dân quận 1',
+    })
     expect(body.courtDecision.fileId).toBeGreaterThan(0)
     expect(body.evidenceFileId).not.toBe(body.courtDecision.fileId)
   })
 
-  it('backend từ chối người ký thay không có quan hệ: báo tại ô mã người ký', async () => {
+  it('backend từ chối người ký thay không có quan hệ: báo tại ô người ký', async () => {
     routes({ consents: [] })
     api.on('POST', '/files', json(201, { fileId: 5 }))
     api.on('POST', '/residents/5/consents', problem(409, 'INVALID_SIGNER'))
@@ -225,7 +238,8 @@ describe('ConsentTab', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận bản đồng ý' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện theo pháp luật' }))
     choose('Bản ký đã scan', pdf())
-    fireEvent.change(screen.getByLabelText('Mã người thân là người ký'), { target: { value: '99' } })
+    await screen.findByRole('option', { name: 'Trần Văn Minh' })
+    fireEvent.change(screen.getByLabelText('Người thân là người ký'), { target: { value: '31' } })
     fireEvent.change(screen.getByLabelText('Số quyết định'), { target: { value: '1' } })
     fireEvent.change(screen.getByLabelText('Ngày quyết định'), { target: { value: '2026-03-05' } })
     fireEvent.change(screen.getByLabelText('Tòa án'), { target: { value: 'TA' } })
@@ -273,7 +287,11 @@ describe('ConsentTab', () => {
 
   it('tải bản ký đi qua backend (có cookie phiên), mở nội dung ở thẻ mới; không có quyền thì báo', async () => {
     routes()
-    api.on('GET', '/files/90', () => new Response(new Blob(['%PDF']), { status: 200, headers: { 'Content-Type': 'application/pdf' } }))
+    api.on(
+      'GET',
+      '/files/90',
+      () => new Response(new Blob(['%PDF']), { status: 200, headers: { 'Content-Type': 'application/pdf' } }),
+    )
     api.on('GET', '/files/71', problem(403, 'PERMISSION_DENIED'))
     const createObjectURL = vi.fn(() => 'blob:ban-ky')
     vi.stubGlobal('URL', Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() }))

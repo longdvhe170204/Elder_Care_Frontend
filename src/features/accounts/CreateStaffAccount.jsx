@@ -17,6 +17,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { ROLE_LABELS, STAFF_ROLES } from './accountLabels'
 import { TemporaryPasswordNotice } from './TemporaryPasswordNotice'
+import { StaffField } from '@/common/StaffField'
 
 // Tạo tài khoản nhân viên (002 T035; US2 #1 → #3; FR-002 → FR-004a, FR-006; hợp đồng POST /accounts).
 // Mã hồ sơ gõ tay tới khi 008 có danh sách hồ sơ nhân viên (chủ dự án duyệt 2026-10-20). Ít nhất một vai trò.
@@ -88,22 +89,17 @@ export function CreateStaffAccount({ onCreated, onClose }) {
         ) : (
           <form onSubmit={submit} noValidate className="flex flex-col gap-4">
             <FieldGroup>
-              <Field data-invalid={!!errors.staffId || undefined}>
-                <FieldLabel htmlFor="create-account-staff">Mã hồ sơ nhân viên</FieldLabel>
-                <Input
-                  id="create-account-staff"
-                  inputMode="numeric"
-                  value={staffId}
-                  onChange={(e) => setStaffId(e.target.value)}
-                  aria-invalid={!!errors.staffId || undefined}
-                  className="h-10 max-w-48 tabular-nums"
-                />
-                {errors.staffId ? (
-                  <FieldError>{errors.staffId}</FieldError>
-                ) : (
-                  <FieldDescription>Mã trên hồ sơ nhân viên.</FieldDescription>
-                )}
-              </Field>
+              {/* Demo 2026-11-25: chọn theo tên trong người chưa có tài khoản; không đọc được danh sách thì nhập mã */}
+              <StaffField
+                id="create-account-staff"
+                label="Nhân viên"
+                fallbackLabel="Mã hồ sơ nhân viên"
+                value={staffId}
+                onChange={setStaffId}
+                error={errors.staffId}
+                hint="Chỉ liệt kê nhân viên đang làm việc chưa có tài khoản."
+                filter={(s) => s.accountId == null}
+              />
               <Field data-invalid={!!errors.username || undefined}>
                 <FieldLabel htmlFor="create-account-username">Tên đăng nhập</FieldLabel>
                 <Input

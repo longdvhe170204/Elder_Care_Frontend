@@ -1,5 +1,6 @@
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Ô dùng chung trong các form của 017: ô chọn native và ô nhập (cùng kiểu với ô của 013, 001).
 
@@ -23,6 +24,22 @@ export function SelectField({ id, label, value, onChange, options, error, placeh
           </option>
         ))}
       </select>
+      {error ? <FieldError>{error}</FieldError> : hint && <FieldDescription>{hint}</FieldDescription>}
+    </Field>
+  )
+}
+
+export function MoneyField({ id, label, value, onChange, error, hint, allowNegative }) {
+  return (
+    <Field data-invalid={!!error || undefined}>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <MoneyInput
+        id={id}
+        value={value}
+        onChange={onChange}
+        allowNegative={allowNegative}
+        aria-invalid={!!error || undefined}
+      />
       {error ? <FieldError>{error}</FieldError> : hint && <FieldDescription>{hint}</FieldDescription>}
     </Field>
   )

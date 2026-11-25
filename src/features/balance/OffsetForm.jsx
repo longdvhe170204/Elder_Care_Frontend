@@ -5,7 +5,7 @@ import { Field, FieldGroup } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
-import { TextField } from './BalanceFields'
+import { MoneyField } from './BalanceFields'
 
 // Cấn trừ tiền cọc vào số dư âm (017 T027; FR-015): Kế toán thực hiện, không cần duyệt; máy chủ tạo cặp hai giao dịch
 // liên kết cùng số tiền và kiểm điều kiện (hồ sơ kết thúc lưu trú hoặc việc sau qua đời, bảng kỳ cuối đã chốt, không vượt
@@ -45,14 +45,13 @@ export function OffsetForm({ residentId, onDone }) {
   return (
     <form className="flex flex-col gap-4" onSubmit={submit} noValidate>
       <FieldGroup>
-        <TextField
+        <MoneyField
           id="offset-amount"
           label="Số tiền cấn trừ"
-          inputMode="numeric"
           value={amount}
           onChange={setAmount}
           error={error}
-          hint="Không vượt số dư cọc và phần còn nợ. Đơn vị đồng."
+          hint="Không vượt số dư cọc và phần còn nợ."
         />
         <Field>
           <label htmlFor="offset-note" className="type-label">
