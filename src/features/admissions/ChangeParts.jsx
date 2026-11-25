@@ -4,6 +4,7 @@ import {
   getApprovalRequestsById,
   getBeds,
   getContracts,
+  getContractsByIdContent,
   getRoomTypes,
   getRooms,
   getResidents,
@@ -542,6 +543,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [residents, setResidents] = useState([])
   const [residentId, setResidentId] = useState(request?.residentId ? String(request.residentId) : '')
   const [contractId, setContractId] = useState(request ? String(request.contractId) : '')
+  const [currentContent, setCurrentContent] = useState(null)
   const [contractSearch, setContractSearch] = useState('')
   const [residentSearch, setResidentSearch] = useState('')
   const [types, setTypes] = useState(request?.changeTypes ?? [])
@@ -606,6 +608,29 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   }, [wantsBed, emptyBeds])
 
   const contract = contracts.find((c) => String(c.id) === contractId)
+  useEffect(() => {
+    let live = true
+    if (!contract?.id) {
+      setCurrentContent(null)
+      return
+    }
+    getContractsByIdContent({ path: { id: contract.id }, query: { date: isoDate() } })
+      .then(({ data }) => {
+        if (live) setCurrentContent(data ?? null)
+      })
+      .catch(() => {
+        if (live) setCurrentContent(null)
+      })
+    return () => {
+      live = false
+    }
+  }, [contract?.id])
+  // Nội dung hiệu lực tại hôm nay (sau các phụ lục đã áp dụng); fallback về hợp đồng gốc nếu chưa tải xong
+  const effectiveContract = contract
+    ? currentContent?.contractId === contract.id && currentContent.content
+      ? { ...contract, ...currentContent.content }
+      : contract
+    : undefined
   const filteredContracts = contracts.filter((c) => {
     if (String(c.id) === contractId) return true
     if (!contractSearch.trim()) return true
@@ -620,16 +645,16 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     const resName = r.personalInfo?.fullName ?? `Mã ${r.id}`
     return plain(resName).includes(kw)
   })
-  const contractServiceIds = new Set((contract?.services ?? []).map((s) => s.serviceId))
+  const contractServiceIds = new Set((effectiveContract?.services ?? []).map((s) => s.serviceId))
   // Dấu thuộc gói theo hợp đồng hiện hành (R19): chỉ dòng có trong hợp đồng mang dấu thuộc gói
-  const inPackageIds = new Set((contract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
-  const subjectId = contract?.residentId ?? (residentId ? Number(residentId) : null)
+  const inPackageIds = new Set((effectiveContract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
+  const subjectId = effectiveContract?.residentId ?? (residentId ? Number(residentId) : null)
 
   // Loại phòng (FR-043l, R22): chỉ các loại phòng khác loại phòng của hợp đồng và còn giường trống; chuyển sang giường cùng
   // loại phòng dùng Chuyển giường trực tiếp (7.4), không lập yêu cầu
   const knowsRoomTypes = !!roomTypeOf && Object.keys(roomTypeOf).length > 0
   const roomTypeOfBed = (bed) => roomTypeOf?.[bed?.location?.roomId]?.id ?? null
-  const currentRoomTypeId = contract?.roomTypeId ?? null
+  const currentRoomTypeId = effectiveContract?.roomTypeId ?? null
   const otherRoomTypes = roomTypes.filter(
     (t) => t.id !== currentRoomTypeId && (emptyBeds ?? []).some((b) => roomTypeOfBed(b) === t.id),
   )
@@ -660,11 +685,30 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     }
   }, [subjectId])
 
-  const assessedLevel = assessedLevelFor(assessment, contract)
+  const assessedLevel = assessedLevelFor(assessment, effectiveContract)
   const careLevelBlocked = !assessedLevel && !assessmentHidden
 
   const set = (patch) => setValue((v) => ({ ...v, ...patch }))
-  const toggleType = (type) => setTypes((t) => (t.includes(type) ? t.filter((x) => x !== type) : [...t, type]))
+  const toggleType = (type) => {
+    const adding = !types.includes(type)
+    setTypes((t) => (adding ? [...t, type] : t.filter((x) => x !== type)))
+    if (
+      adding &&
+      type === 'ARRIVAL_SCHEDULE' &&
+      !value.arrivalSchedule?.length &&
+      effectiveContract?.residenceType === 'DAY_CARE' &&
+      effectiveContract?.arrivalSchedule?.length > 0
+    ) {
+      set({
+        arrivalSchedule: effectiveContract.arrivalSchedule.map((r) => ({
+          ...(r.dayOfWeek != null ? { dayOfWeek: r.dayOfWeek } : {}),
+          ...(r.date ? { date: r.date } : {}),
+          arrivalTime: String(r.arrivalTime ?? '').slice(0, 5),
+          departureTime: String(r.departureTime ?? '').slice(0, 5),
+        })),
+      })
+    }
+  }
   const pickedServices = value.services ?? []
   const lineOf = (id) => pickedServices.find((s) => s.serviceId === id)
   const toggleService = (id) =>
@@ -681,7 +725,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
 
   // Mức chăm sóc mới luôn là mức theo đánh giá (FR-043j), không chọn tay
   const effectiveValue = assessedLevel && !assessmentHidden ? { ...value, careLevel: assessedLevel } : value
-  const changeErrors = validateChange({ types: activeTypes, value: effectiveValue, date, contract })
+  const changeErrors = validateChange({ types: activeTypes, value: effectiveValue, date, contract: effectiveContract })
   const errors = {
     contract: seesContracts ? !contractId && 'Chọn hợp đồng' : !residentId && 'Chọn người cao tuổi',
     ...changeErrors,
@@ -690,7 +734,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   }
   const shown = (key) => (submitted ? errors[key] || null : null)
   const companions = activeTypes.includes('RESIDENCE_TYPE')
-    ? requiredCompanions(contract?.residenceType, value.residenceType)
+    ? requiredCompanions(effectiveContract?.residenceType, value.residenceType)
     : []
   // Sửa nháp: giường đã chọn có thể không còn Trống, vẫn hiện để không mất giá trị
   const candidateBeds = knowsRoomTypes
@@ -879,7 +923,12 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 className={SELECT}
                 value={contractId}
                 disabled={editing}
-                onChange={(e) => setContractId(e.target.value)}
+                onChange={(e) => {
+                  setContractId(e.target.value)
+                  setCurrentContent(null)
+                  setNewRoomTypeId(null)
+                  setValue({})
+                }}
               >
                 <option value="">
                   {filteredContracts.length === 0
@@ -894,14 +943,14 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
-              {contract && (
+              {effectiveContract && (
                 <FieldDescription>
                   {[
-                    contract.residenceType && `Hiện tại: ${labelOf(RESIDENCE_TYPES, contract.residenceType)}`,
-                    contract.careLevel && `mức ${labelOf(CARE_LEVELS, contract.careLevel)}`,
-                    contract.startDate && `bắt đầu ${formatDate(contract.startDate)}`,
-                    (contract.currentEndDate ?? contract.endDate) &&
-                    `kết thúc ${formatDate(contract.currentEndDate ?? contract.endDate)}`,
+                    effectiveContract.residenceType && `Hiện tại: ${labelOf(RESIDENCE_TYPES, effectiveContract.residenceType)}`,
+                    effectiveContract.careLevel && `mức ${labelOf(CARE_LEVELS, effectiveContract.careLevel)}`,
+                    effectiveContract.startDate && `bắt đầu ${formatDate(effectiveContract.startDate)}`,
+                    (effectiveContract.currentEndDate ?? effectiveContract.endDate) &&
+                    `kết thúc ${formatDate(effectiveContract.currentEndDate ?? effectiveContract.endDate)}`,
                   ]
                     .filter(Boolean)
                     .join(', ')}
@@ -948,11 +997,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <>
               <Choices
                 label="Loại lưu trú mới"
-                options={RESIDENCE_TYPES}
+                options={RESIDENCE_TYPES.filter(([k]) => k !== effectiveContract?.residenceType)}
                 value={value.residenceType ?? ''}
                 onChange={(v) => {
                   // Tự chọn loại kèm bắt buộc của loại lưu trú mới, bỏ loại kèm của lựa chọn trước (FR-041)
-                  setTypes((t) => withCompanions(t, contract?.residenceType, value.residenceType, v))
+                  setTypes((t) => withCompanions(t, effectiveContract?.residenceType, value.residenceType, v))
                   set({ residenceType: v })
                 }}
                 error={shown('residenceType')}
@@ -970,7 +1019,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <>
               <Choices
                 label="Mức chăm sóc mới"
-                options={CARE_LEVELS}
+                options={CARE_LEVELS.filter(([k]) => k !== effectiveContract?.careLevel)}
                 value={value.careLevel ?? ''}
                 onChange={(v) => set({ careLevel: v })}
                 error={shown('careLevel')}
@@ -1073,7 +1122,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               </FieldDescription>
               {(() => {
                 // FR-043k (Q-426): dòng đang có (mọi loại) để bớt; chỉ 4 loại để thêm, nhóm theo loại
-                const { removable, addGroups } = serviceChoices(catalog, contract?.services)
+                const { removable, addGroups } = serviceChoices(catalog, effectiveContract?.services)
                 const row = (s) => {
                   const line = lineOf(s.id)
                   const inContract = contractServiceIds.has(s.id)
@@ -1157,11 +1206,16 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 onClick={() => {
                   const rows = value.arrivalSchedule ?? []
                   const last = rows[rows.length - 1]
-                  // Gợi ý dòng mới: ngày kế tiếp, cùng giờ với dòng trước
+                  const used = new Set(rows.map((r) => r.dayOfWeek))
+                  const start = last ? (last.dayOfWeek % 7) + 1 : ARRIVAL_ROW.dayOfWeek
+                  const nextDay =
+                    Array.from({ length: 7 }, (_, idx) => ((start - 1 + idx) % 7) + 1).find((d) => !used.has(d)) ??
+                    start
+                  // Gợi ý dòng mới: thứ chưa dùng tiếp theo, cùng giờ với dòng trước
                   set({
                     arrivalSchedule: [
                       ...rows,
-                      last ? { ...last, dayOfWeek: (last.dayOfWeek % 7) + 1 } : { ...ARRIVAL_ROW },
+                      last ? { ...last, dayOfWeek: nextDay } : { ...ARRIVAL_ROW, dayOfWeek: nextDay },
                     ],
                   })
                 }}
