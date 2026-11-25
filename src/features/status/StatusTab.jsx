@@ -32,6 +32,8 @@ import { STATUS_LABELS } from '../residents/residentLabels'
 import { uploadProblem } from '../wishes/wishUtils'
 import { OpinionBlock } from '../admissions/ApplicationParts'
 import { OPEN_STATUSES, vietnamIso } from '../admissions/admissionLabels'
+import { AbsenceFields } from './AbsenceFields'
+import { EMPTY_ABSENCE, absenceDetails, absenceErrors } from './absenceDetails'
 import {
   BASIS_KINDS,
   COMMAND_LABELS,
@@ -127,6 +129,9 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
   // (residencyEndingId, effectiveAt; thời điểm phải trong ngày kết thúc dự kiến, 004 FR-066)
   const [ending, setEnding] = useState(null)
   const [endAt, setEndAt] = useState('')
+  // Cho tạm vắng: details của 004 (test BF-12 2026-11-24; trước đây chỉ gửi lý do nên lệnh luôn bị chặn)
+  const [absence, setAbsence] = useState(EMPTY_ABSENCE)
+  const grantsAbsence = command === 'GRANT_TEMPORARY_ABSENCE'
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -172,6 +177,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
 
   function detailsOf(evidenceFileId) {
     if (command === 'END_RESIDENCY') return { residencyEndingId: ending.id, effectiveAt: vietnamIso(endAt) }
+    if (grantsAbsence) return absenceDetails(absence, vietnamIso)
     if (command === 'TRANSFER_OUT') {
       const kind = BASIS_KINDS.find((k) => k.value === basisKind)
       const value = basisText.trim()
@@ -186,6 +192,7 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
     const next = {}
     if (!reason.trim()) next.reason = reasonField(command, status).error
     if (command === 'END_RESIDENCY' && !endAt) next.endAt = 'Nhập thời điểm kết thúc'
+    if (grantsAbsence) Object.assign(next, absenceErrors(absence))
     if (command === 'TRANSFER_OUT') {
       const kind = BASIS_KINDS.find((k) => k.value === basisKind)
       const value = basisText.trim()
@@ -235,7 +242,8 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
     }
   }
 
-  const unmet = conditions ?? []
+  // Xem trước điều kiện không mang details, nên điều kiện "bản ghi đón" của Cho tạm vắng do form thỏa; backend kiểm lại khi gửi
+  const unmet = (conditions ?? []).filter((c) => !(grantsAbsence && c.code === 'ABS_PICKUP_RECORD'))
   const blocked = conditions === null || unmet.length > 0 || (command === 'END_RESIDENCY' && !ending)
 
   return (
@@ -286,6 +294,8 @@ function CommandForm({ residentId, status, command, onCancel, onDone }) {
         )}
         {errors.reason && <FieldError>{errors.reason}</FieldError>}
       </Field>
+
+      {grantsAbsence && <AbsenceFields residentId={residentId} value={absence} onChange={setAbsence} errors={errors} />}
 
       {command === 'END_RESIDENCY' && (
         <Field data-invalid={!!errors.endAt || undefined}>

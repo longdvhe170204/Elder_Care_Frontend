@@ -192,6 +192,27 @@ describe('Phản hồi của người thân', () => {
     expect(screen.queryByRole('button', { name: 'Giao lại' })).not.toBeInTheDocument()
   })
 
+  // Test BF-12 (2026-11-24): phản hồi Đóng cho biết đóng lúc nào và cách đóng (FR-064)
+  it('FR_064_dong_hienThoiDiemVaCachDong', async () => {
+    api.on(
+      'GET',
+      '/feedback/91',
+      json(
+        200,
+        detail(
+          { ...COMPLAINT, status: 'CLOSED', overdue: false },
+          { closedAt: '2026-12-01T08:30:00Z', closeMethod: 'AUTO' },
+        ),
+      ),
+    )
+    const table = await renderPage()
+
+    fireEvent.click(within(table).getByRole('button', { name: /Phòng P201/ }))
+    expect(await screen.findByText('Đóng lúc')).toBeInTheDocument()
+    expect(screen.getByText('01/12/2026 15:30')).toBeInTheDocument()
+    expect(screen.getByText('Tự đóng khi người gửi không xác nhận trong thời hạn')).toBeInTheDocument()
+  })
+
   it('FR_060_giaoLai_chonNguoiTrongPhamVi', async () => {
     api.on(
       'GET',

@@ -106,6 +106,17 @@ describe('Người thân ở lại', () => {
     expect(within(staying).getByText('2')).toBeInTheDocument()
   })
 
+  // Test BF-12 (2026-11-24): Trưởng tầng không đọc được quan hệ người thân vẫn thấy họ tên người ở lại do backend trả
+  it('FR_040_truongTang_thayHoTenNguoiThan_khongPhaiMa', async () => {
+    permissions([['FAMILY_STAY', 'VIEW']])
+    api.on('GET', '/residents/5/relationships', problem(403, 'PERMISSION_DENIED'))
+    api.on('GET', '/family-stays', json(200, [{ ...PENDING, familyMemberName: 'Trần Văn Minh' }]))
+    const table = await renderPage('FLOOR_MANAGER')
+
+    expect(await within(table).findByRole('row', { name: /Trần Văn Minh/ })).toBeInTheDocument()
+    expect(within(table).queryByText(/Người thân mã/)).not.toBeInTheDocument()
+  })
+
   it('FR_040_truongTangXacNhan_kemYKienNguoiCungPhong', async () => {
     permissions([
       ['FAMILY_STAY', 'VIEW'],
@@ -219,9 +230,17 @@ describe('Người thân ở lại', () => {
       reason: 'Chưa xuất viện',
     })
 
+    // Test BF-12 (2026-11-24): kết thúc ghi được thời điểm thực tế (FR-045, hợp đồng `at`), không ghi ngay khi bấm
     fireEvent.click(within(detail).getByRole('button', { name: 'Kết thúc ở lại' }))
+    expect(api.calls('POST', '/family-stays/72/end')).toHaveLength(0)
+    fireEvent.change(within(detail).getByLabelText('Thời điểm kết thúc thực tế'), {
+      target: { value: '2026-11-03T07:30' },
+    })
+    fireEvent.click(within(detail).getByRole('button', { name: 'Xác nhận kết thúc' }))
     await waitFor(() => expect(api.calls('POST', '/family-stays/72/end')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/family-stays/72/end')[0][1].body)).toEqual({})
+    expect(JSON.parse(api.calls('POST', '/family-stays/72/end')[0][1].body)).toEqual({
+      at: '2026-11-03T07:30:00+07:00',
+    })
   })
 
   it('khongCoQuyenXem_hienKhongCoQuyen', async () => {

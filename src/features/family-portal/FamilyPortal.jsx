@@ -5,7 +5,7 @@ import { SessionGuard } from '@/common/SessionGuard'
 import { LeafMark } from '@/common/layout/AppShell'
 import { DEMO_PORTAL_CONFIRMATIONS, DEMO_PORTAL_NOTIFICATIONS, DEMO_PORTAL_VIEWER, DEMO_RESIDENTS } from '@/common/demoData'
 import { cn } from '@/lib/utils'
-import { AccountPage } from './AccountPage'
+import { AccountPage, LiveAccountPage } from './AccountPage'
 import { CareSchedulePage, LiveCareSchedulePage } from './CareSchedulePage'
 import { ContractPage } from './ContractPage'
 import { CostsPage } from './CostsPage'
@@ -21,6 +21,8 @@ import { LiveContractPage, LiveDepositsPage, LiveHealthPage, LiveTodayPage } fro
 import { LiveCostsPage } from './live/LiveCostsPage'
 import { LiveFeedbackPage } from './live/LiveFeedbackPage'
 import { LiveNotificationsPage } from './live/LiveNotificationsPage'
+import { FamilyRightsPage } from './live/FamilyRightsPage'
+import { LiveVisitsPage } from './live/LiveVisitsPage'
 
 // Cổng người thân, bản web (DESIGN.md 2.3): đăng nhập xong vào Trang chủ, là trang giới thiệu viện; các màn khác
 // đi từ đầu trang (máy tính) hoặc thanh dưới (điện thoại). Đầu trang cùng kiểu với trang giới thiệu: dải nền trời,
@@ -51,10 +53,23 @@ const PAGES = {
   contract: ContractPage,
   account: AccountPage,
   'care-schedule': CareSchedulePage,
+  'family-rights': FamilyRightsDemo,
+}
+
+// Bản mẫu không có backend: màn "Gia đình và quyền" chỉ chạy với phiên thật (đọc người thân, gửi yêu cầu qua API)
+function FamilyRightsDemo() {
+  return (
+    <p className="rounded-xl border bg-card p-4 type-body-sm text-muted-foreground">
+      Gia đình và quyền: bản mẫu chưa có dữ liệu minh họa. Đăng nhập bằng tài khoản người thân để xem và đề nghị
+      đổi quyền.
+    </p>
+  )
 }
 
 // Có phiên thật: ba màn đọc API của 012 (T028), Chi phí, số dư đọc số dư của 017 (T011), Đồ gửi đọc phần của 013 (T028)
-// do App.jsx truyền vào; Thông báo đọc hộp thông báo của 009; các màn khác còn bản mẫu tới task web của phần đó
+// do App.jsx truyền vào; Thông báo đọc hộp thông báo của 009; Tài khoản đọc người xem, đổi mật khẩu thật, Thăm đăng ký,
+// hủy lượt qua API của 012 (test BF-12);
+// các màn khác còn bản mẫu tới task web của phần đó
 const LIVE_PAGES = {
   today: LiveTodayPage,
   notifications: LiveNotificationsPage,
@@ -64,6 +79,9 @@ const LIVE_PAGES = {
   feedback: LiveFeedbackPage,
   deposits: LiveDepositsPage,
   'care-schedule': LiveCareSchedulePage,
+  account: LiveAccountPage,
+  'family-rights': FamilyRightsPage,
+  visits: LiveVisitsPage,
 }
 
 // Người xem từ phiên và người cao tuổi đầu tiên có quan hệ Hiệu lực (chọn người khi có nhiều người: chưa thiết kế,
@@ -76,11 +94,15 @@ function liveViewer(session, resident) {
     primaryContact: !!resident?.primaryContact,
     residentId: resident?.residentId,
     residentName: resident?.fullName,
+    relationship: resident?.relationship,
     perms: {
       health: !!r.VIEW_HEALTH,
       costs: !!r.VIEW_COSTS,
+      urgent: !!r.RECEIVE_URGENT,
       visits: !!r.REGISTER_VISITS,
+      // pickup mở mục Đồ gửi (FR-046b); pickupAllowed là đúng quyền "được phép đón" cho trang Tài khoản
       pickup: !!r.PICKUP_ALLOWED || !!resident?.canViewBelongings,
+      pickupAllowed: !!r.PICKUP_ALLOWED,
       serviceChange: !!r.REQUEST_SERVICES,
     },
   }
