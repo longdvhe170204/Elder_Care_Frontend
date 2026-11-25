@@ -142,6 +142,51 @@ describe('ResidentBalance (017)', () => {
     expect(await screen.findByText(/Đã gửi duyệt/)).toBeInTheDocument()
   })
 
+  // Demo 2026-11-25: số tiền hiện dạng 1.250.000 đ; nhập sai báo đỏ ngay tại ô, không đợi bấm gửi
+  it('soTien_dinhDangNhomNghin_vaBaoLoiNgayTaiO', async () => {
+    const api = setup()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
+    fill('Loại giao dịch', 'REFUND')
+    fill('Số tiền', '1250000')
+    expect(screen.getByLabelText('Số tiền')).toHaveValue('1.250.000')
+    fill('Số tiền', '0')
+    expect(screen.getByText('Nhập số tiền là số nguyên khác 0.')).toBeInTheDocument()
+    expect(screen.queryByText('Nhập lý do.')).not.toBeInTheDocument()
+    fill('Số tiền', '1.000.000')
+    expect(screen.queryByText('Nhập số tiền là số nguyên khác 0.')).not.toBeInTheDocument()
+    expect(api.calls('POST', '/balance-transactions')).toHaveLength(0)
+  })
+
+  // Demo 2026-11-25: hoàn số dư và tiền cọc một lần; nút Hoàn toàn bộ điền số còn hoàn được, vẫn sửa tay được
+  it('hoanSoDuVaCoc_nutHoanToanBo_guiHaiGiaoDich', async () => {
+    const api = setup({ balance: { ...BALANCE, balance: 800000, debt: null, status: 'NORMAL' } })
+    api.on('POST', '/balance-transactions', json(201, { id: 12, status: 'PENDING_APPROVAL' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
+    fill('Loại giao dịch', 'BOTH')
+    fireEvent.click(screen.getByRole('button', { name: 'Hoàn toàn bộ (3.800.000 đ)' }))
+    expect(screen.getByLabelText('Hoàn từ số dư')).toHaveValue('800.000')
+    expect(screen.getByLabelText('Hoàn từ tiền cọc')).toHaveValue('3.000.000')
+    fill('Hoàn từ tiền cọc', '2000000')
+    expect(screen.getByText('2.800.000 đ')).toBeInTheDocument()
+    fill('Phương thức', 'CASH')
+    fill('Lý do', 'Kết thúc lưu trú')
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
+    await waitFor(() => expect(api.calls('POST', '/balance-transactions')).toHaveLength(2))
+    const [a, b] = api.calls('POST', '/balance-transactions').map(([, init]) => init)
+    expect(JSON.parse(a.body)).toMatchObject({ type: 'REFUND', ledger: 'BALANCE', amount: 800000 })
+    expect(JSON.parse(b.body)).toMatchObject({ type: 'DEPOSIT_REFUND', ledger: 'DEPOSIT', amount: 2000000 })
+    expect(a.headers['Idempotency-Key']).not.toBe(b.headers['Idempotency-Key'])
+  })
+
+  it('hoanCoc_conNo_goiYDaTruNo', async () => {
+    setup()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
+    fill('Loại giao dịch', 'DEPOSIT_REFUND')
+    expect(screen.getByRole('button', { name: 'Hoàn toàn bộ (1.750.000 đ)' })).toBeInTheDocument()
+    fill('Loại giao dịch', 'REFUND')
+    expect(screen.queryByRole('button', { name: /Hoàn toàn bộ/ })).not.toBeInTheDocument()
+  })
+
   it('FR_014_hoanTien_batBuocPhuongThuc', async () => {
     const api = setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
@@ -225,6 +270,8 @@ describe('ResidentBalance (017)', () => {
     api.on('POST', '/residents/7/deposit-offsets', json(201, [{ id: 20 }, { id: 21 }]))
     fireEvent.click(await screen.findByRole('button', { name: 'Cấn trừ tiền cọc' }))
     fill('Số tiền cấn trừ', '1250000')
+    // Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ
+    expect(screen.getByLabelText('Số tiền cấn trừ')).toHaveValue('1.250.000')
     fireEvent.click(screen.getByRole('button', { name: 'Cấn trừ' }))
     await waitFor(() => expect(api.calls('POST', '/residents/7/deposit-offsets')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/residents/7/deposit-offsets')[0][1].body)).toEqual({ amount: 1250000 })

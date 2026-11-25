@@ -22,6 +22,8 @@ const ACTIONS = {
   UNCHECK: ['Xác nhận bỏ kiểm tra', 'Xác nhận bỏ kiểm tra'],
   CANCEL: ['Xác nhận hủy khoản', 'Xác nhận hủy khoản'],
 }
+// Demo 2026-11-25 (E, chờ chủ dự án duyệt): bảng kỳ cuối do Hành chính chốt luôn khi gửi
+const FINAL_SUBMIT = ['Xác nhận chốt bảng kỳ cuối', 'Xác nhận chốt bảng kỳ cuối']
 
 export function ChargeConfirmation({
   intent,
@@ -36,6 +38,7 @@ export function ChargeConfirmation({
   onClose,
 }) {
   const required = ['RETURN_STATEMENT', 'RETURN', 'UNCHECK', 'CANCEL'].includes(intent.operation) || intent.excess
+  const labels = intent.operation === 'SUBMIT' && statement.finalPeriod ? FINAL_SUBMIT : ACTIONS[intent.operation]
   const reasonLabel = intent.excess ? 'Lý do chấp nhận phần vượt (bắt buộc)' : 'Lý do (bắt buộc)'
   return (
     <Dialog
@@ -46,9 +49,11 @@ export function ChargeConfirmation({
     >
       <DialogContent showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>{ACTIONS[intent.operation][0]}</DialogTitle>
+          <DialogTitle>{labels[0]}</DialogTitle>
           <DialogDescription>
             Bảng #{statement.id}, người cao tuổi mã {statement.residentId}. Hãy xem lại trước khi thực hiện.
+            {labels === FINAL_SUBMIT &&
+              ' Bảng được chốt luôn, Quản lý viện được báo. Khoản nhập tay, mua hộ, điều chỉnh phải được Quản lý viện duyệt trước; còn khoản như vậy chưa duyệt thì bảng chờ Quản lý viện chốt.'}
           </DialogDescription>
         </DialogHeader>
         <form
@@ -106,7 +111,7 @@ export function ChargeConfirmation({
               Quay lại
             </Button>
             <Button type="submit" disabled={pending || stale}>
-              {pending ? 'Đang thực hiện…' : ACTIONS[intent.operation][1]}
+              {pending ? 'Đang thực hiện…' : labels[1]}
             </Button>
           </DialogFooter>
         </form>

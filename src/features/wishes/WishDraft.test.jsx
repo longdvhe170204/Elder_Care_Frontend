@@ -72,7 +72,7 @@ describe('Nháp phiếu nguyện vọng cuối đời', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Lập bản Nháp tự khai' }))
     const form = screen.getByRole('form', { name: 'Bản Nháp phiếu nguyện vọng cuối đời' })
-    expect(within(form).queryByLabelText('Mã tài khoản Bác sĩ nhận định')).toBeNull()
+    expect(within(form).queryByLabelText('Bác sĩ nhận định')).toBeNull()
     fireEvent.click(within(form).getByRole('radio', { name: 'Ở lại viện chăm sóc giảm nhẹ' }))
     fireEvent.change(within(form).getByLabelText('Người cần liên hệ trước khi thực hiện'), {
       target: { value: 'Con trai 0901' },
@@ -95,6 +95,7 @@ describe('Nháp phiếu nguyện vọng cuối đời', () => {
     )
     api.on('GET', '/residents/5/end-of-life-wish-draft', json(200, DRAFT))
     api.on('POST', '/files', json(201, { fileId: 77 }))
+    api.on('GET', '/staff', json(200, [{ id: 2, accountId: 8, fullName: 'Phạm Văn Bác', position: 'Bác sĩ' }]))
     api.on('POST', '/residents/5/end-of-life-wish-draft/verify', json(200, { ...DRAFT, status: 'ACTIVE' }))
     render(
       <EndOfLifeWish residentId={5} status="ADMISSION_IN_PROGRESS" allowedCommands={['RECORD_END_OF_LIFE_WISH']} />,
@@ -107,7 +108,8 @@ describe('Nháp phiếu nguyện vọng cuối đời', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Kiểm chứng' }))
     const form = screen.getByRole('form', { name: 'Kiểm chứng phiếu nguyện vọng cuối đời' })
     expect(within(form).getByLabelText('Người cần liên hệ trước khi thực hiện')).toHaveValue('Con trai 0901')
-    fireEvent.change(within(form).getByLabelText('Mã tài khoản Bác sĩ nhận định'), { target: { value: '8' } })
+    await within(form).findByRole('option', { name: 'Phạm Văn Bác (Bác sĩ)' })
+    fireEvent.change(within(form).getByLabelText('Bác sĩ nhận định'), { target: { value: '8' } })
     fireEvent.click(
       within(within(form).getByRole('radiogroup', { name: /tự quyết được/ })).getByRole('radio', { name: 'Có' }),
     )

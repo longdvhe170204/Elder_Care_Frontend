@@ -24,6 +24,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { COMMANDS, ROLE_LABELS, STAFF_ROLES } from './accountLabels'
 import { TemporaryPasswordNotice } from './TemporaryPasswordNotice'
+import { StaffField } from '@/common/StaffField'
 
 // Một lệnh trên tài khoản nhân viên (002 T035; FR-003 → FR-006, FR-011, FR-012; hợp đồng /accounts/{id}/…).
 // Lý do bắt buộc. Khóa, mở khóa gửi If-Match là ETag tài khoản; gán, gỡ vai trò gửi ETag tập quyền
@@ -175,24 +176,15 @@ export function AccountCommandForm({ command, account, etag, onDone, onCancel, o
         )}
 
         {needsReplacement && (
-          <Field data-invalid={!!errors.replacement || undefined}>
-            <FieldLabel htmlFor="account-command-replacement">Mã hồ sơ người thay Phụ trách bộ phận</FieldLabel>
-            <Input
-              id="account-command-replacement"
-              inputMode="numeric"
-              value={replacement}
-              onChange={(e) => setReplacement(e.target.value)}
-              aria-invalid={!!errors.replacement || undefined}
-              className="h-10 max-w-48 tabular-nums"
-            />
-            {errors.replacement ? (
-              <FieldError>{errors.replacement}</FieldError>
-            ) : (
-              <FieldDescription>
-                Người này đang là Phụ trách bộ phận; người thay nhận nhiệm vụ cùng lúc khóa.
-              </FieldDescription>
-            )}
-          </Field>
+          <StaffField
+            id="account-command-replacement"
+            label="Người thay Phụ trách bộ phận"
+            fallbackLabel="Mã hồ sơ người thay Phụ trách bộ phận"
+            value={replacement}
+            onChange={setReplacement}
+            error={errors.replacement}
+            hint="Người này đang là Phụ trách bộ phận; người thay nhận nhiệm vụ cùng lúc khóa."
+          />
         )}
 
         <Field data-invalid={!!errors.reason || undefined}>

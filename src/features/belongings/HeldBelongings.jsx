@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getStaffByStaffIdHeldBelongings } from '@/api'
+import { getStaff, getStaffByStaffIdHeldBelongings } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -16,6 +16,17 @@ import { amountText, statusLabel } from './belongingLabels'
 export function HeldBelongings({ catalogs, initialStaffId = null }) {
   const [staffId, setStaffId] = useState(initialStaffId ? String(initialStaffId) : '')
   const [state, setState] = useState({ status: 'idle', items: [] })
+  // Demo 2026-11-25: chọn nhân viên theo tên; null là đang tải, rỗng là không xem được danh sách thì nhập mã như trước
+  const [staff, setStaff] = useState(null)
+  useEffect(() => {
+    let live = true
+    getStaff({ query: { status: 'WORKING' } })
+      .then(({ data }) => live && setStaff(data ?? []))
+      .catch(() => live && setStaff([]))
+    return () => {
+      live = false
+    }
+  }, [])
 
   const fetchHeld = useCallback(async (id) => {
     setState({ status: 'loading', items: [] })
@@ -42,16 +53,35 @@ export function HeldBelongings({ catalogs, initialStaffId = null }) {
     <Card>
       <CardContent className="flex flex-col gap-4">
         <form className="flex flex-wrap items-end gap-2" onSubmit={load}>
-          <label className="flex flex-col gap-1">
-            <span className="type-caption text-muted-foreground">Mã nhân viên</span>
-            <Input
-              aria-label="Mã nhân viên"
-              inputMode="numeric"
-              className="h-11 w-full sm:w-40"
-              value={staffId}
-              onChange={(e) => setStaffId(e.target.value)}
-            />
-          </label>
+          {staff?.length > 0 ? (
+            <label className="flex flex-col gap-1">
+              <span className="type-caption text-muted-foreground">Nhân viên</span>
+              <select
+                aria-label="Nhân viên"
+                className="h-11 w-full rounded-md border border-input bg-transparent px-3 sm:w-64"
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+              >
+                <option value="">Chọn nhân viên</option>
+                {staff.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.position ? `${s.fullName} (${s.position})` : s.fullName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="flex flex-col gap-1">
+              <span className="type-caption text-muted-foreground">Mã nhân viên</span>
+              <Input
+                aria-label="Mã nhân viên"
+                inputMode="numeric"
+                className="h-11 w-full sm:w-40"
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+              />
+            </label>
+          )}
           <Button type="submit" variant="outline" className="h-11">
             Xem đồ đang giữ
           </Button>

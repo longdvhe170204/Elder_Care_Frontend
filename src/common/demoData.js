@@ -180,15 +180,24 @@ export const DEMO_PORTAL_VIEWER = {
   relation: 'Con gái',
   representative: true,
   primaryContact: true,
-  perms: { health: true, costs: true, visits: true, pickup: true, serviceChange: true },
+  perms: {
+    health: true,
+    costs: true,
+    urgent: true,
+    visits: true,
+    pickup: true,
+    pickupAllowed: true,
+    serviceChange: true,
+  },
 }
 
-// Tên quyền theo 14.1; dùng ở trang Tài khoản để người thân biết mình được xem, làm gì.
+// Tên quyền theo 14.1 (đủ sáu quyền FR-007 của 012); dùng ở trang Tài khoản để người thân biết mình được xem, làm gì.
 export const DEMO_PORTAL_PERMISSION_LABELS = [
   ['health', 'Xem sức khỏe'],
   ['costs', 'Xem chi phí'],
+  ['urgent', 'Nhận thông báo khẩn'],
   ['visits', 'Đăng ký thăm'],
-  ['pickup', 'Được phép đón'],
+  ['pickupAllowed', 'Được phép đón'],
   ['serviceChange', 'Được yêu cầu thay đổi dịch vụ'],
 ]
 

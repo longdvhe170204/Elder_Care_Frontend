@@ -239,3 +239,29 @@ it('D13_phamViLichVaNguoiPhuTrachGhiBangTen', async () => {
   expect(await screen.findByRole('cell', { name: /phụ trách \[Nhân viên kiểm thử\]/ })).toBeInTheDocument()
   expect(screen.queryByText(/#5|#10/)).toBeNull()
 })
+
+it('D13_haiTangCungTenOHaiNhaGhiTenNhaDePhanBiet', async () => {
+  api.on(
+    'GET',
+    '/shift-schedules',
+    json(200, [
+      { id: 7, month: '2026-11', scopeType: 'FLOOR', scopeId: 1, status: 'PUBLISHED', version: 2, shifts: [] },
+      { id: 8, month: '2026-11', scopeType: 'FLOOR', scopeId: 4, status: 'PUBLISHED', version: 2, shifts: [] },
+      { id: 9, month: '2026-11', scopeType: 'FLOOR', scopeId: 6, status: 'PUBLISHED', version: 2, shifts: [] },
+    ]),
+  )
+  api.on(
+    'GET',
+    '/floors',
+    json(200, [
+      { id: 1, areaId: 1, code: 'T1', name: 'Tầng 1', buildingName: 'Nhà A' },
+      { id: 4, areaId: 2, code: 'T1', name: 'Tầng 1', buildingName: 'Nhà B' },
+      { id: 6, areaId: 2, code: 'T2', name: 'Tầng 2' },
+    ]),
+  )
+  api.on('GET', '/areas', json(200, [{ id: 2, code: 'KB', name: 'Khu B' }]))
+  render(<ShiftsPage initialMonth="2026-11" />)
+  expect(await screen.findByRole('option', { name: 'Tầng 1 (Nhà A), Đã công bố' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Tầng 1 (Nhà B), Đã công bố' })).toBeInTheDocument()
+  expect(screen.getByRole('option', { name: 'Tầng 2 (Khu B), Đã công bố' })).toBeInTheDocument()
+})

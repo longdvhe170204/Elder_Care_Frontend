@@ -21,6 +21,23 @@ describe('ProblemAlert', () => {
     expect(alert).toHaveTextContent('Chỉ Bác sĩ được hủy ghi nhận')
   })
 
+  // Góp ý test BF-12 (2026-11-25): backend gửi cùng một câu ở detail và điều kiện chưa thỏa, khối lỗi lặp câu hai lần
+  it('409_dieuKienTrungDetail_khongLapLai', () => {
+    const message = 'Phòng có từ hai giường đang dùng: ghi đã hỏi ý kiến người cùng phòng và kết quả'
+    render(
+      <ProblemAlert
+        problem={{
+          status: 409,
+          title: 'Chưa thực hiện được',
+          detail: message,
+          unmetConditions: [{ code: 'ROOMMATE_OPINION_REQUIRED', description: message }],
+        }}
+      />,
+    )
+    expect(screen.getAllByText(message)).toHaveLength(1)
+    expect(screen.queryByRole('list')).not.toBeInTheDocument()
+  })
+
   it('412_hienGiaTriMoiDoManTruyen', () => {
     render(
       <ProblemAlert

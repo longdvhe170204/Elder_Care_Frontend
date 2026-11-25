@@ -76,6 +76,7 @@ beforeEach(() => {
   )
   api.on('GET', '/residency-change-requests/12/resident-opinions', json(200, []))
   api.on('GET', '/staff', json(200, [{ id: 7, fullName: 'Lê Hành Chính' }]))
+  api.on('GET', '/me', json(200, { accountId: 3, type: 'STAFF', fullName: 'Bùi Thị Hạnh', staffId: 9010 }))
 })
 
 describe('BF-08 sửa đổi', () => {
@@ -85,6 +86,39 @@ describe('BF-08 sửa đổi', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Chờ ký \(1\)/ }))
     expect(await screen.findByText('Đã duyệt, chờ ký')).toBeInTheDocument()
     expect(screen.getByText(/ngày từ lúc duyệt/)).toBeInTheDocument()
+  })
+
+  // Góp ý test BF-12 (2026-11-25): loại "Loại phòng" (mã BED, Q-445) có giá trị trước là loại phòng của hợp đồng, sau là
+  // giường mới; trước đây hiện "—" và "Giường mã 9010"
+  it('Q445_loaiPhong_hienTenLoaiPhongCu_vaNhanGiuongMoi', async () => {
+    const bedChange = {
+      ...BASE,
+      status: 'DRAFT',
+      changeTypes: ['BED'],
+      previousValue: { roomTypeId: 9001 },
+      newValue: { newBedId: 9010 },
+    }
+    api.on('GET', '/residency-change-requests', json(200, [bedChange]))
+    api.on('GET', '/residency-change-requests/12', json(200, bedChange, { ETag: '"5"' }))
+    api.on(
+      'GET',
+      '/room-types',
+      json(200, [
+        { id: 9001, name: 'Phòng 2 giường' },
+        { id: 9002, name: 'Phòng 4 giường' },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/beds/9010',
+      json(200, { id: 9010, code: 'G2', location: { label: 'Khu A – Tầng 2 – Phòng 202 – G2', bedId: 9010 } }),
+    )
+    renderPage({ id: 12 })
+
+    const panel = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    expect(await within(panel).findByText('Phòng 2 giường')).toBeInTheDocument()
+    expect(await within(panel).findByText('Khu A – Tầng 2 – Phòng 202 – G2')).toBeInTheDocument()
+    expect(within(panel).queryByText(/Giường mã/)).not.toBeInTheDocument()
   })
 
   it('A_phuLucChoKy_nhanHoPhachTrongDanhSach_vaKhoiAlertTrongKhung', async () => {
@@ -193,14 +227,17 @@ describe('BF-08 sửa đổi', () => {
     expect(await screen.findByText(/ngày hiệu lực dời sang 28\/11\/2026/)).toBeInTheDocument()
   })
 
-  it('W2a_nguoiKyPhiaVien_khongXemDuocAi_baoKhongCoNhanVien', async () => {
+  // Góp ý test BF-12 (2026-11-25): Hành chính không xem được hồ sơ nhân viên khác vẫn chọn được chính mình ("Tôi")
+  it('W2a_nguoiKyPhiaVien_khongXemDuocAi_vanChonDuocToi', async () => {
     api.on('GET', '/staff', json(200, []))
     api.on('GET', '/residency-change-requests', json(200, [PENDING_SIGNATURE]))
     api.on('GET', '/residency-change-requests/12', json(200, PENDING_SIGNATURE, { ETag: '"5"' }))
     renderPage({ id: 12 })
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận phụ lục đã ký' }))
     const dialog = await screen.findByRole('dialog')
-    expect(await within(dialog).findByRole('option', { name: 'Không có nhân viên để chọn' })).toBeInTheDocument()
+    const me = await within(dialog).findByRole('option', { name: 'Tôi (Bùi Thị Hạnh)' })
+    expect(me).toHaveValue('9010')
+    expect(within(dialog).queryByRole('option', { name: 'Không có nhân viên để chọn' })).not.toBeInTheDocument()
     expect(within(dialog).getByText(/nhờ Quản lý viện ghi nhận/)).toBeInTheDocument()
   })
 

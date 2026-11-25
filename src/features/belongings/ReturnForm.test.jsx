@@ -25,19 +25,24 @@ const pdf = () => new File(['k'], 'chu-ky.pdf', { type: 'application/pdf' })
 describe('ReturnForm (013 T019, US3)', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('BR_M12_04_traNhieuDoChoNguoiThan_kemGiayToVaChuKy_traMotPhanTien', async () => {
+  // Demo 2026-11-25: bỏ ô số trả, họ tên, loại và số giấy tờ; họ tên người thân lấy theo hồ sơ đã chọn
+  it('BR_M12_04_traNhieuDoChoNguoiThan_chonTrongDanhSach_khongNhapGiayTo', async () => {
     const api = mockRoutes()
+    api.on(
+      'GET',
+      '/residents/7/relationships',
+      json(200, [{ id: 1, familyMember: { id: 33, fullName: 'Trần Văn Bình' }, representative: true, rights: {} }]),
+    )
     api.on('POST', '/files', json(201, { fileId: 700 }))
     api.on('POST', '/belongings/returns', json(201, { handovers: [], belongings: [] }))
     const onDone = renderForm()
     pick('Điện thoại Nokia')
     pick('Tiền mặt')
-    fireEvent.change(screen.getByLabelText('Số trả của Tiền mặt (trống là toàn bộ)'), { target: { value: '500000' } })
+    expect(screen.queryByLabelText(/Số trả của/)).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'FAMILY_MEMBER' } })
-    fireEvent.change(screen.getByLabelText('Mã người thân'), { target: { value: '33' } })
-    fireEvent.change(screen.getByLabelText('Họ tên người nhận'), { target: { value: 'Trần Văn Bình' } })
-    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'CCCD' } })
-    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: '001' } })
+    fireEvent.change(await screen.findByLabelText('Người thân nhận'), { target: { value: '33' } })
+    expect(screen.queryByLabelText('Họ tên người nhận')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Số giấy tờ')).not.toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Bản ký của người nhận'), { target: { files: [pdf()] } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu trả đồ' }))
 
@@ -47,20 +52,15 @@ describe('ReturnForm (013 T019, US3)', () => {
     expect(JSON.parse(init.body)).toEqual({
       items: [
         { belongingId: 90, version: 2, condition: { levelId: 11 } },
-        { belongingId: 92, version: 1, quantity: 500000, condition: { levelId: 11 } },
+        { belongingId: 92, version: 1, condition: { levelId: 11 } },
       ],
-      recipient: {
-        type: 'FAMILY_MEMBER',
-        familyMemberId: 33,
-        fullName: 'Trần Văn Bình',
-        presentedIdDocument: { type: 'CCCD', number: '001' },
-      },
+      recipient: { type: 'FAMILY_MEMBER', familyMemberId: 33, fullName: 'Trần Văn Bình' },
       signatureFileId: 700,
     })
   })
 
   // Hoàn thiện BF-14 (2026-11-23): chọn người thân nhận theo tên (người đại diện, người được phép đón), điền sẵn họ tên
-  it('FR_016_chonNguoiThanNhanTheoTen_dienSanHoTen', async () => {
+  it('FR_016_chonNguoiThanNhanTheoTen_chiNguoiCoQuyenNhan', async () => {
     const api = mockRoutes()
     api.on(
       'GET',
@@ -80,8 +80,7 @@ describe('ReturnForm (013 T019, US3)', () => {
     fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'FAMILY_MEMBER' } })
     const select = await screen.findByLabelText('Người thân nhận')
     expect(within(select).queryByRole('option', { name: /Ngô Văn Khác/ })).not.toBeInTheDocument()
-    fireEvent.change(select, { target: { value: '34' } })
-    expect(screen.getByLabelText('Họ tên người nhận')).toHaveValue('Lê Thị Đón')
+    expect(within(select).getByRole('option', { name: /Lê Thị Đón/ })).toBeInTheDocument()
   })
 
   // Test luồng BF-14 2026-11-23 (FR-020): người trả so được tình trạng lúc trả với lúc tiếp nhận
@@ -144,7 +143,11 @@ describe('ReturnForm (013 T019, US3)', () => {
 
   it('FR_016_biChan_hienLyDo_vaGhiLanChan', async () => {
     const api = mockRoutes()
-    api.on('GET', '/recipient-confirmations', json(200, []))
+    api.on(
+      'GET',
+      '/residents/7/relationships',
+      json(200, [{ id: 1, familyMember: { id: 33, fullName: 'Trần Văn Bình' }, representative: true, rights: {} }]),
+    )
     api.on('POST', '/files', json(201, { fileId: 701 }))
     api.on(
       'POST',
@@ -153,8 +156,8 @@ describe('ReturnForm (013 T019, US3)', () => {
     )
     const onDone = renderForm()
     pick('Điện thoại Nokia')
-    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'OTHER_PERSON' } })
-    fireEvent.change(screen.getByLabelText('Họ tên người nhận'), { target: { value: 'Lê Văn Nam' } })
+    fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'FAMILY_MEMBER' } })
+    fireEvent.change(await screen.findByLabelText('Người thân nhận'), { target: { value: '33' } })
     fireEvent.change(screen.getByLabelText('Bản ký của người nhận'), { target: { files: [pdf()] } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu trả đồ' }))
 
@@ -218,19 +221,17 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     })
   }
 
-  function otherPerson({ name = 'Lê Văn Nam', type = 'CCCD', number = '079000000102' } = {}) {
+  // Demo 2026-11-25: không còn ô họ tên, giấy tờ; người nhận khác lấy theo xác nhận được chọn
+  function otherPerson() {
     fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'OTHER_PERSON' } })
-    fireEvent.change(screen.getByLabelText('Họ tên người nhận'), { target: { value: name } })
-    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: type } })
-    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: number } })
   }
 
   const signRecipient = () =>
     fireEvent.change(screen.getByLabelText('Bản ký của người nhận'), { target: { files: [pdf()] } })
   const returnBodies = (api) => api.calls('POST', '/belongings/returns').map(([, init]) => JSON.parse(init.body))
 
-  it('FR_017_nguoiKhac_chonXacNhanKhopTuDanhSach_guiDungMa_khongGoMa', async () => {
-    const { api, onDone } = setupForm({ list: [conf(), conf({ id: 9, recipientIdDocument: 'CCCD 111' })] })
+  it('FR_017_nguoiKhac_chonXacNhanTuDanhSach_layHoTenGiayToTuXacNhan', async () => {
+    const { api, onDone } = setupForm({ list: [conf(), conf({ id: 9, belongingIds: [19] })] })
     pickId(18, 'Áo len')
     otherPerson()
     fireEvent.click(await screen.findByRole('button', { name: 'Chọn xác nhận mã 8' }))
@@ -243,7 +244,7 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     await waitFor(() => expect(onDone).toHaveBeenCalledWith('Đã trả đồ.'))
     expect(returnBodies(api)[0]).toMatchObject({
       items: [{ belongingId: 18, version: 1, condition: { levelId: 11 } }],
-      recipient: { type: 'OTHER_PERSON', fullName: 'Lê Văn Nam', presentedIdDocument: { type: 'CCCD', number: '079000000102' } },
+      recipient: { type: 'OTHER_PERSON', fullName: 'Lê Văn Nam', presentedIdDocument: { number: 'CCCD 079000000102' } },
       recipientConfirmationId: 8,
     })
   })
@@ -274,18 +275,15 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     expect(screen.getByText(/xác nhận chuyển Đã dùng/)).toHaveTextContent('mã 19')
   })
 
-  it('FR_017_doiGiayToSauKhiChon_boChon_vanChoLuuDeBackendChanVaGhiLanChan', async () => {
+  it('FR_017_nguoiKhacChuaChonXacNhan_baoLoiTaiCho_khongGui', async () => {
     const { api } = setupForm({ list: [conf()] })
     pickId(18, 'Áo len')
     otherPerson()
-    fireEvent.click(await screen.findByRole('button', { name: 'Chọn xác nhận mã 8' }))
-    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: '999' } })
-    expect(screen.queryByRole('button', { name: 'Chọn xác nhận mã 8' })).not.toBeInTheDocument()
-    expect(screen.getByText(/Chưa chọn xác nhận người nhận khác phù hợp/)).toBeInTheDocument()
+    await screen.findByRole('button', { name: 'Chọn xác nhận mã 8' })
     signRecipient()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu trả đồ' }))
-    await waitFor(() => expect(api.calls('POST', '/belongings/returns')).toHaveLength(1))
-    expect(returnBodies(api)[0].recipientConfirmationId).toBeUndefined()
+    expect(await screen.findByText('Chọn xác nhận người nhận khác.')).toBeInTheDocument()
+    expect(api.calls('POST', '/belongings/returns')).toHaveLength(0)
   })
 
   it('FR_017_xacNhanQuaHan_khongHienDuTrangThaiHieuLuc', async () => {
@@ -306,8 +304,8 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     pickId(18, 'Áo len')
     otherPerson()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập xác nhận ngay' }))
-    expect(screen.getByLabelText('Họ tên người nhận khác')).toHaveValue('Lê Văn Nam')
-    expect(screen.getByLabelText('Giấy tờ của người nhận')).toHaveValue('CCCD 079000000102')
+    fireEvent.change(screen.getByLabelText('Họ tên người nhận khác'), { target: { value: 'Lê Văn Nam' } })
+    fireEvent.change(screen.getByLabelText('Giấy tờ của người nhận'), { target: { value: 'CCCD 079000000102' } })
     fireEvent.change(screen.getByLabelText('Bản ký của người đại diện (không bắt buộc)'), {
       target: { files: [pdf()] },
     })
@@ -343,6 +341,8 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     pickId(18, 'Áo len')
     otherPerson()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập xác nhận ngay' }))
+    fireEvent.change(screen.getByLabelText('Họ tên người nhận khác'), { target: { value: 'Lê Văn Nam' } })
+    fireEvent.change(screen.getByLabelText('Giấy tờ của người nhận'), { target: { value: 'CCCD 079000000102' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lập xác nhận' }))
 
     expect(await screen.findByText(/Đang chờ xác nhận, chưa thể trả đồ/)).toHaveTextContent('mã 11')
@@ -365,6 +365,8 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     pickId(18, 'Áo len')
     otherPerson()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập xác nhận ngay' }))
+    fireEvent.change(screen.getByLabelText('Họ tên người nhận khác'), { target: { value: 'Lê Văn Nam' } })
+    fireEvent.change(screen.getByLabelText('Giấy tờ của người nhận'), { target: { value: 'CCCD 079000000102' } })
     fireEvent.change(screen.getByLabelText('Bản ký của người đại diện (không bắt buộc)'), {
       target: { files: [pdf()] },
     })
@@ -382,7 +384,13 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
   })
 
   it('Q_253_nguoiCaoTuoiNhanTienMat_chonXacNhanCuaNguoiCaoTuoi_guiMa', async () => {
-    const lan = conf({ id: 12, recipientIsResident: true, recipientName: 'Nguyễn Thị Lan', recipientIdDocument: 'CCCD 001', belongingIds: [92] })
+    const lan = conf({
+      id: 12,
+      recipientIsResident: true,
+      recipientName: 'Nguyễn Thị Lan',
+      recipientIdDocument: 'CCCD 001',
+      belongingIds: [92],
+    })
     const { api, onDone } = setupForm({ list: [conf(), lan] })
     pickId(92, 'Tiền mặt')
     fireEvent.change(screen.getByLabelText('Ảnh tình trạng của Tiền mặt'), {

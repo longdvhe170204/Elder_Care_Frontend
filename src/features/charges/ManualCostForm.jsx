@@ -7,6 +7,9 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { uploadFile } from '@/common/files'
 import { FileInput } from '@/common/FileInput'
+import { ResidentField } from './ResidentField'
+import { useResidentDirectory } from './useResidentDirectory'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Ngày theo giờ Việt Nam (NFR-11), dạng yyyy-MM-dd cho ô ngày.
 const todayIso = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
@@ -22,17 +25,16 @@ const empty = {
 }
 
 const fields = [
-  ['residentId', 'Mã người cao tuổi', { type: 'number', min: 1, step: 1 }],
   ['description', 'Mô tả', { type: 'text', maxLength: 2000 }],
   ['incurredOn', 'Ngày phát sinh', { type: 'date' }],
   ['quantity', 'Số lượng', { type: 'number', min: 0.001, step: 0.001 }],
   ['unit', 'Đơn vị', { type: 'text', maxLength: 40 }],
-  ['unitPrice', 'Đơn giá (đồng)', { type: 'number', min: 0, step: 1, max: 999999999999999 }],
 ]
 
 /** FR-021, BR-M11-04: khoản nhập tay chỉ cho mục ngoài danh mục; lý do bắt buộc; Quản lý viện duyệt từng khoản. */
 export function ManualCostForm({ today = todayIso(), onCreated = () => {} }) {
   const [values, setValues] = useState(empty)
+  const residents = useResidentDirectory()
   const [evidence, setEvidence] = useState(null)
   const uploaded = useRef(new Map())
   const [failure, setFailure] = useState(null)
@@ -87,6 +89,15 @@ export function ManualCostForm({ today = todayIso(), onCreated = () => {} }) {
         Chỉ lập cho mục không có trong danh mục dịch vụ, vật phẩm của viện, kể cả mục đã ngừng hiệu lực. Mục có trong
         danh mục thì lập theo bản ghi nguồn hoặc đề nghị mua hộ.
       </p>
+      <ResidentField
+        label="Người cao tuổi"
+        fallbackLabel="Mã người cao tuổi"
+        residents={residents}
+        required
+        disabled={pending}
+        value={values.residentId}
+        onChange={(value) => update('residentId', value)}
+      />
       {fields.map(([key, label, attributes]) => (
         <label key={key}>
           {label}
@@ -100,6 +111,16 @@ export function ManualCostForm({ today = todayIso(), onCreated = () => {} }) {
           />
         </label>
       ))}
+      <label>
+        Đơn giá
+        {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ */}
+        <MoneyInput
+          required
+          disabled={pending}
+          value={values.unitPrice}
+          onChange={(value) => update('unitPrice', value)}
+        />
+      </label>
       <label>
         Lý do
         <Textarea

@@ -106,13 +106,15 @@ describe('LiveNotificationsPage', () => {
           reason: 'Gia đình muốn xem chi phí',
           status: 'PENDING_CONFIRMATION',
           source: 'COUNTER',
+          familyMemberName: 'Trần Thu Hà',
         },
       ]),
     )
     api.on('POST', '/right-change-requests/4/confirm', json(200, {}))
     render(<LiveNotificationsPage viewer={{ ...viewer, residentId: 9 }} />)
 
-    expect(await screen.findByText('Bật quyền Xem chi phí cho người thân')).toBeInTheDocument()
+    // Test BF-12 (2026-11-24): thẻ nêu tên người thân bị tác động
+    expect(await screen.findByText('Bật quyền Xem chi phí cho Trần Thu Hà')).toBeInTheDocument()
     expect(screen.getByText('Lý do: Gia đình muốn xem chi phí')).toBeInTheDocument()
     const [call] = api.calls('GET', '/right-change-requests')
     expect(call[0]).toContain('residentId=9')
@@ -124,6 +126,48 @@ describe('LiveNotificationsPage', () => {
       /^[0-9a-f-]{36}$/,
     )
     expect(await screen.findByText('Đã xác nhận yêu cầu.')).toBeInTheDocument()
+  })
+
+  // Test BF-12 C-5 (2026-11-24): người đại diện xác nhận hoặc từ chối ngoại lệ đón trên cổng (FR-024, FR-050)
+  it('FR_024_nguoiDaiDien_xacNhanNgoaiLeDon_tuChoiBatBuocLyDo', async () => {
+    serve(notification({ eventType: 'COST_FINALIZED', title: 'Bảng chi phí tháng 10 đã chốt', sourceRecord: null }))
+    api.on('GET', '/right-change-requests', json(200, []))
+    api.on(
+      'GET',
+      '/pickup-exceptions',
+      json(200, [
+        {
+          id: 81,
+          residentId: 9,
+          fullName: 'Ngô Hàng Xóm',
+          idDocumentNumber: '0099',
+          relationship: 'Hàng xóm',
+          reason: 'Con gái ốm, nhờ hàng xóm đón',
+          status: 'PENDING_CONFIRMATION',
+          createdAt: '2026-11-05T08:00:00Z',
+        },
+      ]),
+    )
+    api.on('POST', '/pickup-exceptions/81/reject', json(200, {}))
+    render(<LiveNotificationsPage viewer={{ ...viewer, residentId: 9 }} />)
+
+    expect(await screen.findByText('Ngoại lệ đón: Ngô Hàng Xóm (Hàng xóm)')).toBeInTheDocument()
+    expect(screen.getByText('Giấy tờ: 0099')).toBeInTheDocument()
+    expect(screen.getByText('Lý do: Con gái ốm, nhờ hàng xóm đón')).toBeInTheDocument()
+    const [call] = api.calls('GET', '/pickup-exceptions')
+    expect(call[0]).toContain('residentId=9')
+    expect(call[0]).toContain('status=PENDING_CONFIRMATION')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Từ chối' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi từ chối' }))
+    expect(await screen.findByText('Nhập lý do từ chối')).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('Lý do từ chối'), { target: { value: 'Không quen người này' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi từ chối' }))
+    await waitFor(() => expect(api.calls('POST', '/pickup-exceptions/81/reject')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/pickup-exceptions/81/reject')[0][1].body)).toEqual({
+      reason: 'Không quen người này',
+    })
+    expect(await screen.findByText('Đã từ chối ngoại lệ đón.')).toBeInTheDocument()
   })
 
   it('FR_015_khongPhaiNguoiDaiDien_khongTaiYeuCau', async () => {
