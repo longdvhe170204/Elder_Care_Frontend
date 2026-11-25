@@ -98,6 +98,8 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
   const commands = alert.allowedCommands ?? []
   // Người xử lý (không phải Quản lý viện) tiếp nhận xong thường xử lý ngay: một nút làm cả hai lệnh (FR-029 giữ hai trạng thái)
   const handler = commands.includes('activate-emergency')
+  // Khẩn cấp: một chạm "Nhận" làm cả hai lệnh; cảnh báo thường giữ hai bước Tiếp nhận rồi Bắt đầu xử lý (BF-06)
+  const oneTap = handler && alert.level === 'CRITICAL'
   const chip = timeChip(alert)
   const reconcile = onReconcile && alert.type === 'CHUA_DOI_CHIEU' && alert.residentId && isOpen(alert)
   return (
@@ -148,10 +150,10 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
             variant={urgent ? 'default' : 'tonal'}
             className="h-11 px-5"
             disabled={busy}
-            onClick={() => onReceive(alert, handler)}
-            aria-label={handler ? `Nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
+            onClick={() => onReceive(alert, oneTap)}
+            aria-label={oneTap ? `Nhận và xử lý cảnh báo của ${name}` : `Tiếp nhận cảnh báo của ${name}`}
           >
-            {handler ? 'Nhận' : 'Tiếp nhận'}
+            {oneTap ? 'Nhận' : 'Tiếp nhận'}
           </Button>
         )}
         {commands.includes('start-handling') && (
@@ -266,18 +268,19 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   const followUpEvent = FOLLOW_UP_EVENTS.includes(alert.eventType)
   // Người xử lý (không phải Quản lý viện): tiếp nhận xong thường xử lý ngay nên một nút làm cả hai lệnh
   const handler = commands.includes('activate-emergency')
+  const oneTap = handler && alert.level === 'CRITICAL'
   // Thanh lệnh ở chân khung (đề xuất 2026-11-24, góp ý test demo): nút chính là bước kế tiếp của trạng thái; hai cách kết
   // thúc (chuyển sự cố, đóng) ngang nhau, người xử lý tự chọn. Kích hoạt khẩn cấp luôn thấy ở cảnh báo Khẩn cấp; lệnh ít
   // dùng gom vào "Thêm thao tác"
   const steps = [
     commands.includes('receive') && {
       icon: ClipboardCheck,
-      label: handler ? 'Nhận và xử lý' : 'Tiếp nhận',
-      hint: handler ? 'Báo đã nhận và bắt đầu xử lý ngay.' : 'Báo đã nhận để dừng leo thang.',
+      label: oneTap ? 'Nhận và xử lý' : 'Tiếp nhận',
+      hint: oneTap ? 'Báo đã nhận và bắt đầu xử lý ngay.' : 'Báo đã nhận để dừng leo thang.',
       primary: true,
       disabled: busy,
       onSelect: () =>
-        handler
+        oneTap
           ? quick(['receive', 'start-handling'], 'Đã tiếp nhận và bắt đầu xử lý')
           : quick('receive', 'Đã tiếp nhận cảnh báo'),
     },
