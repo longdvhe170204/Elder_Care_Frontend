@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -7,27 +7,39 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { Skeleton } from '@/components/ui/skeleton'
 import { problemOf } from '@/common/problem'
+import { cn } from '@/lib/utils'
+import { CHOICE_LABELS } from '@/features/wishes/wishLabels'
 import { HandoverStaffField } from './HandoverStaffField'
 import { vietnamIso } from './incidentView'
-import { downloadTransferDocument, loadTransferInfo, submitTransferOut } from './transferOut'
+import { loadTransferDocument, loadTransferInfo, submitTransferOut } from './transferOut'
 
 // Chuyển viện từ sự cố (007 T105; FR-049, FR-050; BR-M05-14, Q-383, Q-384): đơn vị nhận, thời điểm, người đi cùng; hỏi
 // người liên hệ chính trước khi phiếu điều trị có yêu cầu hỏi trước, chưa hỏi được thì ghi lý do (trừ sự cố Khẩn cấp).
 // Xong thì tải, in bản tóm tắt chuyển viện (PDF); in lại ghi nhật ký.
 
-export function TransferOutPanel({ incidentId, onDone, onCancel }) {
+export function TransferOutPanel({ incidentId, residentId = null, onDone, onCancel }) {
   const [info, setInfo] = useState(null)
   const [problem, setProblem] = useState(null)
   const [unit, setUnit] = useState('')
+  // Mặc định chuyển ngay: không gửi thời điểm, máy chủ lấy giờ của hệ thống (đề xuất 2026-11-23 lượt 3)
+  const [atNow, setAtNow] = useState(true)
   const [at, setAt] = useState('')
   const [returnAt, setReturnAt] = useState('')
-  const [companion, setCompanion] = useState('')
   const [staffId, setStaffId] = useState('')
+  const [staff, setStaff] = useState(null)
+  // Người đi cùng chọn từ nhân viên bàn giao, người liên hệ chính, hoặc ghi người khác; ghép thành một dòng như cũ
+  const [withStaff, setWithStaff] = useState(true)
+  const [withContact, setWithContact] = useState(false)
+  const [withOther, setWithOther] = useState(false)
+  const [other, setOther] = useState('')
   const [reached, setReached] = useState('')
   const [reason, setReason] = useState('')
+  const [includeWishes, setIncludeWishes] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [summaryId, setSummaryId] = useState(null)
+  // Giờ chuyển khác và dự kiến về ít khi cần: gập lại (đề xuất 2026-11-24, ít ô hơn khi khẩn)
+  const [more, setMore] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -40,11 +52,35 @@ export function TransferOutPanel({ incidentId, onDone, onCancel }) {
     }
   }, [incidentId])
 
-  async function download(reprint) {
+  const [pdfUrl, setPdfUrl] = useState(null)
+  const frameRef = useRef(null)
+
+  useEffect(() => {
+    if (!summaryId) return undefined
+    let url
+    loadTransferDocument(summaryId)
+      .then((u) => setPdfUrl((url = u)))
+      .catch((error) => setProblem(problemOf(error)))
+    return () => url && URL.revokeObjectURL(url)
+  }, [summaryId])
+
+  function printPdf() {
+    frameRef.current?.contentWindow?.print()
+  }
+
+  function savePdf() {
+    const link = document.createElement('a')
+    link.href = pdfUrl
+    link.download = `tom-tat-chuyen-vien-${summaryId}.pdf`
+    link.click()
+  }
+
+  async function reprint() {
     setBusy(true)
     setProblem(null)
     try {
-      await downloadTransferDocument(summaryId, reprint)
+      const url = await loadTransferDocument(summaryId, true)
+      setPdfUrl(url)
     } catch (error) {
       setProblem(problemOf(error))
     } finally {
@@ -54,16 +90,31 @@ export function TransferOutPanel({ incidentId, onDone, onCancel }) {
 
   if (summaryId) {
     return (
-      <div className="flex flex-col gap-4">
-        <h3 className="type-card-title">Đã chuyển viện</h3>
-        <p className="type-body-sm">Đã tạo bản tóm tắt chuyển viện. Tải hoặc in để giao cho đơn vị nhận.</p>
+      <div className="flex flex-col gap-3">
+        <h3 className="type-card-title">Đã chuyển viện · Xem trước phiếu</h3>
+        <p className="type-body-sm text-muted-foreground">
+          Kiểm tra phiếu rồi In hoặc Tải về. Thông tin sai thì sửa ở hồ sơ, không sửa trên phiếu.
+        </p>
         {problem && <ProblemAlert problem={problem} />}
+        {pdfUrl ? (
+          <iframe
+            ref={frameRef}
+            title="Phiếu tóm tắt chuyển viện"
+            src={pdfUrl}
+            className="h-[60vh] w-full rounded-md border"
+          />
+        ) : (
+          <Skeleton className="h-[60vh] w-full" />
+        )}
         <div className="flex flex-wrap gap-2">
-          <Button className="h-11" disabled={busy} onClick={() => download(false)}>
-            Tải bản tóm tắt
+          <Button className="h-11" disabled={!pdfUrl || busy} onClick={printPdf}>
+            In phiếu
           </Button>
-          <Button variant="outline" className="h-11" disabled={busy} onClick={() => download(true)}>
-            In lại
+          <Button variant="outline" className="h-11" disabled={!pdfUrl} onClick={savePdf}>
+            Tải về
+          </Button>
+          <Button variant="outline" className="h-11" disabled={busy} onClick={reprint}>
+            In lại (ghi nhật ký)
           </Button>
           <Button variant="ghost" className="h-11" onClick={onDone}>
             Xong
@@ -76,10 +127,23 @@ export function TransferOutPanel({ incidentId, onDone, onCancel }) {
   if (!info) return problem ? <ProblemAlert problem={problem} /> : <Skeleton className="h-40 w-full" />
 
   const askFirst = info.mustAskFirst
+  const contact = info.primaryContact
+  // BF-06 bước 10: xem nguyện vọng khi điều trị trước khi chuyển; bệnh viện ưu tiên thành nút điền nhanh
+  const preferred = info.treatmentWish?.preferredHospitals ?? []
+  const endOfLife = info.endOfLifeWish
+  const staffName = staff ? (staff.position ? `${staff.fullName} (${staff.position})` : staff.fullName) : null
+  const companion = [
+    withStaff && (staffName ? `${staffName}, nhân viên bàn giao` : staffId && 'Nhân viên bàn giao của viện'),
+    withContact && contact && `${contact.fullName} (người liên hệ chính)`,
+    withOther && other.trim(),
+  ]
+    .filter(Boolean)
+    .join('; ')
   const missing = {
     unit: !unit.trim(),
-    at: !at,
-    companion: !companion.trim(),
+    at: !atNow && !at,
+    companion: !companion,
+    other: withOther && !other.trim(),
     staff: !staffId,
     reached: askFirst && !reached,
     reason: askFirst && reached === 'no' && !info.isEmergency && !reason.trim(),
@@ -94,12 +158,13 @@ export function TransferOutPanel({ incidentId, onDone, onCancel }) {
     try {
       const body = {
         transferUnit: unit.trim(),
-        transferAt: vietnamIso(at),
-        companion: companion.trim(),
+        ...(atNow ? {} : { transferAt: vietnamIso(at) }),
+        companion,
         handoverStaffId: Number(staffId),
         ...(returnAt ? { expectedReturnAt: vietnamIso(returnAt) } : {}),
         ...(askFirst ? { requiredContactReached: reached === 'yes' } : {}),
         ...(askFirst && reached === 'no' && reason.trim() ? { notAskedFirstReason: reason.trim() } : {}),
+        ...(includeWishes ? { includeWishes: true } : {}),
       }
       const summary = await submitTransferOut(incidentId, body)
       setSummaryId(summary.id)
@@ -110,46 +175,180 @@ export function TransferOutPanel({ incidentId, onDone, onCancel }) {
     }
   }
 
-  const contact = info.primaryContact
-
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <h3 className="type-card-title">Chuyển viện</h3>
-      {contact && (
-        <p className="type-body-sm text-muted-foreground">
-          Người liên hệ chính: {contact.fullName} {contact.phoneNumber ?? ''}
-        </p>
+      {(endOfLife || contact) && (
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-lg bg-muted/60 px-4 py-3 type-body-sm">
+          {endOfLife && (
+            <>
+              <dt className="text-muted-foreground">Nguyện vọng cuối đời</dt>
+              <dd>
+                <strong>{CHOICE_LABELS[endOfLife.choice] ?? endOfLife.choice}</strong>
+                {endOfLife.note && `. ${endOfLife.note}`}
+              </dd>
+            </>
+          )}
+          {contact && (
+            <>
+              <dt className="text-muted-foreground">Người liên hệ chính</dt>
+              <dd>
+                {contact.fullName}
+                {contact.phoneNumber && (
+                  <>
+                    {', '}
+                    <a className="type-label text-primary underline" href={`tel:${contact.phoneNumber}`}>
+                      {contact.phoneNumber}
+                    </a>
+                  </>
+                )}
+              </dd>
+            </>
+          )}
+        </dl>
       )}
-      <Field data-invalid={(submitted && missing.unit) || undefined}>
-        <FieldLabel htmlFor="transfer-unit">Đơn vị nhận</FieldLabel>
-        <Input id="transfer-unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
-        {submitted && missing.unit && <FieldError>Nhập đơn vị nhận</FieldError>}
-      </Field>
-      <Field data-invalid={(submitted && missing.at) || undefined}>
-        <FieldLabel htmlFor="transfer-at">Thời điểm chuyển</FieldLabel>
-        <Input id="transfer-at" type="datetime-local" value={at} onChange={(e) => setAt(e.target.value)} />
-        {submitted && missing.at && <FieldError>Chọn thời điểm chuyển</FieldError>}
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="transfer-return">Dự kiến về (nếu có)</FieldLabel>
-        <Input
-          id="transfer-return"
-          type="datetime-local"
-          value={returnAt}
-          onChange={(e) => setReturnAt(e.target.value)}
+      <div className="flex flex-col gap-4">
+        <Field data-invalid={(submitted && missing.unit) || undefined}>
+          <FieldLabel htmlFor="transfer-unit">Bệnh viện nhận</FieldLabel>
+          {preferred.length > 0 && (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Bệnh viện ưu tiên theo nguyện vọng">
+              {preferred.map((h) => (
+                <Button
+                  key={h.name}
+                  type="button"
+                  variant="outline"
+                  title={h.address ?? undefined}
+                  aria-pressed={unit === h.name}
+                  className={cn('h-10 px-3', unit === h.name && 'border-2 border-primary bg-accent')}
+                  onClick={() => setUnit(h.name)}
+                >
+                  {h.name}
+                </Button>
+              ))}
+            </div>
+          )}
+          <Input id="transfer-unit" value={unit} onChange={(e) => setUnit(e.target.value)} />
+          {submitted && missing.unit && <FieldError>Nhập bệnh viện nhận</FieldError>}
+        </Field>
+        <HandoverStaffField
+          id="transfer-handover-staff"
+          residentId={residentId}
+          value={staffId}
+          onChange={setStaffId}
+          onPick={setStaff}
+          invalid={submitted && missing.staff}
         />
-      </Field>
-      <Field data-invalid={(submitted && missing.companion) || undefined}>
-        <FieldLabel htmlFor="transfer-companion">Người đi cùng (họ tên, quan hệ hoặc chức danh)</FieldLabel>
-        <Input id="transfer-companion" value={companion} onChange={(e) => setCompanion(e.target.value)} />
-        {submitted && missing.companion && <FieldError>Nhập người đi cùng</FieldError>}
-      </Field>
-      <HandoverStaffField
-        id="transfer-handover-staff"
-        value={staffId}
-        onChange={setStaffId}
-        invalid={submitted && missing.staff}
-      />
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <Button
+            type="button"
+            variant="link"
+            className="h-9 self-start px-0"
+            aria-expanded={more || !atNow}
+            onClick={() => setMore((v) => !v)}
+          >
+            {more || !atNow ? 'Ẩn giờ chuyển, dự kiến về' : 'Lúc: ngay bây giờ · Đổi giờ, thêm dự kiến về'}
+          </Button>
+          {(more || !atNow) && (
+            <div className="flex flex-col gap-4">
+              <Field data-invalid={(submitted && missing.at) || undefined}>
+                <FieldLabel>Thời điểm chuyển</FieldLabel>
+                <ToggleGroup
+                  variant="outline"
+                  value={[atNow ? 'now' : 'pick']}
+                  onValueChange={(n) => n[0] && setAtNow(n[0] === 'now')}
+                  className="flex flex-wrap"
+                  aria-label="Thời điểm chuyển"
+                >
+                  <ToggleGroupItem value="now" className="h-11 px-4">
+                    Ngay bây giờ
+                  </ToggleGroupItem>
+                  <ToggleGroupItem value="pick" className="h-11 px-4">
+                    Chọn giờ khác
+                  </ToggleGroupItem>
+                </ToggleGroup>
+                {!atNow && (
+                  <Input
+                    id="transfer-at"
+                    type="datetime-local"
+                    aria-label="Giờ chuyển"
+                    value={at}
+                    onChange={(e) => setAt(e.target.value)}
+                  />
+                )}
+                {submitted && missing.at && <FieldError>Chọn giờ chuyển</FieldError>}
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="transfer-return">Dự kiến về (nếu có)</FieldLabel>
+                <Input
+                  id="transfer-return"
+                  type="datetime-local"
+                  value={returnAt}
+                  onChange={(e) => setReturnAt(e.target.value)}
+                />
+              </Field>
+            </div>
+          )}
+        </div>
+        <fieldset
+          className="flex flex-col gap-2 sm:col-span-2"
+          aria-invalid={(submitted && (missing.companion || missing.other)) || undefined}
+        >
+          <legend className="type-label mb-1">Người đi cùng</legend>
+          <label className="flex min-h-11 items-center gap-3">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={withStaff}
+              onChange={(e) => setWithStaff(e.target.checked)}
+            />
+            <span>Nhân viên bàn giao đi cùng{staffName ? `: ${staffName}` : ' (chọn ở trên)'}</span>
+          </label>
+          {contact && (
+            <label className="flex min-h-11 items-center gap-3">
+              <input
+                type="checkbox"
+                className="size-5"
+                checked={withContact}
+                onChange={(e) => setWithContact(e.target.checked)}
+              />
+              <span>
+                {contact.fullName} (người liên hệ chính){contact.phoneNumber ? `, ${contact.phoneNumber}` : ''}
+              </span>
+            </label>
+          )}
+          <label className="flex min-h-11 items-center gap-3">
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={withOther}
+              onChange={(e) => setWithOther(e.target.checked)}
+            />
+            <span>Người khác</span>
+          </label>
+          {withOther && (
+            <Input
+              id="transfer-companion-other"
+              aria-label="Người đi cùng khác: họ tên, quan hệ hoặc chức danh"
+              placeholder="Họ tên, quan hệ hoặc chức danh"
+              value={other}
+              onChange={(e) => setOther(e.target.value)}
+            />
+          )}
+          {submitted && missing.other && <FieldError>Nhập người đi cùng khác</FieldError>}
+          {submitted && !missing.other && missing.companion && <FieldError>Chọn người đi cùng</FieldError>}
+        </fieldset>
+        <div className="flex flex-col gap-1.5 sm:pt-7">
+          <Field orientation="horizontal">
+            <input
+              id="transfer-include-wishes"
+              type="checkbox"
+              className="size-5"
+              checked={includeWishes}
+              onChange={(e) => setIncludeWishes(e.target.checked)}
+            />
+            <FieldLabel htmlFor="transfer-include-wishes">In kèm nguyện vọng điều trị</FieldLabel>
+          </Field>
+        </div>
+      </div>
       {askFirst && (
         <>
           <Field data-invalid={(submitted && missing.reached) || undefined}>
@@ -187,7 +386,7 @@ export function TransferOutPanel({ incidentId, onDone, onCancel }) {
       {problem && <ProblemAlert problem={problem} />}
       <div className="flex flex-wrap gap-2">
         <Button type="submit" className="h-11" disabled={busy}>
-          Xác nhận chuyển viện
+          Chuyển viện và in phiếu
         </Button>
         <Button type="button" variant="ghost" className="h-11" onClick={onCancel}>
           Quay lại

@@ -116,16 +116,16 @@ export function ReconciliationPanel({
       <ProblemAlert problem={problem} />
 
       {sources?.admissionMedications !== undefined && (
-        <section aria-labelledby="admission-medications" className="flex flex-col gap-1 rounded-xl border bg-card p-4">
-          <h3 id="admission-medications" className="type-label">
+        <section aria-labelledby="admission-medications" className="flex flex-col gap-1.5 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+          <h3 id="admission-medications" className="text-sm font-bold text-slate-900 dark:text-slate-100">
             Thuốc đang dùng khi tiếp nhận (hồ sơ sức khỏe ban đầu)
           </h3>
-          <p className="type-body-sm whitespace-pre-line">
+          <p className="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
             {sources.admissionMedications === null
               ? 'Chưa đọc được hồ sơ sức khỏe ban đầu.'
               : sources.admissionMedications || 'Hồ sơ chưa ghi thuốc đang dùng.'}
           </p>
-          <p className="type-caption text-muted-foreground">
+          <p className="text-[11px] text-slate-400">
             Chỉ để đối chiếu; người thực hiện tự thêm một dòng cho mỗi thuốc.
           </p>
         </section>
@@ -135,7 +135,7 @@ export function ReconciliationPanel({
         <CreateTicket residentId={residentId} defaultReason={defaultReason} onDone={changed} />
       )}
       {!working && tickets.length === 0 && (
-        <p className="rounded-xl border bg-card px-4 py-3 type-body-sm">{`${residentName} chưa có phiếu đối chiếu thuốc.`}</p>
+        <p className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-6 text-center text-xs text-slate-500 shadow-xs dark:border-slate-800 dark:bg-slate-900">{`${residentName} chưa có phiếu đối chiếu thuốc.`}</p>
       )}
 
       {selectedId && (
@@ -151,14 +151,14 @@ export function ReconciliationPanel({
       )}
 
       {others.length > 0 && (
-        <section aria-labelledby="other-reconciliations" className="flex flex-col gap-2">
-          <h3 id="other-reconciliations" className="type-label">
+        <section aria-labelledby="other-reconciliations" className="flex flex-col gap-2 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+          <h3 id="other-reconciliations" className="text-xs font-bold uppercase tracking-wider text-slate-500">
             Phiếu khác
           </h3>
           <ul className="flex flex-col gap-2">
             {others.map((t) => (
               <li key={t.id}>
-                <Button variant="outline" className="h-11" onClick={() => setSelectedId(t.id)}>
+                <Button variant="outline" className="h-10 w-full justify-start rounded-xl text-xs font-semibold" onClick={() => setSelectedId(t.id)}>
                   {`Xem phiếu #${t.id}, ${REASONS[t.reason] ?? t.reason}, ${STATUS[t.status] ?? t.status}`}
                 </Button>
               </li>
@@ -183,8 +183,8 @@ function CreateTicket({ residentId, defaultReason, onDone }) {
   if (!open)
     return (
       <div>
-        <Button className="h-11" onClick={() => setOpen(true)}>
-          <Plus aria-hidden="true" />
+        <Button className="h-10 gap-1.5 rounded-xl bg-[#24496f] hover:bg-[#193552] text-white px-4 text-xs font-bold shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5" onClick={() => setOpen(true)}>
+          <Plus className="size-4" aria-hidden="true" />
           Lập phiếu đối chiếu
         </Button>
       </div>
@@ -207,14 +207,14 @@ function CreateTicket({ residentId, defaultReason, onDone }) {
   }
 
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-xl border bg-card p-4">
-      <h3 className="type-card-title">Lập phiếu đối chiếu thuốc</h3>
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs dark:border-slate-800 dark:bg-slate-900">
+      <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">Lập phiếu đối chiếu thuốc</h3>
       <ProblemAlert problem={problem} />
       <Field>
-        <FieldLabel htmlFor="reconciliation-reason">Lý do lập phiếu</FieldLabel>
+        <FieldLabel htmlFor="reconciliation-reason" className="text-xs font-semibold">Lý do lập phiếu</FieldLabel>
         <select
           id="reconciliation-reason"
-          className={select}
+          className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs shadow-xs focus:border-sky-500 focus:outline-none dark:border-slate-800 dark:bg-slate-900"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         >
@@ -226,7 +226,7 @@ function CreateTicket({ residentId, defaultReason, onDone }) {
         </select>
       </Field>
       <Field data-invalid={(submitted && detailMissing) || undefined}>
-        <FieldLabel htmlFor="reconciliation-detail">
+        <FieldLabel htmlFor="reconciliation-detail" className="text-xs font-semibold">
           {reason === 'PROFESSIONAL_REQUEST' ? 'Chi tiết lý do (bắt buộc)' : 'Chi tiết lý do (không bắt buộc)'}
         </FieldLabel>
         <Textarea
@@ -235,14 +235,15 @@ function CreateTicket({ residentId, defaultReason, onDone }) {
           value={detail}
           onChange={(e) => setDetail(e.target.value)}
           aria-invalid={(submitted && detailMissing) || undefined}
+          className="rounded-xl text-xs"
         />
         {submitted && detailMissing && <FieldError>Nhập chi tiết lý do</FieldError>}
       </Field>
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" className="h-11" disabled={saving}>
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Button type="submit" className="h-10 rounded-xl bg-[#24496f] hover:bg-[#193552] text-white px-4 text-xs font-bold shadow-xs" disabled={saving}>
           Lập phiếu
         </Button>
-        <Button type="button" variant="outline" className="h-11" onClick={() => setOpen(false)}>
+        <Button type="button" variant="outline" className="h-10 rounded-xl px-4 text-xs font-semibold" onClick={() => setOpen(false)}>
           Hủy
         </Button>
       </div>
@@ -444,16 +445,16 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
               onCollect={() => setCollecting(index)}
             />
           ))}
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="h-11" onClick={addLine}>
-              <Plus aria-hidden="true" />
+          <div className="flex flex-wrap gap-2.5 pt-1">
+            <Button variant="outline" className="h-9.5 gap-1.5 rounded-xl border-slate-200 bg-white px-3.5 text-xs font-bold text-slate-800 shadow-xs hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200" onClick={addLine}>
+              <Plus className="size-4" aria-hidden="true" />
               Thêm dòng
             </Button>
-            <Button variant="outline" className="h-11" onClick={save} disabled={saving}>
+            <Button variant="outline" className="h-9.5 rounded-xl border-slate-200 bg-white px-3.5 text-xs font-bold text-slate-800 shadow-xs hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200" onClick={save} disabled={saving}>
               Lưu các dòng
             </Button>
             {allowed('GUI_XAC_NHAN') && (
-              <Button className="h-11" onClick={submitForConfirmation} disabled={saving}>
+              <Button className="h-9.5 rounded-xl bg-[#24496f] hover:bg-[#193552] text-white px-4 text-xs font-bold shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5" onClick={submitForConfirmation} disabled={saving}>
                 Gửi xác nhận
               </Button>
             )}
@@ -464,14 +465,14 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
       )}
 
       {(allowed('TRA_LAI') || allowed('XAC_NHAN')) && !action && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2.5 pt-1">
           {allowed('XAC_NHAN') && (
-            <Button className="h-11" onClick={() => setAction('confirm')}>
+            <Button className="h-10 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white px-4 text-xs font-bold shadow-xs transition-all hover:shadow-md hover:-translate-y-0.5" onClick={() => setAction('confirm')}>
               Xác nhận phiếu
             </Button>
           )}
           {allowed('TRA_LAI') && (
-            <Button variant="outline" className="h-11" onClick={() => setAction('return')}>
+            <Button variant="outline" className="h-10 rounded-xl border-amber-300 bg-amber-50/50 text-amber-900 px-4 text-xs font-bold shadow-xs hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200" onClick={() => setAction('return')}>
               Trả lại phiếu
             </Button>
           )}

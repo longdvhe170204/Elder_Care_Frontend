@@ -46,7 +46,8 @@ function HourColumn({ children }) {
   )
 }
 
-export function CareChecklistPage({ shiftId: initialShiftId, role }) {
+// taskId: mở thẳng một việc (từ cảnh báo quá hạn, sự cố)
+export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role }) {
   const { status, can } = usePermissions()
   const permitted = can('TASK_CHECKLIST', 'VIEW') && role !== 'DOCTOR'
   const [shiftId, setShiftId] = useState(initialShiftId ? String(initialShiftId) : '')
@@ -56,7 +57,7 @@ export function CareChecklistPage({ shiftId: initialShiftId, role }) {
   const [failure, setFailure] = useState(null)
   const [stale, setStale] = useState(false)
   const [filter, setFilter] = useState('all')
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(taskId)
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [openHours, setOpenHours] = useState([])

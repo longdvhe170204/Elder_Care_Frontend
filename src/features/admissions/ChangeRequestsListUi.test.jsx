@@ -76,7 +76,7 @@ describe('ChangeRequestsPage: danh sách', () => {
     api.on('GET', '/residency-change-requests', () => new Promise(() => {}))
     renderPage()
     expect(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' })).toBeInTheDocument()
-    expect(screen.getByRole('searchbox', { name: 'Tìm theo mã yêu cầu, mã hợp đồng' })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: 'Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng' })).toBeInTheDocument()
   })
 
   it('bang_coCotSoThuTu', async () => {
@@ -90,7 +90,7 @@ describe('ChangeRequestsPage: danh sách', () => {
     renderPage()
     await openDoneTab()
     await screen.findByText('Yêu cầu mã 11')
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm theo mã yêu cầu, mã hợp đồng' }), {
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng' }), {
       target: { value: '32' },
     })
     expect(screen.queryByText('Yêu cầu mã 11')).not.toBeInTheDocument()
@@ -101,7 +101,7 @@ describe('ChangeRequestsPage: danh sách', () => {
     renderPage()
     await openDoneTab()
     await screen.findByText('Yêu cầu mã 11')
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm theo mã yêu cầu, mã hợp đồng' }), {
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng' }), {
       target: { value: '999' },
     })
     expect(screen.getByText('Không có yêu cầu nào trong nhóm này.')).toBeInTheDocument()
@@ -113,7 +113,7 @@ describe('ChangeRequestsPage: danh sách', () => {
     await openDoneTab()
     await screen.findByText('Yêu cầu mã 11')
     fireEvent.click(screen.getByRole('button', { name: 'Lọc' }))
-    fireEvent.click(within(screen.getByRole('group', { name: 'Lọc theo loại thay đổi' })).getByRole('button', { name: 'Giường' }))
+    fireEvent.click(within(screen.getByRole('group', { name: 'Lọc theo loại thay đổi' })).getByRole('button', { name: 'Loại phòng' }))
     expect(screen.queryByText('Yêu cầu mã 11')).not.toBeInTheDocument()
     expect(screen.getByText('Yêu cầu mã 10')).toBeInTheDocument()
     fireEvent.change(screen.getByLabelText('Ngày hiệu lực'), { target: { value: '2026-11-20' } })
@@ -192,5 +192,48 @@ describe('ChangeRequestView: form xem chi tiết', () => {
     const view = await openDetail()
     const footer = within(view).getByRole('group', { name: 'Lệnh của yêu cầu' })
     expect(within(footer).getByRole('button', { name: 'Tải lại' })).toBeInTheDocument()
+  })
+})
+
+describe('ChangeRequestsPage: tìm theo tên và phân trang', () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    ...APPLIED,
+    approvalRequestId: 100 + i,
+    residentId: i < 2 ? 6 : 5,
+  }))
+
+  beforeEach(() => {
+    api.on('GET', '/residency-change-requests', json(200, many))
+    api.on('GET', '/residents/6', json(200, { id: 6, personalInfo: { fullName: 'Trần Văn Bình' } }))
+  })
+
+  const viewButtons = () => screen.queryAllByRole('button', { name: /^Xem yêu cầu mã/ })
+
+  it('moiTrang10YeuCau_nutSauChuyenTrang', async () => {
+    renderPage()
+    await openDoneTab()
+    await screen.findByText('1–10 trên 12 yêu cầu')
+    expect(viewButtons()).toHaveLength(10)
+    expect(screen.getByRole('button', { name: 'Trước' })).toBeDisabled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sau' }))
+    expect(await screen.findByText('11–12 trên 12 yêu cầu')).toBeInTheDocument()
+    expect(viewButtons()).toHaveLength(2)
+    expect(screen.getByText('Trang 2 / 2')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sau' })).toBeDisabled()
+  })
+
+  it('timTheoTen_khongPhanBietDau_vaVeTrangDau', async () => {
+    renderPage()
+    await openDoneTab()
+    await screen.findByText('1–10 trên 12 yêu cầu')
+    fireEvent.click(screen.getByRole('button', { name: 'Sau' }))
+    await screen.findByText('Trang 2 / 2')
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Tìm theo tên người cao tuổi, mã yêu cầu, mã hợp đồng' }), {
+      target: { value: 'binh' },
+    })
+    expect(await screen.findAllByRole('button', { name: /^Xem yêu cầu mã/ })).toHaveLength(2)
+    expect(screen.queryByText(/Trang \d \/ \d/)).not.toBeInTheDocument()
   })
 })

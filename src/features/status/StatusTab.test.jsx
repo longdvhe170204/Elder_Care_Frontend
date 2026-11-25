@@ -80,6 +80,9 @@ async function submitReady(name) {
 
 const result = (status) => json(200, { status, history: HISTORY[0], warnings: [] })
 
+// Ô lý do có nhãn theo từng lệnh (góp ý test demo 2026-11-23): Lý do …, Ghi chú …, Tình trạng khi về …
+const REASON = /Lý do|Ghi chú|Tình trạng khi về/
+
 describe('StatusTab', () => {
   it('hiện trạng thái hiện tại và lịch sử: dòng do hệ thống ghi rõ, miễn điều kiện có dấu', async () => {
     routes()
@@ -196,7 +199,7 @@ describe('StatusTab', () => {
     open({ allowedCommands: ['END_RESIDENCY'], onChanged })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc lưu trú' }))
-    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Hết hợp đồng' } })
+    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Hết hợp đồng' } })
     fireEvent.change(screen.getByLabelText(/Thời điểm kết thúc/), { target: { value: '2026-11-30T09:00' } })
     await submitReady('Xác nhận kết thúc lưu trú')
 
@@ -249,7 +252,7 @@ describe('StatusTab', () => {
     open({ allowedCommands: ['GRANT_TEMPORARY_ABSENCE'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Cho tạm vắng' }))
-    fireEvent.change(await screen.findByLabelText('Lý do của lệnh (bắt buộc)'), {
+    fireEvent.change(await screen.findByLabelText('Lý do tạm vắng (bắt buộc)'), {
       target: { value: 'Gia đình đón về chơi' },
     })
     fireEvent.click(screen.getByRole('radio', { name: 'Về nhà' }))
@@ -315,7 +318,7 @@ describe('StatusTab', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cho tạm vắng' }))
     await submitReady('Xác nhận cho tạm vắng')
 
-    expect(await screen.findByText('Nhập lý do của lệnh')).toBeInTheDocument()
+    expect(await screen.findByText('Nhập lý do tạm vắng')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/grant-temporary-absence')).toHaveLength(0)
   })
 
@@ -327,7 +330,7 @@ describe('StatusTab', () => {
     open({ status: 'TEMPORARILY_ABSENT', allowedCommands: ['RECORD_RETURN'], onChanged })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
-    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Gia đình đưa về sau cuối tuần' } })
+    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Gia đình đưa về sau cuối tuần' } })
     await submitReady('Xác nhận ghi nhận trở về')
 
     await waitFor(() => expect(api.calls('POST', '/residents/5/record-return')).toHaveLength(1))
@@ -344,7 +347,7 @@ describe('StatusTab', () => {
     open({ allowedCommands: ['TRANSFER_OUT'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Chuyển viện' }))
-    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Đau ngực' } })
+    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Đau ngực' } })
     await submitReady('Xác nhận chuyển viện')
     expect(await screen.findByText('Chọn và nhập căn cứ chuyển viện')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/transfer-out')).toHaveLength(0)
@@ -372,7 +375,7 @@ describe('StatusTab', () => {
     open({ allowedCommands: ['END_RESIDENCY'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Kết thúc lưu trú' }))
-    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Hết hợp đồng' } })
+    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Hết hợp đồng' } })
     fireEvent.change(screen.getByLabelText(/Thời điểm kết thúc/), { target: { value: '2026-11-30T09:00' } })
     await submitReady('Xác nhận kết thúc lưu trú')
 
@@ -386,7 +389,7 @@ describe('StatusTab', () => {
     open({ status: 'TEMPORARILY_ABSENT', allowedCommands: ['RECORD_DEATH'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận qua đời' }))
-    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Mất tại nhà' } })
+    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Mất tại nhà' } })
     await submitReady('Xác nhận ghi nhận qua đời')
 
     expect(await screen.findByText(/Phải kèm giấy tờ bằng chứng/)).toBeInTheDocument()
@@ -400,7 +403,7 @@ describe('StatusTab', () => {
     open({ status: 'TEMPORARILY_ABSENT', allowedCommands: ['RECORD_DEATH'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận qua đời' }))
-    fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Mất tại nhà' } })
+    fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Mất tại nhà' } })
     pick(/Giấy tờ bằng chứng/, [pdf('giay-bao-tu.pdf')])
     await submitReady('Xác nhận ghi nhận qua đời')
 
@@ -420,7 +423,7 @@ describe('StatusTab', () => {
       open({ status: 'HOSPITALIZED', allowedCommands: ['RECORD_RETURN'] })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
-      fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Ra viện' } })
+      fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Ra viện' } })
       pick(/Giấy tờ bệnh viện/, [pdf('giay-ra-vien.pdf'), pdf('don-thuoc.pdf')])
       expect(screen.getByText('giay-ra-vien.pdf')).toBeInTheDocument()
       expect(screen.getByText('don-thuoc.pdf')).toBeInTheDocument()
@@ -441,7 +444,7 @@ describe('StatusTab', () => {
       open({ allowedCommands: ['TRANSFER_OUT'] })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Chuyển viện' }))
-      fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Đau ngực' } })
+      fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Đau ngực' } })
       fireEvent.click(screen.getByRole('radio', { name: 'Chỉ định của Bác sĩ' }))
       fireEvent.change(screen.getByLabelText('Nội dung căn cứ'), { target: { value: 'Cấp cứu' } })
       pick(/Giấy tờ bệnh viện/, [pdf('a.pdf'), pdf('b.pdf')])
@@ -459,7 +462,7 @@ describe('StatusTab', () => {
       open({ status: 'HOSPITALIZED', allowedCommands: ['RECORD_RETURN'] })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
-      fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Ra viện' } })
+      fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Ra viện' } })
       await submitReady('Xác nhận ghi nhận trở về')
 
       await waitFor(() => expect(api.calls('POST', '/residents/5/record-return')).toHaveLength(1))
@@ -469,12 +472,22 @@ describe('StatusTab', () => {
       )
     })
 
+    it('Ghi nhận trở về từ bệnh viện: ô ghi tình trạng khi về, nêu thuốc tạm dừng, đối chiếu, đánh giá lại', async () => {
+      routes()
+      open({ status: 'HOSPITALIZED', allowedCommands: ['RECORD_RETURN'] })
+
+      fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
+
+      expect(await screen.findByLabelText('Tình trạng khi về (kết luận của bệnh viện) (bắt buộc)')).toBeInTheDocument()
+      expect(screen.getByText(/Thuốc cũ vẫn tạm dừng tới khi phiếu đối chiếu thuốc được xác nhận/)).toBeInTheDocument()
+    })
+
     it('Ghi nhận trở về từ Tạm vắng không có ô giấy tờ bệnh viện', async () => {
       routes()
       open({ status: 'TEMPORARILY_ABSENT', allowedCommands: ['RECORD_RETURN'] })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
-      await screen.findByLabelText(/Lý do/)
+      await screen.findByLabelText(REASON)
       expect(screen.queryByLabelText(/Giấy tờ bệnh viện/)).not.toBeInTheDocument()
     })
 
@@ -483,7 +496,7 @@ describe('StatusTab', () => {
       open({ status: 'HOSPITALIZED', allowedCommands: ['RECORD_RETURN'] })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
-      fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Ra viện' } })
+      fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Ra viện' } })
       pick(
         /Giấy tờ bệnh viện/,
         Array.from({ length: 11 }, (_, n) => pdf(`t${n}.pdf`)),
@@ -501,7 +514,7 @@ describe('StatusTab', () => {
       open({ status: 'HOSPITALIZED', allowedCommands: ['RECORD_RETURN'] })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
-      fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Ra viện' } })
+      fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Ra viện' } })
       pick(/Giấy tờ bệnh viện/, [pdf()])
       await submitReady('Xác nhận ghi nhận trở về')
 
@@ -519,7 +532,7 @@ describe('StatusTab', () => {
       open({ status: 'HOSPITALIZED', allowedCommands: ['RECORD_RETURN'] })
 
       fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận trở về' }))
-      fireEvent.change(await screen.findByLabelText(/Lý do/), { target: { value: 'Ra viện' } })
+      fireEvent.change(await screen.findByLabelText(REASON), { target: { value: 'Ra viện' } })
       pick(/Giấy tờ bệnh viện/, [pdf()])
       await submitReady('Xác nhận ghi nhận trở về')
       await waitFor(() => expect(api.calls('POST', '/residents/5/record-return')).toHaveLength(1))
