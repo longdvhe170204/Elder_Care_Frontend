@@ -204,13 +204,13 @@ describe('EndingsPage', () => {
     await within(dialog).findByRole('option', { name: 'Nguyễn Thị Lan (NCT-0005)' })
     fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '5' } })
     const input = within(dialog).getByLabelText('Người đề nghị')
-    const list = document.getElementById(input.getAttribute('list'))
+    fireEvent.focus(input)
     await waitFor(() =>
-      expect([...list.querySelectorAll('option')].map((o) => o.value)).toEqual([
-        'Nguyễn Thị Lan (người cao tuổi)',
-        'Trần Văn Minh (người thân)',
-        'Hoàng Thu Hà (nhân viên)',
-      ]),
+      expect(
+        within(within(dialog).getByRole('listbox'))
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Nguyễn Thị Lan (người cao tuổi)', 'Trần Văn Minh (người thân)', 'Hoàng Thu Hà (nhân viên)']),
     )
   })
 
