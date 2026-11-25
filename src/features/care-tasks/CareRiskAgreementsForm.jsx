@@ -1,5 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getStaff } from '@/api'
 import { Button } from '@/components/ui/button'
+import { useFamilyMembers } from '@/common/useFamilyMembers'
 import { formatDateTime } from '@/common/dateTime'
 import { CareField, CareCheck } from './CareField'
 
@@ -17,8 +19,42 @@ const blank = () => ({
   reviewDate: '',
 })
 
-export function CareRiskAgreementsForm({ agreements, busy, onSave }) {
+// Demo 2026-11-25: chọn người theo tên thay cho ô nhập mã. Danh sách rỗng (đang tải, không có quyền đọc) thì giữ ô nhập
+// mã với nhãn cũ. Bác sĩ là nhân viên có chức vụ Bác sĩ (backend vẫn kiểm).
+const names = (list) =>
+  Object.fromEntries(list.map((p) => [String(p.id), p.position ? `${p.fullName} (${p.position})` : p.fullName]))
+
+function PersonField({ label, fallbackLabel, choices, value, onChange, disabled }) {
+  return Object.keys(choices).length > 0 ? (
+    <CareField label={label} value={value} onChange={onChange} options={choices} required disabled={disabled} />
+  ) : (
+    <CareField
+      label={fallbackLabel}
+      value={value}
+      onChange={onChange}
+      type="number"
+      min={1}
+      required
+      disabled={disabled}
+    />
+  )
+}
+
+export function CareRiskAgreementsForm({ agreements, busy, onSave, residentId = null }) {
   const [rows, setRows] = useState(agreements)
+  const [staff, setStaff] = useState([])
+  useEffect(() => {
+    let live = true
+    getStaff({ query: { status: 'WORKING' } })
+      .then(({ data }) => live && setStaff(data ?? []))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  const staffChoices = names(staff)
+  const doctorChoices = names(staff.filter((s) => s.position === 'Bác sĩ'))
+  const familyChoices = names(useFamilyMembers(residentId))
   const [error, setError] = useState('')
   const set = (index, patch) => setRows((all) => all.map((row, i) => (i === index ? { ...row, ...patch } : row)))
   function submit(event) {
@@ -116,17 +152,16 @@ export function CareRiskAgreementsForm({ agreements, busy, onSave }) {
                   options={{ FAMILY_MEMBER: 'Người thân', STAFF: 'Nhân viên' }}
                   required
                 />
-                <CareField
-                  label={`Mã người tham gia ${index + 1}.${pi + 1}`}
+                <PersonField
+                  label={`Người tham gia ${index + 1}.${pi + 1}`}
+                  fallbackLabel={`Mã người tham gia ${index + 1}.${pi + 1}`}
+                  choices={p.type === 'FAMILY_MEMBER' ? familyChoices : p.type === 'STAFF' ? staffChoices : {}}
                   value={p.id}
                   onChange={(value) =>
                     set(index, {
                       participants: row.participants.map((entry, j) => (j === pi ? { ...entry, id: value } : entry)),
                     })
                   }
-                  type="number"
-                  min={1}
-                  required
                 />
                 <Button
                   type="button"
@@ -144,13 +179,12 @@ export function CareRiskAgreementsForm({ agreements, busy, onSave }) {
             >
               Thêm người tham gia thỏa thuận {index + 1}
             </Button>
-            <CareField
-              label={`Mã bác sĩ nhận định ${index + 1}`}
+            <PersonField
+              label={`Bác sĩ nhận định ${index + 1}`}
+              fallbackLabel={`Mã bác sĩ nhận định ${index + 1}`}
+              choices={doctorChoices}
               value={row.assessingDoctorId}
               onChange={(value) => set(index, { assessingDoctorId: value })}
-              type="number"
-              min={1}
-              required
             />
             <CareField
               label={`Nhận định tự quyết ${index + 1}`}
@@ -187,24 +221,22 @@ export function CareRiskAgreementsForm({ agreements, busy, onSave }) {
               required
             />
             {maker.type === 'PATIENT_REPRESENTATIVE' && (
-              <CareField
-                label={`Mã người thân đại diện ${index + 1}`}
+              <PersonField
+                label={`Người thân đại diện ${index + 1}`}
+                fallbackLabel={`Mã người thân đại diện ${index + 1}`}
+                choices={familyChoices}
                 value={maker.familyMemberId}
                 onChange={(value) => set(index, { decisionMaker: { ...maker, familyMemberId: value } })}
-                type="number"
-                min={1}
-                required
               />
             )}
             {maker.type === 'DOCTOR' && (
               <>
-                <CareField
-                  label={`Mã bác sĩ quyết định ${index + 1}`}
+                <PersonField
+                  label={`Bác sĩ quyết định ${index + 1}`}
+                  fallbackLabel={`Mã bác sĩ quyết định ${index + 1}`}
+                  choices={doctorChoices}
                   value={maker.doctorId}
                   onChange={(value) => set(index, { decisionMaker: { ...maker, doctorId: value } })}
-                  type="number"
-                  min={1}
-                  required
                 />
                 <CareField
                   label={`Căn cứ bác sĩ quyết định ${index + 1}`}
@@ -238,8 +270,10 @@ export function CareRiskAgreementsForm({ agreements, busy, onSave }) {
                   disabled={!!opinion.at}
                 />
                 {opinion.source.type === 'FAMILY_MEMBER' && (
-                  <CareField
-                    label={`Mã người thân nêu ý kiến ${index + 1}.${oi + 1}`}
+                  <PersonField
+                    label={`Người thân nêu ý kiến ${index + 1}.${oi + 1}`}
+                    fallbackLabel={`Mã người thân nêu ý kiến ${index + 1}.${oi + 1}`}
+                    choices={familyChoices}
                     value={opinion.source.familyMemberId}
                     onChange={(value) =>
                       set(index, {
@@ -248,9 +282,6 @@ export function CareRiskAgreementsForm({ agreements, busy, onSave }) {
                         ),
                       })
                     }
-                    type="number"
-                    min={1}
-                    required
                     disabled={!!opinion.at}
                   />
                 )}
