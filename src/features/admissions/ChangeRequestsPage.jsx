@@ -63,7 +63,10 @@ const STATUS_CARD_CONFIG = {
 
 export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}) {
   const { can } = usePermissions()
+  const canAccessDrafts = can('RESIDENCY_CHANGE_REQUEST', 'CREATE') || can('RESIDENCY_CHANGE_REQUEST', 'UPDATE')
+  const visibleFilters = canAccessDrafts ? FILTERS : FILTERS.filter(([k]) => k !== 'DRAFT')
   const [filter, setFilter] = useState('DRAFT')
+  const activeFilter = visibleFilters.some(([k]) => k === filter) ? filter : visibleFilters[0][0]
   const [requests, setRequests] = useState(null)
   const [shown, setShown] = useState(null)
   const [failure, setFailure] = useState(null)
@@ -121,20 +124,21 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
     if (initialId) open(initialId)
   }, [initialId])
 
-  function open(id) {
+  function open(id, { silentNotFound = false } = {}) {
     setFailure(null)
     return getResidencyChangeRequestsById({ path: { id } })
       .then(({ data, etag }) => setShown({ request: data, etag }))
       .catch((e) => {
+        const problem = problemOf(e)
         setShown(null)
-        setFailure(problemOf(e))
+        if (!(silentNotFound && problem?.status === 404)) setFailure(problem)
       })
   }
 
   function changed(message, id) {
     setAnnouncement(message)
     load()
-    if (id) open(id)
+    if (id) open(id, { silentNotFound: !canAccessDrafts })
   }
 
   if (failure?.status === 403) return <PermissionDeniedState label="Yêu cầu điều chỉnh hợp đồng" />
@@ -144,7 +148,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
   const term = query.trim()
   const plainTerm = plain(term)
   const rows = (requests ?? [])
-    .filter(matcherOf(filter))
+    .filter(matcherOf(activeFilter))
     .filter(
       (r) =>
         !term ||
@@ -220,14 +224,17 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
       )}
       <ToggleGroup
         size="lg"
-        value={[filter]}
+        value={[activeFilter]}
         onValueChange={(n) => n[0] && (setPage(0), setFilter(n[0]))}
         aria-label="Lọc yêu cầu theo trạng thái"
-        className="w-full grid grid-cols-2 sm:grid-cols-5 gap-3 border-none p-0 overflow-visible"
+        className={cn(
+          'w-full grid grid-cols-2 gap-3 border-none p-0 overflow-visible',
+          canAccessDrafts ? 'sm:grid-cols-5' : 'sm:grid-cols-4',
+        )}
       >
-        {FILTERS.map(([key, label, matches]) => {
+        {visibleFilters.map(([key, label, matches]) => {
           const count = (requests ?? []).filter(matches).length
-          const isSelected = key === filter
+          const isSelected = key === activeFilter
           const cfg = STATUS_CARD_CONFIG[key]
           return (
             <ToggleGroupItem

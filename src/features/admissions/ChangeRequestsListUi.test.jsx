@@ -139,6 +139,25 @@ describe('ChangeRequestsPage: danh sách', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Xem yêu cầu mã 11' }))
     expect(await screen.findByText('Sau đợt đánh giá mới')).toBeInTheDocument()
   })
+
+  it('quanLyVien_khongThayTabNhap_macDinhTabChoDuyet', async () => {
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'RESIDENCY_CHANGE_REQUEST', operation: 'VIEW' },
+        { function: 'RESIDENCY_CHANGE_REQUEST', operation: 'APPROVE' },
+      ]),
+    )
+    const pending = { ...BASE, approvalRequestId: 12, status: 'PENDING_APPROVAL' }
+    const draft = { ...BASE, approvalRequestId: 13, status: 'DRAFT' }
+    api.on('GET', '/residency-change-requests', json(200, [pending, draft]))
+    renderPage()
+    expect(await screen.findByText('Yêu cầu mã 12')).toBeInTheDocument()
+    expect(screen.queryByText('Yêu cầu mã 13')).not.toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: /Nháp/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Chờ duyệt (1)')).toBeInTheDocument()
+  })
 })
 
 describe('ChangeRequestSheet: form lập yêu cầu', () => {
