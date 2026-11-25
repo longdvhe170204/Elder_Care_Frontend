@@ -138,9 +138,33 @@ describe('AlertsPage', () => {
     expect(await screen.findByText(/Đã tiếp nhận cảnh báo/)).toBeTruthy()
   })
 
+  // BF-06: người xử lý làm xong ngay thì một lần tiếp nhận, bắt đầu xử lý, đóng; nhân viên chăm sóc đóng phải kèm lý do
+  it('BF_06_daXuLyDong_tiepNhanBatDauRoiDongMotLan', async () => {
+    api.on('GET', '/me/permissions', json(200, [{ function: 'INCIDENT_EMERGENCY', operation: 'UPDATE' }]))
+    for (const c of ['receive', 'start-handling', 'close']) api.on('POST', `/alerts/1/${c}`, json(200, {}))
+    render(
+      <PermissionsProvider>
+        <AlertsPage role="NURSING_STAFF" />
+      </PermissionsProvider>,
+    )
+    const cards = await screen.findAllByRole('article')
+    fireEvent.click(within(cards[1]).getByRole('button', { name: /Chi tiết/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Đã xử lý, đóng' }))
+    fireEvent.change(screen.getByLabelText('Kết quả xử lý'), { target: { value: 'Đã đo lại, ổn định' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu và đóng cảnh báo' }))
+    await waitFor(() => expect(api.calls('POST', '/alerts/1/close')).toHaveLength(1))
+    expect(api.calls('POST', '/alerts/1/receive')).toHaveLength(1)
+    expect(api.calls('POST', '/alerts/1/start-handling')).toHaveLength(1)
+  })
+
   it('FR_029_dongCanKetQua_doiMucCanLyDo', async () => {
+    api.on('GET', '/me/permissions', json(200, [{ function: 'INCIDENT_EMERGENCY', operation: 'UPDATE' }]))
     api.on('POST', '/alerts/3/close', json(200, {}))
-    render(<AlertsPage role="NURSING_STAFF" />)
+    render(
+      <PermissionsProvider>
+        <AlertsPage role="NURSING_STAFF" />
+      </PermissionsProvider>,
+    )
     const cards = await screen.findAllByRole('article')
     fireEvent.click(within(cards[2]).getByRole('button', { name: /Chi tiết/ }))
     fireEvent.click(await screen.findByRole('button', { name: 'Đóng cảnh báo' }))

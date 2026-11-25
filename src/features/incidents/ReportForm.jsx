@@ -11,7 +11,7 @@ import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
-import { createAlert, loadIncidentTypes } from '@/features/alerts/alerts'
+import { createAlert, loadIncidentTypes, runAlertCommand } from '@/features/alerts/alerts'
 import { getAlerts, getIncidentResidents, postEmergencyAssist } from '@/api/api007'
 import { typeLabel } from '@/features/alerts/alertView'
 import { LevelChoices } from './CaseFormParts'
@@ -210,7 +210,10 @@ export function ReportForm({
   }, [])
 
   const residentId = picked?.id ?? null
-  const openRecords = found.for === residentId ? found.list : []
+  const allOpen = found.for === residentId ? found.list : []
+  // Mới nhất trước; chỉ hiện 2 hồ sơ gần nhất để khung hỏi gọn (BF-06)
+  const openRecords = [...allOpen].sort((a, b) => b.id - a.id).slice(0, 2)
+  const moreOpen = allOpen.length - openRecords.length
   const ignoreOpen = ignoredFor === residentId
 
   useEffect(() => {
@@ -241,7 +244,7 @@ export function ReportForm({
   const ask = canAlert && canIncident && !!type && !type.nonHealth && residentId != null
   // Chỉ tạo được cảnh báo (không có quyền ghi sự cố) thì luôn là cảnh báo; còn lại mặc định ghi sự cố
   const alertOnly = canAlert && !canIncident
-  const kind = alertOnly || (ask && wantAlert) ? 'alert' : 'incident'
+  const kind = alertOnly || (canAlert && canIncident && wantAlert && (!type || !type.nonHealth)) ? 'alert' : 'incident'
   // Tình trạng chỉ hỏi khi ghi sự cố cho một người cao tuổi; không chọn sẵn (BF-06): ĐANG XỬ LÝ hay ĐÃ XỬ LÝ XONG
   const needsStatus = kind === 'incident' && residentId != null
   const isLater = needsStatus && status === 'DONE'
@@ -277,13 +280,21 @@ export function ReportForm({
     try {
       if (kind === 'alert') {
         const alert = await createAlert({ residentId, incidentTypeId: type.id, level, description })
+        // Người có quyền xử lý tạo thì coi như đã nhận: khỏi bấm Tiếp nhận (BF-06); lỗi nhận không làm mất cảnh báo đã tạo
+        let received = false
+        if (canClose && alert?.id != null && !alert.merged) {
+          received = await runAlertCommand(alert.id, 'receive').then(
+            () => true,
+            () => false,
+          )
+        }
         onDone({
           kind,
           id: alert?.id ?? null,
           level,
           message: alert?.merged
             ? `Đã gộp vào cảnh báo đang mở của ${who}, lần thứ ${alert.occurrenceCount}`
-            : `Đã tạo cảnh báo ${type.name.toLowerCase()}, ${who}`,
+            : `Đã tạo cảnh báo ${type.name.toLowerCase()}, ${who}${received ? ', bạn đã nhận' : ''}`,
         })
         return
       }
@@ -299,7 +310,7 @@ export function ReportForm({
         ...(initialResponse.trim() ? { initialResponse: initialResponse.trim() } : {}),
         ...(occurredAt ? { occurredAt: vietnamIso(occurredAt) } : {}),
         ...(lowerNeeded ? { lowerLevelReason: lowerReason.trim() } : {}),
-        ...(separate ? { createDespiteOpen: true } : {}),
+        ...(separate || ignoreOpen ? { createDespiteOpen: true } : {}),
         ...(isLater
           ? {
               recordedLater: true,
@@ -449,7 +460,8 @@ export function ReportForm({
           {openRecords.length > 0 && !ignoreOpen && (
             <Alert variant="attention" className="gap-3 p-4">
               <p>
-                {picked?.name} đang có {openRecords.map((r) => r.label).join(', ')}. Ghi vào hồ sơ đó để khỏi trùng?
+                {picked?.name} đang có {openRecords.map((r) => r.label).join(', ')}
+                {moreOpen > 0 ? ` và ${moreOpen} hồ sơ khác` : ''}. Ghi vào hồ sơ đó để khỏi trùng?
               </p>
               <div className="flex flex-wrap gap-2">
                 {openRecords.map((r) => {
@@ -589,6 +601,7 @@ export function ReportForm({
                       type="datetime-local"
                       className="h-11"
                       value={familyAt}
+                      max={vietnamNowLocal()}
                       onChange={(event) => setFamilyAt(event.target.value)}
                     />
                   </Field>

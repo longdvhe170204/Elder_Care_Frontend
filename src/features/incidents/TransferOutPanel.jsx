@@ -10,7 +10,7 @@ import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { CHOICE_LABELS } from '@/features/wishes/wishLabels'
 import { HandoverStaffField } from './HandoverStaffField'
-import { vietnamIso } from './incidentView'
+import { vietnamIso, vietnamNowLocal } from './incidentView'
 import { loadTransferDocument, loadTransferInfo, submitTransferOut } from './transferOut'
 
 // Chuyển viện từ sự cố (007 T105; FR-049, FR-050; BR-M05-14, Q-383, Q-384): đơn vị nhận, thời điểm, người đi cùng; hỏi
@@ -284,6 +284,7 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
                   id="transfer-return"
                   type="datetime-local"
                   value={returnAt}
+                  min={atNow ? vietnamNowLocal() : at}
                   onChange={(e) => setReturnAt(e.target.value)}
                 />
               </Field>

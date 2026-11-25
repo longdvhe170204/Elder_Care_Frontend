@@ -66,6 +66,7 @@ import {
   statusTone,
   typeLabel,
   handlerText,
+  levelWhy,
 } from './alertView'
 
 // Màn Cảnh báo (spec 007 User Story 3, FR-027 → FR-036; T031 phần web): danh sách theo phạm vi đọc từ api-007
@@ -126,6 +127,9 @@ function AlertRow({ alert, name, busy, onReceive, onStart, onOpen, onReconcile }
             {typeLabel(alert.type)}
             {alert.residentId == null && alert.floorName && `, ${alert.floorName}`}
           </span>
+          {alert.eventType && EVENT_LABEL[alert.eventType] && (
+            <span> · {[EVENT_LABEL[alert.eventType], PLACE_LABEL[alert.chosenPlace]].filter(Boolean).join(', ')}</span>
+          )}
           {alert.occurrenceCount > 1 && <span> · {alert.occurrenceCount} lần gộp</span>}
         </span>
       </div>
@@ -257,6 +261,8 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   const converting = mode === 'convert-to-incident' || mode === 'activate-emergency'
   const levelChoices = LEVEL_ORDER.filter((l) => l !== alert.level)
   // Đóng cảnh báo Khẩn cấp: kết quả phải nêu lý do không kích hoạt khẩn cấp, tối thiểu ít chữ để không đóng bằng "ok"
+  // Nhân viên chăm sóc đóng và cảnh báo việc quá hạn cần lý do; dùng luôn dòng kết quả đã nhập
+  const reasonNeeded = !can('INCIDENT_EMERGENCY', 'UPDATE') || alert.type === 'OVERDUE_CARE_TASK'
   const criticalClose = mode === 'close' && alert.level === 'CRITICAL'
   const textMissing = criticalClose ? text.trim().length < CRITICAL_CLOSE_MIN : !text.trim()
   const pressed = ['SOS', 'ASSIST_BUTTON'].includes(alert.origin)
@@ -268,6 +274,14 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
   const followUpEvent = FOLLOW_UP_EVENTS.includes(alert.eventType)
   // Người xử lý (không phải Quản lý viện): tiếp nhận xong thường xử lý ngay nên một nút làm cả hai lệnh
   const handler = commands.includes('activate-emergency')
+  const mayHandle = can('INCIDENT_EMERGENCY', 'UPDATE')
+  // Chưa ở bước đóng được nhưng người xử lý đã làm xong: tiếp nhận, bắt đầu xử lý và đóng trong một lần (BF-06)
+  const closeInOne =
+    mayHandle &&
+    !commands.includes('close') &&
+    (commands.includes('receive') || commands.includes('start-handling')) &&
+    alert.level !== 'CRITICAL' &&
+    alert.criticalFlagId == null
   const oneTap = handler && alert.level === 'CRITICAL'
   // Thanh lệnh ở chân khung (đề xuất 2026-11-24, góp ý test demo): nút chính là bước kế tiếp của trạng thái; hai cách kết
   // thúc (chuyển sự cố, đóng) ngang nhau, người xử lý tự chọn. Kích hoạt khẩn cấp luôn thấy ở cảnh báo Khẩn cấp; lệnh ít
@@ -311,6 +325,12 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
       label: 'Chuyển thành sự cố',
       hint: 'Cần ghi nhận chính thức để theo dõi, ghi diễn biến, chuyển viện.',
       onSelect: () => openConvert('convert-to-incident'),
+    },
+    closeInOne && {
+      icon: CircleCheck,
+      label: 'Đã xử lý, đóng',
+      hint: 'Tiếp nhận, xử lý và đóng trong một bước, ghi kết quả.',
+      onSelect: () => setMode('close'),
     },
     commands.includes('close') && {
       icon: CircleCheck,
@@ -431,7 +451,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
         : command === 'activate-emergency'
           ? 'Đã kích hoạt khẩn cấp'
           : 'Đã chuyển thành sự cố'
-      onChanged(`${what}${incidentId ? ` SC-${incidentId}` : ''}${taken ? ', bạn đang xử lý' : ''}`, name)
+      onChanged(`${what}${incidentId ? ` SC-${incidentId}` : ''}${taken ? ', bạn đang xử lý' : ''}`, picked?.name ?? name)
       // Khẩn cấp: sang thẳng sự cố để thấy thẻ thông tin khẩn cấp và Gọi 115, không bắt tìm lại ở menu
       if (command === 'activate-emergency' && incidentId && onNavigate) onNavigate('incidents', { incidentId })
     } catch (error) {
@@ -472,11 +492,16 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
     if (textMissing || (mode === 'change-level' && !level) || (mode === 'assign' && !staffId)) return
     setBusy(true)
     try {
+      // Đóng một lần: làm nốt các bước còn thiếu trước khi đóng
+      if (mode === 'close' && closeInOne) {
+        if (commands.includes('receive')) await runAlertCommand(alert.id, 'receive')
+        await runAlertCommand(alert.id, 'start-handling')
+      }
       await runAlertCommand(
         alert.id,
         mode,
         mode === 'close'
-          ? { resolution: text.trim() }
+          ? { resolution: text.trim(), ...(reasonNeeded && { reason: text.trim() }) }
           : mode === 'assign'
             ? { staffId: Number(staffId), note: text.trim() }
             : { newLevel: level, reason: text.trim() },
@@ -632,7 +657,15 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
                       )}
                       onClick={() => setTarget(i.id)}
                     >
-                      Cùng vụ: gắn vào SC-{i.id}, {INCIDENT_STATUS[i.status]?.toLowerCase()}
+                      Cùng vụ: gắn vào SC-{i.id}
+                      {[
+                        incidentTypes.find((t) => t.id === i.currentTypeId)?.name,
+                        i.content?.discoveredAt && formatDateTime(i.content.discoveredAt),
+                        INCIDENT_STATUS[i.status]?.toLowerCase(),
+                      ]
+                        .filter(Boolean)
+                        .map((part) => `, ${part}`)
+                        .join('')}
                     </Button>
                   ))}
                   <Button
@@ -840,6 +873,7 @@ function AlertDetail({ id, name, Title, tick = 0, onDone, onChanged, onNavigate 
           rows={[
             ['Mô tả', alert.description || undefined, true],
             ['Người xử lý', handlerText(alert)],
+            ['Vì sao mức này', levelWhy(alert)],
             ['Kết quả', !isOpen(alert) ? alert.resolution || undefined : undefined, true],
             ['Người đóng', !isOpen(alert) ? alert.closedBy || undefined : undefined],
             ['Tầng', alert.floorName || undefined],

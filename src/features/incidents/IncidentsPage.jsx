@@ -583,6 +583,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const transferOffered =
     ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
     incident.content?.residentId != null &&
+    !atHospital &&
     commands.includes('transfer-out')
   const statusBlocksTransfer = residentStatus != null && !TRANSFERABLE_STATUS.includes(residentStatus)
   const canTransfer = transferOffered && !statusBlocksTransfer
@@ -777,7 +778,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
               rows={[
                 ['Mô tả', content.description ?? '', true],
                 ['Nơi xảy ra', content.location ?? ''],
-                ['Người xử lý', incident.assignee ?? 'Chưa ai nhận'],
+                ['Người xử lý', incident.assignee ?? (incident.closedBy ? `${incident.closedBy} (người đóng)` : 'Chưa ai nhận')],
                 ['Cùng xử lý', (incident.handlers ?? []).join(', ') || undefined],
                 ['Kết quả', incident.resolution ?? undefined, true],
               ]}
@@ -973,7 +974,8 @@ function IncidentRow({ incident, name, typeName, typeCode, inHospital, onOpen })
           {name}
         </button>
         <span className="type-body-sm text-muted-foreground">
-          {typeName} · {LEVEL_LABEL[incident.level]}
+          SC-{incident.id} · {typeName} · {LEVEL_LABEL[incident.level]}
+          {incident.content?.discoveredAt && ` · ${formatDateTime(incident.content.discoveredAt)}`}
           {!open && ` · ${STATUS_LABEL[incident.status] ?? incident.status}`}
         </span>
       </div>

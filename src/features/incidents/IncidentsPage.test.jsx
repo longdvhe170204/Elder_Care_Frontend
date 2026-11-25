@@ -252,7 +252,7 @@ describe('IncidentsPage', () => {
     const list = await rows()
     expect(list).toHaveLength(2)
     expect(within(list[0]).getByText('Trần Thị Mai')).toBeTruthy()
-    expect(within(list[0]).getByText('Ngã · Khẩn cấp')).toBeTruthy()
+    expect(within(list[0]).getByText(/Ngã · Khẩn cấp/)).toBeTruthy()
     expect(within(list[0]).getByText('Chưa ai nhận')).toBeTruthy()
     expect(within(list[1]).getByText('Trần Thu Hà xử lý')).toBeTruthy()
   })
