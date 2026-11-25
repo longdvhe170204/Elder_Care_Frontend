@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   getCarePlansById,
+  getCarePlansCompare,
   getTaskTypes,
   putCarePlansByIdItems,
   putCarePlansByIdRiskAgreements,
@@ -8,7 +9,7 @@ import {
   postCarePlansByIdApprove,
   postCarePlansByIdReturn,
   postCarePlansByIdCancel,
-  postCarePlansByIdWithdrawApproval,
+  postCarePlansByIdRetract,
 } from '@/api'
 import { Button } from '@/components/ui/button'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -18,24 +19,28 @@ import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { isAllowed } from '@/common/permissions/permissions'
 import { CareField } from './CareField'
+import { CarePlanComparison } from './CarePlanComparison'
 import { CarePlanItemsForm } from './CarePlanItemsForm'
 import { CareRiskAgreementsForm } from './CareRiskAgreementsForm'
-import { FREQUENCIES, PLAN_STATUS } from './carePlanLabels'
+import { FREQUENCIES, PLAN_STATUS, planLabel } from './carePlanLabels'
 
+// Q-447: bỏ Thu hồi duyệt; thêm Rút lại (người lập kéo bản Chờ duyệt về soạn tiếp, không cần lý do)
 const COMMANDS = {
+  retract: postCarePlansByIdRetract,
   approve: postCarePlansByIdApprove,
   return: postCarePlansByIdReturn,
   cancel: postCarePlansByIdCancel,
-  withdrawApproval: postCarePlansByIdWithdrawApproval,
 }
 const LABELS = {
-  approve: 'Duyệt kế hoạch',
+  retract: 'Rút lại',
+  approve: 'Duyệt',
   return: 'Trả lại',
-  cancel: 'Hủy phiên bản',
-  withdrawApproval: 'Thu hồi duyệt',
+  cancel: 'Bỏ bản sửa',
 }
+const NO_REASON = ['approve', 'retract']
 
-export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 'p' }) {
+// currentPlanId: kế hoạch Hiệu lực để hiện thay đổi khi bản sửa Chờ duyệt (FR-008, sửa Q-447)
+export function CarePlanDetail({ planId, currentPlanId, onChanged, Title = 'h2', Description = 'p' }) {
   const [resource, setResource] = useState(null)
   const [taskTypes, setTaskTypes] = useState([])
   const [loadFailure, setLoadFailure] = useState(null)
@@ -44,9 +49,8 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
   const [busy, setBusy] = useState(false)
   const [reason, setReason] = useState('')
   const [reasonError, setReasonError] = useState(false)
-  const [effectiveFrom, setEffectiveFrom] = useState('')
-  const [dateError, setDateError] = useState(false)
   const [message, setMessage] = useState('')
+  const [comparison, setComparison] = useState(null)
   useEffect(() => {
     let cancelled = false
     getCarePlansById({ path: { id: planId } })
@@ -54,7 +58,6 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
         if (!cancelled) {
           setResource(value)
           setLoadFailure(null)
-          setEffectiveFrom(value.data.effectiveFrom ?? '')
         }
       })
       .catch((error) => {
@@ -71,64 +74,95 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
       cancelled = true
     }
   }, [planId, reload])
+  const pendingApproval = resource?.data.status === 'PENDING_APPROVAL'
+  useEffect(() => {
+    if (!pendingApproval || !currentPlanId) return undefined
+    let cancelled = false
+    getCarePlansCompare({ query: { from: currentPlanId, to: planId } })
+      .then(({ data }) => {
+        if (!cancelled) setComparison(data)
+      })
+      .catch((error) => {
+        if (!cancelled) setProblem(problemOf(error))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [pendingApproval, currentPlanId, planId])
   function refresh() {
     setResource(null)
     setProblem(null)
     setReasonError(false)
     setReason('')
+    setComparison(null)
     setReload((value) => value + 1)
     onChanged?.()
   }
+  function failed(error) {
+    const value = problemOf(error)
+    setProblem(value)
+    if (value.errorCode === 'REASON_REQUIRED') setReasonError(true)
+    if (value.errorCode === 'ALREADY_PROCESSED') {
+      setMessage('Yêu cầu đã được xử lý. Đã tải lại kế hoạch.')
+      refresh()
+    }
+  }
+  const request = (body, match = false) => ({
+    path: { id: planId },
+    body,
+    headers: { 'Idempotency-Key': crypto.randomUUID(), ...(match && { 'If-Match': resource.etag }) },
+  })
   async function command(operation, body, match = false) {
     setBusy(true)
     setProblem(null)
     setReasonError(false)
     try {
-      await operation({
-        path: { id: planId },
-        body,
-        headers: { 'Idempotency-Key': crypto.randomUUID(), ...(match && { 'If-Match': resource.etag }) },
-      })
+      await operation(request(body, match))
       setMessage('Đã lưu thay đổi.')
       refresh()
     } catch (error) {
-      const value = problemOf(error)
-      setProblem(value)
-      if (value.errorCode === 'REASON_REQUIRED') setReasonError(true)
-      if (value.errorCode === 'ALREADY_PROCESSED') {
-        setMessage('Yêu cầu đã được xử lý. Đã tải lại phiên bản.')
-        refresh()
-      }
+      failed(error)
+    } finally {
+      setBusy(false)
+    }
+  }
+  // "Gửi Bác sĩ duyệt": lưu mục rồi gửi; không có ngày hiệu lực (Q-447)
+  async function sendForApproval(items) {
+    setBusy(true)
+    setProblem(null)
+    setReasonError(false)
+    try {
+      await putCarePlansByIdItems(request(items, true))
+      await postCarePlansByIdSubmit(request(reason.trim() ? { changeReason: reason.trim() } : {}))
+      setMessage('Đã gửi Bác sĩ duyệt.')
+      refresh()
+    } catch (error) {
+      failed(error)
     } finally {
       setBusy(false)
     }
   }
   function transition(name) {
-    if (name !== 'approve' && !reason.trim()) {
+    if (!NO_REASON.includes(name) && !reason.trim()) {
       setReasonError(true)
       return
     }
     command(COMMANDS[name], reason.trim() ? { reason: reason.trim() } : {})
   }
-  function submit(event) {
-    event.preventDefault()
-    if (!effectiveFrom) {
-      setDateError(true)
-      return
-    }
-    setDateError(false)
-    command(postCarePlansByIdSubmit, { effectiveFrom, ...(reason.trim() && { changeReason: reason.trim() }) })
-  }
   if (loadFailure?.status === 403) return <PermissionDeniedState label="kế hoạch chăm sóc" />
   if (loadFailure) return <ProblemAlert problem={loadFailure} />
-  if (!resource) return <p role="status">Đang tải phiên bản…</p>
+  if (!resource) return <p role="status">Đang tải kế hoạch…</p>
   const plan = resource.data
   const editable = isAllowed(plan, 'replaceItems')
+  const hasPlan = !plan.noEffectivePlan || Boolean(currentPlanId)
+  const commands = Object.keys(LABELS).filter((name) => isAllowed(plan, name))
   return (
     <div className="flex min-w-0 flex-col gap-5" aria-busy={busy}>
-      <Title className="type-title">Phiên bản {plan.revision}</Title>
-      <Description className="type-body-sm text-muted-foreground">Kế hoạch chăm sóc theo phiên bản</Description>
-      <StatusBadge status={PLAN_STATUS[plan.status] ?? plan.status} />
+      <Title className="type-title">Kế hoạch chăm sóc</Title>
+      <Description className="type-body-sm text-muted-foreground">
+        {editable ? 'Soạn mục công việc rồi gửi Bác sĩ duyệt' : 'Nội dung kế hoạch'}
+      </Description>
+      <StatusBadge status={planLabel(plan, hasPlan)} />
       <div className="type-body-sm flex flex-col gap-1">
         <p>Người lập: {plan.createdBy}</p>
         {plan.approvedBy && (
@@ -144,11 +178,8 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
             {plan.effectiveTo ? ` đến ${formatDate(plan.effectiveTo)}` : ''}
           </p>
         )}
-        {plan.changeReason && <p>Lý do thay đổi: {plan.changeReason}</p>}
+        {plan.changeReason && <p>Lý do sửa: {plan.changeReason}</p>}
       </div>
-      {plan.noEffectivePlan && (
-        <p className="rounded-lg bg-muted p-3">Người cao tuổi chưa có kế hoạch đang hiệu lực.</p>
-      )}
       <p role="status" className="type-body-sm">
         {message}
       </p>
@@ -157,11 +188,18 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
           <>
             <p>Trạng thái mới: {PLAN_STATUS[problem.currentValue?.status] ?? 'Có cập nhật từ người khác'}</p>
             <Button type="button" variant="outline" onClick={refresh}>
-              Tải lại phiên bản
+              Tải lại kế hoạch
             </Button>
           </>
         )}
       </ProblemAlert>
+      {comparison && <CarePlanComparison value={comparison} />}
+      {editable && (
+        <div className="flex flex-col gap-1">
+          <CareField label="Lý do sửa" value={reason} onChange={setReason} type="textarea" maxLength={2000} />
+          {hasPlan && <p className="type-body-sm text-muted-foreground">Bắt buộc khi sửa kế hoạch đã có.</p>}
+        </div>
+      )}
       {editable ? (
         <CarePlanItemsForm
           key={`items-${reload}`}
@@ -169,6 +207,7 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
           taskTypes={taskTypes}
           busy={busy || problem?.status === 412}
           onSave={(items) => command(putCarePlansByIdItems, items, true)}
+          onSubmitForApproval={isAllowed(plan, 'submit') ? sendForApproval : undefined}
         />
       ) : (
         <section className="flex flex-col gap-3">
@@ -216,47 +255,34 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
           ))}
         </section>
       )}
-      {(plan.allowedCommands ?? []).some((name) => ['submit', ...Object.keys(COMMANDS)].includes(name)) && (
+      {commands.length > 0 && (
         <section className="flex flex-col gap-4 border-t pt-4">
-          <CareField
-            label={isAllowed(plan, 'submit') ? 'Lý do thay đổi' : 'Lý do'}
-            value={reason}
-            onChange={setReason}
-            type="textarea"
-            maxLength={2000}
-          />
+          {!editable && (
+            <CareField label="Lý do" value={reason} onChange={setReason} type="textarea" maxLength={2000} />
+          )}
+          {isAllowed(plan, 'approve') && (
+            <p className="type-body-sm text-muted-foreground">
+              {hasPlan
+                ? 'Duyệt xong, bản sửa áp dụng từ ngày mai. Tự duyệt bắt buộc có lý do.'
+                : 'Duyệt xong, kế hoạch có hiệu lực ngay. Tự duyệt bắt buộc có lý do.'}
+            </p>
+          )}
           {reasonError && (
             <p role="alert" className="text-destructive">
               Nhập lý do trước khi thực hiện.
             </p>
           )}
-          {isAllowed(plan, 'approve') && (
-            <p className="type-body-sm text-muted-foreground">
-              Tự duyệt bắt buộc có lý do. Ngày hiệu lực do người lập đề xuất, người duyệt không sửa ngày.
-            </p>
-          )}
-          {isAllowed(plan, 'submit') && (
-            <form className="flex flex-col gap-3" onSubmit={submit}>
-              <CareField label="Ngày hiệu lực đề xuất" value={effectiveFrom} onChange={setEffectiveFrom} type="date" />
-              {dateError && <p role="alert">Chọn ngày hiệu lực đề xuất.</p>}
-              <Button type="submit" disabled={busy || problem?.status === 412}>
-                Gửi duyệt
-              </Button>
-            </form>
-          )}
           <div className="flex flex-wrap gap-3">
-            {Object.entries(LABELS)
-              .filter(([name]) => isAllowed(plan, name))
-              .map(([name, label]) => (
-                <Button
-                  key={name}
-                  variant="outline"
-                  disabled={busy || problem?.status === 412}
-                  onClick={() => transition(name)}
-                >
-                  {label}
-                </Button>
-              ))}
+            {commands.map((name) => (
+              <Button
+                key={name}
+                variant={name === 'approve' ? 'default' : 'outline'}
+                disabled={busy || problem?.status === 412}
+                onClick={() => transition(name)}
+              >
+                {LABELS[name]}
+              </Button>
+            ))}
           </div>
         </section>
       )}

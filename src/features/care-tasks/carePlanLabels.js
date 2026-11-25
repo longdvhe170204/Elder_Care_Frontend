@@ -58,3 +58,24 @@ export const TASK_GROUPS = {
   MEDICATION: 'Uống thuốc',
   OTHER: 'Khác',
 }
+
+// Q-447: giao diện không hiện phiên bản; chỉ còn kế hoạch hiện hành, bản đã duyệt chờ áp dụng và bản sửa đang xử lý.
+export function planState(plans) {
+  const find = (...statuses) => (plans ?? []).find((plan) => statuses.includes(plan.status)) ?? null
+  return {
+    current: find('EFFECTIVE'),
+    scheduled: find('PENDING_EFFECT'),
+    open: find('DRAFT', 'PENDING_APPROVAL'),
+  }
+}
+
+// Nhãn trạng thái hiển thị; hasPlan: người cao tuổi đã có kế hoạch Hiệu lực hoặc đã duyệt chờ áp dụng.
+export function planLabel(plan, hasPlan) {
+  if (plan.status === 'DRAFT') return hasPlan ? 'Bản sửa đang soạn' : 'Đang soạn'
+  if (plan.status === 'PENDING_APPROVAL') return 'Chờ Bác sĩ duyệt'
+  if (plan.status === 'PENDING_EFFECT') {
+    const [, month, day] = /^\d{4}-(\d{2})-(\d{2})$/.exec(plan.effectiveFrom ?? '') ?? []
+    return day ? `Đã duyệt, áp dụng từ ${day}/${month}` : 'Đã duyệt, chờ áp dụng'
+  }
+  return PLAN_STATUS[plan.status] ?? plan.status
+}

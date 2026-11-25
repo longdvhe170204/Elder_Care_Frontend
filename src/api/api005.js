@@ -18,8 +18,11 @@ export const putCarePlansByIdItems = (params) => request('PUT', '/care-plans/{id
 /** Thay toàn bộ danh sách thỏa thuận lựa chọn có rủi ro của bản Nháp (bổ sung 2026-10-18) (FR-002a, FR-004, BR-M04-19, BR-M01-14, BR-M01-15) */
 export const putCarePlansByIdRiskAgreements = (params) => request('PUT', '/care-plans/{id}/risk-agreements', params)
 
-/** Gửi duyệt kèm ngày hiệu lực đề xuất (FR-003, FR-005) */
+/** Gửi Bác sĩ duyệt (FR-003, FR-005) */
 export const postCarePlansByIdSubmit = (params) => request('POST', '/care-plans/{id}/submit', params)
+
+/** Rút lại bản Chờ duyệt về Nháp (chỉ người lập, Q-447) (FR-003) */
+export const postCarePlansByIdRetract = (params) => request('POST', '/care-plans/{id}/retract', params)
 
 /** Duyệt (Bác sĩ; Điều dưỡng được gán quyền) (FR-003, FR-004, FR-005, BR-M04-19) */
 export const postCarePlansByIdApprove = (params) => request('POST', '/care-plans/{id}/approve', params)
@@ -30,10 +33,7 @@ export const postCarePlansByIdReturn = (params) => request('POST', '/care-plans/
 /** Hủy phiên bản Nháp hoặc Chờ duyệt (người lập, người có quyền duyệt) (FR-003) */
 export const postCarePlansByIdCancel = (params) => request('POST', '/care-plans/{id}/cancel', params)
 
-/** Thu hồi duyệt trước ngày hiệu lực (FR-003) */
-export const postCarePlansByIdWithdrawApproval = (params) => request('POST', '/care-plans/{id}/withdraw-approval', params)
-
-/** So sánh hai phiên bản (mục thêm, bớt, đổi) (FR-008) */
+/** Thay đổi của bản sửa so với kế hoạch Hiệu lực (mục thêm, bớt, đổi; Q-447) (FR-008) */
 export const getCarePlansCompare = (params) => request('GET', '/care-plans/compare', params)
 
 /** Trạng thái có mặt theo ngày của khu bán trú (FR-012, FR-013, FR-016, FR-049) */

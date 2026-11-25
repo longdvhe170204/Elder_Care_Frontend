@@ -30,7 +30,7 @@ it('FR_002_nhapNhieuMocGioGiuDauPhayTrongLucNhapVaGuiMangGio', () => {
   fireEvent.change(field, { target: { value: '08:00,' } })
   expect(field).toHaveValue('08:00,')
   fireEvent.change(field, { target: { value: '08:00, 14:00' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Lưu mục công việc' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
   expect(save).toHaveBeenCalledWith([expect.objectContaining({ times: ['08:00', '14:00'] })])
   expect(save.mock.calls[0][0][0]).not.toHaveProperty('timesText')
 })
@@ -59,7 +59,7 @@ it('D14_thieuTruongBatBuoc_baoLoiTiengVietTaiO_khongDungKiemTraCuaTrinhDuyet', (
       onSave={save}
     />,
   )
-  const button = screen.getByRole('button', { name: 'Lưu mục công việc' })
+  const button = screen.getByRole('button', { name: 'Lưu nháp' })
   expect(button.closest('form')).toHaveAttribute('novalidate')
   fireEvent.click(button)
   expect(save).not.toHaveBeenCalled()

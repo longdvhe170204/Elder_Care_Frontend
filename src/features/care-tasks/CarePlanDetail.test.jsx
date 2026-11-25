@@ -13,7 +13,7 @@ const plan = {
   riskAgreements: [],
   allowedCommands: ['submit', 'replaceItems', 'replaceRiskAgreements', 'cancel'],
   createdBy: '[Người lập kiểm thử]',
-  noEffectivePlan: true,
+  noEffectivePlan: false,
 }
 beforeEach(() => {
   api = mockRoutes()
@@ -22,25 +22,61 @@ beforeEach(() => {
 })
 afterEach(() => vi.unstubAllGlobals())
 
-it('FR_003_guiDuyetGuiNgayDeXuatVaLyDo', async () => {
+it('Q447_guiBacSiDuyet_luuMucRoiGuiKhongCoNgay', async () => {
+  api.on('PUT', '/care-plans/17/items', json(200, null))
   api.on('POST', '/care-plans/17/submit', json(200, null))
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
-  fireEvent.change(await screen.findByLabelText('Ngày hiệu lực đề xuất'), { target: { value: '2026-11-02' } })
-  fireEvent.change(screen.getByLabelText('Lý do thay đổi'), { target: { value: 'Theo đánh giá mới' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
+  expect(await screen.findByText('Bản sửa đang soạn')).toBeInTheDocument()
+  expect(screen.queryByLabelText('Ngày hiệu lực đề xuất')).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Lý do sửa'), { target: { value: 'Theo đánh giá mới' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Gửi Bác sĩ duyệt' }))
   await waitFor(() => expect(api.calls('POST', '/care-plans/17/submit')).toHaveLength(1))
+  expect(api.calls('PUT', '/care-plans/17/items')[0][1].headers['If-Match']).toBe('"4"')
   expect(JSON.parse(api.calls('POST', '/care-plans/17/submit')[0][1].body)).toEqual({
-    effectiveFrom: '2026-11-02',
     changeReason: 'Theo đánh giá mới',
   })
+})
+
+it('Q447_choDuyet_nguoiLapThayRutLai', async () => {
+  api.on(
+    'GET',
+    '/care-plans/17',
+    json(200, { ...plan, status: 'PENDING_APPROVAL', allowedCommands: ['retract', 'cancel'] }, { ETag: '"5"' }),
+  )
+  api.on('POST', '/care-plans/17/retract', json(200, null))
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  expect(await screen.findByText('Chờ Bác sĩ duyệt')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Thu hồi duyệt' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Rút lại' }))
+  await waitFor(() => expect(api.calls('POST', '/care-plans/17/retract')).toHaveLength(1))
+})
+
+it('Q447_choDuyet_bacSiThayThayDoiSoVoiHienHanh', async () => {
+  api.on(
+    'GET',
+    '/care-plans/17',
+    json(200, { ...plan, status: 'PENDING_APPROVAL', allowedCommands: ['approve', 'return'] }, { ETag: '"5"' }),
+  )
+  api.on(
+    'GET',
+    '/care-plans/compare',
+    json(200, { added: [{ id: 9, content: 'Mục thêm kiểm thử' }], removed: [], changed: [] }),
+  )
+  render(<CarePlanDetail planId={17} currentPlanId={11} onChanged={vi.fn()} />)
+  expect(await screen.findByText('Mục thêm kiểm thử')).toBeInTheDocument()
+  const [url] = api.calls('GET', '/care-plans/compare')[0]
+  expect(new URL(url, 'http://localhost').searchParams.get('from')).toBe('11')
+  expect(new URL(url, 'http://localhost').searchParams.get('to')).toBe('17')
+  expect(screen.getByRole('button', { name: 'Duyệt' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Trả lại' })).toBeInTheDocument()
 })
 
 it('FR_007_nutLenhChiTheoAllowedCommands', async () => {
   api.on('GET', '/care-plans/17', json(200, { ...plan, status: 'EFFECTIVE', allowedCommands: [] }, { ETag: '"5"' }))
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
   expect(await screen.findByText('Hiệu lực')).toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Gửi duyệt' })).not.toBeInTheDocument()
-  expect(screen.queryByRole('button', { name: 'Lưu mục công việc' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Gửi Bác sĩ duyệt' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Lưu nháp' })).not.toBeInTheDocument()
 })
 
 it('FR_004_412HienGiaTriMoiVaTaiLaiKhongGhiDe', async () => {
@@ -50,18 +86,18 @@ it('FR_004_412HienGiaTriMoiVaTaiLaiKhongGhiDe', async () => {
     problem(412, 'VERSION_MISMATCH', { currentValue: { version: 5, status: 'PENDING_APPROVAL' } }),
   )
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Lưu mục công việc' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Lưu nháp' }))
   expect(await screen.findByText('Dữ liệu đã thay đổi')).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Tải lại phiên bản' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Tải lại kế hoạch' })).toBeInTheDocument()
   const [, request] = api.calls('PUT', '/care-plans/17/items')[0]
   expect(request.headers['If-Match']).toBe('"4"')
   expect(request.headers['Idempotency-Key']).toBeTruthy()
   expect(api.calls('PUT', '/care-plans/17/items')).toHaveLength(1)
 })
 
-it('FR_003_huyPhienBanBatBuocLyDoTaiO', async () => {
+it('FR_003_boBanSuaBatBuocLyDoTaiO', async () => {
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Hủy phiên bản' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Bỏ bản sửa' }))
   expect(await screen.findByText('Nhập lý do trước khi thực hiện.')).toBeInTheDocument()
   expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(0)
 })

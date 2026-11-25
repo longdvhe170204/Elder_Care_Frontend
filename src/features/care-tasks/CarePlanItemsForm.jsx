@@ -22,7 +22,7 @@ function rowErrors(row) {
   return errors
 }
 
-export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
+export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForApproval }) {
   const [rows, setRows] = useState(() => items.map((row) => ({ ...row, timesText: (row.times ?? []).join(', ') })))
   const [errors, setErrors] = useState([])
   const errorOf = (index, key) => errors[index]?.[key]
@@ -47,12 +47,13 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
       ),
     )
   }
-  function submit(event) {
+  // Gửi qua nút: "Lưu nháp" là submit của form, "Gửi Bác sĩ duyệt" lưu rồi gửi (Q-447)
+  function submit(event, send = onSave) {
     event.preventDefault()
     const found = rows.map(rowErrors)
     setErrors(found)
     if (found.some((e) => Object.keys(e).length > 0)) return
-    onSave(
+    send(
       rows.map(({ timesText, ...row }) => ({
         ...row,
         taskTypeId: Number(row.taskTypeId),
@@ -253,9 +254,14 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
         >
           Thêm mục công việc
         </Button>
-        <Button type="submit" disabled={busy}>
-          Lưu mục công việc
+        <Button type="submit" variant={onSubmitForApproval ? 'outline' : 'default'} disabled={busy}>
+          Lưu nháp
         </Button>
+        {onSubmitForApproval && (
+          <Button type="button" disabled={busy} onClick={(event) => submit(event, onSubmitForApproval)}>
+            Gửi Bác sĩ duyệt
+          </Button>
+        )}
       </div>
     </form>
   )
