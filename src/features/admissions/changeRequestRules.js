@@ -68,6 +68,15 @@ const COMPANION_TEXT = {
   DURATION: 'Thời hạn',
 }
 
+const normalizeSchedule = (rows = []) =>
+  rows
+    .map(
+      (r) =>
+        `${r.date ? `D:${r.date}` : `W:${r.dayOfWeek}`}|${String(r.arrivalTime ?? '').slice(0, 5)}|${String(r.departureTime ?? '').slice(0, 5)}`,
+    )
+    .sort()
+    .join(';')
+
 // Lỗi theo ô của phần nội dung thay đổi; contract là hợp đồng đang chọn (có thể chưa biết, ví dụ Bác sĩ)
 export function validateChange({ types, value, date, contract }) {
   const errors = {}
@@ -120,6 +129,20 @@ export function validateChange({ types, value, date, contract }) {
           r.departureTime <= r.arrivalTime,
       )
       if (bad >= 0) errors.arrivalSchedule = `Dòng ${bad + 1}: chọn thứ, giờ đến và giờ về; giờ về phải sau giờ đến`
+      else {
+        const keys = rows.map((r) => (r.date ? `D:${r.date}` : `W:${r.dayOfWeek}`))
+        if (new Set(keys).size !== keys.length) {
+          errors.arrivalSchedule = 'Không được chọn trùng thứ hoặc ngày trong lịch đến'
+        } else if (
+          !types.includes('RESIDENCE_TYPE') &&
+          contract?.residenceType === 'DAY_CARE' &&
+          Array.isArray(contract?.arrivalSchedule) &&
+          contract.arrivalSchedule.length > 0 &&
+          normalizeSchedule(rows) === normalizeSchedule(contract.arrivalSchedule)
+        ) {
+          errors.arrivalSchedule = 'Lịch đến mới trùng với lịch đến hiện tại của hợp đồng'
+        }
+      }
     }
   }
   return errors
