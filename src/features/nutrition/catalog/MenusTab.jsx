@@ -378,6 +378,8 @@ function MenuDetail({ summary, meals, dishes, kitchen, manager, onChanged, Title
     if (result) {
       setMode(null)
       setReason('')
+      // Tải lại chi tiết: thực đơn có thể rời danh sách đang lọc (Chờ duyệt) nên khung không được mở lại theo danh sách
+      detail.reload()
       onChanged(`${MENU_COMMAND[cmd].replace('…', '')}: xong`)
     }
   }
