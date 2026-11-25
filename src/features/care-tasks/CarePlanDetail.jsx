@@ -133,6 +133,8 @@ export function CarePlanDetail({ planId, currentPlanId, onChanged, Title = 'h2',
     setReasonError(false)
     try {
       await putCarePlansByIdItems(request(items, true))
+      // Lưu mục làm tăng phiên bản dữ liệu: lấy ETag mới để lần gửi lại (vd. thiếu lý do) không bị 412
+      setResource(await getCarePlansById({ path: { id: planId } }))
       await postCarePlansByIdSubmit(request(reason.trim() ? { changeReason: reason.trim() } : {}))
       setMessage('Đã gửi Bác sĩ duyệt.')
       refresh()
