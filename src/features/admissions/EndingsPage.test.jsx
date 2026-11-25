@@ -98,6 +98,28 @@ describe('EndingsPage', () => {
     expect(screen.queryByText('Hợp đồng được xử lý')).not.toBeInTheDocument()
   })
 
+  // Demo 2026-11-26: hồ sơ hiện người đại diện kèm số điện thoại, phòng và giường đang ở
+  it('hoSo_hienNguoiDaiDien_soDienThoai_phongGiuong', async () => {
+    api.on(
+      'GET',
+      '/residents/5/relationships',
+      json(200, [
+        { id: 1, status: 'ACTIVE', representative: false, familyMember: { id: 40, fullName: 'Lê Văn Khác' } },
+        {
+          id: 2,
+          status: 'ACTIVE',
+          representative: true,
+          familyMember: { id: 41, fullName: 'Trần Văn Minh', phoneNumber: '0911000004' },
+        },
+      ]),
+    )
+    api.on('GET', '/residents/5/location', json(200, { location: { room: 'P102', bed: 'G2' } }))
+    renderPage()
+    await openEnding()
+    expect(await screen.findByText('Trần Văn Minh · 0911000004')).toBeInTheDocument()
+    expect(screen.getByText('Phòng P102, giường G2')).toBeInTheDocument()
+  })
+
   // Demo 2026-11-26: điều kiện bàn giao ở dòng cuối, sau quyết toán
   it('dieuKien_banGiaoODongCuoi', async () => {
     renderPage()
