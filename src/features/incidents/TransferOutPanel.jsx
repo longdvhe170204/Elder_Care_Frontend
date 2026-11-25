@@ -17,7 +17,7 @@ import { loadTransferDocument, loadTransferInfo, submitTransferOut } from './tra
 // người liên hệ chính trước khi phiếu điều trị có yêu cầu hỏi trước, chưa hỏi được thì ghi lý do (trừ sự cố Khẩn cấp).
 // Xong thì tải, in bản tóm tắt chuyển viện (PDF); in lại ghi nhật ký.
 
-export function TransferOutPanel({ incidentId, residentId = null, onDone, onCancel }) {
+export function TransferOutPanel({ incidentId, residentId = null, onDone, onCancel, onPreview }) {
   const [info, setInfo] = useState(null)
   const [problem, setProblem] = useState(null)
   const [unit, setUnit] = useState('')
@@ -64,6 +64,11 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
     return () => url && URL.revokeObjectURL(url)
   }, [summaryId])
 
+  // Báo khung ngoài biết đang xem trước phiếu để chỉ hiện tờ giấy (BF-06)
+  useEffect(() => {
+    onPreview?.(Boolean(summaryId))
+  }, [summaryId, onPreview])
+
   function printPdf() {
     frameRef.current?.contentWindow?.print()
   }
@@ -89,34 +94,31 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
   }
 
   if (summaryId) {
+    // Chỉ hiện tờ giấy: ẩn thanh công cụ, cột trang thu nhỏ của trình xem PDF và vừa khít một trang A4 (BF-06)
     return (
-      <div className="flex flex-col gap-3">
-        <h3 className="type-card-title">Đã chuyển viện · Xem trước phiếu</h3>
-        <p className="type-body-sm text-muted-foreground">
-          Kiểm tra phiếu rồi In hoặc Tải về. Thông tin sai thì sửa ở hồ sơ, không sửa trên phiếu.
-        </p>
+      <div className="flex flex-col items-center gap-3">
         {problem && <ProblemAlert problem={problem} />}
         {pdfUrl ? (
           <iframe
             ref={frameRef}
             title="Phiếu tóm tắt chuyển viện"
-            src={pdfUrl}
-            className="h-[60vh] w-full rounded-md border"
+            src={`${pdfUrl}#toolbar=0&navpanes=0&scrollbar=0&view=Fit`}
+            className="aspect-[210/297] h-[74vh] max-w-full border-0 bg-white"
           />
         ) : (
-          <Skeleton className="h-[60vh] w-full" />
+          <Skeleton className="aspect-[210/297] h-[74vh] max-w-full" />
         )}
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap justify-center gap-2">
           <Button className="h-11" disabled={!pdfUrl || busy} onClick={printPdf}>
             In phiếu
           </Button>
-          <Button variant="outline" className="h-11" disabled={!pdfUrl} onClick={savePdf}>
+          <Button variant="secondary" className="h-11" disabled={!pdfUrl} onClick={savePdf}>
             Tải về
           </Button>
-          <Button variant="outline" className="h-11" disabled={busy} onClick={reprint}>
+          <Button variant="secondary" className="h-11" disabled={busy} onClick={reprint}>
             In lại (ghi nhật ký)
           </Button>
-          <Button variant="ghost" className="h-11" onClick={onDone}>
+          <Button variant="secondary" className="h-11" onClick={onDone}>
             Xong
           </Button>
         </div>

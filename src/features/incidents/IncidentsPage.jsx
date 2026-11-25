@@ -505,6 +505,8 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const [residentStatus, setResidentStatus] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
+  // Đang xem trước phiếu chuyển viện: hộp chỉ hiện tờ giấy, không khung (BF-06)
+  const [paper, setPaper] = useState(false)
   const [busy, setBusy] = useState(false)
 
   // Trạng thái người cao tuổi, tải lại mỗi khi sự cố được tải lại (sau chuyển viện thì khóa nút Chuyển viện)
@@ -593,6 +595,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
     if (mode === 'transfer-out') loadIncident(incident.id).then(setState, () => {})
     if (mode === 'progressions') requestAnimationFrame(() => document.getElementById('write-progression')?.focus())
     setMode(null)
+    setPaper(false)
     setProblem(null)
   }
 
@@ -894,6 +897,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
           description={DIALOG_HINT[mode]}
           problem={problem}
           wide={mode === 'transfer-out'}
+          paper={mode === 'transfer-out' && paper}
           onClose={closeMode}
         >
           {mode === 'transfer-out' ? (
@@ -901,8 +905,10 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
               incidentId={incident.id}
               residentId={content.residentId ?? null}
               onCancel={closeMode}
+              onPreview={setPaper}
               onDone={async () => {
                 setMode(null)
+                setPaper(false)
                 setState(await loadIncident(incident.id))
                 onChanged('Đã chuyển viện')
               }}
