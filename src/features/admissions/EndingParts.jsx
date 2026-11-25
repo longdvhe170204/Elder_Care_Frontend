@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   getResidentsById,
+  getResidentsByResidentIdLocation,
   getResidentsByResidentIdRelationships,
   getMe,
   getResidencyEndingsByIdConditions,
@@ -260,8 +261,39 @@ function ConfirmEndForm({ ending, onDone, onCancel }) {
   )
 }
 
+// Demo 2026-11-26 (E): hồ sơ hiện người đại diện (họ tên, số điện thoại; api-012) và phòng, giường đang ở (api-003); không
+// tải được (thiếu quyền, đã trả giường) thì không hiện dòng đó
+function useEndingContacts(residentId) {
+  const [contacts, setContacts] = useState({ representative: null, place: null })
+  useEffect(() => {
+    let live = true
+    getResidentsByResidentIdRelationships({ path: { residentId } })
+      .then(({ data }) => {
+        const member = (data ?? []).find((r) => r.representative && r.status !== 'ENDED')?.familyMember
+        if (live && member)
+          setContacts((c) => ({
+            ...c,
+            representative: member.phoneNumber ? `${member.fullName} · ${member.phoneNumber}` : member.fullName,
+          }))
+      })
+      .catch(() => {})
+    getResidentsByResidentIdLocation({ path: { residentId } })
+      .then(({ data }) => {
+        const place = data?.location
+        if (live && place?.room)
+          setContacts((c) => ({ ...c, place: `Phòng ${place.room}${place.bed ? `, giường ${place.bed}` : ''}` }))
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [residentId])
+  return contacts
+}
+
 export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
   const [name, setName] = useState('')
+  const contacts = useEndingContacts(ending.residentId)
   const [conditions, setConditions] = useState(null)
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
@@ -336,6 +368,8 @@ export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Info label="Ngày kết thúc dự kiến">{formatDate(ending.expectedEndDate)}</Info>
+        {contacts.representative && <Info label="Người đại diện">{contacts.representative}</Info>}
+        {contacts.place && <Info label="Phòng, giường">{contacts.place}</Info>}
         {ending.destination && <Info label="Nơi chuyển đến">{ending.destination}</Info>}
         {ending.actualEndedAt && <Info label="Đã kết thúc lúc">{formatDateTime(ending.actualEndedAt)}</Info>}
         {ending.overdueSince && <Info label="Quá hạn từ">{formatDate(ending.overdueSince)}</Info>}
