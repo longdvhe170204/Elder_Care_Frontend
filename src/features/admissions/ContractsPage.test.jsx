@@ -224,3 +224,17 @@ describe('ContractsPage', () => {
     expect(await screen.findByText(/Bạn không có quyền xem/)).toBeInTheDocument()
   })
 })
+
+// Demo 2026-11-25: mở từ thông báo nhắc hợp đồng sắp hết hạn, quá hạn: chọn sẵn bộ lọc và mở chi tiết hợp đồng đó
+describe('ContractsPage mở theo contractId', () => {
+  it('moTuThongBao_moThangHopDong', async () => {
+    render(
+      <PermissionsProvider>
+        <ContractsPage contractId={33} />
+      </PermissionsProvider>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Phạm Thị Mai' })).toBeInTheDocument()
+    expect(screen.getByText('Hợp đồng HD-033')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Hiệu lực/, hidden: true })).toHaveAttribute('aria-pressed', 'true')
+  })
+})
