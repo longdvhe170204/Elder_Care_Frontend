@@ -12,7 +12,8 @@ const POLL_MS = 30_000
 // không có lượt nào thì không hiện gì. Hỏi lại mỗi 30 giây như yêu cầu nền.
 // Đề xuất 2026-11-24 (góp ý test demo: khối quá dài): người nhà hiện đủ; nhân viên chưa xác nhận gom thành một dòng, bấm mới
 // mở danh sách.
-export function ResidentCallReminders({ residentId, residentName, onFamilyReached }) {
+// who: 'family' chỉ lượt gọi người nhà (đặt trong khối Báo người nhà của sự cố), 'staff' chỉ lượt gọi nhân viên; bỏ trống là cả hai.
+export function ResidentCallReminders({ residentId, residentName, onFamilyReached, who }) {
   const id = useId()
   const [items, setItems] = useState([])
   const [opened, setOpened] = useState(null)
@@ -24,7 +25,15 @@ export function ResidentCallReminders({ residentId, residentName, onFamilyReache
     let live = true
     const run = (background) =>
       getMeCallReminders({ headers: background ? { 'X-Background-Refresh': 'true' } : {} }).then(
-        ({ data }) => live && setItems((data ?? []).filter((r) => r.residentId === residentId)),
+        ({ data }) =>
+          live &&
+          setItems(
+            (data ?? []).filter(
+              (r) =>
+                r.residentId === residentId &&
+                (!who || (who === 'staff') === (r.personToCall?.type === 'STAFF')),
+            ),
+          ),
         () => live && setItems([]),
       )
     run(false)
@@ -33,7 +42,7 @@ export function ResidentCallReminders({ residentId, residentName, onFamilyReache
       live = false
       clearInterval(timer)
     }
-  }, [residentId, version])
+  }, [residentId, version, who])
 
   if (items.length === 0) return null
   const staff = items.filter((r) => r.personToCall?.type === 'STAFF')
@@ -48,8 +57,11 @@ export function ResidentCallReminders({ residentId, residentName, onFamilyReache
     </li>
   )
   return (
-    <section aria-label="Cần gọi điện" className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-      <h2 className="type-card-title">Cần gọi điện ({items.length})</h2>
+    <section
+      aria-label={who === 'family' ? 'Gọi người nhà' : 'Cần gọi điện'}
+      className={who === 'family' ? 'flex flex-col gap-3' : 'flex flex-col gap-3 rounded-xl border bg-card p-4'}
+    >
+      {who !== 'family' && <h2 className="type-card-title">Cần gọi điện ({items.length})</h2>}
       {others.length > 0 && <ul className="flex flex-col gap-2">{others.map(row)}</ul>}
       {staff.length > 0 && (
         <div className="flex flex-col gap-2">

@@ -17,7 +17,7 @@ import { loadTransferDocument, loadTransferInfo, submitTransferOut } from './tra
 // người liên hệ chính trước khi phiếu điều trị có yêu cầu hỏi trước, chưa hỏi được thì ghi lý do (trừ sự cố Khẩn cấp).
 // Xong thì tải, in bản tóm tắt chuyển viện (PDF); in lại ghi nhật ký.
 
-export function TransferOutPanel({ incidentId, residentId = null, onDone, onCancel, onPreview }) {
+export function TransferOutPanel({ incidentId, residentId = null, onDone, onCancel, onPreview, reopen = false }) {
   const [info, setInfo] = useState(null)
   const [problem, setProblem] = useState(null)
   const [unit, setUnit] = useState('')
@@ -44,13 +44,18 @@ export function TransferOutPanel({ incidentId, residentId = null, onDone, onCanc
   useEffect(() => {
     let cancelled = false
     loadTransferInfo(incidentId).then(
-      (data) => !cancelled && setInfo(data),
+      (data) => {
+        if (cancelled) return
+        setInfo(data)
+        // Mở xem lại phiếu đã lập (sau khi đã đóng màn in): vào thẳng màn phiếu
+        if (reopen && data?.summaryId) setSummaryId(data.summaryId)
+      },
       (error) => !cancelled && setProblem(problemOf(error)),
     )
     return () => {
       cancelled = true
     }
-  }, [incidentId])
+  }, [incidentId, reopen])
 
   const [pdfUrl, setPdfUrl] = useState(null)
   const frameRef = useRef(null)

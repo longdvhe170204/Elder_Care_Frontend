@@ -15,7 +15,7 @@ const METHOD_LABEL = Object.fromEntries(FAMILY_METHODS)
  * Tình trạng báo người nhà của sự cố (BF-06, đề xuất 2026-11-24): đã báo thì hiện ai, lúc nào, cách nào; chưa báo thì nhắc,
  * quá hạn thì nhắc rõ hơn. Người có quyền (canRecord = lệnh family-notice) ghi được "Đã báo người nhà".
  */
-export function FamilyNoticePanel({ incidentId, canRecord }) {
+export function FamilyNoticePanel({ incidentId, canRecord, children }) {
   const [status, setStatus] = useState(null)
   const [editing, setEditing] = useState(false)
   const [method, setMethod] = useState('PHONE')
@@ -81,6 +81,8 @@ export function FamilyNoticePanel({ incidentId, canRecord }) {
           </p>
         )}
         {problem && <ProblemAlert problem={problem} />}
+        {/* Việc nhắc gọi người nhà nằm ngay đây: gọi xong chọn "Đã liên lạc được" là tự ghi đã báo (BF-06) */}
+        {!informed && children}
         {!informed && canRecord && !editing && (
           <Button className="h-11 self-start" onClick={() => setEditing(true)}>
             Ghi đã báo người nhà

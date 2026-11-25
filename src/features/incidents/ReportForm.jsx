@@ -251,10 +251,13 @@ export function ReportForm({
   // Chỉ người có quyền xử lý sự cố mới đóng được; người khác chỉ Lưu, chờ người có chuyên môn đóng
   const canClose = can('INCIDENT_EMERGENCY', 'UPDATE')
   const closeNow = isLater && canClose
+  // Cụ đang ở bệnh viện: không tạo cảnh báo hay ghi sự cố mới, chỉ ghi nhận sau việc đã xảy ra trước đó (BF-06)
+  const atHospital = picked?.status === 'HOSPITALIZED' && !(kind === 'incident' && isLater)
   const lowerNeeded = kind === 'incident' && needsLowerReason(level, type)
   const description = note.trim() || [type?.name, place.trim()].filter(Boolean).join(', ')
   const errors = {
     resident: !answered || (kind === 'alert' && residentId == null),
+    hospital: atHospital,
     floor: noResident && !floorId,
     type: !type,
     level: !level,
@@ -454,6 +457,7 @@ export function ReportForm({
             {picked && AWAY_STATUS_TEXT[picked.status] && (
               <Alert role="note" variant="attention">
                 {picked.name} {AWAY_STATUS_TEXT[picked.status]}.
+                {picked.status === 'HOSPITALIZED' && ' Không tạo cảnh báo hay ghi sự cố mới; việc đã xảy ra trước đó thì chọn "Đã xử lý xong" để ghi nhận sau.'}
               </Alert>
             )}
           </Section>
