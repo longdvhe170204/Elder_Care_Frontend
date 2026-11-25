@@ -35,7 +35,7 @@ const FILTERS = [
   ['PENDING_APPROVAL', 'Chờ duyệt', (r) => r.status === 'PENDING_APPROVAL'],
   ['PENDING_SIGNATURE', 'Chờ ký', awaitingSignature],
   ['APPROVED', 'Đã duyệt', (r) => r.status === 'APPROVED' && !awaitingSignature(r)],
-  ['DONE', 'Đã xong', (r) => ['APPLIED', 'APPLY_FAILED', 'REJECTED', 'CANCELLED', 'SUPERSEDED'].includes(r.status)],
+  ['DONE', 'Đã kết thúc', (r) => ['APPLIED', 'APPLY_FAILED', 'REJECTED', 'CANCELLED', 'SUPERSEDED'].includes(r.status)],
 ]
 
 const STATUS_CARD_CONFIG = {
@@ -56,7 +56,7 @@ const STATUS_CARD_CONFIG = {
     dot: 'bg-emerald-600',
   },
   DONE: {
-    hint: 'Hoàn tất / đóng',
+    hint: 'Đã xử lý hoặc đóng',
     dot: 'bg-teal-600',
   },
 }
@@ -350,7 +350,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
             <TableHeader className="bg-[#24496F] text-white border-b border-border/80 [&_th]:text-white [&_th]:font-bold [&_th]:text-xs [&_th]:uppercase [&_th]:tracking-wider">
               <TableRow className="hover:bg-transparent border-none">
                 <TableHead className="w-14 pl-4 text-center text-white">#</TableHead>
-                <TableHead className="text-white">Yêu cầu</TableHead>
+                <TableHead className="text-white">Người cao tuổi / Hợp đồng</TableHead>
                 <TableHead className="text-white">Thay đổi</TableHead>
                 <TableHead className="text-white">Ngày hiệu lực</TableHead>
                 <TableHead className="text-white">Số phụ lục</TableHead>
@@ -423,7 +423,7 @@ export function ChangeRequestsPage({ id: initialId, onNavigate = () => {} } = {}
                       {r.addendum?.addendumNo ? (
                         <span className="flex items-center gap-1.5 font-medium">
                           <FileText aria-hidden className="size-4 text-primary" />
-                          {String(r.addendum.addendumNo).padStart(2, '0')}
+                          {`Phụ lục ${String(r.addendum.addendumNo).padStart(2, '0')}`}
                         </span>
                       ) : (
                         <span className="text-muted-foreground">—</span>

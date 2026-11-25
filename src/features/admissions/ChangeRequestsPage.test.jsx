@@ -508,6 +508,8 @@ describe('ChangeRequestsPage', () => {
     const roomType = await within(dialog).findByLabelText('Loại phòng mới')
     await within(roomType).findByRole('option', { name: 'Phòng đôi' })
     expect(within(roomType).queryByRole('option', { name: 'Phòng bốn giường' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(/Chuyển giường trực tiếp/)).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hướng dẫn: Loại phòng mới' }))
     expect(within(dialog).getByText(/Chuyển giường trực tiếp/)).toBeInTheDocument()
 
     fireEvent.change(roomType, { target: { value: '2' } })

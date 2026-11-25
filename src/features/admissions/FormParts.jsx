@@ -1,18 +1,62 @@
 import { useEffect, useState } from 'react'
+import { CircleHelp } from 'lucide-react'
 import { getResidents } from '@/api'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChoiceTray } from '@/common/ChoiceTray'
+import { cn } from '@/lib/utils'
 import { SELECT } from './admissionLabels'
 
 // Thành phần form dùng chung trong features/admissions (004): chọn một trong vài giá trị, dòng thông tin, ô lý do,
 // chọn người cao tuổi. Không dùng chung với feature khác (frontend/README mục 4 điều 1).
 
-export function Choices({ label, options, value, onChange, error }) {
+// Nút ? nhỏ cạnh nhãn/tiêu đề: bấm để ẩn/hiện phần giải thích chi tiết, giữ giao diện gọn mặc định
+export function HelpHintButton({ label, open, onToggle }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      aria-label={`Hướng dẫn: ${label}`}
+      title={`Xem hướng dẫn: ${label}`}
+      onClick={onToggle}
+      className={cn(
+        'inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        open && 'bg-primary/10 text-primary',
+      )}
+    >
+      <CircleHelp aria-hidden className="size-3.5 stroke-[2]" />
+    </button>
+  )
+}
+
+export function HelpHintBox({ children }) {
+  return (
+    <p className="rounded-lg border border-border/70 bg-muted/50 px-3 py-2 type-caption text-muted-foreground leading-relaxed">
+      {children}
+    </p>
+  )
+}
+
+export function LabelWithHelp({ htmlFor, label, hint, className }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <FieldLabel htmlFor={htmlFor} className={className}>
+          {label}
+        </FieldLabel>
+        {hint && <HelpHintButton label={label} open={open} onToggle={() => setOpen((v) => !v)} />}
+      </div>
+      {hint && open && <HelpHintBox>{hint}</HelpHintBox>}
+    </div>
+  )
+}
+
+export function Choices({ label, hint, options, value, onChange, error }) {
   return (
     <Field data-invalid={!!error || undefined}>
-      <FieldLabel>{label}</FieldLabel>
+      <LabelWithHelp label={label} hint={hint} />
       <ToggleGroup
         variant="outline"
         value={value ? [value] : []}

@@ -12,7 +12,7 @@ import {
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
@@ -31,7 +31,7 @@ import {
   addendumNoText,
   isoDate,
 } from './changeRequestRules'
-import { ReasonField } from './FormParts'
+import { HelpHintBox, HelpHintButton, LabelWithHelp, ReasonField } from './FormParts'
 
 // Lệnh trên yêu cầu thay đổi lưu trú theo BF-08 sửa đổi (004 FR-043d → FR-043h; Q-417 → Q-421): ghi nhận phụ lục đã
 // ký, ý kiến người cao tuổi, trả về nháp, hủy, gửi duyệt kèm cảnh báo và lý do. Kiểm thật ở backend; lỗi 409 hiện mô tả
@@ -100,6 +100,7 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const [showHelp, setShowHelp] = useState(false)
 
   useEffect(() => {
     getStaff({ query: { status: 'WORKING' } })
@@ -152,10 +153,20 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
-        <SheetTitle>{`Ghi nhận ${addendumNoText(request.addendum?.addendumNo).toLowerCase()} đã ký`}</SheetTitle>
-        <SheetDescription>
-          Ngày hiệu lực thực tế là ngày muộn nhất trong ngày mong muốn, ngày duyệt và ngày ký; không tính lùi.
+        <div className="flex items-center gap-1.5 pr-8">
+          <SheetTitle>{`Ghi nhận ${addendumNoText(request.addendum?.addendumNo).toLowerCase()} đã ký`}</SheetTitle>
+          <HelpHintButton label="ghi nhận phụ lục đã ký" open={showHelp} onToggle={() => setShowHelp((v) => !v)} />
+        </div>
+        <SheetDescription className="text-xs text-muted-foreground">
+          Ghi nhận bản scan phụ lục đã có chữ ký.
         </SheetDescription>
+        {showHelp && (
+          <div className="mt-2">
+            <HelpHintBox>
+              Ngày hiệu lực thực tế là ngày muộn nhất trong ngày mong muốn, ngày duyệt và ngày ký; không tính lùi.
+            </HelpHintBox>
+          </div>
+        )}
         <FieldGroup className="mt-4">
           <Field data-invalid={!!shown('signedDate') || undefined}>
             <FieldLabel htmlFor="sign-date">Ngày ký</FieldLabel>
@@ -178,7 +189,11 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
             label="Người đại diện ký"
           />
           <Field>
-            <FieldLabel htmlFor="sign-staff">Người ký phía viện</FieldLabel>
+            <LabelWithHelp
+              htmlFor="sign-staff"
+              label="Người ký phía viện"
+              hint="Không bắt buộc. Chỉ hiện nhân viên bạn được xem hồ sơ; cần ghi người khác thì nhờ Quản lý viện ghi nhận."
+            />
             <select id="sign-staff" className={SELECT} value={staffId} onChange={(e) => setStaffId(e.target.value)}>
               <option value="">{staff?.length === 0 ? 'Không có nhân viên để chọn' : 'Không ghi'}</option>
               {(staff ?? []).map((s) => (
@@ -187,18 +202,14 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
                 </option>
               ))}
             </select>
-            <FieldDescription>
-              Không bắt buộc. Chỉ hiện nhân viên bạn được xem hồ sơ; cần ghi người khác thì nhờ Quản lý viện ghi nhận.
-            </FieldDescription>
           </Field>
           <Field data-invalid={!!shown('file') || undefined}>
-            <FieldLabel htmlFor="sign-file">Bản scan phụ lục đã ký</FieldLabel>
+            <LabelWithHelp htmlFor="sign-file" label="Bản scan phụ lục đã ký" hint="PDF, JPG hoặc PNG, tối đa 10 MB." />
             <FileInput
               id="sign-file"
               accept={EVIDENCE_ACCEPT}
               onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             />
-            <FieldDescription>PDF, JPG hoặc PNG, tối đa 10 MB.</FieldDescription>
             {shown('file') && <FieldError>{shown('file')}</FieldError>}
           </Field>
           <Field>
@@ -291,7 +302,12 @@ export function ResidentOpinions({ request, canRecord, warnings = [], onChanged 
           {items.map((o, i) => (
             <li key={o.id} className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/30 p-2.5">
               <span className="flex flex-wrap items-center gap-2">
-                <span className="type-body-sm font-semibold text-foreground">{`${labelOf(OPINIONS, o.opinion)}${i === 0 ? ', hiện hành' : ''}`}</span>
+                <span className="type-body-sm font-semibold text-foreground">{labelOf(OPINIONS, o.opinion)}</span>
+                {i === 0 && (
+                  <Badge variant="outline" className="text-xs font-medium">
+                    Mới nhất
+                  </Badge>
+                )}
                 <Badge variant="secondary" className="text-xs font-medium">{OPINION_SOURCE_BADGES[o.source] ?? o.source}</Badge>
               </span>
               <span className="type-caption text-muted-foreground">
@@ -389,7 +405,7 @@ export function ResidentOpinions({ request, canRecord, warnings = [], onChanged 
           <ProblemAlert problem={failure} />
           <div className="flex items-center justify-end gap-2 pt-1 border-t border-border/60">
             <Button variant="ghost" size="sm" className="h-9 px-3 text-xs" onClick={() => setAdding(false)}>
-              Thôi
+              Hủy
             </Button>
             <Button size="sm" className="h-9 px-4 text-xs font-bold shadow-xs" disabled={busy || !opinion} onClick={save}>
               Lưu ý kiến

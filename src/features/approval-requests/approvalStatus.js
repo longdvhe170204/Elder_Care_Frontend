@@ -5,7 +5,7 @@ export const STATUS_LABELS = {
   PENDING_APPROVAL: 'Chờ duyệt',
   APPROVED: 'Đã duyệt',
   APPLIED: 'Đã áp dụng',
-  APPLY_FAILED: 'Áp dụng không thành',
+  APPLY_FAILED: 'Áp dụng thất bại',
   REJECTED: 'Từ chối',
   CANCELLED: 'Đã hủy',
 }
@@ -25,7 +25,7 @@ export const ACTION_LABELS = {
   REQUEST_REJECTED: 'Từ chối',
   REQUEST_CANCELLED: 'Hủy',
   REQUEST_APPLIED: 'Áp dụng',
-  REQUEST_APPLY_FAILED: 'Áp dụng không thành',
+  REQUEST_APPLY_FAILED: 'Áp dụng thất bại',
   REQUEST_APPLY_ERROR: 'Lỗi khi áp dụng, sẽ thử lại',
   REQUEST_REMINDED: 'Nhắc người duyệt',
   REQUEST_ESCALATED: 'Báo Quản lý viện',

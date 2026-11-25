@@ -312,7 +312,7 @@ export const REGISTRABLE_SERVICE_GROUPS = [
 ]
 
 export const SERVICE_CHOICE_HINT =
-  'Chỉ đăng ký phục hồi chức năng, hoạt động dài hạn, đưa đi khám, tiêm. Mức chăm sóc đổi ở loại Mức chăm sóc; phí lưu trú đổi ở loại Giường; tã, bỉm, thuốc, suất ăn không đăng ký ở đây.'
+  'Chỉ đăng ký phục hồi chức năng, hoạt động dài hạn, đưa đi khám, tiêm. Mức chăm sóc đổi ở mục Mức chăm sóc; phí lưu trú đổi ở mục Loại phòng; tã, bỉm, thuốc, suất ăn không đăng ký ở đây.'
 
 // Dịch vụ trên form: dòng đang có trong hợp đồng (mọi loại) để bớt; dịch vụ Hiệu lực chưa có, thuộc 4 loại, để thêm,
 // nhóm theo loại. Dòng hợp đồng không còn trong danh mục thì hiện mã.

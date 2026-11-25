@@ -114,16 +114,16 @@ export const REQUEST_STATUS = {
   PENDING_APPROVAL: 'Chờ duyệt',
   APPROVED: 'Đã duyệt',
   APPLIED: 'Đã áp dụng',
-  APPLY_FAILED: 'Áp dụng không thành',
+  APPLY_FAILED: 'Áp dụng thất bại',
   REJECTED: 'Từ chối',
   CANCELLED: 'Đã hủy',
-  SUPERSEDED: 'Đã thay thế',
+  SUPERSEDED: 'Bị thay thế',
 }
 
 export const ADDENDUM_STATUS = {
   PENDING_EFFECTIVE: 'Chờ hiệu lực',
   APPLIED: 'Đã áp dụng',
-  NOT_APPLICABLE: 'Áp dụng không thành',
+  NOT_APPLICABLE: 'Áp dụng thất bại',
 }
 
 export const ABSENCE_TYPES = {

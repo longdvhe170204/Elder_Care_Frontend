@@ -81,7 +81,7 @@ import {
 } from './changeRequestRules'
 import { CHANGE_TYPE_ICONS, CHANGE_TYPE_TONES } from './changeTypeIcons'
 import { ChangeProgress } from './ChangeProgress'
-import { Choices, Info, ReasonField } from './FormParts'
+import { Choices, HelpHintBox, HelpHintButton, Info, LabelWithHelp, ReasonField } from './FormParts'
 import {
   ReasonCommandSheet,
   RepresentativeSelect,
@@ -420,7 +420,7 @@ export function ChangeRequestView({
         )}
 
         {request.minorChange && (
-          <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
+          <p className="type-body-sm">Điều chỉnh nhẹ: Hành chính tự duyệt, không cần xác nhận người đại diện.</p>
         )}
         {state && (draft || sent) && (
           <section className="flex flex-col gap-2" aria-label="Xác nhận của người đại diện">
@@ -471,7 +471,7 @@ export function ChangeRequestView({
         )}
         {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
           <p className="type-body-sm">
-            Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
+            Gia đình tự gửi trên ứng dụng: Hành chính kiểm tra rồi gửi duyệt.
           </p>
         )}
         {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
@@ -503,7 +503,7 @@ export function ChangeRequestView({
         ) : (
           request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
         )}
-        <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
+        <p className="type-caption text-muted-foreground">{`Mã yêu cầu: #${request.approvalRequestId}`}</p>
         <ProblemAlert problem={failure} />
       </div>
 
@@ -662,6 +662,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const [showSheetHelp, setShowSheetHelp] = useState(false)
   // Lần đánh giá gần nhất đã xác nhận: mức chăm sóc mới lấy từ đây, không chọn tay (FR-043j)
   const [assessment, setAssessment] = useState(null)
   // Người lập không được xem Đánh giá (Phụ lục 27, ví dụ Hành chính: 403) thì chọn mức tay, backend kiểm FR-043j khi lưu
@@ -904,12 +905,22 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <SheetTitle className="type-title text-primary">
               {editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}
             </SheetTitle>
+            <HelpHintButton
+              label="lập yêu cầu"
+              open={showSheetHelp}
+              onToggle={() => setShowSheetHelp((v) => !v)}
+            />
           </div>
           <SheetDescription className="text-xs text-muted-foreground leading-relaxed">
-            {seesContracts
-              ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
-              : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
+            Điền nội dung cần điều chỉnh để lưu bản nháp.
           </SheetDescription>
+          {showSheetHelp && (
+            <HelpHintBox>
+              {seesContracts
+                ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
+                : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
+            </HelpHintBox>
+          )}
         </div>
 
         {/* 2. BODY (Khu vực cuộn độc lập) */}
@@ -1051,7 +1062,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 <div className="mt-2 flex flex-col gap-1 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
                   {effectiveContract.residenceType && (
                     <div>
-                      Hiện tại:{' '}
+                      Loại lưu trú:{' '}
                       <strong className="font-semibold text-foreground">
                         {labelOf(RESIDENCE_TYPES, effectiveContract.residenceType)}
                       </strong>
@@ -1137,24 +1148,20 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 <FieldDescription>
                   {`Loại này cần chọn kèm: ${companions
                     .map((t) => labelOf(CHANGE_TYPES, t))
-                    .join(', ')} (kiểm khi duyệt).`}
+                    .join(', ')} (hệ thống kiểm tra khi duyệt).`}
                 </FieldDescription>
               )}
             </>
           )}
           {activeTypes.includes('CARE_LEVEL') && assessmentHidden && (
-            <>
-              <Choices
-                label="Mức chăm sóc mới"
-                options={CARE_LEVELS.filter(([k]) => k !== effectiveContract?.careLevel)}
-                value={value.careLevel ?? ''}
-                onChange={(v) => set({ careLevel: v })}
-                error={shown('careLevel')}
-              />
-              <FieldDescription>
-                Chọn đúng mức của lần đánh giá lại gần nhất do Bác sĩ xác nhận; hệ thống kiểm khi lưu.
-              </FieldDescription>
-            </>
+            <Choices
+              label="Mức chăm sóc mới"
+              hint="Chọn đúng mức của lần đánh giá lại gần nhất do Bác sĩ xác nhận; hệ thống kiểm tra khi lưu."
+              options={CARE_LEVELS.filter(([k]) => k !== effectiveContract?.careLevel)}
+              value={value.careLevel ?? ''}
+              onChange={(v) => set({ careLevel: v })}
+              error={shown('careLevel')}
+            />
           )}
           {activeTypes.includes('CARE_LEVEL') && !assessmentHidden && (
             <Field data-invalid={!!shown('careLevel') || undefined}>
@@ -1184,7 +1191,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           )}
           {activeTypes.includes('BED') && knowsRoomTypes && (
             <Field data-invalid={!!shown('newRoomTypeId') || undefined}>
-              <FieldLabel htmlFor="change-room-type">Loại phòng mới</FieldLabel>
+              <LabelWithHelp
+                htmlFor="change-room-type"
+                label="Loại phòng mới"
+                hint="Chỉ dùng khi đổi sang loại phòng khác (đổi phí lưu trú, phải ký phụ lục). Chuyển sang giường khác cùng loại phòng thì dùng Chuyển giường trực tiếp ở màn Giường, không cần lập yêu cầu."
+              />
               <select
                 id="change-room-type"
                 className={SELECT}
@@ -1203,16 +1214,16 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
-              <FieldDescription>
-                Chỉ dùng khi đổi sang loại phòng khác (đổi phí lưu trú, phải ký phụ lục). Chuyển sang giường khác cùng loại
-                phòng thì dùng Chuyển giường trực tiếp ở màn Giường, không cần lập yêu cầu.
-              </FieldDescription>
               {shown('newRoomTypeId') && <FieldError>{shown('newRoomTypeId')}</FieldError>}
             </Field>
           )}
           {activeTypes.includes('BED') && (
             <Field data-invalid={!!shown('newBedId') || undefined}>
-              <FieldLabel htmlFor="change-bed">{knowsRoomTypes ? 'Giường trong loại phòng mới' : 'Giường mới'}</FieldLabel>
+              <LabelWithHelp
+                htmlFor="change-bed"
+                label={knowsRoomTypes ? 'Giường trong loại phòng mới' : 'Giường mới'}
+                hint="Giữ trước giường này tới ngày hiệu lực; giường phải còn trống và hợp mức chăm sóc lúc duyệt."
+              />
               <select
                 id="change-bed"
                 className={SELECT}
@@ -1234,19 +1245,15 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
-              <FieldDescription>
-                Giữ trước giường này tới ngày hiệu lực; giường phải còn trống và hợp mức chăm sóc lúc duyệt.
-              </FieldDescription>
               {shown('newBedId') && <FieldError>{shown('newBedId')}</FieldError>}
             </Field>
           )}
           {activeTypes.includes('SERVICE') && (
             <Field data-invalid={!!shown('services') || undefined}>
-              <FieldLabel>Dịch vụ thêm hoặc bớt</FieldLabel>
-              <FieldDescription>
-                {SERVICE_CHOICE_HINT} Thuộc gói hay ngoài gói theo hợp đồng hiện hành; chỉ thêm, bớt dịch vụ thuộc gói
-                là thay đổi nhỏ.
-              </FieldDescription>
+              <LabelWithHelp
+                label="Dịch vụ thêm hoặc bớt"
+                hint={`${SERVICE_CHOICE_HINT} Thuộc gói hay ngoài gói theo hợp đồng hiện hành; chỉ thêm, bớt dịch vụ thuộc gói là điều chỉnh nhẹ.`}
+              />
               {(() => {
                 // FR-043k (Q-426): dòng đang có (mọi loại) để bớt; chỉ 4 loại để thêm, nhóm theo loại
                 const { removable, addGroups } = serviceChoices(catalog, effectiveContract?.services)
@@ -1354,9 +1361,12 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           )}
 
           <Field data-invalid={!!shown('date') || undefined}>
-            <FieldLabel htmlFor="change-date" className={REQUIRED}>
-              Ngày hiệu lực mong muốn
-            </FieldLabel>
+            <LabelWithHelp
+              htmlFor="change-date"
+              label="Ngày hiệu lực mong muốn"
+              className={REQUIRED}
+              hint="Duyệt muộn hơn ngày này thì thay đổi tính từ ngày duyệt, không tính lùi."
+            />
             <Input
               id="change-date"
               type="date"
@@ -1365,16 +1375,15 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
-            <FieldDescription>
-              Duyệt muộn hơn ngày này thì thay đổi tính từ ngày duyệt, không tính lùi.{' '}
+            <div className="flex items-center">
               <button
                 type="button"
-                className="rounded-md bg-accent px-2 py-0.5 text-accent-foreground"
+                className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
                 onClick={() => setDate(tomorrowIso())}
               >
                 {`Dùng ngày mai (${formatDate(tomorrowIso())})`}
               </button>
-            </FieldDescription>
+            </div>
             {shown('date') && <FieldError>{shown('date')}</FieldError>}
           </Field>
           <ReasonField id="change-reason" value={reason} onChange={setReason} error={shown('reason')} showCount />
@@ -1419,6 +1428,7 @@ export function ConfirmationSheet({ request, etag, onClose, onDone }) {
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const [showHelp, setShowHelp] = useState(false)
 
   const errors = {
     ...validateConfirmation({ method, confirmedOn, file: evidence, existingFileId: null, note }),
@@ -1462,11 +1472,21 @@ export function ConfirmationSheet({ request, etag, onClose, onDone }) {
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
-        <SheetTitle>Ghi xác nhận trực tiếp</SheetTitle>
-        <SheetDescription>
-          Dùng khi người đại diện đã đồng ý nội dung thay đổi tại viện, qua điện thoại hoặc tin nhắn. Đính kèm bằng
-          chứng rồi lưu; sau đó gửi Quản lý viện duyệt.
+        <div className="flex items-center gap-1.5 pr-8">
+          <SheetTitle>Ghi xác nhận trực tiếp</SheetTitle>
+          <HelpHintButton label="ghi xác nhận" open={showHelp} onToggle={() => setShowHelp((v) => !v)} />
+        </div>
+        <SheetDescription className="text-xs text-muted-foreground">
+          Đính kèm bằng chứng xác nhận từ người đại diện.
         </SheetDescription>
+        {showHelp && (
+          <div className="mt-2">
+            <HelpHintBox>
+              Dùng khi người đại diện đã đồng ý nội dung thay đổi tại viện, qua điện thoại hoặc tin nhắn. Đính kèm bằng
+              chứng rồi lưu; sau đó gửi Quản lý viện duyệt.
+            </HelpHintBox>
+          </div>
+        )}
         <FieldGroup className="mt-4">
           <RepresentativeSelect
             id="change-confirmer"
@@ -1496,13 +1516,16 @@ export function ConfirmationSheet({ request, etag, onClose, onDone }) {
             {shown('confirmedOn') && <FieldError>{shown('confirmedOn')}</FieldError>}
           </Field>
           <Field data-invalid={!!shown('evidence') || undefined}>
-            <FieldLabel htmlFor="change-evidence">Bằng chứng xác nhận</FieldLabel>
+            <LabelWithHelp
+              htmlFor="change-evidence"
+              label="Bằng chứng xác nhận"
+              hint={`${EVIDENCE_HINTS[method] ?? ''} PDF, JPG hoặc PNG, tối đa 10 MB.`}
+            />
             <FileInput
               id="change-evidence"
               accept={EVIDENCE_ACCEPT}
               onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
             />
-            <FieldDescription>{`${EVIDENCE_HINTS[method] ?? ''} PDF, JPG hoặc PNG, tối đa 10 MB.`}</FieldDescription>
             {shown('evidence') && <FieldError>{shown('evidence')}</FieldError>}
           </Field>
           <Field data-invalid={!!shown('note') || undefined}>

@@ -59,7 +59,7 @@ function renderPage() {
 }
 
 async function openDoneTab() {
-  const tab = await screen.findByRole('radio', { name: /Đã xong/ }).catch(() => screen.findByText(/Đã xong/))
+  const tab = await screen.findByRole('radio', { name: /Đã kết thúc/ }).catch(() => screen.findByText(/Đã kết thúc/))
   fireEvent.click(tab)
 }
 
@@ -67,7 +67,7 @@ describe('ChangeRequestsPage: danh sách', () => {
   it('daThayThe_hienNhanTiengViet_khongHienMaKyThuat', async () => {
     renderPage()
     await openDoneTab()
-    expect(await screen.findByText('Đã thay thế')).toBeInTheDocument()
+    expect(await screen.findByText('Bị thay thế')).toBeInTheDocument()
     expect(screen.queryByText(/superseded/i)).not.toBeInTheDocument()
   })
 
@@ -84,6 +84,7 @@ describe('ChangeRequestsPage: danh sách', () => {
     await openDoneTab()
     const table = await screen.findByRole('table', { name: 'Yêu cầu điều chỉnh hợp đồng' })
     expect(within(table).getByRole('columnheader', { name: '#' })).toBeInTheDocument()
+    expect(within(table).getByRole('columnheader', { name: 'Người cao tuổi / Hợp đồng' })).toBeInTheDocument()
   })
 
   it('oTim_loc_theoMaYeuCauHoacMaHopDong', async () => {
@@ -124,12 +125,12 @@ describe('ChangeRequestsPage: danh sách', () => {
     renderPage()
     await openDoneTab()
     expect((await screen.findByText('Đã áp dụng')).className).toMatch(/bg-success/)
-    expect(screen.getByText('Đã thay thế').className).toMatch(/bg-muted/)
+    expect(screen.getByText('Bị thay thế').className).toMatch(/bg-muted/)
   })
 
   it('tab_hienSoLuongTrongNgoac', async () => {
     renderPage()
-    expect(await screen.findByText('Đã xong (2)')).toBeInTheDocument()
+    expect(await screen.findByText('Đã kết thúc (2)')).toBeInTheDocument()
   })
 
   it('nutXem_moChiTietCuaDong', async () => {

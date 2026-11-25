@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { CircleHelp } from 'lucide-react'
 import {
   ApiError,
   getApprovalRequestsById,
@@ -10,7 +11,7 @@ import {
   postApprovalRequestsByIdSubmit,
 } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -80,6 +81,32 @@ function Timeline({ request }) {
         ))}
       </ul>
     </section>
+  )
+}
+
+function CommentHelpToggle() {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center gap-1.5">
+        <FieldLabel htmlFor="approval-comment">Ý kiến</FieldLabel>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-label="Hướng dẫn: Ý kiến"
+          title="Xem hướng dẫn: Ý kiến"
+          onClick={() => setOpen((v) => !v)}
+          className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <CircleHelp aria-hidden className="size-3.5 stroke-[2]" />
+        </button>
+      </div>
+      {open && (
+        <p className="rounded-lg border border-border/70 bg-muted/50 px-3 py-2 type-caption text-muted-foreground leading-relaxed">
+          Bắt buộc khi từ chối, trả về nháp, hoặc khi duyệt yêu cầu do chính mình lập.
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -270,7 +297,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
       {canDecide && (
         <section className="flex flex-col gap-3">
           <Field data-invalid={!!errors.comment || undefined}>
-            <FieldLabel htmlFor="approval-comment">Ý kiến</FieldLabel>
+            <CommentHelpToggle />
             <Textarea
               id="approval-comment"
               rows={3}
@@ -279,11 +306,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
               onChange={(e) => setComment(e.target.value)}
               aria-invalid={!!errors.comment || undefined}
             />
-            {errors.comment ? (
-              <FieldError>{errors.comment}</FieldError>
-            ) : (
-              <FieldDescription>Bắt buộc khi từ chối, trả về nháp, hoặc khi duyệt yêu cầu do chính mình lập.</FieldDescription>
-            )}
+            {errors.comment && <FieldError>{errors.comment}</FieldError>}
           </Field>
           <div className="flex flex-wrap gap-2">
             {allowed.includes('approve') && (

@@ -202,6 +202,8 @@ describe('BF-08 sửa đổi', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận phụ lục đã ký' }))
     const dialog = await screen.findByRole('dialog')
     expect(await within(dialog).findByRole('option', { name: 'Không có nhân viên để chọn' })).toBeInTheDocument()
+    expect(within(dialog).queryByText(/nhờ Quản lý viện ghi nhận/)).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hướng dẫn: Người ký phía viện' }))
     expect(within(dialog).getByText(/nhờ Quản lý viện ghi nhận/)).toBeInTheDocument()
   })
 
@@ -424,6 +426,8 @@ describe('BF-08 sửa đổi', () => {
       expect(within(dialog).queryByRole('checkbox', { name })).not.toBeInTheDocument()
     }
     expect(within(dialog).getByText('Phục hồi chức năng')).toBeInTheDocument()
+    expect(within(dialog).queryByText(/tã, bỉm, thuốc, suất ăn không đăng ký ở đây/)).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hướng dẫn: Dịch vụ thêm hoặc bớt' }))
     expect(within(dialog).getByText(/tã, bỉm, thuốc, suất ăn không đăng ký ở đây/)).toBeInTheDocument()
   })
 
