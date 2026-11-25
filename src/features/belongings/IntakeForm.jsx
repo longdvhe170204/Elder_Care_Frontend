@@ -11,6 +11,7 @@ import { problemOf } from '@/common/problem'
 import { FilesField, MemberField, SelectField } from './BelongingFields'
 import { GIVER_LABELS, activeOptions, nowLocal, toOffsetIso } from './belongingLabels'
 import { useFamilyContacts } from './useFamilyContacts'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Lệnh Tiếp nhận đồ gửi (013 T011, US1; FR-003 → FR-008; api-013 BelongingIntake). Loại tiền mặt nhập số tiền, loại
 // khác nhập số lượng (FR-005); đồ có giá trị (dấu `valuable` của loại theo CFG-M12-01 hiện hành) bắt buộc ảnh (BR-M12-05);
@@ -148,17 +149,27 @@ export function IntakeForm({ residentId, types, levels, locations, onDone }) {
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
           <Field data-invalid={!!errors.amount || undefined}>
-            <FieldLabel htmlFor="intake-amount">{type?.hasCashAmount ? 'Số tiền (đồng)' : 'Số lượng'}</FieldLabel>
-            <Input
-              id="intake-amount"
-              type="number"
-              min="0"
-              inputMode="decimal"
-              className="h-11 tabular-nums"
-              value={values.amount}
-              onChange={(e) => set('amount')(e.target.value)}
-              aria-invalid={!!errors.amount || undefined}
-            />
+            <FieldLabel htmlFor="intake-amount">{type?.hasCashAmount ? 'Số tiền' : 'Số lượng'}</FieldLabel>
+            {/* Demo 2026-11-25: tiền mặt nhập dạng xxx.xxx.xxx đ */}
+            {type?.hasCashAmount ? (
+              <MoneyInput
+                id="intake-amount"
+                value={values.amount}
+                onChange={set('amount')}
+                aria-invalid={!!errors.amount || undefined}
+              />
+            ) : (
+              <Input
+                id="intake-amount"
+                type="number"
+                min="0"
+                inputMode="decimal"
+                className="h-11 tabular-nums"
+                value={values.amount}
+                onChange={(e) => set('amount')(e.target.value)}
+                aria-invalid={!!errors.amount || undefined}
+              />
+            )}
             {errors.amount && <FieldError>{errors.amount}</FieldError>}
           </Field>
           {!type?.hasCashAmount && (

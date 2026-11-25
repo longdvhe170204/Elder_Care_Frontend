@@ -22,8 +22,11 @@ function renderForm(onDone = vi.fn()) {
 function fill({ type, description = 'Áo len', amount = '5' }) {
   fireEvent.change(screen.getByLabelText('Loại đồ'), { target: { value: String(type) } })
   fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: description } })
-  const amountLabel = TYPES.find((t) => t.id === type).hasCashAmount ? 'Số tiền (đồng)' : 'Số lượng'
+  const cash = TYPES.find((t) => t.id === type).hasCashAmount
+  const amountLabel = cash ? 'Số tiền' : 'Số lượng'
   fireEvent.change(screen.getByLabelText(amountLabel), { target: { value: amount } })
+  // Demo 2026-11-25: số tiền mặt hiện dạng xxx.xxx.xxx đ
+  if (cash) expect(screen.getByLabelText(amountLabel)).toHaveValue(Number(amount).toLocaleString('vi-VN'))
   fireEvent.change(screen.getByLabelText('Mức tình trạng'), { target: { value: '11' } })
   fireEvent.change(screen.getByLabelText('Người giao'), { target: { value: 'OTHER_PERSON' } })
   fireEvent.change(screen.getByLabelText('Họ tên người giao'), { target: { value: 'Trần Văn Bình' } })

@@ -11,6 +11,7 @@ import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { FilesField, SelectField } from './BelongingFields'
 import { activeOptions, commandsFor, kindLabel, nowLocal, toOffsetIso } from './belongingLabels'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Lệnh bàn giao trên một đồ (013 T015, US2; FR-011 → FR-015, FR-021, FR-024; api-013 HandoverCommand). Lệnh hiện theo
 // trạng thái đồ như bảng chuyển của data-model mục 3; số lượng nhỏ hơn hiện có thì backend tách đồ (FR-012); số đếm
@@ -187,16 +188,27 @@ export function HandoverForm({ belonging, levels, locations, valuable = false, l
         <div className="grid gap-4 sm:grid-cols-2">
           <Field data-invalid={!!errors.quantity || undefined}>
             <FieldLabel htmlFor="handover-quantity">{amountLabel}</FieldLabel>
-            <Input
-              id="handover-quantity"
-              type="number"
-              min="0"
-              className="h-11 tabular-nums"
-              value={v.quantity}
-              placeholder="Toàn bộ"
-              onChange={(e) => set('quantity')(e.target.value)}
-              aria-invalid={!!errors.quantity || undefined}
-            />
+            {/* Demo 2026-11-25: tiền mặt nhập dạng xxx.xxx.xxx đ */}
+            {belonging.cashAmount != null ? (
+              <MoneyInput
+                id="handover-quantity"
+                value={v.quantity}
+                placeholder="Toàn bộ"
+                onChange={set('quantity')}
+                aria-invalid={!!errors.quantity || undefined}
+              />
+            ) : (
+              <Input
+                id="handover-quantity"
+                type="number"
+                min="0"
+                className="h-11 tabular-nums"
+                value={v.quantity}
+                placeholder="Toàn bộ"
+                onChange={(e) => set('quantity')(e.target.value)}
+                aria-invalid={!!errors.quantity || undefined}
+              />
+            )}
             {errors.quantity && <FieldError>{errors.quantity}</FieldError>}
           </Field>
           <Field data-invalid={!!errors.counted || undefined}>
