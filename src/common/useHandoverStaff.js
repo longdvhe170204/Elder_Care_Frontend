@@ -3,7 +3,8 @@ import { getMe, getStaff } from '@/api'
 
 // Nhân viên bàn giao chọn được khi ghi đón (012) và Cho tạm vắng (004): người đang ghi ("Tôi", theo UserInfo.staffId của
 // /me) đứng đầu, rồi nhân viên đang làm việc người ghi xem được (api-008: nhân viên chỉ thấy người cùng ca, nên Hành chính
-// không có ca thì chỉ có "Tôi"). Test BF-12 2026-11-24. null khi đang tải.
+// không có ca thì chỉ có "Tôi"). Test BF-12 2026-11-24. null khi đang tải. Dùng cả cho người ký phía viện khi ghi nhận
+// phụ lục đã ký (004; góp ý test BF-12 2026-11-25).
 export function useHandoverStaff() {
   const [me, setMe] = useState(undefined)
   const [staff, setStaff] = useState(undefined)

@@ -46,6 +46,7 @@ const FIXED_SERVICE_TYPES = ['CARE', 'RESIDENCY_FEE']
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 import { FileInput } from '@/common/FileInput'
 import { MoneyInput } from '@/common/MoneyInput'
+import { useBedChangeNames } from './useBedChangeNames'
 
 // Hôm nay ở Việt Nam, dạng yyyy-MM-dd (en-CA định dạng đúng kiểu này)
 const vietnamToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
@@ -179,6 +180,9 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
   const [busy, setBusy] = useState(false)
   const [roomTypeName, setRoomTypeName] = useState(null)
   const [serviceNames, setServiceNames] = useState({})
+  const bedNames = useBedChangeNames(
+    addenda.filter((a) => a.changeTypes?.includes('BED')).flatMap((a) => [a.contentBefore, a.contentAfter]),
+  )
   const allowed = contract.allowedCommands ?? []
   const hidden = contract.hiddenFields ?? []
   const draft = contract.status === 'DRAFT'
@@ -332,7 +336,7 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
                 {`Hiệu lực ${formatDate(a.effectiveDate)}`}
                 {(a.changeTypes ?? []).map((type) => (
                   <span key={type} className="block">
-                    {`${labelOf(CHANGE_TYPES, type)}: ${changeValueText(type, a.contentBefore)} → ${changeValueText(type, a.contentAfter)}`}
+                    {`${labelOf(CHANGE_TYPES, type)}: ${changeValueText(type, a.contentBefore, bedNames)} → ${changeValueText(type, a.contentAfter, bedNames)}`}
                   </span>
                 ))}
                 <span className="block type-caption text-muted-foreground">

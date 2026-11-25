@@ -47,6 +47,12 @@ function Choices({ label, options, value, onChange, error }) {
   )
 }
 
+// "Võ Thị Hòa: Đồng ý. Không phiền" (người được hỏi, kết quả, ghi chú)
+function roommateOpinionText({ askedPerson, result, note }) {
+  const label = ROOMMATE_RESULTS.find(([value]) => value === result)?.[1] ?? result
+  return `${askedPerson}: ${label}${note ? `. ${note}` : ''}`
+}
+
 function Info({ label, children }) {
   return (
     <div className="flex flex-col">
@@ -157,6 +163,10 @@ export function StayDetail({ stay, role, memberName, residentName, onChanged, Ti
         )}
         <Info label="Lý do">{stay.reason}</Info>
         <Info label="Đăng ký ăn">{stay.mealRegistered ? 'Có' : 'Không'}</Info>
+        {stay.roommateOpinion && (
+          // Góp ý test BF-12 (2026-11-25): ý kiến ghi lúc xác nhận; backend chỉ trả cho nhân viên
+          <Info label="Ý kiến người cùng phòng">{roommateOpinionText(stay.roommateOpinion)}</Info>
+        )}
       </div>
       <ProblemAlert problem={failure} />
 
