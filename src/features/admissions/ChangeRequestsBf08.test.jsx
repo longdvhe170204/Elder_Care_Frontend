@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { ChangeRequestsPage } from './ChangeRequestsPage'
-import { withCompanions } from './changeRequestRules'
+import { validateChange, withCompanions } from './changeRequestRules'
 
 // BF-08 sửa đổi (004 FR-043d → FR-043j; Q-415 → Q-424; plan-bf08 W1 → W13): phụ lục Chờ ký và ghi nhận đã ký, bộ lọc
 // Chờ ký, trả về nháp, hủy, ý kiến người cao tuổi và cảnh báo khi gửi duyệt, nhãn thuộc gói theo hợp đồng, loại kèm tự chọn.
@@ -471,5 +471,99 @@ describe('BF-08 sửa đổi', () => {
       'RESIDENCE_TYPE',
       'BED',
     ])
+  })
+
+  it('W9_hopDongDaDoiSangBanTruQuaPhuLuc_docNoiDungHienHanh_khongChoChonLaiBanTru', async () => {
+    api.on('GET', '/residency-change-requests', json(200, []))
+    api.on(
+      'GET',
+      '/contracts',
+      json(200, [
+        {
+          id: 31,
+          residentId: 5,
+          contractNumber: 'HD-031',
+          status: 'ACTIVE',
+          residenceType: 'LONG_TERM_RESIDENTIAL',
+          careLevel: 'REGULAR',
+        },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/contracts/31/content',
+      json(200, {
+        contractId: 31,
+        version: 2,
+        effectiveFrom: '2026-11-24',
+        content: {
+          residentId: 5,
+          residenceType: 'DAY_CARE',
+          startDate: '2026-10-25',
+          careLevel: 'REGULAR',
+          residencyFeeBillingPeriod: 'SESSION',
+          services: [],
+        },
+      }),
+    )
+    api.on('GET', '/residents/5', json(200, { id: 5, personalInfo: { fullName: 'Nguyễn Thị An' } }))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
+    const dialog = screen.getByRole('dialog')
+    await within(dialog).findByRole('option', { name: /HD-031/ })
+    fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
+    await within(dialog).findByText(/Hiện tại: Bán trú/)
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Loại lưu trú' }))
+    expect(within(dialog).queryByRole('button', { name: 'Bán trú' })).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Nội trú dài hạn' })).toBeInTheDocument()
+  })
+
+  it('W9_lichDen_khongChoTrungLichHienTai_hoacTrungThu', () => {
+    const dayCare = {
+      residenceType: 'DAY_CARE',
+      startDate: '2026-10-01',
+      arrivalSchedule: [
+        { dayOfWeek: 1, arrivalTime: '07:30:00', departureTime: '17:00:00' },
+        { dayOfWeek: 3, arrivalTime: '07:30:00', departureTime: '17:00:00' },
+      ],
+    }
+    expect(
+      validateChange({
+        types: ['ARRIVAL_SCHEDULE'],
+        value: {
+          arrivalSchedule: [
+            { dayOfWeek: 3, arrivalTime: '07:30', departureTime: '17:00' },
+            { dayOfWeek: 1, arrivalTime: '07:30', departureTime: '17:00' },
+          ],
+        },
+        date: '2026-11-26',
+        contract: dayCare,
+      }).arrivalSchedule,
+    ).toMatch(/trùng.*lịch đến hiện tại/i)
+
+    expect(
+      validateChange({
+        types: ['ARRIVAL_SCHEDULE'],
+        value: {
+          arrivalSchedule: [
+            { dayOfWeek: 2, arrivalTime: '07:30', departureTime: '17:00' },
+            { dayOfWeek: 2, arrivalTime: '08:00', departureTime: '16:00' },
+          ],
+        },
+        date: '2026-11-26',
+        contract: dayCare,
+      }).arrivalSchedule,
+    ).toMatch(/trùng/i)
+
+    expect(
+      validateChange({
+        types: ['ARRIVAL_SCHEDULE'],
+        value: {
+          arrivalSchedule: [{ dayOfWeek: 2, arrivalTime: '07:30', departureTime: '17:00' }],
+        },
+        date: '2026-11-26',
+        contract: dayCare,
+      }).arrivalSchedule,
+    ).toBeUndefined()
   })
 })
