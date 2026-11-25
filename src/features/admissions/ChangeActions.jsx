@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CheckCircle2, MessageSquarePlus, MinusCircle, XCircle } from 'lucide-react'
 import {
   getResidencyChangeRequestsByIdResidentOpinions,
   getResidentsByResidentIdRelationships,
@@ -237,6 +238,21 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
 // Nhãn nguồn ý kiến ở danh sách đã ghi (ý kiến không sửa, xóa: DESIGN.md 2.2); nhãn ở form chọn nguồn là OPINION_SOURCES
 const OPINION_SOURCE_BADGES = { RESIDENT: 'Theo lời người cao tuổi', STAFF_OBSERVATION: 'Nhân viên quan sát' }
 
+const OPINION_STYLE = {
+  AGREE: {
+    Icon: CheckCircle2,
+    badge: 'border-emerald-500/30 bg-emerald-500/12 text-emerald-700 dark:text-emerald-400',
+  },
+  DISAGREE: {
+    Icon: XCircle,
+    badge: 'border-red-500/30 bg-red-500/12 text-red-700 dark:text-red-400',
+  },
+  UNABLE_TO_EXPRESS: {
+    Icon: MinusCircle,
+    badge: 'border-border/70 bg-muted text-muted-foreground',
+  },
+}
+
 export function ResidentOpinions({ request, canRecord, warnings = [], onChanged }) {
   const [items, setItems] = useState(null)
   const [opinion, setOpinion] = useState('')
@@ -298,30 +314,51 @@ export function ResidentOpinions({ request, canRecord, warnings = [], onChanged 
         {items === null ? null : items.length === 0 ? (
           warnings.length === 0 && <p className="type-body-sm text-muted-foreground">Chưa ghi ý kiến của người cao tuổi.</p>
         ) : (
-        <ul className="flex flex-col gap-2">
-          {items.map((o, i) => (
-            <li key={o.id} className="flex flex-col gap-0.5 rounded-lg border border-border/60 bg-muted/30 p-2.5">
-              <span className="flex flex-wrap items-center gap-2">
-                <span className="type-body-sm font-semibold text-foreground">{labelOf(OPINIONS, o.opinion)}</span>
-                {i === 0 && (
-                  <Badge variant="outline" className="text-xs font-medium">
-                    Mới nhất
-                  </Badge>
+        <ul className="flex flex-col divide-y divide-border/60">
+          {items.map((o, i) => {
+            const style = OPINION_STYLE[o.opinion] ?? OPINION_STYLE.UNABLE_TO_EXPRESS
+            const OpinionIcon = style.Icon
+            return (
+              <li key={o.id} className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-xs font-semibold ${style.badge}`}>
+                      <OpinionIcon aria-hidden className="size-3.5 stroke-[2]" />
+                      {labelOf(OPINIONS, o.opinion)}
+                    </span>
+                    {i === 0 && (
+                      <Badge variant="outline" className="rounded-md border-primary/25 bg-primary/10 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                        Mới nhất
+                      </Badge>
+                    )}
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {OPINION_SOURCE_BADGES[o.source] ?? o.source}
+                  </span>
+                </div>
+                {o.note && (
+                  <p className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs text-foreground leading-relaxed">
+                    {o.note}
+                  </p>
                 )}
-                <Badge variant="secondary" className="text-xs font-medium">{OPINION_SOURCE_BADGES[o.source] ?? o.source}</Badge>
-              </span>
-              <span className="type-caption text-muted-foreground">
-                {`Ghi ${o.recordedBy ? `bởi ${o.recordedBy}, ` : ''}${formatDate(o.recordedAt)}${o.note ? `. ${o.note}` : ''}`}
-              </span>
-              {o.outdated && i === 0 && (
-                <span className="type-caption font-semibold text-warning-foreground">Ghi trước khi nội dung thay đổi; nên ghi lại.</span>
-              )}
-            </li>
-          ))}
+                <span className="type-caption text-muted-foreground">
+                  {`Ghi ${o.recordedBy ? `bởi ${o.recordedBy}, ` : ''}${formatDate(o.recordedAt)}`}
+                </span>
+                {o.outdated && i === 0 && (
+                  <span className="type-caption font-semibold text-warning-foreground">Ghi trước khi nội dung thay đổi; nên ghi lại.</span>
+                )}
+              </li>
+            )
+          })}
         </ul>
       )}
       {open && canRecord && !adding && (
-        <Button variant="outline" className="h-10 self-start font-semibold border-border/80 shadow-2xs hover:bg-accent" onClick={() => setAdding(true)}>
+        <Button
+          variant="outline"
+          className="h-9 w-full gap-1.5 rounded-lg border-border/80 bg-card text-[13px] font-medium shadow-2xs hover:bg-accent"
+          onClick={() => setAdding(true)}
+        >
+          <MessageSquarePlus aria-hidden className="size-4 stroke-[1.75]" />
           Ghi ý kiến người cao tuổi
         </Button>
       )}
