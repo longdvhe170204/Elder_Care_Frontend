@@ -1036,6 +1036,10 @@ export function AlertsPage({ onNavigate, alertId = null } = {}) {
     return (
       <ReportForm
         defaultKind="alert"
+        onOpenAlert={(id) => {
+          setCreating(false)
+          setOpenId(id)
+        }}
         onClose={() => setCreating(false)}
         onOpenIncident={onNavigate && ((incidentId) => onNavigate('incidents', { incidentId }))}
         onDone={({ kind, id, message }) => {

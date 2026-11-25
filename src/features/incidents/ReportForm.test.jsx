@@ -200,6 +200,23 @@ describe('ReportForm', () => {
     expect(body.closeNow).toBeUndefined()
   })
 
+  it('BF_06_nguoiNayDangCoCanhBaoMo_hoiGhiVaoHoSoDoKhiTrung', async () => {
+    permissions(BOTH)
+    api.on(
+      'GET',
+      '/alerts',
+      json(200, [{ id: 5, residentId: 9, type: 'CHI_SO', level: 'MEDIUM', status: 'NEW', allowedCommands: [] }]),
+    )
+    api.on('GET', '/incidents', json(200, []))
+    api.on('GET', '/alerts/5', json(200, { id: 5, residentId: 9, type: 'CHI_SO', level: 'MEDIUM', status: 'NEW', allowedCommands: [] }))
+    renderPage()
+    await start()
+    expect(await screen.findByText(/đang có cảnh báo/)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Mở cảnh báo đó' })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Vẫn ghi mới' }))
+    expect(screen.queryByText(/đang có cảnh báo/)).toBeNull()
+  })
+
   it('BF_06_daXuLyXong_coQuyenDong_luuVaDong_phaiCoKetQua', async () => {
     permissions(BOTH_CLOSE)
     api.on('POST', '/incidents', json(201, { incident: { id: 57 } }))

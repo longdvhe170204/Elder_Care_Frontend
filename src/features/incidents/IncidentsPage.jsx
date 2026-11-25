@@ -1042,6 +1042,7 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
     return (
       <ReportForm
         onClose={() => setRecording(false)}
+        onOpenAlert={onNavigate && ((alertId) => onNavigate('alerts', { alertId }))}
         onOpenIncident={(id) => {
           setRecording(false)
           setOpenId(id)

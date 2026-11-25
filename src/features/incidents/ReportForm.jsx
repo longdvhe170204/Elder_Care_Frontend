@@ -12,11 +12,12 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { createAlert, loadIncidentTypes } from '@/features/alerts/alerts'
-import { getIncidentResidents, postEmergencyAssist } from '@/api/api007'
+import { getAlerts, getIncidentResidents, postEmergencyAssist } from '@/api/api007'
+import { typeLabel } from '@/features/alerts/alertView'
 import { LevelChoices } from './CaseFormParts'
 import { CasePage } from './CasePage'
 import { IncidentTypePicker } from './IncidentTypePicker'
-import { loadFloorChoices, loadResidentChoices, recordIncident, runIncidentCommand } from './incidents'
+import { loadFloorChoices, loadOpenIncidents, loadResidentChoices, recordIncident, runIncidentCommand } from './incidents'
 import { FAMILY_METHODS, LEVEL_LABEL, needsLowerReason, presetLevel, vietnamIso, vietnamNowLocal } from './incidentView'
 
 // Báo sự việc (đề xuất 2026-11-24, góp ý demo BF-06): một form thay cho "Tạo cảnh báo" và "Ghi nhận sự cố" vốn giống hệt
@@ -33,6 +34,7 @@ const AWAY_STATUS_TEXT = {
 }
 
 const RESIDENT_TILES_MAX = 9
+const OPEN_ALERT = ['NEW', 'ESCALATED', 'RECEIVED', 'IN_PROGRESS']
 const SEARCH_DELAY_MS = 300
 
 // Chọn người cao tuổi (đề xuất 2026-11-24): ô tìm luôn hiện, con trỏ đặt sẵn. Gõ tên hoặc mã thì lọc ngay các cụ trong
@@ -82,7 +84,7 @@ function ResidentPicker({ residents, currentFloorId, onPick }) {
       <Input
         autoFocus
         className="h-11 bg-card"
-        placeholder="Gõ tên hoặc mã để tìm"
+        placeholder="Gõ tên, mã hoặc số phòng để tìm"
         aria-label="Tìm người cao tuổi"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -142,6 +144,7 @@ export function ReportForm({
   onClose,
   onDone,
   onOpenIncident,
+  onOpenAlert,
   returnFocusId = 'report-event',
   defaultKind = 'incident',
 }) {
@@ -174,6 +177,9 @@ export function ReportForm({
   const [familyMethod, setFamilyMethod] = useState('PHONE')
   const [familyAt, setFamilyAt] = useState(() => vietnamNowLocal())
   const [existingId, setExistingId] = useState(null)
+  // Người này đang có cảnh báo hoặc sự cố mở: hỏi ghi vào hồ sơ đó để khỏi trùng (BF-06)
+  const [found, setFound] = useState({ for: null, list: [] })
+  const [ignoredFor, setIgnoredFor] = useState(null)
   const [submitted, setSubmitted] = useState(false)
   const [problem, setProblem] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -204,6 +210,28 @@ export function ReportForm({
   }, [])
 
   const residentId = picked?.id ?? null
+  const openRecords = found.for === residentId ? found.list : []
+  const ignoreOpen = ignoredFor === residentId
+
+  useEffect(() => {
+    if (residentId == null) return undefined
+    let live = true
+    Promise.all([
+      getAlerts({ query: { residentId } }).then(
+        ({ data }) =>
+          (data ?? [])
+            .filter((a) => a.residentId === residentId && OPEN_ALERT.includes(a.status))
+            .map((a) => ({ kind: 'alert', id: a.id, label: `cảnh báo "${typeLabel(a.type)}"` })),
+        () => [],
+      ),
+      loadOpenIncidents(residentId).then((list) =>
+        list.map((i) => ({ kind: 'incident', id: i.id, label: `sự cố SC-${i.id}` })),
+      ),
+    ]).then((lists) => live && setFound({ for: residentId, list: lists.flat() }))
+    return () => {
+      live = false
+    }
+  }, [residentId])
   const currentFloorId = floors.find((f) => f.current)?.id ?? null
   const activeTypes = (types ?? []).filter((t) => t.active !== false && t.status !== 'INACTIVE')
   const choosable = noResident ? activeTypes.filter((t) => t.allowsNoResident) : activeTypes
@@ -418,6 +446,28 @@ export function ReportForm({
               </Alert>
             )}
           </Section>
+          {openRecords.length > 0 && !ignoreOpen && (
+            <Alert variant="attention" className="gap-3 p-4">
+              <p>
+                {picked?.name} đang có {openRecords.map((r) => r.label).join(', ')}. Ghi vào hồ sơ đó để khỏi trùng?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {openRecords.map((r) => {
+                  const open = r.kind === 'alert' ? onOpenAlert : onOpenIncident
+                  return (
+                    open && (
+                      <Button key={`${r.kind}-${r.id}`} type="button" className="h-11" onClick={() => open(r.id)}>
+                        Mở {r.kind === 'alert' ? 'cảnh báo' : `SC-${r.id}`} đó
+                      </Button>
+                    )
+                  )
+                })}
+                <Button type="button" variant="outline" className="h-11" onClick={() => setIgnoredFor(residentId)}>
+                  Vẫn ghi mới
+                </Button>
+              </div>
+            </Alert>
+          )}
           <Section title="Chuyện gì">
             {types ? (
               <IncidentTypePicker types={choosable} value={typeId} onChange={pickType} />
