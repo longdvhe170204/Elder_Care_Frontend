@@ -54,7 +54,7 @@ async function open(role = 'DOCTOR') {
 describe('PrescriptionPanel', () => {
   it('FR_016a_chonNguoi_hienDonVoiTrangThaiLieuTanSuat', async () => {
     await open()
-    expect(screen.getAllByText('Các mốc giờ: 08:00').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('08:00').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Hiệu lực').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Amlodipin 5mg')).toHaveLength(2)
     fireEvent.click(screen.getByRole('button', { name: 'Đã ngừng' }))
@@ -66,7 +66,7 @@ describe('PrescriptionPanel', () => {
     await open('NURSING_STAFF')
     expect(screen.queryByRole('button', { name: /Đổi liều/ })).toBeNull()
     expect(screen.queryByRole('button', { name: /Ngừng/ })).toBeNull()
-    expect(screen.getByRole('button', { name: /Nhập đơn bên ngoài/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Nhập đơn/ })).toBeNull()
   })
 
   it('FR_011_ngungDon_guiLyDoVaIdempotencyKey', async () => {
@@ -97,7 +97,11 @@ describe('PrescriptionPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /Nhập đơn thuốc mới/ }))
     const sheet = await screen.findByRole('dialog')
     expect(within(sheet).getByText(/Penicillin/)).toBeTruthy()
-    fireEvent.change(within(sheet).getByLabelText('Thuốc từ danh mục'), { target: { value: '2' } })
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: /Amlodipin/ }))
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: /Amoxicillin/ }))
+    const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+    fireEvent.change(within(sheet).getByLabelText('Ngày kết thúc'), { target: { value: nextWeek } })
+    fireEvent.change(within(sheet).getByLabelText('Chẩn đoán / Chỉ định lâm sàng'), { target: { value: 'Nhiễm khuẩn' } })
     fireEvent.click(within(sheet).getByRole('button', { name: 'Kiểm tra ngay' }))
     expect(await within(sheet).findByText('Xung đột dị ứng Penicillin, mức SEVERE')).toBeTruthy()
     fireEvent.change(within(sheet).getByLabelText(/Lý do xác nhận/), { target: { value: 'Đã cân nhắc lợi ích' } })
@@ -119,6 +123,9 @@ describe('PrescriptionPanel', () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: /Nhập đơn thuốc mới/ }))
     const sheet = await screen.findByRole('dialog')
+    const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+    fireEvent.change(within(sheet).getByLabelText('Ngày kết thúc'), { target: { value: nextWeek } })
+    fireEvent.change(within(sheet).getByLabelText('Chẩn đoán / Chỉ định lâm sàng'), { target: { value: 'Tăng huyết áp' } })
     fireEvent.click(within(sheet).getByRole('button', { name: 'Lưu đơn thuốc' }))
     expect(await within(sheet).findByText('Trùng hoạt chất Amlodipin với đơn #3')).toBeTruthy()
   })
@@ -168,6 +175,9 @@ describe('PrescriptionPanel', () => {
     await open()
     fireEvent.click(screen.getByRole('button', { name: /Nhập đơn thuốc mới/ }))
     const sheet = await screen.findByRole('dialog')
+    const nextWeek = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+    fireEvent.change(within(sheet).getByLabelText('Ngày kết thúc'), { target: { value: nextWeek } })
+    fireEvent.change(within(sheet).getByLabelText('Chẩn đoán / Chỉ định lâm sàng'), { target: { value: 'Tăng huyết áp' } })
     fireEvent.change(within(sheet).getByLabelText('Kiểu tần suất'), { target: { value: 'DAYS_OF_WEEK' } })
     fireEvent.click(within(sheet).getByLabelText('Thứ 4'))
     fireEvent.click(within(sheet).getByLabelText('Thứ 2'))
@@ -198,5 +208,20 @@ describe('PrescriptionPanel', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     await screen.findAllByText('Amlodipin 5mg')
     expect(screen.queryByRole('button', { name: /Mở đối chiếu thuốc/ })).toBeNull()
+  })
+
+  it('M07_01_bacSi_hienToaNhieuThuocGopChungMotThe', async () => {
+    api.on(
+      'GET',
+      '/residents/9/prescriptions',
+      json(200, [
+        { ...ACTIVE, id: 13, medicationId: 1, prescriptionGroupId: '0cef6102-1111-2222-3333-444455556666' },
+        { ...ACTIVE, id: 14, medicationId: 2, prescriptionGroupId: '0cef6102-1111-2222-3333-444455556666' },
+      ]),
+    )
+    render(<PrescriptionPanel role="DOCTOR" onSaved={() => {}} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    expect(await screen.findByText(/Toa thuốc #0cef6102/)).toBeTruthy()
+    expect(screen.getAllByRole('button', { name: 'Ngừng' })).toHaveLength(2)
   })
 })
