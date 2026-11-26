@@ -130,8 +130,8 @@ describe('MedicationPage', () => {
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Đối chiếu thuốc' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập phiếu đối chiếu' }))
-    expect(screen.getByLabelText('Lý do lập phiếu')).toHaveValue('ADMISSION')
+    fireEvent.click(await screen.findByRole('button', { name: 'Bác sĩ trực tiếp lập phiếu đối chiếu' }))
+    expect(screen.getByLabelText('Loại đối chiếu')).toHaveValue('ADMISSION')
   })
 
   it('006_T074_donChoDoiChieu_nutMoChuyenSangDoiChieuDungNguoi', async () => {

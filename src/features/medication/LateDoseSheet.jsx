@@ -14,6 +14,7 @@ import { recordLateDose } from './doseRound'
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
 
 function LateForm({ dose, now, onSaved, onClose }) {
+  const [kind, setKind] = useState('LATE_ACTUAL')
   const [time, setTime] = useState(now)
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
@@ -29,7 +30,8 @@ function LateForm({ dose, now, onSaved, onClose }) {
     setSaving(true)
     setProblem(null)
     try {
-      const outcome = await recordLateDose(dose, time, reason, key)
+      const prefix = kind === 'FORGOT_TO_RECORD' ? '[Quên ghi nhận]' : '[Uống muộn thực tế]'
+      const outcome = await recordLateDose(dose, time, `${prefix} ${reason.trim()}`, key)
       await onSaved(
         outcome === 'pending'
           ? `Đã gửi yêu cầu ghi ${dose.drug} đã dùng muộn, chờ phê duyệt.`
@@ -51,6 +53,20 @@ function LateForm({ dose, now, onSaved, onClose }) {
       </SheetHeader>
       <div className="flex flex-col gap-4 px-4">
         <ProblemAlert problem={problem} />
+        <fieldset className="flex flex-col gap-1.5 rounded-lg border p-3">
+          <legend className="px-1 type-label">Phân loại ghi nhận (M07-12)</legend>
+          <label className="flex cursor-pointer items-center gap-2 type-body-sm">
+            <input type="radio" name="late-kind" checked={kind === 'LATE_ACTUAL'} onChange={() => setKind('LATE_ACTUAL')} />
+            Uống thuốc muộn thực tế
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 type-body-sm">
+            <input type="radio" name="late-kind" checked={kind === 'FORGOT_TO_RECORD'} onChange={() => setKind('FORGOT_TO_RECORD')} />
+            Đã uống đúng giờ nhưng quên ghi nhận
+          </label>
+          <FieldDescription>
+            Kiểm tra khoảng cách với liều kế tiếp để tránh dùng trùng; không tự ý cho uống bù liều nếu không có chỉ định bác sĩ.
+          </FieldDescription>
+        </fieldset>
         <Field data-invalid={(submitted && timeInvalid) || undefined}>
           <FieldLabel htmlFor="late-time">Giờ dùng thực tế</FieldLabel>
           <Input id="late-time" inputMode="numeric" value={time} onChange={(e) => setTime(e.target.value)} className="h-11 w-32 tabular-nums" />

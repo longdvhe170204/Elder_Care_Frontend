@@ -6,10 +6,9 @@ import { getResidentsByResidentIdLocation } from '@/api/api003'
 import {
   getMedicationDosesRounds,
   postMedicationDosesByDoseKeyAdminister,
-  postMedicationDosesByDoseKeyClaim,
+  postMedicationDosesByDoseKeyHold,
   postMedicationDosesByDoseKeyPostpone,
   postMedicationDosesByDoseKeyRefuse,
-  postMedicationDosesByDoseKeyRelease,
   postMedicationDosesByDoseKeySkip,
 } from '@/api/api006'
 import { doseRoundView, hhmm, POSTPONE } from './doseRoundView'
@@ -33,8 +32,16 @@ async function currentShift(now) {
   }
 }
 
-export async function loadDoseRound(now = new Date()) {
-  const { data: doses } = await getMedicationDosesRounds({})
+export async function loadDoseRound(arg = new Date()) {
+  const opts = arg instanceof Date ? { now: arg } : (arg ?? {})
+  const now = opts.now ?? new Date()
+  const query = {}
+  if (opts.from) query.from = opts.from
+  if (opts.to) query.to = opts.to
+  if (opts.floorAreaId != null) query.floorAreaId = opts.floorAreaId
+  const { data: doses } = await getMedicationDosesRounds(
+    Object.keys(query).length > 0 ? { query } : {},
+  )
   const ids = [...new Set(doses.map((d) => d.residentId))]
   const profiles = {}
   const locations = {}
@@ -72,12 +79,6 @@ export async function recordLateDose(dose, time, reason, key, now = new Date()) 
   return status === 202 ? 'pending' : 'saved'
 }
 
-// Nhận liều trước khi soạn thuốc, tự hết sau 15 phút; bỏ nhận (BR-M07-26, Q-428)
-export const claimDose = (doseKey) =>
-  postMedicationDosesByDoseKeyClaim({ path: { doseKey }, headers: { 'Idempotency-Key': crypto.randomUUID() } })
-export const releaseDose = (doseKey) =>
-  postMedicationDosesByDoseKeyRelease({ path: { doseKey }, headers: { 'Idempotency-Key': crypto.randomUUID() } })
-
 // results: [{ dose, result, time, reaction, reason, measure, key }] từ khung xác nhận; mỗi liều một lệnh, tuần tự để dừng ở lỗi
 // đầu tiên (liều đã lưu giữ nguyên, liều chưa lưu còn trong khung).
 export async function recordDoses(results, now = new Date()) {
@@ -86,18 +87,22 @@ export async function recordDoses(results, now = new Date()) {
     const path = { doseKey: entry.dose.id }
     const headers = { 'Idempotency-Key': entry.key }
     if (entry.result === 'Đã dùng') {
+      const incident = entry.incidentType ? `[${entry.incidentType}] ` : ''
+      const reaction = `${incident}${entry.reaction?.trim() ?? ''}`.trim()
       await postMedicationDosesByDoseKeyAdminister({
         path,
         headers,
         body: {
           administeredAt: `${day}T${entry.time}:00+07:00`,
           basis: entry.dose.status === 'Mang theo' ? 'LEAVE_MEDICATION' : 'REGULAR',
-          ...(entry.reaction?.trim() && { adverseReaction: entry.reaction.trim() }),
+          ...(reaction && { adverseReaction: reaction }),
           ...(measurementsOf(entry).length > 0 && { measurements: measurementsOf(entry) }),
         },
       })
     } else if (entry.result === POSTPONE) {
       await postMedicationDosesByDoseKeyPostpone({ path, headers, body: { reason: entry.reason.trim() } })
+    } else if (entry.result === 'Tạm giữ 1 liều') {
+      await postMedicationDosesByDoseKeyHold({ path, headers, body: { reason: entry.reason.trim() } })
     } else if (entry.result === 'Từ chối') {
       await postMedicationDosesByDoseKeyRefuse({ path, headers, body: { reason: entry.reason.trim() } })
     } else {

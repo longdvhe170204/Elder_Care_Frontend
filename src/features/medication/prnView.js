@@ -33,5 +33,8 @@ export function prnOrderView({ prescription, history, medication, profile, now =
     awaitingEffect: (history?.administrations ?? [])
       .filter((a) => !a.effectiveness && now - new Date(a.administeredAt) < DAY_MS && new Date(a.administeredAt) <= now)
       .map((a) => ({ id: a.id, time: hhmm(a.administeredAt) })),
+    recordedEffects: (history?.administrations ?? [])
+      .filter((a) => a.effectiveness && now - new Date(a.administeredAt) < DAY_MS && new Date(a.administeredAt) <= now)
+      .map((a) => ({ id: a.id, time: hhmm(a.administeredAt), effectiveness: a.effectiveness })),
   }
 }

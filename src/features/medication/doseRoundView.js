@@ -64,7 +64,7 @@ export function doseView(dose, now = new Date()) {
     source: SOURCE[dose.medicationSource],
     status: STATUS[dose.currentStatus ?? dose.status],
     controlled: dose.requiresOnline,
-    sharedFloor: dose.floorShared,
+    sharedFloor: false,
     lots: (dose.usableBatches ?? []).map((batch) => ({
       code: `Lô ${batch.batchId}`,
       batchId: batch.batchId,
@@ -73,13 +73,12 @@ export function doseView(dose, now = new Date()) {
     })),
     handoverId: dose.handoverId,
     awaitingRecordAfterReturn: dose.awaitingRecordAfterReturn,
-    // BF-07: mức quan trọng, dấu Hoãn, người nhận liều, chỉ số phải đo trước khi dùng, dấu dùng muộn
+    // BF-07: mức quan trọng, dấu Hoãn, chỉ số phải đo trước khi dùng, dấu dùng muộn
     critical: dose.timeCriticality === 'CRITICAL',
     postponed: Boolean(dose.postponed),
     postponedReason: dose.postponedReason ?? null,
-    claimedBy: dose.claimedBy ?? null,
-    claimExpiresAt: dose.claimExpiresAt ?? null,
     measurements: dose.requiredMeasurements ?? [],
+    measurementConditions: dose.measurementConditions ?? [],
     late: Boolean(dose.result?.late),
     resultId: dose.result?.id ?? null,
   }

@@ -10,6 +10,7 @@ import { AllergyNote } from '@/common/CareNotes'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { problemOf } from '@/common/problem'
+import { cn } from '@/lib/utils'
 import { hhmm } from './doseRoundView'
 import { DoseTags } from './DoseTags'
 import { loadPrnOrders, recordEffectiveness, recordPrn } from './prnApi'
@@ -20,6 +21,15 @@ import { ResidentPicker } from './ResidentPicker'
 // do backend tính, không có thao tác vượt chặn.
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+
+const PRN_REASON_PRESETS = [
+  'Đau đầu nhiều',
+  'Sốt > 38.5°C',
+  'Khó ngủ',
+  'Tăng huyết áp kịch phát',
+  'Đau khớp cấp',
+  'Khó thở nhẹ',
+]
 
 function PrnForm({ order, now, onSave }) {
   const [time, setTime] = useState(now)
@@ -85,6 +95,19 @@ function PrnForm({ order, now, onSave }) {
         </Field>
         <Field data-invalid={(submitted && !reason.trim()) || undefined}>
           <FieldLabel htmlFor="prn-reason" className="text-xs font-semibold">Lý do dùng</FieldLabel>
+          <div className="flex flex-wrap items-center gap-1.5 pb-1">
+            <span className="text-[11px] text-muted-foreground font-medium">Gợi ý nhanh:</span>
+            {PRN_REASON_PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setReason(p)}
+                className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
           <Textarea
             id="prn-reason"
             rows={2}
@@ -322,9 +345,25 @@ export function PrnPanel({ canRecord, now, onSaved }) {
                       <h4 className="text-base font-bold text-slate-900 tracking-tight dark:text-slate-100">
                         {o.drug}
                       </h4>
-                      <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
-                        Khi cần (PRN)
-                      </span>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800">
+                          Khi cần (PRN)
+                        </span>
+                        {o.maxPer24h != null && (
+                          <span
+                            className={cn(
+                              'inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold border tabular-nums',
+                              o.usesIn24h >= o.maxPer24h
+                                ? 'bg-rose-50 text-rose-800 border-rose-200 dark:bg-rose-950/40 dark:text-rose-200 dark:border-rose-800'
+                                : o.usesIn24h === o.maxPer24h - 1
+                                  ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800'
+                                  : 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+                            )}
+                          >
+                            Đã dùng {o.usesIn24h}/{o.maxPer24h} lần
+                          </span>
+                        )}
+                      </div>
                     </div>
                     {o.indication && (
                       <div className="inline-flex items-center gap-1.5 rounded-xl bg-sky-50 border border-sky-100 px-3 py-1.5 text-xs font-semibold text-sky-900 dark:bg-sky-950/40 dark:border-sky-900 dark:text-sky-200 w-fit">
@@ -404,6 +443,15 @@ export function PrnPanel({ canRecord, now, onSaved }) {
                         </Button>
                       </div>
                     ))}
+
+                  {(o.recordedEffects ?? []).map((use) => (
+                    <div
+                      key={use.id}
+                      className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-200"
+                    >
+                      Hiệu quả lúc <strong className="tabular-nums">{use.time}</strong>: {use.effectiveness}
+                    </div>
+                  ))}
 
                   {/* Nút hành động chính */}
                   {canRecord && o.canAdministerNow && (
