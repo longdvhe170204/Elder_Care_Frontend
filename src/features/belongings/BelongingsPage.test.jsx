@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { PermissionsProvider } from '@/common/permissions/permissions'
+import { pickResident } from '@/test/pickResident'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { BelongingsPage } from './BelongingsPage'
 
@@ -81,9 +82,7 @@ function setup(permissions = ['BELONGINGS:VIEW', 'BELONGINGS:CREATE', 'BELONGING
 }
 
 async function openResident() {
-  fireEvent.change(screen.getByLabelText('Tìm người cao tuổi'), { target: { value: 'Lan' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Tìm' }))
-  fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+  await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
 }
 
 describe('BelongingsPage (013 T011, US1)', () => {
@@ -115,24 +114,17 @@ describe('BelongingsPage (013 T011, US1)', () => {
     const minh = { id: 8, profileCode: 'NCT-0008', personalInfo: { fullName: 'Lê Văn Minh' } }
     const api = setup(undefined, [LAN, minh])
     api.on('GET', '/residents/8/belongings', json(200, []))
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
     fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết Điện thoại Nokia' }))
     expect(await screen.findByText('Trần Thu Hà', { exact: false })).toBeInTheDocument()
 
-    expect(screen.getByRole('button', { name: 'Lê Văn Minh, NCT-0008', hidden: true })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007', hidden: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Lê Văn Minh, NCT-0008', hidden: true }))
+    expect(screen.getByLabelText('Tìm người cao tuổi')).toHaveValue('Nguyễn Thị Lan (NCT-0007)')
+    await pickResident('Lê Văn Minh', { label: 'Tìm người cao tuổi', hidden: true })
 
     expect(await screen.findByRole('heading', { name: 'Đồ gửi của Lê Văn Minh' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Chi tiết Điện thoại Nokia' })).not.toBeInTheDocument()
     expect(screen.queryByText('Trần Thu Hà', { exact: false })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Lê Văn Minh, NCT-0008', hidden: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByLabelText('Tìm người cao tuổi')).toHaveValue('Lê Văn Minh (NCT-0008)')
   })
 
   it('FR_011_danhSachDoGui_loaiTrangThaiNguoiGiuViTri', async () => {
@@ -319,7 +311,7 @@ describe('BelongingsPage (013 T011, US1)', () => {
 
   it('FR_011_moManHienNgayDanhSachNguoiCaoTuoi_khongCanTim', async () => {
     setup()
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
     expect(await screen.findByText('Điện thoại Nokia')).toBeInTheDocument()
   })
 })
@@ -376,7 +368,7 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
   }
 
   async function openReturn() {
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
     const section = await screen.findByRole('region', { name: 'Xác nhận người nhận khác' })
     fireEvent.click(screen.getByRole('button', { name: 'Trả đồ' }))
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Trả Áo len A, mã 18' }))
