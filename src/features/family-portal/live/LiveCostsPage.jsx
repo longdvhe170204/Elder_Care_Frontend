@@ -1,6 +1,11 @@
 import { useEffect, useState } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
-import { ApiError, getFamilyPortalResidentsByResidentIdBalance } from '@/api'
+import {
+  ApiError,
+  getFamilyPortalBalanceTransactionsByIdReceipt,
+  getFamilyPortalResidentsByResidentIdBalance,
+} from '@/api'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { PageHeader } from '@/common/PageHeader'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -18,6 +23,35 @@ import { LivePurchaseConsent } from './LivePurchaseConsent'
 
 const MONEY = new Intl.NumberFormat('vi-VN')
 const money = (n) => `${MONEY.format(n ?? 0)} đồng`
+
+// Q-451: khoản nộp (cổng chỉ trả giao dịch Đã xác nhận) có biên nhận
+const RECEIPT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
+
+function ReceiptButton({ id }) {
+  const [failure, setFailure] = useState(null)
+  async function download() {
+    setFailure(null)
+    try {
+      const { data } = await getFamilyPortalBalanceTransactionsByIdReceipt({ path: { id }, responseType: 'blob' })
+      const url = URL.createObjectURL(data)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `BN-${String(id).padStart(6, '0')}.pdf`
+      link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      setFailure(problemOf(error))
+    }
+  }
+  return (
+    <>
+      <Button variant="outline" className="h-11 self-start" onClick={download}>
+        Tải biên nhận
+      </Button>
+      <ProblemAlert problem={failure} />
+    </>
+  )
+}
 
 const TYPES = {
   CASH_PAYMENT: 'Nộp tiền mặt',
@@ -134,6 +168,7 @@ export function LiveCostsPage({ viewer }) {
                     {formatDate(t.at)}
                     {t.ledger === 'DEPOSIT' && ', sổ tiền cọc'}
                   </span>
+                  {RECEIPT_TYPES.includes(t.type) && t.amount > 0 && <ReceiptButton id={t.id} />}
                 </span>
                 <span className="type-label tabular-nums">{money(t.amount)}</span>
               </li>

@@ -86,6 +86,27 @@ describe('ResidentBalance (017)', () => {
     vi.unstubAllGlobals()
   })
 
+  // Q-451: biên nhận chỉ có ở khoản nộp đã xác nhận, người xem đủ sổ
+  it('Q_451_taiBienNhan_chiKhoanNopDaXacNhan', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    const api = setup()
+    api.on('GET', '/balance-transactions/1/receipt', json(200, {}))
+    const buttons = await screen.findAllByRole('button', { name: 'Tải biên nhận' })
+    expect(buttons).toHaveLength(1)
+
+    fireEvent.click(buttons[0])
+
+    await waitFor(() => expect(api.calls('GET', '/balance-transactions/1/receipt')).toHaveLength(1))
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+  })
+
+  it('Q_451_hanhChinh_khongCoNutBienNhan', async () => {
+    setup({ balance: { ...BALANCE, hiddenFields: ['paymentCode'] } })
+    await screen.findAllByText('Nộp tiền mặt')
+    expect(screen.queryByRole('button', { name: 'Tải biên nhận' })).not.toBeInTheDocument()
+  })
+
   it('FR_002_hienSoDuCocNoMaNopTienVaTinhTrang', async () => {
     setup()
     expect(await screen.findByText('NCT7K2M9X4A')).toBeInTheDocument()

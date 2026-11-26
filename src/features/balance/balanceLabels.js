@@ -42,3 +42,7 @@ export const labelOf = (map, code) => map[code] ?? code
 export function formatMoney(value) {
   return value === undefined || value === null ? '—' : `${Number(value).toLocaleString('vi-VN')} đ`
 }
+
+// Q-451: khoản nộp đã xác nhận mới có biên nhận (backend kiểm lại)
+const RECEIPT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
+export const hasReceipt = (t) => RECEIPT_TYPES.includes(t.type) && t.status === 'CONFIRMED' && t.amount > 0

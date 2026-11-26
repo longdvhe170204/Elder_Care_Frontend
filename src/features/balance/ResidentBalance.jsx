@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getResidentsByResidentIdBalance, getResidentsByResidentIdBalanceTransactions } from '@/api'
+import {
+  getBalanceTransactionsByIdReceipt,
+  getResidentsByResidentIdBalance,
+  getResidentsByResidentIdBalanceTransactions,
+} from '@/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,6 +16,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDateTime } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
+import { saveBlob } from './download'
 import { OffsetForm } from './OffsetForm'
 import { ResidentNotices } from './ResidentNotices'
 import { SettlementPanel } from './SettlementPanel'
@@ -23,6 +28,7 @@ import {
   TRANSACTION_STATUS_LABELS,
   TYPE_LABELS,
   formatMoney,
+  hasReceipt,
   labelOf,
 } from './balanceLabels'
 
@@ -45,6 +51,18 @@ export function ResidentBalance({ residentId, fullName }) {
   const [state, setState] = useState({ status: 'loading' })
   const [sheet, setSheet] = useState(null)
   const [notice, setNotice] = useState('')
+  const [receiptFailure, setReceiptFailure] = useState(null)
+
+  // Q-451: biên nhận nộp tiền dựng ở backend, số theo mã giao dịch
+  async function downloadReceipt(id) {
+    setReceiptFailure(null)
+    try {
+      const { data } = await getBalanceTransactionsByIdReceipt({ path: { id }, responseType: 'blob' })
+      saveBlob(data, `BN-${String(id).padStart(6, '0')}.pdf`)
+    } catch (error) {
+      setReceiptFailure(problemOf(error))
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +89,8 @@ export function ResidentBalance({ residentId, fullName }) {
 
   const canCreate = can('BALANCE_LEDGER', 'CREATE')
   const balance = state.balance
+  // Hành chính chỉ thấy một phần sổ (hiddenFields) nên không tải biên nhận
+  const fullView = !balance?.hiddenFields?.length
   return (
     <div className="flex flex-col gap-5">
       <h2 className="type-title">Số dư của {fullName}</h2>
@@ -139,6 +159,7 @@ export function ResidentBalance({ residentId, fullName }) {
         <Card>
           <CardContent className="flex flex-col gap-3">
             <h3 className="type-title">Giao dịch</h3>
+            <ProblemAlert problem={receiptFailure} />
             {state.transactions.length === 0 ? (
               <Empty>
                 <EmptyHeader>
@@ -156,6 +177,7 @@ export function ResidentBalance({ residentId, fullName }) {
                     <TableHead className="text-right">Số tiền</TableHead>
                     <TableHead>Trạng thái</TableHead>
                     <TableHead>Người lập</TableHead>
+                    {fullView && <TableHead className="text-right">Biên nhận</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -179,6 +201,15 @@ export function ResidentBalance({ residentId, fullName }) {
                         </Badge>
                       </TableCell>
                       <TableCell>{t.createdBy}</TableCell>
+                      {fullView && (
+                        <TableCell className="text-right">
+                          {hasReceipt(t) && (
+                            <Button variant="outline" className="h-11" onClick={() => downloadReceipt(t.id)}>
+                              Tải biên nhận
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
