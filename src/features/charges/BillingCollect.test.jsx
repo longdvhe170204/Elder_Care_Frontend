@@ -9,6 +9,12 @@ import { BillingSources } from './BillingSources'
 vi.mock('@/api', () => ({
   getCostsBillingSources: vi.fn(),
   postCostsItemsFromEvents: vi.fn(),
+  getContracts: vi.fn().mockResolvedValue({
+    data: [
+      { id: 3, status: 'ENDED', startDate: '2025-01-01' },
+      { id: 4, status: 'ACTIVE', startDate: '2026-11-01' },
+    ],
+  }),
   getResidents: vi.fn().mockResolvedValue({
     data: { items: [{ id: 42, profileCode: 'NCT-0042', personalInfo: { fullName: 'Nguyễn Văn Tư' } }] },
   }),
@@ -92,4 +98,39 @@ it('gomToanBo_thieuNguoiHoacNgay_khongGoi', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Gom toàn bộ chi phí chưa lập' }))
   expect(screen.getByText('Chọn người cao tuổi, từ ngày và đến ngày trước khi gom.')).toBeInTheDocument()
   expect(getCostsBillingSources).not.toHaveBeenCalled()
+})
+
+// Demo 2026-11-26 (E): mở từ điều kiện (a) của Kết thúc lưu trú: chọn sẵn người cao tuổi, khoảng ngày tự tính từ ngày bắt
+// đầu hợp đồng đang hiệu lực tới ngày kết thúc dự kiến, không cần chọn ngày
+it('moTuKetThucLuuTru_khoangNgayTuTinh_khongCanChonNgay', async () => {
+  render(<BillingSources preset={{ residentId: 42, until: '2026-11-28' }} />)
+  expect(
+    await screen.findByText('Khoảng ngày: 01/11/2026 (bắt đầu hợp đồng) đến 28/11/2026 (kết thúc dự kiến).'),
+  ).toBeInTheDocument()
+  expect(screen.queryByLabelText('Từ ngày')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Gom toàn bộ chi phí chưa lập' }))
+  await waitFor(() => expect(postCostsItemsFromEvents).toHaveBeenCalled())
+  expect(getCostsBillingSources).toHaveBeenCalledWith({
+    query: { residentId: 42, type: 'RESIDENCY_DAY', from: '2026-11-01', to: '2026-11-28' },
+  })
+})
+
+// Demo 2026-11-26: nguồn bị bỏ qua nêu ngày và giải thích lý do
+it('gomToanBo_boQuaNgayLuuTru_neuNgayVaGiaiThich', async () => {
+  postCostsItemsFromEvents.mockImplementation(({ body }) =>
+    Promise.resolve({
+      data:
+        body.sourceType === 'RESIDENCY_DAY'
+          ? { succeededIds: [], skipped: [{ source: '42:2026-11-02', reason: 'Ngày ngoài thời gian tính phí' }] }
+          : { succeededIds: [], skipped: [] },
+    }),
+  )
+  await fillFilter()
+  fireEvent.click(screen.getByRole('button', { name: 'Gom toàn bộ chi phí chưa lập' }))
+  expect(
+    await screen.findByText('Ngày lưu trú: lập 0, bỏ qua 1 (02/11/2026: Ngày ngoài thời gian tính phí)'),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByText(/Ngày ngoài thời gian tính phí là ngày sau ngày kết thúc lưu trú, trước ngày bắt đầu hợp đồng/),
+  ).toBeInTheDocument()
 })
