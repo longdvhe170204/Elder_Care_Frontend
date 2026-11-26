@@ -106,3 +106,12 @@ it('Q447_mocGioTuBackendCoGiay_hienVaGuiDangHHmm', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
   expect(save).toHaveBeenCalledWith([expect.objectContaining({ times: ['09:00', '17:00'] })])
 })
+
+it('Q447_mucCuCoMucKhacLoai_dongBoTheoMucCuaLoaiCongViec', () => {
+  // Mục cũ đã chọn Thường trước khi bỏ ô chọn; loại "Xoay trở" trong danh mục là Bắt buộc
+  const save = renderForm([{ ...base, taskTypeId: 10, importance: 'NORMAL' }])
+  expect(screen.getByText('Bắt buộc')).toBeInTheDocument()
+  expect(screen.queryByText('Thường')).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+  expect(save).toHaveBeenCalledWith([expect.objectContaining({ taskTypeId: 10, importance: 'MANDATORY' })])
+})

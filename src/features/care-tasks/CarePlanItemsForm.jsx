@@ -114,7 +114,7 @@ function TimeChips({ index, times, onChange }) {
   )
 }
 
-function ItemSummary({ index, row, typeName, onOpen }) {
+function ItemSummary({ index, row, typeName, importance, onOpen }) {
   const { main } = frequencyText(row)
   return (
     <button
@@ -131,7 +131,7 @@ function ItemSummary({ index, row, typeName, onOpen }) {
           {[row.content, main].filter(Boolean).join(' · ')}
         </span>
       </span>
-      {row.importance && <StatusBadge status={IMPORTANCE[row.importance]} />}
+      {importance && <StatusBadge status={IMPORTANCE[importance]} />}
       <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />
     </button>
   )
@@ -147,6 +147,8 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
   const [open, setOpen] = useState(0)
   const typeById = Object.fromEntries(taskTypes.map((type) => [String(type.id), type]))
   const errorOf = (index, key) => errors[index]?.[key]
+  // Mức luôn theo loại công việc, kể cả mục lập từ trước khi bỏ ô chọn (chủ dự án 2026-11-26)
+  const importanceOf = (row) => typeById[String(row.taskTypeId)]?.defaultImportance || row.importance || null
   const set = (index, key, value) => {
     setRows((all) => all.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
     setErrors((all) => all.map((e, i) => (i === index && e ? { ...e, [key]: undefined } : e)))
@@ -193,7 +195,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
           ]),
         ),
         startsAt: row.startsAt || null,
-        importance: row.importance || typeById[String(row.taskTypeId)]?.defaultImportance || null,
+        importance: importanceOf(row),
       })),
     )
   }
@@ -234,7 +236,16 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
         const key = row.id ?? `new-${index}`
         const typeName = typeById[String(row.taskTypeId)]?.name
         if (index !== open && !hasErrors(errors[index])) {
-          return <ItemSummary key={key} index={index} row={row} typeName={typeName} onOpen={() => setOpen(index)} />
+          return (
+            <ItemSummary
+              key={key}
+              index={index}
+              row={row}
+              typeName={typeName}
+              importance={importanceOf(row)}
+              onOpen={() => setOpen(index)}
+            />
+          )
         }
         const drinking = typeById[String(row.taskTypeId)]?.group === 'DRINKING_ASSISTANCE'
         const kind = row.frequencyType
@@ -370,8 +381,8 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
             <div className="grid items-center gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1">
                 <span className="type-label">Mức quan trọng theo loại công việc</span>
-                {row.importance ? (
-                  <StatusBadge status={IMPORTANCE[row.importance]} className="self-start" />
+                {importanceOf(row) ? (
+                  <StatusBadge status={IMPORTANCE[importanceOf(row)]} className="self-start" />
                 ) : (
                   <span className="type-body-sm text-muted-foreground">Chọn loại công việc để có mức</span>
                 )}
