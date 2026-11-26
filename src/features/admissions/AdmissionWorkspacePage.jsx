@@ -21,7 +21,7 @@ import { ResidentDetail, ResidentPartSheet } from '../residents/ResidentDetail'
 import { APPLICATION_STATUS, OPEN_STATUSES, RESIDENCE_TYPES, labelOf } from './admissionLabels'
 import { ApplicationSheet, OpinionBlock, OpinionForm } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
-import { admissionProgress } from './admissionProgress'
+import { admissionProgress, visibleWarnings } from './admissionProgress'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.2): một màn cho một lượt tiếp nhận, đi theo các
 // bước BF-01. Trạng thái từng bước lấy từ điều kiện tiếp nhận của 004 (FR-004; mã ADM_A → ADM_F);
@@ -130,10 +130,14 @@ function ProgressBar({ phases }) {
           <span className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
             <span
               className="block h-full rounded-full bg-chart-2"
-              style={{ width: `${(phase.done / phase.total) * 100}%` }}
+              style={{ width: `${phase.total ? (phase.done / phase.total) * 100 : 100}%` }}
             />
           </span>
-          <span className="type-caption text-muted-foreground">{`${phase.short}, ${phase.done} trên ${phase.total} bước xong`}</span>
+          <span className="type-caption text-muted-foreground">
+            {phase.total
+              ? `${phase.short}, ${phase.done} trên ${phase.total} bước xong`
+              : `${phase.short}, không còn kiểm`}
+          </span>
         </li>
       ))}
     </ol>
@@ -369,7 +373,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           </ul>
           {conditions?.warnings?.length > 0 && (
             <ul className="flex flex-col gap-1" aria-label="Cảnh báo">
-              {conditions.warnings.map((w) => (
+              {visibleWarnings(conditions.warnings).map((w) => (
                 <li key={w.code} className="type-body-sm text-warning-foreground">
                   {w.description}
                 </li>

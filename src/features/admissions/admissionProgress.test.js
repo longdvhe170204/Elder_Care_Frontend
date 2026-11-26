@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { admissionProgress } from './admissionProgress'
+import { admissionProgress, visibleWarnings } from './admissionProgress'
 
 // Hồ sơ tiếp nhận phương án B "Việc tiếp theo" (chủ dự án chọn 2026-11-21): trạng thái mỗi bước một bộ nhãn, tiến độ theo
 // giai đoạn, việc tiếp theo là bước đầu tiên chưa xong mà vai trò đang đăng nhập làm được (bước là điều kiện trước, bước
@@ -90,5 +90,30 @@ describe('admissionProgress', () => {
 
   it('luotDaDong_khongCoViecTiepTheo', () => {
     expect(admissionProgress(input({ closed: true, conditions: null })).next).toBeNull()
+  })
+
+  it('BF_01_luotDaDong_buocKhongConKiem_khongTinhVaoTong', () => {
+    const { phases } = admissionProgress(input({ closed: true, conditions: null }))
+    expect(phases.map((p) => [p.done, p.total])).toEqual([
+      [3, 3],
+      [2, 2],
+      [0, 0],
+      [0, 2],
+    ])
+  })
+})
+
+describe('visibleWarnings', () => {
+  it('BF_01_coBanNhapNguyenVongChoKiemChung_anCanhBaoChuaCoNguyenVong', () => {
+    const warnings = [
+      { code: 'MISSING_END_OF_LIFE_WISH' },
+      { code: 'MISSING_TREATMENT_WISH' },
+      { code: 'UNVERIFIED_END_OF_LIFE_WISH_DRAFT' },
+    ]
+    expect(visibleWarnings(warnings).map((w) => w.code)).toEqual([
+      'MISSING_TREATMENT_WISH',
+      'UNVERIFIED_END_OF_LIFE_WISH_DRAFT',
+    ])
+    expect(visibleWarnings([{ code: 'MISSING_END_OF_LIFE_WISH' }])).toHaveLength(1)
   })
 })

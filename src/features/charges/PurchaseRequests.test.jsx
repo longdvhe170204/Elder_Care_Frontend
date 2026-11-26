@@ -22,7 +22,7 @@ vi.mock('@/api', async (importOriginal) => ({
   getResidents: vi.fn(),
   getStaff: vi.fn(),
   getServices: vi.fn(),
-  getResidentsByResidentIdRelationships: vi.fn(),
+  getResidentsByResidentIdFamilyContacts: vi.fn(),
 }))
 vi.mock('@/common/permissions/permissions', () => ({
   usePermissions: () => ({ status: 'ready', can: (_f, op) => permissions.operations.includes(op) }),
@@ -46,8 +46,8 @@ beforeEach(() => {
       { id: 13, name: 'Vật tư đã ngừng', type: 'MEDICAL_SUPPLY', status: 'INACTIVE' },
     ],
   })
-  api.getResidentsByResidentIdRelationships.mockResolvedValue({
-    data: [{ id: 1, status: 'ACTIVE', familyMember: { id: 41, fullName: 'Trần Văn Minh' } }],
+  api.getResidentsByResidentIdFamilyContacts.mockResolvedValue({
+    data: [{ familyMemberId: 41, fullName: 'Trần Văn Minh' }],
   })
   api.getPurchaseAssistanceRequests.mockResolvedValue({
     data: [

@@ -126,6 +126,9 @@ export const postMedicationReconciliationsByIdSubmit = (params) => request('POST
 /** Trả lại về Mở (bắt buộc lý do) (FR-035) */
 export const postMedicationReconciliationsByIdReturn = (params) => request('POST', '/medication-reconciliations/{id}/return', params)
 
+/** Hủy phiếu Mở hoặc Chờ xác nhận (bắt buộc lý do; bổ sung 2026-11-26, Q-447) (FR-035) */
+export const postMedicationReconciliationsByIdCancel = (params) => request('POST', '/medication-reconciliations/{id}/cancel', params)
+
 /** Xác nhận phiếu và áp quyết định từng dòng trong một lệnh (FR-036, FR-038, FR-034a, BR-M07-09) */
 export const postMedicationReconciliationsByIdConfirm = (params) => request('POST', '/medication-reconciliations/{id}/confirm', params)
 

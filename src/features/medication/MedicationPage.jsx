@@ -341,6 +341,7 @@ function ReconciliationMode({ resident, setResident, isDoctor, onSaved }) {
               key={resident.id}
               residentId={resident.id}
               residentName={name}
+              defaultReason={resident.status === 'ADMISSION_IN_PROGRESS' ? 'ADMISSION' : undefined}
               isDoctor={isDoctor}
               onChanged={(message) => {
                 onSaved(message)

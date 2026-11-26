@@ -68,12 +68,12 @@ function routes({ active = ACTIVE, history = [ACTIVE, OLD], forbidden = false } 
   api.on('GET', '/staff', json(200, [{ id: 2, accountId: 8, fullName: 'Phạm Văn Bác', position: 'Bác sĩ' }]))
   api.on(
     'GET',
-    '/residents/5/relationships',
+    '/residents/5/family-contacts',
     json(200, [
-      { id: 1, status: 'ACTIVE', familyMember: { id: 31, fullName: 'Trần Văn Minh' } },
-      { id: 2, status: 'ACTIVE', familyMember: { id: 32, fullName: 'Đỗ Thị Lan' } },
-      { id: 3, status: 'ACTIVE', familyMember: { id: 41, fullName: 'Lê Thị Hoa' } },
-      { id: 4, status: 'ACTIVE', familyMember: { id: 99, fullName: 'Ngô Văn Khác' } },
+      { familyMemberId: 31, fullName: 'Trần Văn Minh' },
+      { familyMemberId: 32, fullName: 'Đỗ Thị Lan' },
+      { familyMemberId: 41, fullName: 'Lê Thị Hoa' },
+      { familyMemberId: 99, fullName: 'Ngô Văn Khác' },
     ]),
   )
 }

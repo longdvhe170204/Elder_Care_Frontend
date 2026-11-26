@@ -83,3 +83,13 @@ export const CORRECTION_FIELDS = [
   { name: 'expiryDate', label: 'Ngày hết hạn' },
   { name: 'evidenceFileId', label: 'Mã tệp bằng chứng' },
 ]
+
+export const taskKey = (task) => `${task.residentId}:${task.taskType}:${task.registrationId ?? ''}`
+
+// Việc hiện tại của người đang mở theo danh sách vừa tải lại (sau mỗi lệnh việc có thể đổi loại hoặc hết); không còn việc
+// thì null để khung chi tiết không giữ đầu "Cần lập" cũ
+export function currentTask(tasks, opened) {
+  return (
+    tasks.find((t) => taskKey(t) === opened.key) ?? tasks.find((t) => t.residentId === opened.residentId) ?? null
+  )
+}

@@ -86,6 +86,14 @@ describe('ConsentTab', () => {
     expect(within(history).getByText(/12\/2026\/QĐ-TA/)).toBeInTheDocument()
   })
 
+  it('BF_01_buoc2_ngayDongY_chiHienNgay', async () => {
+    routes()
+    open()
+    const now = await screen.findByRole('region', { name: 'Bản đồng ý hiện hành' })
+    expect(within(now).getByText('10/10/2026')).toBeInTheDocument()
+    expect(within(now).queryByText(/09:00/)).not.toBeInTheDocument()
+  })
+
   it('nút lệnh chỉ hiện theo allowedCommands', async () => {
     routes()
     const view = open({ allowedCommands: ['RECORD_CONSENT', 'WITHDRAW_CONSENT'] })

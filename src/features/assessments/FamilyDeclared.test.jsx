@@ -127,8 +127,8 @@ describe('Gia đình khai: chọn người thân theo tên', () => {
     api.on('GET', '/residents/5/initial-assessment/family-declared', problem(404, 'NO_DRAFT'))
     api.on(
       'GET',
-      '/residents/5/relationships',
-      json(200, [{ id: 1, status: 'ACTIVE', familyMember: { id: 31, fullName: 'Trần Văn Minh' } }]),
+      '/residents/5/family-contacts',
+      json(200, [{ familyMemberId: 31, fullName: 'Trần Văn Minh' }]),
     )
     api.on(
       'PUT',

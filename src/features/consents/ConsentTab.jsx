@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
-import { formatDateTime } from '@/common/dateTime'
+import { formatDate, formatDateTime } from '@/common/dateTime'
 import { openFile, uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { CONSENTER_LABELS, FINAL_STATUSES, STATUS_LABELS } from './consentLabels'
@@ -133,7 +133,7 @@ function ConsentDetails({ consent, members = [], onDownloadFailure }) {
           {CONSENTER_LABELS[consent.consenterType]}
           {consent.consenterFamilyMemberId != null && ` (${nameOf(members, consent.consenterFamilyMemberId)})`}
         </Row>
-        <Row label="Ngày đồng ý">{formatDateTime(consent.consentedAt)}</Row>
+        <Row label="Ngày đồng ý">{formatDate(consent.consentedAt)}</Row>
         <Row label="Người thân được xem sức khỏe">
           {consent.familyMemberIdsAllowedHealthView.length > 0
             ? consent.familyMemberIdsAllowedHealthView.map((id) => nameOf(members, id)).join(', ')

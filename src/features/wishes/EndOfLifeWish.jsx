@@ -16,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
-import { formatDateTime } from '@/common/dateTime'
+import { formatDate, formatDateTime } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { FileField, Row } from '../consents/ConsentTab'
@@ -69,7 +69,7 @@ function WishDetails({ wish }) {
             <Row label="Ghi chú">{wish.note}</Row>
           </div>
         )}
-        <Row label="Ký lúc">{formatDateTime(wish.signedAt)}</Row>
+        <Row label="Ngày ký">{formatDate(wish.signedAt)}</Row>
       </dl>
       <section aria-label="Nhận định của Bác sĩ cho phiếu này" className="flex flex-col gap-2 rounded-lg border p-3">
         <h4 className="type-label">Nhận định của Bác sĩ cho phiếu này</h4>
@@ -79,7 +79,7 @@ function WishDetails({ wish }) {
           <div className="col-span-2">
             <Row label="Cách đã hỗ trợ hiểu thông tin">{assessment.supportMethod}</Row>
           </div>
-          <Row label="Ngày xem lại nhận định">{assessment.reviewDate}</Row>
+          <Row label="Ngày xem lại nhận định">{formatDate(assessment.reviewDate)}</Row>
         </dl>
       </section>
       <OpinionList opinions={wish.otherOpinions} />
@@ -880,7 +880,7 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={END_OF_LIFE_STATUS_LABELS[wish.status]} />
                   <span className="type-caption text-muted-foreground tabular-nums">
-                    {formatDateTime(wish.signedAt)}
+                    {formatDate(wish.signedAt)}
                   </span>
                 </div>
                 <WishDetails wish={wish} />
