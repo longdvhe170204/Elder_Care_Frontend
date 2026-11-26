@@ -33,6 +33,15 @@ export const postCarePlansByIdReturn = (params) => request('POST', '/care-plans/
 /** Hủy phiên bản Nháp hoặc Chờ duyệt (người lập, người có quyền duyệt) (FR-003) */
 export const postCarePlansByIdCancel = (params) => request('POST', '/care-plans/{id}/cancel', params)
 
+/** Hàng chờ cần lập hoặc sửa kế hoạch theo phạm vi xem, chờ lâu nhất trước (Q-448) (FR-009, FR-059) */
+export const getCarePlanReviewsQueue = (params) => request('GET', '/care-plan-reviews/queue', params)
+
+/** Yêu cầu xem xét kế hoạch Đang mở của một người cao tuổi (Q-448) (FR-058, FR-059) */
+export const getResidentsByResidentIdCarePlanReviews = (params) => request('GET', '/residents/{residentId}/care-plan-reviews', params)
+
+/** Không cần thay đổi kế hoạch, đóng mọi yêu cầu xem xét Đang mở (người có quyền Lập hoặc Duyệt; Q-448) (FR-058) */
+export const postResidentsByResidentIdCarePlanReviewsDismiss = (params) => request('POST', '/residents/{residentId}/care-plan-reviews/dismiss', params)
+
 /** Thay đổi của bản sửa so với kế hoạch Hiệu lực (mục thêm, bớt, đổi; Q-447) (FR-008) */
 export const getCarePlansCompare = (params) => request('GET', '/care-plans/compare', params)
 

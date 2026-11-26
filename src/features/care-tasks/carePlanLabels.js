@@ -6,6 +6,24 @@ export const PLAN_STATUS = {
   EXPIRED: 'Hết hiệu lực',
   CANCELLED: 'Đã hủy',
 }
+// Nguồn của yêu cầu xem xét kế hoạch (Q-448, FR-058)
+export const REVIEW_SOURCES = {
+  'M01.INITIAL_ASSESSMENT': 'Đánh giá đầu vào có nhu cầu chăm sóc',
+  'M01.ASSESSMENT': 'Bác sĩ đánh giá lại',
+  'M02.ADDENDUM': 'Phụ lục đổi mức chăm sóc',
+  'M05.INCIDENT': 'Sự cố ngã',
+  'M05.PALLIATIVE_CARE_CHOICE': 'Chọn chăm sóc giảm nhẹ',
+}
+export const reviewSource = (source) => REVIEW_SOURCES[source] ?? 'Cần xem xét kế hoạch'
+
+// Thời gian đã chờ trong hàng chờ: "Chờ 2 ngày", "Chờ 5 giờ", "Chờ dưới 1 giờ"
+export function waitingText(since, now = new Date()) {
+  const hours = Math.floor((now - new Date(since)) / 3_600_000)
+  if (hours >= 24) return `Chờ ${Math.floor(hours / 24)} ngày`
+  if (hours >= 1) return `Chờ ${hours} giờ`
+  return 'Chờ dưới 1 giờ'
+}
+
 export const FREQUENCIES = {
   TIMES_PER_DAY: 'Số lần trong ngày',
   EVERY_N_HOURS: 'Mỗi N giờ',

@@ -17,6 +17,8 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { formatDate } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { CarePlanDetail } from './CarePlanDetail'
+import { CarePlanQueue } from './CarePlanQueue'
+import { CarePlanReviewNotice } from './CarePlanReviewNotice'
 import { ResidentSearch } from './ResidentSearch'
 import { CARE_ROLES, IMPORTANCE, frequencyText, planLabel, planState, residentLabel } from './carePlanLabels'
 
@@ -177,7 +179,10 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  {scheduled && <StatusBadge status={planLabel(scheduled, true)} />}
+                  <Button variant="ghost" onClick={() => choose(null)}>
+                    Về danh sách cần lập
+                  </Button>
+                  {scheduled &&<StatusBadge status={planLabel(scheduled, true)} />}
                   {canCreate && plans !== null && (
                     <Button disabled={busy} onClick={create}>
                       {hasPlan ? 'Sửa kế hoạch' : 'Lập kế hoạch'}
@@ -185,6 +190,12 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
                   )}
                 </div>
               </div>
+              <CarePlanReviewNotice
+                residentId={residentId}
+                reload={reload}
+                canDismiss={can('CARE_PLAN', 'CREATE') || can('CARE_PLAN', 'APPROVE')}
+                onDismissed={() => setReload((value) => value + 1)}
+              />
               {/* Bản nháp đặt ngay dưới tiêu đề để người mở sau thấy trước bảng dài */}
               {open && (
                 <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-(--warning-foreground)/40 bg-warning/40 p-4">
@@ -208,7 +219,7 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
               )}
             </section>
           ) : (
-            <p>Chọn người cao tuổi để xem kế hoạch.</p>
+            <CarePlanQueue onChoose={choose} />
           )}
         </>
       )}

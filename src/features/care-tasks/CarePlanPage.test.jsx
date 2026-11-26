@@ -114,7 +114,8 @@ it('Q447_dangCoBanSua_khongLapThemMaMoBanDo', async () => {
 
 it('F5_timNguoiCaoTuoi_goiYHoTenVaMaHoSo_chonThiTaiKeHoach', async () => {
   renderPage({})
-  expect(screen.getByText('Chọn người cao tuổi để xem kế hoạch.')).toBeInTheDocument()
+  // Q-448: chưa chọn người thì hiện hàng chờ (đang tải vì route hàng chờ không khai báo)
+  expect(screen.getByRole('heading', { name: 'Cần lập hoặc sửa kế hoạch' })).toBeInTheDocument()
   fireEvent.change(screen.getByRole('combobox', { name: 'Tìm người cao tuổi' }), { target: { value: 'kiểm thử' } })
   fireEvent.click(await screen.findByRole('option', { name: '[Họ tên kiểm thử] · NCT-077' }))
   expect(await screen.findByText('Xoay trở người kiểm thử')).toBeInTheDocument()
@@ -204,4 +205,37 @@ it('Q447_dongKhiChuaLuu_hoiTruocKhiDong', async () => {
     within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Đóng không lưu' }),
   )
   await waitFor(() => expect(screen.queryByLabelText('Lý do sửa')).not.toBeInTheDocument())
+})
+
+it('Q448_coYeuCauXemXet_hienLyDo_khongCanThayDoiBatBuocLyDo', async () => {
+  api.on(
+    'GET',
+    '/residents/77/care-plan-reviews',
+    json(200, [{ source: 'M05.INCIDENT', sourceId: 3, reference: '3', raisedAt: '2026-11-25T07:20:00Z' }]),
+  )
+  api.on('POST', '/residents/77/care-plan-reviews/dismiss', json(200, {}))
+  renderPage()
+  const notice = await screen.findByRole('region', { name: 'Cần xem xét kế hoạch' })
+  expect(within(notice).getByText(/Sự cố ngã/)).toBeInTheDocument()
+
+  fireEvent.click(within(notice).getByRole('button', { name: 'Không cần thay đổi' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận không cần thay đổi' }))
+  expect(await screen.findByText('Nhập lý do không cần thay đổi kế hoạch.')).toBeInTheDocument()
+  expect(api.calls('POST', '/residents/77/care-plan-reviews/dismiss')).toHaveLength(0)
+
+  fireEvent.change(screen.getByRole('textbox', { name: /Lý do không cần thay đổi/ }), {
+    target: { value: 'Đã xem, kế hoạch hiện hành vẫn phù hợp' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'Xác nhận không cần thay đổi' }))
+  await waitFor(() => expect(api.calls('POST', '/residents/77/care-plan-reviews/dismiss')).toHaveLength(1))
+  expect(JSON.parse(api.calls('POST', '/residents/77/care-plan-reviews/dismiss')[0][1].body)).toEqual({
+    reason: 'Đã xem, kế hoạch hiện hành vẫn phù hợp',
+  })
+})
+
+it('Q448_chuaChonNguoi_hienHangChoThayChoLoiNhac', async () => {
+  api.on('GET', '/care-plan-reviews/queue', json(200, []))
+  renderPage({})
+  expect(await screen.findByText('Không có ai cần lập hoặc sửa kế hoạch')).toBeInTheDocument()
+  expect(screen.queryByText('Chọn người cao tuổi để xem kế hoạch.')).not.toBeInTheDocument()
 })

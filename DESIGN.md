@@ -1,6 +1,6 @@
 ---
 name: Elder_Care
-version: 6.26.0
+version: 6.27.0
 status: Đã duyệt (chủ dự án, 2026-10-16; mục 2.2 duyệt 2026-10-18; mục 15 duyệt 2026-10-18; mục 15.6 duyệt 2026-10-19; 6.0.0 hướng "Dòng thời gian ca" duyệt 2026-10-28)
 platforms: { web: frontend/, mobile: mobile/ }
 updated: 2026-11-26
@@ -163,7 +163,7 @@ Các màn web giống nhau nhờ dùng chung một số kiểu bố cục đã d
 
 - Làm hay sửa một màn: chọn một mẫu trong bảng và ghi tên mẫu trong mô tả PR. Trong một mẫu được đổi thứ tự khối, cột, nhóm lọc, câu chữ; không đổi khung, component dùng chung, cách mở chi tiết.
 - Không mẫu nào hợp, hoặc muốn lai hai mẫu: đề xuất phương án (trang so sánh, mục 13 điều 2) → chủ dự án duyệt → thêm dòng vào bảng này, tăng phiên bản → mới sửa mã. Bố cục chỉ một màn dùng thì ghi là bố cục riêng của màn đó, chưa thành mẫu; khi màn thứ hai cần thì mới thêm vào bảng và tách component ra `src/common`.
-- Bố cục riêng đã duyệt, chưa là mẫu: Tổng quan "Cột chú ý" (`dashboard/DashboardPage.jsx`, mục 5.1, 7.2 `dashboard-attention`); cổng người thân (mục 2.1, 2.3); Kế hoạch chăm sóc (`care-tasks/CarePlanPage.jsx`, Q-447, thiết kế Figma của chủ dự án 2026-11-26): ô tìm người cao tuổi có gợi ý, bảng kế hoạch hiện hành, bản sửa mở trong `Dialog` giữa màn rộng tối đa 960px, cao tối đa 90% màn hình, cuộn bên trong (đầu hộp thoại có tab, thân nền trang, thanh lệnh cố định cuối hộp thoại) thay cho khung phải 420px của `DetailLayout`; Figma vẽ panel trượt phải, chủ dự án đổi sang hộp thoại giữa màn 2026-11-26. Màn này không có phần thỏa thuận lựa chọn có rủi ro (chủ dự án bỏ 2026-11-26); dữ liệu cũ vẫn hiện ở checklist và màn quyết định mức chăm sóc.
+- Bố cục riêng đã duyệt, chưa là mẫu: Tổng quan "Cột chú ý" (`dashboard/DashboardPage.jsx`, mục 5.1, 7.2 `dashboard-attention`); cổng người thân (mục 2.1, 2.3); Kế hoạch chăm sóc (`care-tasks/CarePlanPage.jsx`, Q-447, thiết kế Figma của chủ dự án 2026-11-26): ô tìm người cao tuổi có gợi ý; chưa chọn người thì hiện bảng hàng chờ "Cần lập hoặc sửa kế hoạch" (`CarePlanQueue.jsx`, Q-448: người cao tuổi, lý do, thời gian đã chờ, nút "Mở kế hoạch"); đã chọn người thì dải "Cần xem xét kế hoạch" cùng kiểu dải bản nháp, có nút phụ "Không cần thay đổi" (`CarePlanReviewNotice.jsx`), bảng kế hoạch hiện hành, bản sửa mở trong `Dialog` giữa màn rộng tối đa 960px, cao tối đa 90% màn hình, cuộn bên trong (đầu hộp thoại có tab, thân nền trang, thanh lệnh cố định cuối hộp thoại) thay cho khung phải 420px của `DetailLayout`; Figma vẽ panel trượt phải, chủ dự án đổi sang hộp thoại giữa màn 2026-11-26. Màn này không có phần thỏa thuận lựa chọn có rủi ro (chủ dự án bỏ 2026-11-26); dữ liệu cũ vẫn hiện ở checklist và màn quyết định mức chăm sóc.
 - Chưa có màn tham chiếu: Phòng, giường dạng thẻ phòng (`room-card`, mục 14 "Chưa thiết kế"). Màn chưa áp 6.x (mục 14) không lấy làm mẫu để chép.
 - Skill `/ui-redesign` (mục 12) đi theo mục này khi dùng AI sửa bố cục.
 
@@ -817,6 +817,7 @@ Cho tài khoản người cao tuổi (AC-16; nghiep-vu.md 14.6a, spec 012 mục 
 
 | Phiên bản | Ngày | Nội dung |
 | --- | --- | --- |
+| 6.27.0 | 2026-11-26 | Q-448: màn Kế hoạch chăm sóc thêm bảng hàng chờ "Cần lập hoặc sửa kế hoạch" khi chưa chọn người và dải "Cần xem xét kế hoạch" có nút phụ "Không cần thay đổi" (mục 0, bố cục riêng của màn). Không thêm màu, không thêm mẫu |
 | 6.26.0 | 2026-11-26 | Chủ dự án duyệt thiết kế Figma màn Kế hoạch chăm sóc (Q-447): mục 0 thêm bố cục riêng của màn (bản sửa mở trong `Dialog` giữa màn rộng tối đa 960px thay khung phải 420px; chủ dự án đổi từ panel trượt phải của Figma). Tông nhãn: "Chờ Bác sĩ duyệt", "Quan trọng", "Bắt buộc" dùng attention; "Bắt buộc" không dùng đỏ như Figma vì đỏ chỉ cho việc gấp (mục 1 điều 4). Không thêm màu |
 | 6.25.0 | 2026-11-23 | Mục 6 thêm lớp phủ sau `Dialog`, `Sheet`: đen 40% thay 10% mặc định của shadcn, vì modal có thân nền xám bị lẫn với nền trang (màn Lập công việc ca). Áp cho mọi màn web |
 | 6.24.0 | 2026-11-22 | Chủ dự án chốt Q-440 (luồng chăm sóc hằng ngày): mục 2.3 thêm "Lịch chăm sóc hằng ngày" ở "Thêm" của cổng người thân cho mọi người thân có quan hệ Hiệu lực (công việc chăm sóc và trạng thái không còn phụ thuộc quyền xem sức khỏe; giá trị đo vẫn phụ thuộc); mục 3.5 thêm công việc "Chưa hoàn thành" vào tông neutral. Không thêm màu |
