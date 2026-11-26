@@ -115,7 +115,7 @@ function BelongingTable({ items, catalogs, opened, onOpen }) {
 // Đồ còn trả được (data-model 013 mục 3: Trả từ Đang giữ, Đang được sử dụng, Hư hỏng)
 const RETURNABLE = ['HELD', 'IN_USE', 'DAMAGED']
 
-function ResidentBelongings({ resident, catalogs, role, initialBelongingId = null }) {
+function ResidentBelongings({ resident, catalogs, role, initialBelongingId = null, allowOtherRecipient = false }) {
   const { can } = usePermissions()
   const [state, setState] = useState({ status: 'loading', items: [] })
   const [opened, setOpened] = useState(initialBelongingId)
@@ -191,7 +191,7 @@ function ResidentBelongings({ resident, catalogs, role, initialBelongingId = nul
           {state.status === 'ready' && state.items.length > 0 && (
             <BelongingTable items={state.items} catalogs={catalogs} opened={opened} onOpen={setOpened} />
           )}
-          {state.status === 'ready' && (
+          {state.status === 'ready' && allowOtherRecipient && (
             <RecipientConfirmations
               residentId={resident.id}
               belongings={returnable}
@@ -227,6 +227,7 @@ function ResidentBelongings({ resident, catalogs, role, initialBelongingId = nul
             isValuable={(b) => !!catalogs.typeOf(b.typeId)?.valuable}
             requiresConsent={(b) => !!catalogs.typeOf(b.typeId)?.requiresConsentForUse}
             onConfirmationCreated={() => setConfirmationsVersion((n) => n + 1)}
+            allowOtherRecipient={allowOtherRecipient}
             locationName={catalogs.locationName}
             levels={catalogs.levels}
             onDone={(message) => {
@@ -272,7 +273,17 @@ const TABS = [
 ]
 
 // residentId, belongingId, tab, checkId: mở từ thông báo (NotificationDetail; hoàn thiện BF-14, 2026-11-23)
-export function BelongingsPage({ role, residentId, belongingId, tab: initialTab, checkId, staffId }) {
+// allowOtherRecipient (demo 2026-11-26, E chốt): người nhận "Người khác" và mục "Xác nhận người nhận khác" (FR-017) đang ẩn;
+// mã, API giữ nguyên để bật lại bằng tham số này
+export function BelongingsPage({
+  role,
+  residentId,
+  belongingId,
+  tab: initialTab,
+  checkId,
+  staffId,
+  allowOtherRecipient = false,
+}) {
   const catalogs = useBelongingCatalogs()
   const [resident, setResident] = useState(null)
   const [tab, setTab] = useState(['inventory', 'held'].includes(initialTab) ? initialTab : 'resident')
@@ -292,7 +303,12 @@ export function BelongingsPage({ role, residentId, belongingId, tab: initialTab,
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Đồ gửi" subtitle="Tiếp nhận, bàn giao và trả đồ gia đình gửi viện giữ hộ.">
-        <ToggleGroup variant="filter" className="flex-wrap" value={[tab]} onValueChange={(next) => next[0] && setTab(next[0])}>
+        <ToggleGroup
+          variant="filter"
+          className="flex-wrap"
+          value={[tab]}
+          onValueChange={(next) => next[0] && setTab(next[0])}
+        >
           {TABS.filter((t) => !t.roles || t.roles.includes(role)).map((t) => (
             <ToggleGroupItem key={t.value} value={t.value}>
               {t.label}
@@ -319,6 +335,7 @@ export function BelongingsPage({ role, residentId, belongingId, tab: initialTab,
       )}
       {tab === 'resident' && resident && (
         <ResidentBelongings
+          allowOtherRecipient={allowOtherRecipient}
           key={resident.id}
           resident={resident}
           catalogs={catalogs}
