@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { pickResident } from '@/test/pickResident'
 import { json, mockRoutes } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { EndingsPage } from './EndingsPage'
@@ -241,8 +242,7 @@ describe('EndingsPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
     const dialog = screen.getByRole('dialog')
-    await within(dialog).findByRole('option', { name: 'Nguyễn Thị Lan (NCT-0005)' })
-    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '5' } })
+    await pickResident('Nguyễn Thị Lan', { container: dialog })
     const input = within(dialog).getByLabelText('Người đề nghị')
     fireEvent.focus(input)
     await waitFor(() =>
@@ -258,8 +258,7 @@ describe('EndingsPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
     const dialog = screen.getByRole('dialog')
-    await within(dialog).findByRole('option', { name: 'Nguyễn Thị Lan (NCT-0005)' })
-    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '5' } })
+    await pickResident('Nguyễn Thị Lan', { container: dialog })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Chuyển cơ sở' }))
     fireEvent.change(within(dialog).getByLabelText('Ngày kết thúc dự kiến'), { target: { value: '2026-11-30' } })
     fireEvent.change(within(dialog).getByLabelText('Người đề nghị'), { target: { value: 'Con gái' } })
