@@ -23,6 +23,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { usePermissions } from '@/common/permissions/permissions'
 import { ShiftSourceDialog } from './ShiftSourceDialog'
+import { MonthTaskPlanning } from './MonthTaskPlanning'
 import { ShiftTaskBatchDialog } from './ShiftTaskBatchDialog'
 import { dateOf, formatDate, needsOf, newPlanningRow, nextDate, shiftLabel, timeOf } from './shiftPlanning'
 
@@ -77,13 +78,14 @@ function ResidentSearch({ onPick }) {
   useEffect(() => {
     onPick(pickedId)
   }, [pickedId, onPick])
-  const hint = !query || !results
-    ? ''
-    : !found.length
-      ? 'Không tìm thấy người cao tuổi.'
-      : !picked
-        ? `Có ${found.length} người khớp, chọn một trong gợi ý.`
-        : ''
+  const hint =
+    !query || !results
+      ? ''
+      : !found.length
+        ? 'Không tìm thấy người cao tuổi.'
+        : !picked
+          ? `Có ${found.length} người khớp, chọn một trong gợi ý.`
+          : ''
   return (
     <div className="flex min-w-0 flex-col gap-1">
       <InputGroup className="h-11 bg-popover">
@@ -352,9 +354,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   const shift = source?.shift
   const shiftOptions = initialShiftId ? (shift ? [shift] : []) : shifts
   const manyFloors = new Set(shiftOptions.map((x) => x.floorId).filter(Boolean)).size > 1
-  const subtitle = shift
-    ? [formatDate(dateOf(shift.startsAt)), floorName].filter(Boolean).join(' · ')
-    : ''
+  const subtitle = shift ? [formatDate(dateOf(shift.startsAt)), floorName].filter(Boolean).join(' · ') : ''
   const focusName = focusResidentId && (people[focusResidentId] || `Người cao tuổi · mã ${focusResidentId}`)
   const focusInShift = source?.residents.some((r) => r.residentId === focusResidentId)
   const readyForShift = source && String(shift.id) === String(shiftId) && !loading
@@ -436,6 +436,10 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Lập công việc ca" subtitle="Xem việc còn thiếu, phân công và lưu công việc của ca." />
+      {/* Q-453: lập công việc cho cả tháng; phần theo ca bên dưới để bổ sung, việc phát sinh */}
+      {create && (
+        <MonthTaskPlanning people={people} types={types} staff={staff} onPublished={() => setRevision((n) => n + 1)} />
+      )}
       {focusResidentId && source && (
         <div
           role="status"
@@ -458,7 +462,9 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
       <section aria-labelledby="pending-care-plans" className="flex flex-col gap-3 rounded-xl border bg-card p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h2 id="pending-care-plans" className="type-title">Kế hoạch còn việc chưa lập</h2>
+            <h2 id="pending-care-plans" className="type-title">
+              Kế hoạch còn việc chưa lập
+            </h2>
             {readyForShift && floorName && <p className="type-body-sm text-muted-foreground">{floorName}</p>}
           </div>
           {shiftPicker}
@@ -471,7 +477,9 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
                   <TableHead>Người cao tuổi</TableHead>
                   <TableHead>Mốc chưa lập</TableHead>
                   {create && (
-                    <TableHead><span className="sr-only">Thao tác</span></TableHead>
+                    <TableHead>
+                      <span className="sr-only">Thao tác</span>
+                    </TableHead>
                   )}
                 </TableRow>
               </TableHeader>
@@ -492,7 +500,10 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
               </TableBody>
             </Table>
             {pendingPlanPages > 1 && (
-              <nav aria-label="Phân trang kế hoạch còn việc chưa lập" className="flex flex-wrap items-center justify-end gap-2">
+              <nav
+                aria-label="Phân trang kế hoạch còn việc chưa lập"
+                className="flex flex-wrap items-center justify-end gap-2"
+              >
                 <Button
                   variant="outline"
                   disabled={currentPendingPlanPage === 1}
@@ -517,7 +528,9 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
           <p className="type-body-sm text-muted-foreground">
             {readyForShift
               ? 'Không còn mốc kế hoạch nào cần lập trong ca này.'
-              : shiftId && !failure ? 'Đang tải kế hoạch của ca…' : 'Chọn ngày và ca để xem công việc cần lập.'}
+              : shiftId && !failure
+                ? 'Đang tải kế hoạch của ca…'
+                : 'Chọn ngày và ca để xem công việc cần lập.'}
           </p>
         )}
       </section>

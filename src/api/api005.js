@@ -147,6 +147,18 @@ export const getShiftsByShiftIdSourceData = (params) => request('GET', '/shifts/
 /** Công việc đã lập của ca (Người phụ trách ca, Trưởng tầng, Quản lý viện) (FR-017, FR-045) */
 export const getShiftsByShiftIdCareTasks = (params) => request('GET', '/shifts/{shiftId}/care-tasks', params)
 
+/** Chép từ kế hoạch cho cả tháng của tầng, tạo công việc Nháp (Trưởng tầng; Q-453, FR-054) */
+export const postCareTasksMonthDrafts = (params) => request('POST', '/care-tasks/month-drafts', params)
+
+/** Công việc Nháp của tầng trong tháng (Q-453) */
+export const getCareTasksMonthDrafts = (params) => request('GET', '/care-tasks/month-drafts', params)
+
+/** Công bố công việc tháng, Nháp sang Chưa đến hạn (Trưởng tầng; Q-453) */
+export const postCareTasksMonthDraftsPublish = (params) => request('POST', '/care-tasks/month-drafts/publish', params)
+
+/** Bỏ một công việc Nháp (Trưởng tầng; Q-453) */
+export const postCareTasksMonthDraftsByIdDiscard = (params) => request('POST', '/care-tasks/month-drafts/{id}/discard', params)
+
 /** Lập công việc của ca theo lô (FR-002, FR-006, FR-017, FR-018, FR-021, FR-023, FR-024, FR-029, BR-M04-01, BR-M04-02, BR-M04-24, BR-M04-26, BR-M04-28, BR-M09-01) */
 export const postShiftsByShiftIdCareTasksPlan = (params) => request('POST', '/shifts/{shiftId}/care-tasks/plan', params)
 
