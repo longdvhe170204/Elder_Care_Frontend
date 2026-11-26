@@ -146,7 +146,7 @@ describe('EndingsPage', () => {
     const table = screen.getByRole('table', { name: 'Điều kiện kết thúc' })
     const row = (name) => within(table).getByText(name).closest('tr')
     fireEvent.click(within(row('Chi phí kỳ cuối đã chốt')).getByRole('button', { name: /Xử lý/ }))
-    expect(onNavigate).toHaveBeenLastCalledWith('charges', {})
+    expect(onNavigate).toHaveBeenLastCalledWith('charges', { residentId: 5, workspace: 'sources', until: '2026-11-20' })
     fireEvent.click(within(row('Số dư và tiền cọc đã quyết toán')).getByRole('button', { name: /Xử lý/ }))
     expect(onNavigate).toHaveBeenLastCalledWith('balance', { residentId: 5, focus: 'resident' })
     expect(within(row('Đã bàn giao người cao tuổi')).queryByRole('button', { name: /Xử lý/ })).toBeNull()
