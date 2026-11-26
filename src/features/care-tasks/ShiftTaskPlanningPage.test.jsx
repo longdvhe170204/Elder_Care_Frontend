@@ -90,7 +90,9 @@ async function enterRow(dialog, source = 'CARE_PLAN_ITEM:90', time = '08:00') {
     fireEvent.change(within(row).getByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi'), { target: { value: source } })
   }
   fireEvent.change(within(row).getByLabelText('Phân công'), { target: { value: '22' } })
-  fireEvent.change(within(row).getByLabelText('Nội dung (không bắt buộc)'), { target: { value: 'Nội dung tự nhập' } })
+  if (!source?.startsWith('CARE_PLAN_ITEM:')) {
+    fireEvent.change(within(row).getByLabelText('Nội dung (không bắt buộc)'), { target: { value: 'Nội dung tự nhập' } })
+  }
   return row
 }
 
@@ -111,7 +113,9 @@ it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
   api.on('POST', '/shifts/5/care-tasks/plan', json(201, []))
   view()
   const dialog = await openBatch()
-  await enterRow(dialog)
+  const row = await enterRow(dialog)
+  expect(within(row).queryByLabelText('Nội dung (không bắt buộc)')).not.toBeInTheDocument()
+  expect(within(row).getByText('Nội dung theo mục kế hoạch')).toBeInTheDocument()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
   await waitFor(() => expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(1))
   const [, options] = api.calls('POST', '/shifts/5/care-tasks/plan')[0]
@@ -120,7 +124,6 @@ it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
       residentId: 77,
       taskTypeId: 9,
       basis: { type: 'CARE_PLAN_ITEM', id: 90 },
-      content: 'Nội dung tự nhập',
       plannedAt: '2026-11-01T08:00:00+07:00',
       importance: 'NORMAL',
       performerId: 22,
@@ -128,6 +131,7 @@ it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
     },
   ])
   expect(options.headers['Idempotency-Key']).toBeTruthy()
+  expect(JSON.parse(options.body)[0]).not.toHaveProperty('content')
   expect(JSON.parse(options.body)[0]).not.toHaveProperty('windowBeforeMinutes')
   expect(JSON.parse(options.body)[0]).not.toHaveProperty('windowAfterMinutes')
   expect(
@@ -397,6 +401,35 @@ it('FR_023_chonNguonThucTeVaXoaLuaChonKhiDoiGio', async () => {
   expect(await within(row).findByRole('option', { name: '[Nhân viên kiểm thử] · Nhân viên chăm sóc' })).toHaveValue('22')
 })
 
+it('FR_023_mucMotLanMoiCaChiChonODauCaVaHienKhungCa', async () => {
+  api.on('GET', '/shifts/5/source-data', json(200, {
+    shift: SHIFT,
+    residents: [{
+      residentId: 77,
+      assignments: [{ staffId: 22, role: 'CAREGIVER' }],
+      planItems: [
+        { id: 90, taskTypeId: 9, content: 'Mục một lần mỗi ca', frequencyType: 'ONCE_PER_SHIFT', importance: 'NORMAL' },
+        { id: 91, taskTypeId: 9, content: 'Mục chỉ có thứ Hai', frequencyType: 'DAYS_OF_WEEK', weekdays: [1], times: ['07:00:00'], importance: 'NORMAL' },
+      ],
+      otherSources: [],
+    }],
+  }))
+  view()
+  const dialog = await openBatch()
+  const row = await enterRow(dialog, null)
+  const fields = within(row)
+  fireEvent.change(fields.getByLabelText('Cách lập công việc'), { target: { value: 'source' } })
+  const source = fields.getByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi')
+  expect(source).toBeDisabled()
+  expect(fields.getByText(/giờ bắt đầu ca 07:00/)).toBeInTheDocument()
+  fireEvent.change(fields.getByLabelText('Giờ dự kiến'), { target: { value: '07:00' } })
+  expect(within(source).getByRole('option', { name: /Mục một lần mỗi ca/ })).toHaveValue('CARE_PLAN_ITEM:90')
+  expect(within(source).queryByRole('option', { name: /Mục chỉ có thứ Hai/ })).not.toBeInTheDocument()
+  fireEvent.change(source, { target: { value: 'CARE_PLAN_ITEM:90' } })
+  fireEvent.click(fields.getByText('Tùy chọn thời gian nâng cao'))
+  expect(fields.getByText('Khung thực hiện: 01/11/2026 07:00 – 01/11/2026 15:00')).toBeInTheDocument()
+})
+
 it('FR_017_thieuTruong_baoTruocKhiGui_mucTheoMucKeHoachKhongCoOChon', async () => {
   view()
   const dialog = await openBatch()
@@ -486,7 +519,8 @@ it('BR_M04_01_loiTheoDong_giuNoiDung_baoTaiTruong', async () => {
   )
   view()
   const dialog = await openBatch()
-  await enterRow(dialog)
+  const draft = await enterRow(dialog, null)
+  fireEvent.change(within(draft).getByLabelText('Mức quan trọng'), { target: { value: 'NORMAL' } })
   fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
   const alert = await within(dialog).findByRole('alert')
   expect(alert).toHaveTextContent('Chưa lưu lô công việc')

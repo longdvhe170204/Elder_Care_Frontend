@@ -9,7 +9,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { IMPORTANCE, CARE_ROLES } from './carePlanLabels'
-import { BASIS, ERRORS, anyTimeItem, inShift, matchingSources, needsOf, pad, plannedAtOf, shiftTimeOptions, timeOf } from './shiftPlanning'
+import { BASIS, ERRORS, inShift, matchingSources, needsOf, pad, plannedAtOf, shiftTimeOptions, timeOf, wholeShiftItem } from './shiftPlanning'
 
 const SHIFT_LEVEL = ['SHIFT_START_CHECK', 'SUPERVISION']
 const isShiftLevel = (type) => SHIFT_LEVEL.includes(type?.group) && type.defaultRole === 'NURSING_STAFF'
@@ -120,7 +120,7 @@ function WindowOptions({ row, shift, type, plan, errors, set }) {
   const [open, setOpen] = useState(false)
   const id = useId()
   const edit = canEditWindow(row, type)
-  const wholeShift = row.residentId === 'FLOOR' || (plan && anyTimeItem(plan))
+  const wholeShift = row.residentId === 'FLOOR' || (plan && wholeShiftItem(plan))
   const defaults = WINDOW_FIELDS.map(([field]) => plan?.[field] ?? type[field])
   const minutes = WINDOW_FIELDS.map(([field], index) => (edit && hasMinutes(row[field]) ? row[field] : defaults[index]))
   let preview = 'Nhập giờ dự kiến trong ca để xem khung.'
@@ -312,7 +312,8 @@ export function ShiftTaskBatchDialog({
     }
     const body = rows.map((r) => {
       const floor = r.residentId === 'FLOOR'
-      const basis = floor ? typeById[r.taskTypeId].group : resolve(r, residentsById[r.residentId], shift).basis
+      const source = floor ? null : resolve(r, residentsById[r.residentId], shift)
+      const basis = floor ? typeById[r.taskTypeId].group : source.basis
       const [type, id] = basis.split(':')
       const shared = r.performer === 'SHARED'
       return {
@@ -320,7 +321,7 @@ export function ShiftTaskBatchDialog({
         location: floor ? { type: 'FLOOR', id: shift.floorAreaId } : undefined,
         taskTypeId: Number(r.taskTypeId),
         basis: id ? { type, id: Number(id) } : { type },
-        content: r.content || undefined,
+        content: source?.plan ? undefined : r.content || undefined,
         plannedAt: plannedAtOf(shift, r.time),
         ...(canEditWindow(r, typeById[r.taskTypeId]) &&
           Object.fromEntries(WINDOW_FIELDS.filter(([field]) => hasMinutes(r[field])).map(([field]) => [field, Number(r[field])]))),
@@ -464,10 +465,8 @@ export function ShiftTaskBatchDialog({
               ]
               const set = (field) => (value) => update(r.key, field, value)
               const level = importanceOf(r, current, shift, typeById)
-              const sourceOptions =
-                r.mode === 'source' && !floor
-                  ? matchingSources(current, shift, r.taskTypeId, r.time).map((item) => [sourceKey(item), sourceText(item)])
-                  : []
+              const source = floor ? null : resolve(r, current, shift)
+              const sourceOptions = (source?.sources ?? []).map((item) => [sourceKey(item), sourceText(item)])
               return (
                 <fieldset
                   key={r.key}
@@ -631,21 +630,28 @@ export function ShiftTaskBatchDialog({
                         row={r}
                         shift={shift}
                         type={typeById[r.taskTypeId]}
-                        plan={resolve(r, current, shift).plan}
+                        plan={source?.plan}
                         errors={errors}
                         set={set}
                       />
                     )}
-                    <RowField label="Nội dung (không bắt buộc)" className="md:col-span-3">
-                      {(p) => (
-                        <Textarea
-                          id={p.id}
-                          maxLength={1000}
-                          value={r.content}
-                          onChange={(e) => set('content')(e.target.value)}
-                        />
-                      )}
-                    </RowField>
+                    {source?.plan ? (
+                      <div className="flex flex-col gap-2 md:col-span-3">
+                        <p className="type-label">Nội dung theo mục kế hoạch</p>
+                        <p className="type-body-sm">{source.plan.content}</p>
+                      </div>
+                    ) : (
+                      <RowField label="Nội dung (không bắt buộc)" className="md:col-span-3">
+                        {(p) => (
+                          <Textarea
+                            id={p.id}
+                            maxLength={1000}
+                            value={r.content}
+                            onChange={(e) => set('content')(e.target.value)}
+                          />
+                        )}
+                      </RowField>
+                    )}
                   </div>
                 </fieldset>
               )
@@ -712,7 +718,9 @@ function NeedList({ name, shiftText, need, typeName }) {
                   <span className="type-label">{typeName[e.taskTypeId] || e.kind}</span>
                   <span className="block text-muted-foreground">{e.text}</span>
                 </td>
-                <td className="py-1.5 pr-3 tabular-nums">{e.time ?? 'Trong ca'}</td>
+                <td className="py-1.5 pr-3 tabular-nums">
+                  {e.wholeShift ? `Trong ca · giờ bắt đầu ca ${e.time}` : e.time}
+                </td>
                 <td className="py-1.5 pr-3">{IMPORTANCE[e.importance] || '—'}</td>
                 <td className="py-1.5 pr-3">{CARE_ROLES[e.role] || '—'}</td>
                 <td className={`py-1.5 type-label ${STATES[e.state][1]}`}>{STATES[e.state][0]}</td>
