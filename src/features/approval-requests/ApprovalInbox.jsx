@@ -36,11 +36,12 @@ function toQuery({ inbox, status, type }, cursor) {
   return { inbox, status: status || undefined, type: type || undefined, cursor }
 }
 
-export function ApprovalInbox() {
+// requestId (demo 2026-11-26): mở từ nút Xử lý của thông báo, hiện ngay chi tiết yêu cầu đó
+export function ApprovalInbox({ requestId = null } = {}) {
   const [filter, setFilter] = useState({ inbox: 'AWAITING_MY_APPROVAL', status: '', type: '' })
   const [state, setState] = useState({ status: 'loading', items: [], nextCursor: null })
   const [awaitingCount, setAwaitingCount] = useState(null)
-  const [opened, setOpened] = useState(null)
+  const [opened, setOpened] = useState(requestId)
 
   const load = useCallback(async (nextFilter, cursor) => {
     setState((s) => (cursor ? { ...s, loadingMore: true } : { status: 'loading', items: [], nextCursor: null }))
