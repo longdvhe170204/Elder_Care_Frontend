@@ -6,13 +6,24 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { IMPORTANCE, CARE_ROLES } from './carePlanLabels'
-import { BASIS, ERRORS, matchingSources, needsOf, pad, plannedAtOf, timeOf } from './shiftPlanning'
+import { BASIS, ERRORS, anyTimeItem, inShift, matchingSources, needsOf, pad, plannedAtOf, shiftTimeOptions, timeOf } from './shiftPlanning'
 
 const SHIFT_LEVEL = ['SHIFT_START_CHECK', 'SUPERVISION']
 const isShiftLevel = (type) => SHIFT_LEVEL.includes(type?.group) && type.defaultRole === 'NURSING_STAFF'
 const newRow = () => ({ key: crypto.randomUUID(), content: '', mode: 'adHoc' })
+const WINDOW_FIELDS = [
+  ['windowBeforeMinutes', 'Phút trước giờ dự kiến'],
+  ['windowAfterMinutes', 'Phút sau giờ dự kiến'],
+]
+const hasMinutes = (value) => value != null && value !== ''
+const validMinutes = (value) => /^\d+$/.test(value) && Number(value) <= 2_147_483_647
+
+function canEditWindow(row, type) {
+  return row.residentId !== 'FLOOR' && row.mode === 'adHoc' && row.importance === 'NORMAL' && type?.resultType === 'PERFORMED'
+}
 
 // Một trường của dòng: nhãn bao điều khiển, lỗi hiện ngay dưới trường (DESIGN.md 7.4)
 function RowField({ label, error, children, className }) {
@@ -83,20 +94,87 @@ function checkRow(row, resident, shift, typeById) {
   if (!row.residentId) errors.resident = 'Chọn người cao tuổi.'
   if (!row.taskTypeId) errors.type = 'Chọn loại công việc.'
   if (!row.time) errors.time = 'Nhập giờ dự kiến.'
+  else if (!inShift(shift, row.time)) errors.time = `Nhập giờ từ ${timeOf(shift.startsAt)} đến trước ${timeOf(shift.endsAt)}.`
   const level = importanceOf(row, resident, shift, typeById)
   if (level.choose && !level.value) errors.importance = 'Chọn mức quan trọng của việc này.'
   if (!row.performer) errors.performer = 'Chọn người thực hiện hoặc Việc chung của tầng.'
+  if (canEditWindow(row, typeById[row.taskTypeId])) {
+    for (const [field] of WINDOW_FIELDS) {
+      if (hasMinutes(row[field]) && !validMinutes(row[field])) errors[field] = 'Nhập số phút nguyên không âm hợp lệ.'
+    }
+  }
   if (floor) {
     if (!level.value) errors.type = 'Loại công việc cấp ca chưa có mức quan trọng mặc định.'
     return errors
   }
-  if (!row.residentId || !row.taskTypeId || !row.time) return errors
+  if (!row.residentId || !row.taskTypeId || errors.time) return errors
   const found = resolve(row, resident, shift)
   if (!found.basis)
     errors.basis = found.sources?.length
       ? 'Chọn nguồn của công việc.'
       : 'Không có nguồn phù hợp với giờ đã nhập. Kiểm tra lại giờ hoặc chọn công việc phát sinh.'
   return errors
+}
+
+function WindowOptions({ row, shift, type, plan, errors, set }) {
+  const [open, setOpen] = useState(false)
+  const id = useId()
+  const edit = canEditWindow(row, type)
+  const wholeShift = row.residentId === 'FLOOR' || (plan && anyTimeItem(plan))
+  const defaults = WINDOW_FIELDS.map(([field]) => plan?.[field] ?? type[field])
+  const minutes = WINDOW_FIELDS.map(([field], index) => (edit && hasMinutes(row[field]) ? row[field] : defaults[index]))
+  let preview = 'Nhập giờ dự kiến trong ca để xem khung.'
+  if (wholeShift) {
+    preview = `Khung thực hiện: ${formatDateTime(shift.startsAt)} – ${formatDateTime(shift.endsAt)}`
+  } else if (row.time && inShift(shift, row.time)) {
+    if (minutes.every(validMinutes)) {
+      const at = Date.parse(plannedAtOf(shift, row.time))
+      const from = at - Number(minutes[0]) * 60_000
+      const to = at + Number(minutes[1]) * 60_000
+      preview = `Khung thực hiện: ${formatDateTime(from)} – ${formatDateTime(to)}`
+    } else if (minutes.some((value) => hasMinutes(value) && !validMinutes(value))) {
+      preview = 'Sửa số phút để xem khung thực hiện.'
+    } else {
+      preview = 'Hệ thống áp dụng cấu hình khung giờ khi lưu.'
+    }
+  }
+  return (
+    <div className="flex flex-col gap-3 md:col-span-3">
+      <Button
+        type="button"
+        variant="outline"
+        className="self-start"
+        aria-expanded={open}
+        aria-controls={id}
+        onClick={() => setOpen(!open)}
+      >
+        Tùy chọn thời gian nâng cao
+      </Button>
+      <div id={id} hidden={!open} className={open ? 'grid gap-4 sm:grid-cols-2' : undefined}>
+        {open && (
+          <>
+            <p className="type-body-sm sm:col-span-2">{preview}</p>
+            {edit && WINDOW_FIELDS.map(([field, label], index) => (
+              <RowField key={field} label={label} error={errors[field]}>
+                {(p) => (
+                  <input
+                    {...p}
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder={hasMinutes(defaults[index]) ? String(defaults[index]) : undefined}
+                    value={row[field] ?? ''}
+                    onChange={(event) => set(field)(event.target.value)}
+                  />
+                )}
+              </RowField>
+            ))}
+            {edit && <p className="type-body-sm text-muted-foreground sm:col-span-2">Để trống để dùng khung mặc định.</p>}
+          </>
+        )}
+      </div>
+    </div>
+  )
 }
 
 // "Lập công việc cho ca": nhập các dòng rồi gửi cả lô; không tự thêm dòng, không điền thay theo nguồn (Q-306, Q-307)
@@ -125,6 +203,7 @@ export function ShiftTaskBatchDialog({
   const attempt = useRef(null)
   const summary = useRef(null)
   const shift = source?.shift
+  const clock = shift && shiftTimeOptions(shift)
   const residentsById = Object.fromEntries((source?.residents ?? []).map((r) => [String(r.residentId), r]))
   const typeById = Object.fromEntries(types.map((t) => [String(t.id), t]))
 
@@ -201,6 +280,9 @@ export function ShiftTaskBatchDialog({
         }
         if (field === 'residentId') next.performer = ''
         if (['residentId', 'taskTypeId', 'time', 'mode'].includes(field)) next.source = ''
+        if (['residentId', 'taskTypeId', 'mode', 'source', 'importance'].includes(field)) {
+          for (const [key] of WINDOW_FIELDS) delete next[key]
+        }
         return next
       }),
     )
@@ -240,6 +322,8 @@ export function ShiftTaskBatchDialog({
         basis: id ? { type, id: Number(id) } : { type },
         content: r.content || undefined,
         plannedAt: plannedAtOf(shift, r.time),
+        ...(canEditWindow(r, typeById[r.taskTypeId]) &&
+          Object.fromEntries(WINDOW_FIELDS.filter(([field]) => hasMinutes(r[field])).map(([field]) => [field, Number(r[field])]))),
         importance: importanceOf(r, residentsById[r.residentId], shift, typeById).value,
         performerId: shared ? undefined : Number(r.performer),
         shared,
@@ -443,13 +527,24 @@ export function ShiftTaskBatchDialog({
                     </RowField>
                     <RowField label="Giờ dự kiến" error={errors.time}>
                       {(p) => (
-                        <input
-                          {...p}
-                          type="time"
-                          required
-                          value={r.time ?? ''}
-                          onChange={(e) => set('time')(e.target.value)}
-                        />
+                        <>
+                          <input
+                            {...p}
+                            type="time"
+                            required
+                            min={clock.first}
+                            max={clock.last}
+                            list={`${p.id}-times`}
+                            value={r.time ?? ''}
+                            onChange={(e) => set('time')(e.target.value)}
+                          />
+                          <datalist id={`${p.id}-times`}>
+                            {clock.options.map((time) => <option key={time} value={time} />)}
+                          </datalist>
+                          {r.time && inShift(shift, r.time) && (
+                            <p className="type-body-sm text-muted-foreground">{formatDate(plannedAtOf(shift, r.time))}</p>
+                          )}
+                        </>
                       )}
                     </RowField>
                     {level.choose ? (
@@ -531,6 +626,16 @@ export function ShiftTaskBatchDialog({
                       </>
                     )}
                     {floor && errors.basis && <p className="type-body-sm text-destructive">{errors.basis}</p>}
+                    {typeById[r.taskTypeId] && (
+                      <WindowOptions
+                        row={r}
+                        shift={shift}
+                        type={typeById[r.taskTypeId]}
+                        plan={resolve(r, current, shift).plan}
+                        errors={errors}
+                        set={set}
+                      />
+                    )}
                     <RowField label="Nội dung (không bắt buộc)" className="md:col-span-3">
                       {(p) => (
                         <Textarea

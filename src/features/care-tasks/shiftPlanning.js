@@ -55,8 +55,22 @@ export const shiftLabel = (shift) => `Ca ${timeOf(shift.startsAt)}–${timeOf(sh
 // Giờ dự kiến trong ca: giờ nhỏ hơn giờ bắt đầu của ca qua đêm thuộc ngày hôm sau
 export function plannedAtOf(shift, time) {
   const start = dateOf(shift.startsAt)
-  const date = time < timeOf(shift.startsAt) ? nextDate(start) : start
+  const overnight = start !== dateOf(shift.endsAt)
+  const date = overnight && time < timeOf(shift.startsAt) ? nextDate(start) : start
   return `${date}T${time}:00+07:00`
+}
+
+export function shiftTimeOptions(shift) {
+  const minute = 60_000
+  const first = Math.ceil(Date.parse(shift.startsAt) / minute) * minute
+  const end = Date.parse(shift.endsAt)
+  const options = []
+  for (let at = first; at < end; at += 15 * minute) options.push(timeOf(at))
+  return {
+    options,
+    first: timeOf(first),
+    last: timeOf((Math.ceil(end / minute) - 1) * minute),
+  }
 }
 
 export const pad = (n) => String(n).padStart(2, '0')
