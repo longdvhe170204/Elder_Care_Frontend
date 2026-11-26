@@ -178,6 +178,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   function openerOf(step) {
     if (step.page) {
       const [page, , withResident] = step.page
+      // Màn nhận người cao tuổi chọn sẵn theo mã (Số dư, Người thân và quyền)
       return () => (withResident ? onNavigate(page, { residentId: resident.id }) : onNavigate(page))
     }
     if (step.action === 'resident')

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   getResidents,
+  getResidentsById,
   getResidentsByResidentIdRelationships,
   getResidentsByResidentIdVisitPickupWishes,
   getRightChangeRequests,
@@ -155,7 +156,9 @@ function RelationshipTable({ relationships, selectedId, onSelect }) {
   )
 }
 
-export function FamilyMembersPage() {
+// residentId: mở từ bước "Ghi người thân" của Hồ sơ tiếp nhận, chọn sẵn người cao tuổi đó (chủ dự án yêu cầu 2026-11-26);
+// họ tên, mã hồ sơ tải theo mã, không đưa lên địa chỉ trang
+export function FamilyMembersPage({ residentId = null } = {}) {
   const { can } = usePermissions()
   const [resident, setResident] = useState(null)
   const [relationships, setRelationships] = useState(null)
@@ -189,6 +192,16 @@ export function FamilyMembersPage() {
       setFailure(problemOf(error))
     }
   }, [])
+
+  useEffect(() => {
+    if (residentId == null) return
+    getResidentsById({ path: { id: residentId } })
+      .then(({ data }) => {
+        setResident({ id: data.id, name: data.personalInfo?.fullName ?? `Mã ${data.id}`, code: data.profileCode })
+        load(data.id)
+      })
+      .catch((error) => setFailure(problemOf(error)))
+  }, [residentId, load])
 
   function pick(next) {
     setResident(next)

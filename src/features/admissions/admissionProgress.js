@@ -34,7 +34,7 @@ export const PHASES = [
         key: 'contacts',
         label: 'Người thân: liên hệ chính, người đại diện',
         condition: 'ADM_F_CONTACTS',
-        page: ['family-members', 'Mở Người thân và quyền'],
+        page: ['family-members', 'Mở Người thân và quyền', 'resident'],
         doLabel: 'Ghi người thân',
         mine: (ctx) => ctx.can('FAMILY_MEMBER_PERMISSION', 'CREATE'),
         who: 'Hành chính',
