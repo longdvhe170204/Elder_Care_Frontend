@@ -74,7 +74,10 @@ it('Q447_dangCoBanApDungNgayMai_hienNhanVaNutSuaChepBanDo', async () => {
   api.on(
     'GET',
     '/residents/77/care-plans',
-    json(200, [effective, { id: 13, revision: 3, status: 'PENDING_EFFECT', effectiveFrom: '2026-11-26', items: [item] }]),
+    json(200, [
+      effective,
+      { id: 13, revision: 3, status: 'PENDING_EFFECT', effectiveFrom: '2026-11-26', items: [item] },
+    ]),
   )
   api.on('POST', '/residents/77/care-plans', json(201, { id: 14 }, { ETag: '"0"' }))
   api.on(
@@ -97,7 +100,14 @@ it('Q447_dangCoBanSua_khongLapThemMaMoBanDo', async () => {
   api.on(
     'GET',
     '/care-plans/15',
-    json(200, { id: 15, residentId: 77, status: 'PENDING_APPROVAL', items: [], riskAgreements: [], allowedCommands: [] }),
+    json(200, {
+      id: 15,
+      residentId: 77,
+      status: 'PENDING_APPROVAL',
+      items: [],
+      riskAgreements: [],
+      allowedCommands: [],
+    }),
   )
   api.on('GET', '/care-plans/compare', json(200, { added: [], removed: [item], changed: [] }))
   renderPage()
@@ -125,7 +135,14 @@ it('F5_timNguoiCaoTuoi_goiYHoTenVaMaHoSo_chonThiTaiKeHoach', async () => {
 it('Figma_keHoachHienHanhDangBang_cotTheoThietKe', async () => {
   renderPage()
   const table = await screen.findByRole('table', { name: 'Mục của kế hoạch đang áp dụng' })
-  for (const head of ['Loại công việc', 'Nội dung', 'Tần suất và giờ', 'Vai trò thực hiện', 'Mức quan trọng', 'Mục tiêu nước'])
+  for (const head of [
+    'Loại công việc',
+    'Nội dung',
+    'Tần suất và giờ',
+    'Vai trò thực hiện',
+    'Mức quan trọng',
+    'Mục tiêu nước',
+  ])
     expect(screen.getByRole('columnheader', { name: head })).toBeInTheDocument()
   expect(table).toHaveTextContent('Hỗ trợ vận động')
   expect(table).toHaveTextContent('Mỗi 2 giờ')
@@ -201,9 +218,7 @@ it('Q447_dongKhiChuaLuu_hoiTruocKhiDong', async () => {
   await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
   expect(screen.getByLabelText('Lý do sửa')).toHaveValue('Sau ngã')
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
-  fireEvent.click(
-    within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Đóng không lưu' }),
-  )
+  fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Đóng không lưu' }))
   await waitFor(() => expect(screen.queryByLabelText('Lý do sửa')).not.toBeInTheDocument())
 })
 
@@ -252,4 +267,36 @@ it('Q448_oTim_khongTuMoKhiChuaGo_dongKhiBamRaNgoai', async () => {
   fireEvent.pointerDown(document.body)
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   expect(box).toHaveAttribute('aria-expanded', 'false')
+})
+
+it('Q448_lyDoTuDanhGia_hienNoiDungDanhGia_veDanhSachThiXoaOTim', async () => {
+  api.on(
+    'GET',
+    '/residents/77/care-plan-reviews',
+    json(200, [{ source: 'M01.ASSESSMENT', sourceId: 4, reference: '4', raisedAt: '2026-11-25T02:00:00Z' }]),
+  )
+  api.on(
+    'GET',
+    '/assessments/4',
+    json(200, {
+      id: 4,
+      status: 'CONFIRMED',
+      confirmedAt: '2026-11-25T02:00:00Z',
+      confirmedBy: 'Lê Văn Minh',
+      careLevel: 'SPECIAL',
+      careNeeds: [{ id: 1, name: 'Hỗ trợ đi lại' }],
+      careNote: null,
+      comment: null,
+    }),
+  )
+  api.on('GET', '/care-plan-reviews/queue', json(200, []))
+  renderPage({})
+  fireEvent.change(screen.getByRole('combobox', { name: 'Tìm người cao tuổi' }), { target: { value: 'kiểm thử' } })
+  fireEvent.click(await screen.findByRole('option', { name: '[Họ tên kiểm thử] · NCT-077' }))
+  const notice = await screen.findByRole('region', { name: 'Cần xem xét kế hoạch' })
+  expect(await within(notice).findByText('Hỗ trợ đi lại')).toBeInTheDocument()
+  expect(within(notice).getByText('Đặc biệt')).toBeInTheDocument()
+
+  fireEvent.click(screen.getByRole('button', { name: 'Về danh sách cần lập' }))
+  expect(screen.getByRole('combobox', { name: 'Tìm người cao tuổi' })).toHaveValue('')
 })

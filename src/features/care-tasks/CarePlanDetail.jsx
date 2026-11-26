@@ -20,6 +20,7 @@ import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { isAllowed } from '@/common/permissions/permissions'
+import { AssessmentBasis } from './AssessmentBasis'
 import { CareField } from './CareField'
 import { CarePlanComparison } from './CarePlanComparison'
 import { CarePlanItemsForm } from './CarePlanItemsForm'
@@ -189,7 +190,12 @@ export function CarePlanDetail({
   }
   if (loadFailure?.status === 403) return <PermissionDeniedState label="kế hoạch chăm sóc" />
   if (loadFailure) return <ProblemAlert problem={loadFailure} />
-  if (!resource) return <p role="status" className="p-6">Đang tải kế hoạch…</p>
+  if (!resource)
+    return (
+      <p role="status" className="p-6">
+        Đang tải kế hoạch…
+      </p>
+    )
   const plan = resource.data
   const editable = isAllowed(plan, 'replaceItems')
   const hasPlan = !plan.noEffectivePlan || Boolean(currentPlanId)
@@ -264,6 +270,10 @@ export function CarePlanDetail({
             Mọi thay đổi ở đây chỉ có hiệu lực sau khi Bác sĩ duyệt.
           </p>
         )}
+        {/* Q-448: căn cứ để Điều dưỡng biết lập mục nào, ngay trong hộp thoại vì hộp thoại che màn phía sau */}
+        {inProgress && plan.residentId && (
+          <AssessmentBasis residentId={plan.residentId} title="Căn cứ: đánh giá của Bác sĩ" />
+        )}
         <section className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2" aria-label="Thông tin kế hoạch">
           <div>
             <p className="type-caption text-muted-foreground">Người lập</p>
@@ -285,26 +295,24 @@ export function CarePlanDetail({
             </p>
           )}
           <div className="flex flex-col gap-1 sm:col-span-2">
-            {editable ? (
-              hasPlan && (
-                <CareField
-                  label="Lý do sửa *"
-                  name="Lý do sửa"
-                  value={reason}
-                  onChange={setReason}
-                  type="textarea"
-                  maxLength={2000}
-                  hint="Bắt buộc khi sửa kế hoạch đã có."
-                />
-              )
-            ) : (
-              plan.changeReason && (
-                <>
-                  <p className="type-caption text-muted-foreground">Lý do sửa</p>
-                  <p className="type-body">{plan.changeReason}</p>
-                </>
-              )
-            )}
+            {editable
+              ? hasPlan && (
+                  <CareField
+                    label="Lý do sửa *"
+                    name="Lý do sửa"
+                    value={reason}
+                    onChange={setReason}
+                    type="textarea"
+                    maxLength={2000}
+                    hint="Bắt buộc khi sửa kế hoạch đã có."
+                  />
+                )
+              : plan.changeReason && (
+                  <>
+                    <p className="type-caption text-muted-foreground">Lý do sửa</p>
+                    <p className="type-body">{plan.changeReason}</p>
+                  </>
+                )}
             {editable && reasonAlert}
           </div>
         </section>
@@ -389,7 +397,9 @@ export function CarePlanDetail({
             )}
           </div>
           {reasonAlert}
-          <div className="flex flex-wrap justify-end gap-3">{commandButtons(['cancel', 'retract', 'return', 'approve'])}</div>
+          <div className="flex flex-wrap justify-end gap-3">
+            {commandButtons(['cancel', 'retract', 'return', 'approve'])}
+          </div>
         </footer>
       )}
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
@@ -398,7 +408,13 @@ export function CarePlanDetail({
           <DialogDescription>
             Kế hoạch đang áp dụng giữ nguyên. Mọi phần đã soạn trong bản này, kể cả phần người khác đã lưu, sẽ bị bỏ.
           </DialogDescription>
-          <CareField label="Lý do hủy" value={cancelReason} onChange={setCancelReason} type="textarea" maxLength={2000} />
+          <CareField
+            label="Lý do hủy"
+            value={cancelReason}
+            onChange={setCancelReason}
+            type="textarea"
+            maxLength={2000}
+          />
           {cancelError && (
             <p role="alert" className="type-body-sm text-destructive">
               Nhập lý do hủy.

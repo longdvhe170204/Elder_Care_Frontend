@@ -132,7 +132,9 @@ it('FR_003_huyBanSua_hopXacNhanCoLyDoHuy', async () => {
   fireEvent.change(within(ask).getByLabelText('Lý do hủy'), { target: { value: 'Bác sĩ giữ kế hoạch cũ' } })
   fireEvent.click(within(ask).getByRole('button', { name: 'Hủy bản sửa' }))
   await waitFor(() => expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(1))
-  expect(JSON.parse(api.calls('POST', '/care-plans/17/cancel')[0][1].body)).toEqual({ reason: 'Bác sĩ giữ kế hoạch cũ' })
+  expect(JSON.parse(api.calls('POST', '/care-plans/17/cancel')[0][1].body)).toEqual({
+    reason: 'Bác sĩ giữ kế hoạch cũ',
+  })
 })
 
 it('Q447_banNhap_daiBaoChuaApDung_vaTabThayDoi', async () => {
@@ -157,4 +159,36 @@ it('Figma_banSuaDangSoan_tieuDeVaTheThongTin_nutCoDinhCuoiPanel', async () => {
   expect(screen.queryByRole('tablist')).not.toBeInTheDocument()
   expect(screen.getByRole('heading', { name: 'Mục công việc' })).toBeInTheDocument()
   expect(screen.queryByText(/Thỏa thuận/)).not.toBeInTheDocument()
+})
+
+it('Q448_soanKeHoach_hienCanCuDanhGiaGanNhatCuaBacSi', async () => {
+  api.on(
+    'GET',
+    '/residents/77/assessments',
+    json(200, [
+      { id: 3, status: 'CONFIRMED', confirmedAt: '2026-10-01T02:00:00Z', careLevel: 'BASIC', careNeeds: [] },
+      {
+        id: 4,
+        status: 'CONFIRMED',
+        confirmedAt: '2026-11-25T02:00:00Z',
+        confirmedBy: 'Lê Văn Minh',
+        careLevel: 'REGULAR',
+        careNeeds: [
+          { id: 1, name: 'Hỗ trợ đi lại' },
+          { id: 2, name: 'Hỗ trợ ăn uống' },
+        ],
+        careNote: 'Đi lại phải có người đỡ',
+        comment: 'Yếu chân trái sau ngã',
+      },
+      { id: 5, status: 'DRAFT', careLevel: 'SPECIAL', careNeeds: [] },
+    ]),
+  )
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  const basis = await screen.findByRole('region', { name: 'Căn cứ: đánh giá của Bác sĩ' })
+  expect(await within(basis).findByText('Hỗ trợ đi lại')).toBeInTheDocument()
+  expect(within(basis).getByText('Hỗ trợ ăn uống')).toBeInTheDocument()
+  expect(within(basis).getByText('Thường xuyên')).toBeInTheDocument()
+  expect(within(basis).getByText('Đi lại phải có người đỡ')).toBeInTheDocument()
+  expect(within(basis).getByText('Yếu chân trái sau ngã')).toBeInTheDocument()
+  expect(within(basis).getByText(/Lê Văn Minh/)).toBeInTheDocument()
 })

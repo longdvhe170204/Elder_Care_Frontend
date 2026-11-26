@@ -71,6 +71,8 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   const [failure, setFailure] = useState(null)
   const [selected, setSelected] = useState(null)
   const [reload, setReload] = useState(0)
+  // Đổi key để ô tìm xóa chữ khi quay về hàng chờ
+  const [searchKey, setSearchKey] = useState(0)
   const [busy, setBusy] = useState(false)
   const [dirty, setDirty] = useState(false)
   const [askClose, setAskClose] = useState(false)
@@ -163,7 +165,7 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
       <PageHeader title="Kế hoạch chăm sóc" subtitle="Điều dưỡng lập, sửa kế hoạch rồi gửi Bác sĩ duyệt" />
-      <ResidentSearch onChange={choose} />
+      <ResidentSearch key={searchKey} onChange={choose} />
       {failure?.status === 403 ? (
         <PermissionDeniedState label="kế hoạch chăm sóc" />
       ) : (
@@ -175,14 +177,22 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
                 <div className="flex flex-col gap-1">
                   <h2 className="type-title">Kế hoạch đang áp dụng</h2>
                   {current && (
-                    <p className="type-body-sm text-muted-foreground">Hiệu lực từ {formatDate(current.effectiveFrom)}</p>
+                    <p className="type-body-sm text-muted-foreground">
+                      Hiệu lực từ {formatDate(current.effectiveFrom)}
+                    </p>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button variant="ghost" onClick={() => choose(null)}>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      choose(null)
+                      setSearchKey((value) => value + 1)
+                    }}
+                  >
                     Về danh sách cần lập
                   </Button>
-                  {scheduled &&<StatusBadge status={planLabel(scheduled, true)} />}
+                  {scheduled && <StatusBadge status={planLabel(scheduled, true)} />}
                   {canCreate && plans !== null && (
                     <Button disabled={busy} onClick={create}>
                       {hasPlan ? 'Sửa kế hoạch' : 'Lập kế hoạch'}

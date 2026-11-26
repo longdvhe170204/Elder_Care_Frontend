@@ -5,8 +5,11 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
+import { AssessmentBasis } from './AssessmentBasis'
 import { CareField } from './CareField'
 import { reviewSource } from './carePlanLabels'
+
+const ASSESSMENT_SOURCES = new Set(['M01.INITIAL_ASSESSMENT', 'M01.ASSESSMENT'])
 
 // Q-448 (FR-058, FR-059): lý do cần xem xét kế hoạch, đặt trên kế hoạch; "Không cần thay đổi" đóng mọi yêu cầu đang mở,
 // lý do bắt buộc. Lập hoặc sửa kế hoạch rồi được Bác sĩ duyệt thì yêu cầu tự đóng.
@@ -64,8 +67,12 @@ export function CarePlanReviewNotice({ residentId, reload, canDismiss, onDismiss
         <h3 className="type-card-title">Cần xem xét kế hoạch</h3>
         <ul className="flex flex-col gap-1">
           {reviews.map((review) => (
-            <li key={`${review.source}:${review.reference}`}>
-              {reviewSource(review.source)}, {formatDateTime(review.raisedAt)}
+            <li key={`${review.source}:${review.reference}`} className="flex flex-col gap-2">
+              <span>
+                {reviewSource(review.source)}, {formatDateTime(review.raisedAt)}
+              </span>
+              {/* Q-448: lý do từ đánh giá thì hiện luôn nội dung đánh giá để biết cần lập mục nào */}
+              {ASSESSMENT_SOURCES.has(review.source) && <AssessmentBasis assessmentId={review.sourceId} />}
             </li>
           ))}
         </ul>
