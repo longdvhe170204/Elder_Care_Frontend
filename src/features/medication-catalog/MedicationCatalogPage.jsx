@@ -65,6 +65,7 @@ export function MedicationCatalogPage({ role }) {
     beforeWindowMinutes: '',
     afterWindowMinutes: '',
     specialControl: false,
+    allowInternalPrescribe: true,
   })
 
   const isManager = role === 'NURSING_HOME_MANAGER'
@@ -131,6 +132,7 @@ export function MedicationCatalogPage({ role }) {
       beforeWindowMinutes: item.beforeWindowMinutes ?? '',
       afterWindowMinutes: item.afterWindowMinutes ?? '',
       specialControl: item.specialControl ?? false,
+      allowInternalPrescribe: item.allowInternalPrescribe ?? true,
     })
     setProblem(null)
     setIsFormOpen(true)
@@ -155,6 +157,7 @@ export function MedicationCatalogPage({ role }) {
       beforeWindowMinutes: formValues.beforeWindowMinutes ? Number(formValues.beforeWindowMinutes) : null,
       afterWindowMinutes: formValues.afterWindowMinutes ? Number(formValues.afterWindowMinutes) : null,
       specialControl: formValues.specialControl,
+      allowInternalPrescribe: formValues.allowInternalPrescribe,
     }
 
     try {
@@ -658,6 +661,19 @@ export function MedicationCatalogPage({ role }) {
               />
               <Label htmlFor="specialControl" className="cursor-pointer font-medium text-xs text-slate-700 dark:text-slate-300">
                 Thuốc kiểm soát đặc biệt (gây nghiện, hướng thần - FR-029)
+              </Label>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="checkbox"
+                id="allowInternalPrescribe"
+                checked={formValues.allowInternalPrescribe}
+                onChange={(e) => setFormValues((v) => ({ ...v, allowInternalPrescribe: e.target.checked }))}
+                className="rounded border-slate-300 text-sky-600 focus:ring-sky-500 size-4"
+              />
+              <Label htmlFor="allowInternalPrescribe" className="cursor-pointer font-medium text-xs text-slate-700 dark:text-slate-300">
+                Cho phép bác sĩ nội bộ kê đơn (tắt nếu thuốc ngoài phạm vi chuyên môn của viện)
               </Label>
             </div>
 
