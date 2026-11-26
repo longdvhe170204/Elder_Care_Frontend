@@ -191,7 +191,7 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
   })
 
   // list: mảng hoặc hàm trả mảng (đổi sau khi lập); POST /files trả mã tăng dần để phân biệt hai tệp
-  function setupForm({ list = [], role = 'OFFICE_STAFF', onCreated = vi.fn() } = {}) {
+  function setupForm({ list = [], role = 'OFFICE_STAFF', onCreated = vi.fn(), allowOther = true } = {}) {
     const api = mockRoutes()
     api.on('GET', '/recipient-confirmations', () => json(200, typeof list === 'function' ? list() : list))
     let fileId = 700
@@ -209,6 +209,7 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
         requiresConsent={(b) => b.id === 92}
         onConfirmationCreated={onCreated}
         onDone={onDone}
+        allowOtherRecipient={allowOther}
       />,
     )
     return { api, onDone, onCreated }

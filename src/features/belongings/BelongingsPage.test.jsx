@@ -24,7 +24,11 @@ const PHONE = {
 
 const LAN = { id: 7, profileCode: 'NCT-0007', personalInfo: { fullName: 'Nguyễn Thị Lan' } }
 
-function setup(permissions = ['BELONGINGS:VIEW', 'BELONGINGS:CREATE', 'BELONGINGS:UPDATE'], residents = [LAN]) {
+function setup(
+  permissions = ['BELONGINGS:VIEW', 'BELONGINGS:CREATE', 'BELONGINGS:UPDATE'],
+  residents = [LAN],
+  props = {},
+) {
   const api = mockRoutes()
   api.on(
     'GET',
@@ -75,7 +79,7 @@ function setup(permissions = ['BELONGINGS:VIEW', 'BELONGINGS:CREATE', 'BELONGING
   )
   render(
     <PermissionsProvider>
-      <BelongingsPage role="OFFICE_STAFF" />
+      <BelongingsPage role="OFFICE_STAFF" {...props} />
     </PermissionsProvider>,
   )
   return api
@@ -345,8 +349,13 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
   })
   const outerCalls = (api) => api.calls('GET', '/recipient-confirmations').filter(([url]) => !url.includes('status='))
 
-  function setupReturn(returnResponse, initial = [confirmation(7, 'EFFECTIVE')]) {
-    const api = setup()
+  // Luồng người nhận khác (FR-017) đang ẩn ở màn (demo 2026-11-26); các ca dưới bật lại để vẫn kiểm luồng
+  function setupReturn(
+    returnResponse,
+    initial = [confirmation(7, 'EFFECTIVE')],
+    props = { allowOtherRecipient: true },
+  ) {
+    const api = setup(undefined, undefined, props)
     const state = { items: initial, returned: false }
     api.on('GET', '/residents/7/belongings', () =>
       json(200, [state.returned ? { ...SWEATER, status: 'RETURNED', version: 2 } : SWEATER]),
@@ -366,6 +375,16 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
     })
     return { api, state }
   }
+
+  // Demo 2026-11-26 (E): mặc định không có người nhận "Người khác" và mục "Xác nhận người nhận khác"
+  it('macDinh_khongCoNguoiNhanKhac_khongCoMucXacNhan', async () => {
+    setupReturn(json(201, { handovers: [], belongings: [] }), undefined, {})
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Trả đồ' }))
+    const recipient = await screen.findByLabelText('Người nhận')
+    expect([...recipient.querySelectorAll('option')].map((o) => o.value)).not.toContain('OTHER_PERSON')
+    expect(screen.queryByRole('region', { name: 'Xác nhận người nhận khác' })).not.toBeInTheDocument()
+  })
 
   async function openReturn() {
     await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
