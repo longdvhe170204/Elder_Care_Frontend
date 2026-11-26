@@ -126,6 +126,8 @@ describe('ApprovalInbox', () => {
     )
     fireEvent.change(within(panel).getByLabelText('Ý kiến'), { target: { value: 'Thiếu chứng từ' } })
     fireEvent.click(within(panel).getByRole('button', { name: 'Từ chối' }))
+    expect(api.calls('POST', '/approval-requests/7/reject')).toHaveLength(0)
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }))
     await waitFor(() => expect(api.calls('POST', '/approval-requests/7/reject')).toHaveLength(1))
     const [, init] = api.calls('POST', '/approval-requests/7/reject')[0]
     expect(init.headers['If-Match']).toBe('"1"')
@@ -143,9 +145,22 @@ describe('ApprovalInbox', () => {
     const panel = await openDetail()
 
     fireEvent.click(await within(panel).findByRole('button', { name: 'Duyệt' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }))
     expect(await within(panel).findByText('Áp dụng ngày 19/10/2026')).toBeInTheDocument()
     expect(JSON.parse(api.calls('POST', '/approval-requests/7/approve')[0][1].body)).toEqual({})
     expect(screen.getAllByRole('row', { hidden: true })[1]).toHaveTextContent('Đã áp dụng')
+  })
+
+  // Demo 2026-11-26: bấm Duyệt hiện hộp xác nhận giữa màn; Hủy thì không đổi gì, Xác nhận mới gửi lệnh
+  it('duyet_hienHopXacNhan_huyThiKhongGui', async () => {
+    api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, PAGE))
+    api.on('POST', '/approval-requests/7/approve', () => json(200, request({ allowedCommands: [] }), { ETag: '"2"' }))
+    const panel = await openDetail()
+    fireEvent.click(await within(panel).findByRole('button', { name: 'Duyệt' }))
+    expect(await screen.findByText('Duyệt yêu cầu này?')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Hủy' }))
+    await waitFor(() => expect(screen.queryByText('Duyệt yêu cầu này?')).not.toBeInTheDocument())
+    expect(api.calls('POST', '/approval-requests/7/approve')).toHaveLength(0)
   })
 
   it('FR_035_tuDuyetKhongYKien_422_baoTaiOYKien', async () => {
@@ -156,6 +171,7 @@ describe('ApprovalInbox', () => {
     const panel = await openDetail()
 
     fireEvent.click(await within(panel).findByRole('button', { name: 'Duyệt' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }))
     expect(await within(panel).findByText('Tự duyệt phải ghi ý kiến')).toBeInTheDocument()
     expect(within(panel).getByLabelText('Ý kiến')).toHaveAttribute('aria-invalid', 'true')
   })
@@ -173,6 +189,7 @@ describe('ApprovalInbox', () => {
     )
 
     fireEvent.click(await within(panel).findByRole('button', { name: 'Duyệt' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận' }))
     expect(await within(panel).findByText('Yêu cầu đã được người khác xử lý')).toBeInTheDocument()
     await waitFor(() => expect(api.calls('GET', '/approval-requests/7')).toHaveLength(2))
     expect(within(panel).queryByRole('button', { name: 'Duyệt' })).not.toBeInTheDocument()
