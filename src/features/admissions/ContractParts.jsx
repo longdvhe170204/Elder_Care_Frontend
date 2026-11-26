@@ -450,9 +450,12 @@ const DAYS = [
 // Audit BF-01 2026-11-27 (chủ dự án duyệt): một trang ba phần (Lưu trú; Mức, phòng; Dịch vụ, đặt cọc), cột phải Tóm tắt chi
 // phí, đầu và chân khung cố định, đóng khi đã nhập thì hỏi lại. Dịch vụ theo Q-426: dịch vụ chăm sóc theo mức, phí lưu trú
 // theo loại phòng, buổi bán trú theo loại lưu trú là tác động kèm lựa chọn (Q-300), không tick tay; chỉ phục hồi, hoạt động,
-// đưa đi khám, tiêm là dịch vụ đi kèm chọn được (gập lại, không bắt buộc); suất ăn, người thân ở lại, thuốc, vật phẩm, vật tư
-// đi theo luồng riêng nên không có trong form. Đặt cọc: chọn "Có đặt cọc" hoặc "Không yêu cầu đặt cọc" (spec 004 US4); nghiệp
-// vụ chưa có chính sách tính khoản cọc nên Hành chính nhập số tiền.
+// đưa đi khám, tiêm là dịch vụ đi kèm chọn được (gập lại, không bắt buộc), luôn ngoài gói, tính theo lần (chủ dự án bỏ nút
+// "Thuộc gói" 2026-11-27; lưu lại thì mọi dòng gửi inPackage false); suất ăn, người thân ở lại, thuốc, vật phẩm, vật tư
+// đi theo luồng riêng nên không có trong form. Đặt cọc: chọn "Có đặt cọc" hoặc "Không yêu cầu đặt cọc" (spec 004 US4). Khoản
+// cọc theo chính sách của web (chủ dự án chọn 2026-11-27, không ghi vào nghiệp vụ): DEPOSIT_MONTHS tháng phí cố định (chăm sóc
+// theo mức + phí lưu trú theo loại phòng, đơn giá tại ngày bắt đầu), như thực tế các viện thu 1–2 tháng tiền phòng; tự điền và
+// tính lại khi đổi mức, loại phòng tới khi Hành chính sửa tay. Bán trú không có phí tháng nên nhập tay.
 // defaults (lập mới từ Hồ sơ tiếp nhận; chủ dự án duyệt 2026-11-27, chép lại thông tin Hành chính đã ghi, không phải gợi ý
 // Q-307): residenceType, startDate (yyyy-MM-dd) từ lượt đăng ký; careLevel là mức hiện hành, chưa có thì mức dự kiến; roomTypeId
 // của giường đã phân bổ. Sửa được trước khi lưu. Kỳ tính phí, dịch vụ đi kèm, đặt cọc không điền sẵn.
@@ -461,6 +464,7 @@ const PERIODS_OF = { DAY_CARE: ['SESSION'] }
 const RESIDENTIAL_PERIODS = ['MONTH', 'DAY']
 const REGISTRABLE_TYPES = ['REHABILITATION', 'ACTIVITY', 'MEDICAL_ESCORT', 'INJECTION']
 const UNIT_OF = { MONTH: 'tháng', DAY: 'ngày', SESSION: 'buổi', OCCURRENCE: 'lần', UNIT: 'đơn vị' }
+const DEPOSIT_MONTHS = 1
 const DEPOSIT_CHOICES = [
   ['yes', 'Có đặt cọc'],
   ['no', 'Không yêu cầu đặt cọc'],
@@ -492,7 +496,7 @@ const priceText = (price, period) =>
   price === undefined ? 'Chưa xem được đơn giá' : `${money(price)}/${UNIT_OF[period] ?? 'lần'}`
 
 function ContractCostSummary({ lines, deposit }) {
-  const monthly = lines.filter((l) => l.billingPeriod === 'MONTH' && !l.inPackage)
+  const monthly = lines.filter((l) => l.billingPeriod === 'MONTH')
   const total = monthly.every((l) => l.price !== undefined) ? monthly.reduce((sum, l) => sum + l.price, 0) : null
   return (
     <section
@@ -510,7 +514,7 @@ function ContractCostSummary({ lines, deposit }) {
             <li key={l.id} className="flex flex-col">
               <span className="type-body-sm">{l.name}</span>
               <span className="type-caption tabular-nums text-muted-foreground">
-                {l.inPackage ? 'Thuộc gói' : priceText(l.price, l.billingPeriod)}
+                {priceText(l.price, l.billingPeriod)}
               </span>
             </li>
           ))}
@@ -589,7 +593,10 @@ export function ContractSheet({
   const [depositChoice, setDepositChoice] = useState(
     contract?.noDepositRequired ? 'no' : contract?.depositAmount != null ? 'yes' : '',
   )
-  const [deposit, setDeposit] = useState(contract?.depositAmount != null ? String(contract.depositAmount) : '')
+  // null: theo chính sách (tự tính); chuỗi: Hành chính đã nhập hoặc hợp đồng đã lưu
+  const [depositInput, setDepositInput] = useState(
+    contract?.depositAmount != null ? String(contract.depositAmount) : null,
+  )
   const [schedule, setSchedule] = useState(contract?.arrivalSchedule ?? [])
   const [roomTypes, setRoomTypes] = useState(null)
   const [roomTypeId, setRoomTypeId] = useState(() => {
@@ -640,7 +647,6 @@ export function ContractSheet({
     roomType: residential && !roomTypeId && 'Chọn loại phòng',
     period: type && !period && 'Chọn kỳ tính phí lưu trú',
     deposit: !depositChoice && 'Chọn đặt cọc',
-    depositAmount: depositChoice === 'yes' && !(Number(deposit) > 0) && 'Nhập khoản đặt cọc',
   }
   const shown = (key) => (submitted ? errors[key] || null : null)
 
@@ -672,9 +678,15 @@ export function ContractSheet({
     id: s.id,
     name: s.name,
     billingPeriod: s.billingPeriod,
-    inPackage: !fixedTypes.includes(s.type) && !!picked.get(s.id),
     price: priceOf(s),
   }))
+  const monthlyFixed = fixedServices.filter((s) => s.billingPeriod === 'MONTH')
+  const standardDeposit =
+    monthlyFixed.length > 0 && monthlyFixed.every((s) => priceOf(s) !== undefined)
+      ? DEPOSIT_MONTHS * monthlyFixed.reduce((sum, s) => sum + priceOf(s), 0)
+      : null
+  const deposit = depositInput ?? (standardDeposit != null ? String(standardDeposit) : '')
+  errors.depositAmount = depositChoice === 'yes' && !(Number(deposit) > 0) && 'Nhập khoản đặt cọc'
   const depositSummary =
     depositChoice === 'no'
       ? 'Không yêu cầu'
@@ -691,7 +703,7 @@ export function ContractSheet({
     period,
     [...picked],
     depositChoice,
-    deposit,
+    depositInput,
     schedule,
     roomTypeId,
   ])
@@ -728,9 +740,7 @@ export function ContractSheet({
       residencyFeeBillingPeriod: period,
       services: [
         ...fixedServices.map((s) => ({ serviceId: s.id, inPackage: false })),
-        ...extraServices
-          .filter((s) => picked.has(s.id))
-          .map((s) => ({ serviceId: s.id, inPackage: !!picked.get(s.id) })),
+        ...extraServices.filter((s) => picked.has(s.id)).map((s) => ({ serviceId: s.id, inPackage: false })),
       ],
       noDepositRequired: depositChoice === 'no',
       ...(depositChoice === 'yes' && { depositAmount: Number(deposit) }),
@@ -978,17 +988,6 @@ export function ContractSheet({
                                     </span>
                                   </span>
                                   <span className="flex flex-wrap justify-end gap-2">
-                                    {on && (
-                                      <Toggle
-                                        variant="outline"
-                                        className="h-9 px-3"
-                                        pressed={!!picked.get(s.id)}
-                                        aria-label={`Thuộc gói: ${s.name}`}
-                                        onPressedChange={(value) => setPicked((c) => new Map(c).set(s.id, value))}
-                                      >
-                                        Thuộc gói
-                                      </Toggle>
-                                    )}
                                     <Toggle
                                       variant="outline"
                                       className="h-9 px-3"
@@ -1023,7 +1022,7 @@ export function ContractSheet({
                         <MoneyInput
                           id="contract-deposit"
                           value={deposit}
-                          onChange={setDeposit}
+                          onChange={setDepositInput}
                           aria-required="true"
                           aria-invalid={!!shown('depositAmount') || undefined}
                         />
