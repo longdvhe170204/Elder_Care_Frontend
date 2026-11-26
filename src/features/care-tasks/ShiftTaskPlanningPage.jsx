@@ -465,9 +465,15 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
             <h2 id="pending-care-plans" className="type-title">
               Kế hoạch còn việc chưa lập
             </h2>
-            {readyForShift && floorName && <p className="type-body-sm text-muted-foreground">{floorName}</p>}
+            {/* Q-453: bỏ ô ngày, ô ca ở màn (chủ dự án 2026-11-26); màn theo ca hiện tại, đổi ca trong hộp thoại lập */}
+            {readyForShift && (
+              <p className="type-body-sm text-muted-foreground">
+                {[floorName, shift && `${shiftLabel(shift)} ngày ${formatDate(dateOf(shift.startsAt))}`]
+                  .filter(Boolean)
+                  .join(', ')}
+              </p>
+            )}
           </div>
-          {shiftPicker}
         </div>
         {readyForShift && residentsWithPendingPlan.length > 0 ? (
           <>

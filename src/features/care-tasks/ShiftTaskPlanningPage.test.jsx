@@ -287,7 +287,8 @@ it('FR_017_hangChoHienNguoiConMocKeHoachVaMoDungDongLapViec', async () => {
   view()
   const queue = await screen.findByRole('region', { name: 'Kế hoạch còn việc chưa lập' })
   const pending = await within(queue).findByRole('row', { name: /\[Họ tên kiểm thử\]/ })
-  expect(within(queue).getByLabelText('Ca đã công bố')).toHaveValue('5')
+  // Q-453: màn không còn ô ngày, ô ca; chọn ca trong hộp thoại lập
+  expect(within(queue).queryByLabelText('Ca đã công bố')).not.toBeInTheDocument()
   expect(within(pending).getByRole('cell', { name: '1' })).toBeInTheDocument()
 
   fireEvent.click(within(pending).getByRole('button', { name: 'Lập việc cho [Họ tên kiểm thử]' }))
@@ -338,11 +339,6 @@ it('FR_017_hangChoPhanTrangNamNguoiVaVeTrangDauKhiDoiCa', async () => {
   expect(queue.getAllByRole('row')).toHaveLength(2)
   expect(queue.getByText('Người kiểm thử 6')).toBeInTheDocument()
   expect(queue.getByRole('button', { name: 'Trang sau' })).toBeDisabled()
-
-  fireEvent.change(queue.getByLabelText('Ca đã công bố'), { target: { value: '6' } })
-  expect(await queue.findByText('Trang 1/2')).toBeInTheDocument()
-  expect(queue.getAllByRole('row')).toHaveLength(6)
-  expect(api.calls('GET', '/shifts/6/source-data')).toHaveLength(1)
 })
 
 it('FR_017_viecCanLapTrongCa_daLapDangNhapChuaLap', async () => {
