@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
@@ -21,7 +20,7 @@ export function DraftCard({ id, title, draft, children, actions }) {
         <h4 id={id} className="type-label">
           {title}
         </h4>
-        <Badge variant="attention">{SELF_REPORT_LABEL}</Badge>
+        <span className="type-caption text-warning-foreground">{SELF_REPORT_LABEL}</span>
       </div>
       {draft.recordedBy && (
         <p className="type-caption text-muted-foreground">
