@@ -4,7 +4,6 @@ import {
   getCarePlansCompare,
   getTaskTypes,
   putCarePlansByIdItems,
-  putCarePlansByIdRiskAgreements,
   postCarePlansByIdSubmit,
   postCarePlansByIdApprove,
   postCarePlansByIdReturn,
@@ -23,7 +22,6 @@ import { isAllowed } from '@/common/permissions/permissions'
 import { CareField } from './CareField'
 import { CarePlanComparison } from './CarePlanComparison'
 import { CarePlanItemsForm } from './CarePlanItemsForm'
-import { CareRiskAgreementsForm } from './CareRiskAgreementsForm'
 import { CARE_ROLES, IMPORTANCE, PLAN_STATUS, frequencyText, planLabel } from './carePlanLabels'
 
 // Q-447: bỏ Thu hồi duyệt; thêm Rút lại (người lập kéo bản Chờ duyệt về soạn tiếp, không cần lý do)
@@ -166,7 +164,6 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
   const tabs = [
     ...(showChanges ? [['changes', 'Thay đổi so với hiện hành']] : []),
     ['items', 'Mục công việc'],
-    ['risks', 'Thỏa thuận có rủi ro'],
   ]
   const activeTab = tabs.some(([key]) => key === tab) ? tab : tabs[0][0]
   const names = Object.fromEntries(taskTypes.map((type) => [String(type.id), type.name]))
@@ -202,7 +199,12 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
         <Description className="sr-only">
           {editable ? 'Soạn mục công việc rồi gửi Bác sĩ duyệt' : 'Nội dung kế hoạch'}
         </Description>
-        <SectionTabs label="Phần của kế hoạch" tabs={tabs} value={activeTab} onChange={setTab} />
+        {/* Chủ dự án bỏ phần thỏa thuận rủi ro khỏi màn này (2026-11-26); một phần thì không cần tab */}
+        {tabs.length > 1 ? (
+          <SectionTabs label="Phần của kế hoạch" tabs={tabs} value={activeTab} onChange={setTab} />
+        ) : (
+          <div className="pb-1" />
+        )}
       </header>
       <div className="flex flex-1 flex-col gap-5 bg-background px-6 py-5">
         <section className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2" aria-label="Thông tin kế hoạch">
@@ -305,40 +307,6 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
                   </article>
                 )
               })}
-            </section>
-          ))}
-        {activeTab === 'risks' &&
-          (isAllowed(plan, 'replaceRiskAgreements') ? (
-            <CareRiskAgreementsForm
-              key={`risks-${reload}`}
-              agreements={plan.riskAgreements ?? []}
-              busy={busy || problem?.status === 412}
-              onSave={(rows) => command(putCarePlansByIdRiskAgreements, rows, true)}
-            />
-          ) : (
-            <section className="flex flex-col gap-3">
-              <h3 className="type-title">Thỏa thuận lựa chọn có rủi ro</h3>
-              {(plan.riskAgreements ?? []).length === 0 && (
-                <p className="type-body-sm text-muted-foreground">Chưa có thỏa thuận nào.</p>
-              )}
-              {(plan.riskAgreements ?? []).map((risk) => (
-                <article key={risk.id} className="flex flex-col gap-2 rounded-xl border bg-card p-4">
-                  <p className="type-label">{risk.choice}</p>
-                  <p>{risk.discussedRisks}</p>
-                  <p>Xem lại thỏa thuận: {formatDate(risk.reviewDate)}</p>
-                  <p>{risk.selfDeterminationAssessment.supportMethod}</p>
-                  <p>Xem lại nhận định: {formatDate(risk.selfDeterminationAssessment.reviewDate)}</p>
-                  {risk.opinions?.map((opinion, index) => (
-                    <div key={index}>
-                      <p>{opinion.content}</p>
-                      <p className="type-body-sm text-muted-foreground">
-                        {opinion.recordedBy}
-                        {opinion.at ? ` · ${formatDateTime(opinion.at)}` : ''}
-                      </p>
-                    </div>
-                  ))}
-                </article>
-              ))}
             </section>
           ))}
       </div>
