@@ -45,7 +45,10 @@ beforeEach(() => {
           residentId: 77,
           assignments: [{ staffId: 22, fullName: '[Nhân viên kiểm thử]', role: 'CAREGIVER' }],
           planItems: [
-            { id: 90, taskTypeId: 9, content: 'Mục kế hoạch kiểm thử', times: ['08:00:00'], importance: 'NORMAL' },
+            {
+              id: 90, taskTypeId: 9, content: 'Mục kế hoạch kiểm thử', times: ['08:00:00'],
+              importance: 'NORMAL', windowBeforeMinutes: 7, windowAfterMinutes: 11,
+            },
           ],
           otherSources: [{ type: 'MEAL', id: 61, at: '2026-11-01T04:30:00Z', description: 'Bữa ăn' }],
         },
@@ -76,12 +79,16 @@ async function openBatch() {
   return screen.findByRole('dialog', { name: 'Lập công việc cho ca' })
 }
 
-async function enterRow(dialog) {
+async function enterRow(dialog, source = 'CARE_PLAN_ITEM:90', time = '08:00') {
   fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm dòng' }))
   const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
   fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
   fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
-  fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
+  fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: time } })
+  if (source) {
+    fireEvent.change(within(row).getByLabelText('Cách lập công việc'), { target: { value: 'source' } })
+    fireEvent.change(within(row).getByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi'), { target: { value: source } })
+  }
   fireEvent.change(within(row).getByLabelText('Phân công'), { target: { value: '22' } })
   fireEvent.change(within(row).getByLabelText('Nội dung (không bắt buộc)'), { target: { value: 'Nội dung tự nhập' } })
   return row
@@ -121,9 +128,57 @@ it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
     },
   ])
   expect(options.headers['Idempotency-Key']).toBeTruthy()
+  expect(JSON.parse(options.body)[0]).not.toHaveProperty('windowBeforeMinutes')
+  expect(JSON.parse(options.body)[0]).not.toHaveProperty('windowAfterMinutes')
   expect(
     await screen.findByText('Đã lập 1 công việc của ca. Ca còn 2 việc theo nguồn chưa lập (1 người).'),
   ).toBeInTheDocument()
+})
+
+it('FR_017_caQuaDemChonDungNgayVaLoaiTruGioKetThuc', async () => {
+  api.on('GET', '/shifts/5/source-data', json(200, {
+    shift: { ...SHIFT, startsAt: '2026-11-01T11:00:00Z', endsAt: '2026-11-02T00:00:00Z' },
+    residents: [{ residentId: 77, assignments: [{ staffId: 22, role: 'CAREGIVER' }], planItems: [], otherSources: [] }],
+  }))
+  api.on('POST', '/shifts/5/care-tasks/plan', json(201, []))
+  view()
+  const dialog = await openBatch()
+  const row = await enterRow(dialog, null, '07:00')
+  const hour = within(row).getByLabelText('Giờ dự kiến')
+  fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'NORMAL' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  expect(hour).toHaveAttribute('aria-invalid', 'true')
+  expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
+  fireEvent.change(hour, { target: { value: '01:07' } })
+  expect(within(row).getByText(/02\/11\/2026/)).toBeInTheDocument()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  await waitFor(() => expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(1))
+  const [request] = api.calls('POST', '/shifts/5/care-tasks/plan')
+  expect(JSON.parse(request[1].body)[0].plannedAt).toBe('2026-11-02T01:07:00+07:00')
+})
+
+it('FR_017_tuyChonNangCaoXemKhungVaGuiGiaTriDaChinh', async () => {
+  api.on('GET', '/task-types', json(200, [{
+    id: 9, name: 'Loại công việc kiểm thử', status: 'ACTIVE', resultType: 'PERFORMED',
+    windowBeforeMinutes: 10, windowAfterMinutes: 20,
+  }]))
+  api.on('POST', '/shifts/5/care-tasks/plan', json(201, []))
+  view()
+  const dialog = await openBatch()
+  const row = await enterRow(dialog, null)
+  const fields = within(row)
+  fireEvent.change(fields.getByLabelText('Mức quan trọng'), { target: { value: 'NORMAL' } })
+  expect(fields.queryByLabelText('Phút trước giờ dự kiến')).not.toBeInTheDocument()
+  fireEvent.click(fields.getByText('Tùy chọn thời gian nâng cao'))
+  expect(fields.getByText('Khung thực hiện: 01/11/2026 07:50 – 01/11/2026 08:20')).toBeInTheDocument()
+  fireEvent.change(fields.getByLabelText('Phút trước giờ dự kiến'), { target: { value: '5' } })
+  expect(fields.getByText('Khung thực hiện: 01/11/2026 07:55 – 01/11/2026 08:20')).toBeInTheDocument()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  await waitFor(() => expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(1))
+  const [request] = api.calls('POST', '/shifts/5/care-tasks/plan')
+  const [draft] = JSON.parse(request[1].body)
+  expect(draft.windowBeforeMinutes).toBe(5)
+  expect(draft).not.toHaveProperty('windowAfterMinutes')
 })
 
 it('FR_017_lichSuKhongTheoCa_phanTrangMayChu', async () => {
@@ -298,6 +353,8 @@ it('FR_017_viecCanLapTrongCa_daLapDangNhapChuaLap', async () => {
   ])
   fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
   fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
+  fireEvent.change(within(row).getByLabelText('Cách lập công việc'), { target: { value: 'source' } })
+  fireEvent.change(within(row).getByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi'), { target: { value: 'CARE_PLAN_ITEM:90' } })
   expect(within(needs).getByText('Đang nhập')).toBeInTheDocument()
   expect(within(needs).getByText('Đã lập đủ theo nguồn')).toBeInTheDocument()
 })
@@ -320,14 +377,23 @@ it('BF_01_chuaCoKeHoachHieuLuc_baoTrongDong', async () => {
   expect(within(row).getByRole('note')).toHaveTextContent('Chưa có kế hoạch chăm sóc hiệu lực.')
 })
 
-it('FR_023_canCuTuDoiChieuLoaiVaGio_khongCoOChon', async () => {
+it('FR_023_chonNguonThucTeVaXoaLuaChonKhiDoiGio', async () => {
   view()
   const dialog = await openBatch()
   const row = await enterRow(dialog)
+  const fields = within(row)
+  expect(fields.getByLabelText('Giờ dự kiến')).toHaveAttribute('min', '07:00')
+  expect(fields.getByLabelText('Giờ dự kiến')).toHaveAttribute('max', '14:59')
+  fireEvent.click(fields.getByText('Tùy chọn thời gian nâng cao'))
+  expect(fields.getByText('Khung thực hiện: 01/11/2026 07:53 – 01/11/2026 08:11')).toBeInTheDocument()
+  expect(fields.queryByLabelText('Phút trước giờ dự kiến')).not.toBeInTheDocument()
   expect(within(row).queryByRole('combobox', { name: 'Căn cứ' })).not.toBeInTheDocument()
-  expect(within(row).getByRole('group', { name: 'Căn cứ' })).toHaveTextContent(
-    'Khớp mục kế hoạch · Mục kế hoạch kiểm thử · 08:00',
-  )
+  const source = within(row).getByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi')
+  expect(source).toHaveValue('CARE_PLAN_ITEM:90')
+  fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '11:30' } })
+  expect(source).toHaveValue('')
+  expect(within(source).queryByRole('option', { name: /Mục kế hoạch kiểm thử/ })).not.toBeInTheDocument()
+  expect(within(source).getByRole('option', { name: /Bữa ăn/ })).toHaveValue('MEAL:61')
   expect(await within(row).findByRole('option', { name: '[Nhân viên kiểm thử] · Nhân viên chăm sóc' })).toHaveValue('22')
 })
 
@@ -343,6 +409,8 @@ it('FR_017_thieuTruong_baoTruocKhiGui_mucTheoMucKeHoachKhongCoOChon', async () =
   fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
   fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
   fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '08:00' } })
+  fireEvent.change(within(row).getByLabelText('Cách lập công việc'), { target: { value: 'source' } })
+  fireEvent.change(within(row).getByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi'), { target: { value: 'CARE_PLAN_ITEM:90' } })
   expect(within(row).queryByRole('combobox', { name: 'Mức quan trọng' })).not.toBeInTheDocument()
   expect(within(row).getByText('theo mục kế hoạch')).toBeInTheDocument()
   expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
@@ -352,15 +420,13 @@ it('FR_023_phatSinhKhongGuiIdCanCu_viecChungKhongGanNguoi', async () => {
   api.on('POST', '/shifts/5/care-tasks/plan', json(201, []))
   view()
   const dialog = await openBatch()
-  const row = await enterRow(dialog)
-  fireEvent.change(within(row).getByLabelText('Giờ dự kiến'), { target: { value: '09:00' } })
+  const row = await enterRow(dialog, null)
+  expect(within(row).getByLabelText('Cách lập công việc')).toHaveValue('adHoc')
+  expect(within(row).queryByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi')).not.toBeInTheDocument()
   fireEvent.change(within(row).getByLabelText('Phân công'), { target: { value: 'SHARED' } })
   fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
-  expect(await within(row).findByText(/Giờ này không khớp nguồn nào/)).toBeInTheDocument()
-  expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
-  fireEvent.click(within(row).getByLabelText('Lập là việc phát sinh, không theo nguồn nào'))
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
   expect(await within(row).findByText('Chọn mức quan trọng của việc này.')).toBeInTheDocument()
+  expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
   fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'MANDATORY' } })
   fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
   await waitFor(() => expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(1))
@@ -369,6 +435,47 @@ it('FR_023_phatSinhKhongGuiIdCanCu_viecChungKhongGanNguoi', async () => {
   expect(body.importance).toBe('MANDATORY')
   expect(body.performerId).toBeUndefined()
   expect(body.shared).toBe(true)
+})
+
+it('FR_023_chonSuCoTuTruocCaVaHienLoiKhiNguonHetHieuLuc', async () => {
+  api.on('GET', '/shifts/5/source-data', json(200, {
+    shift: SHIFT,
+    residents: [
+      {
+        residentId: 77,
+        assignments: [{ staffId: 22, role: 'CAREGIVER' }],
+        planItems: [],
+        otherSources: [
+          { type: 'POST_FALL_MONITORING', id: 61, at: '2026-10-31T04:30:00Z', description: 'Sự cố kiểm thử' },
+          { type: 'CONTACT_MONITORING', id: 63, at: '2026-10-31T04:30:00Z', description: 'Tiếp xúc kiểm thử' },
+          { type: 'INCIDENT_FOLLOW_UP', id: 64, at: '2026-10-31T04:30:00Z', description: 'Việc tiếp theo kiểm thử' },
+        ],
+      },
+      {
+        residentId: 78,
+        assignments: [],
+        planItems: [],
+        otherSources: [{ type: 'POST_FALL_MONITORING', id: 62, at: '2026-10-31T04:30:00Z', description: 'Sự cố của người khác' }],
+      },
+    ],
+  }))
+  api.on('GET', '/residents/78', json(200, { id: 78, personalInfo: { fullName: '[Người kiểm thử thứ hai]' } }))
+  api.on('POST', '/shifts/5/care-tasks/plan', problem(409, 'UNMET_CONDITIONS', {
+    rowErrors: [{ row: 1, codes: ['INVALID_BASIS'] }],
+  }))
+  view()
+  const dialog = await openBatch()
+  const row = await enterRow(dialog, 'POST_FALL_MONITORING:61')
+  const source = within(row).getByLabelText('Chọn kế hoạch hoặc sự kiện cần theo dõi')
+  expect(within(source).getByRole('option', { name: /Tiếp xúc kiểm thử/ })).toHaveValue('CONTACT_MONITORING:63')
+  expect(within(source).getByRole('option', { name: /Việc tiếp theo kiểm thử/ })).toHaveValue('INCIDENT_FOLLOW_UP:64')
+  expect(within(source).queryByRole('option', { name: /Sự cố của người khác/ })).not.toBeInTheDocument()
+  fireEvent.change(within(row).getByLabelText('Mức quan trọng'), { target: { value: 'NORMAL' } })
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Gửi lô 1 dòng' }))
+  expect(await within(row).findByText(/Kế hoạch hoặc sự kiện có thể đã hết hiệu lực/)).toBeInTheDocument()
+  expect(source).toHaveValue('POST_FALL_MONITORING:61')
+  const [request] = api.calls('POST', '/shifts/5/care-tasks/plan')
+  expect(JSON.parse(request[1].body)[0].basis).toEqual({ type: 'POST_FALL_MONITORING', id: 61 })
 })
 
 it('BR_M04_01_loiTheoDong_giuNoiDung_baoTaiTruong', async () => {
@@ -393,16 +500,24 @@ it('BR_M04_01_loiTheoDong_giuNoiDung_baoTaiTruong', async () => {
 })
 
 it('BR_M04_24_viecCapCa_chonDuocThanhVienCaKhongVang', async () => {
+  api.on('GET', '/task-types', json(200, [
+    { id: 9, name: 'Việc cá nhân', status: 'ACTIVE' },
+    { id: 10, name: 'Kiểm tra đầu ca', status: 'ACTIVE', group: 'SHIFT_START_CHECK', defaultRole: 'NURSING_STAFF', defaultImportance: 'NORMAL' },
+  ]))
   view()
   const dialog = await openBatch()
   fireEvent.click(within(dialog).getByRole('button', { name: 'Thêm dòng' }))
   const row = within(dialog).getByRole('group', { name: 'Dòng 01' })
-  fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: 'FLOOR' } })
+  expect(within(row).queryByRole('option', { name: /Cả tầng/ })).not.toBeInTheDocument()
+  fireEvent.change(within(row).getByLabelText('Người cao tuổi'), { target: { value: '77' } })
+  fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '10' } })
+  expect(within(row).queryByLabelText('Người cao tuổi')).not.toBeInTheDocument()
   const values = [...within(row).getByLabelText('Phân công').options].map((o) => o.value)
   expect(values).toContain('33')
   expect(values).not.toContain('44')
-  const bases = [...within(row).getByLabelText('Căn cứ').options].map((o) => o.value)
-  expect(bases).toEqual(['', 'SHIFT_START_CHECK', 'SUPERVISION', 'AD_HOC'])
+  expect(values).not.toContain('SHARED')
+  fireEvent.change(within(row).getByLabelText('Loại công việc'), { target: { value: '9' } })
+  expect(within(row).getByLabelText('Người cao tuổi')).toHaveValue('')
 })
 
 it('FR_017_khongCoQuyenThiKhongHienLenhLap', async () => {

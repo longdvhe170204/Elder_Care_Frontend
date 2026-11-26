@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { pickResident } from '@/test/pickResident'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { getCostsPostFinalizationChanges } from '@/api'
 import { PostFinalizationChanges } from './PostFinalizationChanges'
@@ -51,8 +52,7 @@ it('locTheoNguoiCaoTuoiChonTheoTen_dongHienTen', async () => {
     ],
   })
   render(<PostFinalizationChanges />)
-  await screen.findByRole('option', { name: 'Nguyễn Văn Tư (NCT-0042)' })
-  fireEvent.change(screen.getByLabelText('Người cao tuổi (không bắt buộc)'), { target: { value: '42' } })
+  await pickResident('Nguyễn Văn Tư', { label: 'Người cao tuổi (không bắt buộc)' })
   fireEvent.click(screen.getByRole('button', { name: 'Tra cứu biến động' }))
   expect(await screen.findByText(/Nguyễn Văn Tư/, { selector: 'p, span, td, div' })).toBeInTheDocument()
   expect(getCostsPostFinalizationChanges.mock.calls.at(-1)[0].query).toEqual({ residentId: 42 })

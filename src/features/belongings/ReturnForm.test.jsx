@@ -191,7 +191,7 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
   })
 
   // list: mảng hoặc hàm trả mảng (đổi sau khi lập); POST /files trả mã tăng dần để phân biệt hai tệp
-  function setupForm({ list = [], role = 'OFFICE_STAFF', onCreated = vi.fn() } = {}) {
+  function setupForm({ list = [], role = 'OFFICE_STAFF', onCreated = vi.fn(), allowOther = true } = {}) {
     const api = mockRoutes()
     api.on('GET', '/recipient-confirmations', () => json(200, typeof list === 'function' ? list() : list))
     let fileId = 700
@@ -209,6 +209,7 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
         requiresConsent={(b) => b.id === 92}
         onConfirmationCreated={onCreated}
         onDone={onDone}
+        allowOtherRecipient={allowOther}
       />,
     )
     return { api, onDone, onCreated }
@@ -272,7 +273,9 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     pickId(18, 'Áo len')
     otherPerson()
     fireEvent.click(await screen.findByRole('button', { name: 'Chọn xác nhận mã 8' }))
-    expect(screen.getByText(/xác nhận chuyển Đã dùng/)).toHaveTextContent('mã 19')
+    // Demo 2026-11-26: đồ còn lại nêu bằng tên, số lượng (không hiện mã đồ gửi)
+    expect(screen.getByText(/xác nhận chuyển Đã dùng/)).toHaveTextContent('Áo len, 2')
+    expect(screen.getByText(/xác nhận chuyển Đã dùng/)).not.toHaveTextContent('mã 19')
   })
 
   it('FR_017_nguoiKhacChuaChonXacNhan_baoLoiTaiCho_khongGui', async () => {

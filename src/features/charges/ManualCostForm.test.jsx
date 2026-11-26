@@ -1,4 +1,5 @@
 import { expect, it, vi, beforeEach } from 'vitest'
+import { pickResident } from '@/test/pickResident'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { getResidents, postCostsItemsManual } from '@/api'
 import { uploadFile } from '@/common/files'
@@ -80,9 +81,8 @@ it('chonNguoiCaoTuoiTheoTen_guiDungMa', async () => {
   })
   postCostsItemsManual.mockResolvedValue({ status: 201 })
   render(<ManualCostForm today="2026-11-10" />)
-  await screen.findByRole('option', { name: 'Nguyễn Văn Tư (NCT-0042)' })
   expect(screen.queryByLabelText('Mã người cao tuổi')).toBeNull()
-  fireEvent.change(screen.getByLabelText('Người cao tuổi'), { target: { value: '42' } })
+  await pickResident('Nguyễn Văn Tư', { label: 'Người cao tuổi' })
   fireEvent.change(screen.getByLabelText('Mô tả'), { target: { value: 'Phí chấm dứt sớm' } })
   fireEvent.change(screen.getByLabelText('Ngày phát sinh'), { target: { value: '2026-11-05' } })
   fireEvent.change(screen.getByLabelText('Số lượng'), { target: { value: '1' } })

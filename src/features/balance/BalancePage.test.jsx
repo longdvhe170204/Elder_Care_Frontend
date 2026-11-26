@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { json, mockRoutes } from '@/test/fetchRoutes'
+import { pickResident } from '@/test/pickResident'
 import { BalancePage } from './BalancePage'
 
 // Màn Số dư, thu chi (017 T027, T033, T036, T039): các phần của Kế toán, Quản lý viện duyệt ở màn của 000.
@@ -31,7 +32,7 @@ const PENDING_TX = [
   },
 ]
 
-function setup(perms = ALL) {
+function setup(perms = ALL, props = {}) {
   const api = mockRoutes()
   api.on('GET', '/me/permissions', json(200, perms))
   api.on('GET', '/payment-notices/pending-issue', json(200, []))
@@ -56,9 +57,14 @@ function setup(perms = ALL) {
   api.on('GET', '/residents/7/balance-transactions', json(200, []))
   api.on('GET', '/residents/7/settlement', json(200, { conditions: [], hasException: false, versions: [] }))
   api.on('GET', '/residents/7/payment-notices', json(200, []))
+  api.on(
+    'GET',
+    '/residents/7',
+    json(200, { id: 7, profileCode: 'HS-0007', personalInfo: { fullName: 'Nguyễn Thị Ánh' } }),
+  )
   render(
     <PermissionsProvider>
-      <BalancePage />
+      <BalancePage {...props} />
     </PermissionsProvider>,
   )
   return api
@@ -85,9 +91,7 @@ describe('BalancePage (017)', () => {
   it('FR_004_timNguoiCaoTuoi_moSoDuGiaoDichQuyetToanPhieu', async () => {
     setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Theo người cao tuổi' }))
-    fireEvent.change(screen.getByLabelText('Tìm người cao tuổi'), { target: { value: 'Ánh' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tìm' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Ánh, HS-0007' }))
+    await pickResident('Nguyễn Thị Ánh', { label: 'Tìm người cao tuổi' })
     expect(await screen.findByRole('heading', { name: 'Số dư của Nguyễn Thị Ánh' })).toBeInTheDocument()
     expect(await screen.findByText('Chưa có phiếu báo phí')).toBeInTheDocument()
   })
@@ -101,10 +105,35 @@ describe('BalancePage (017)', () => {
     expect(await screen.findByText('Không có hồ sơ Sắp hết tiền, Còn nợ')).toBeInTheDocument()
   })
 
-  it('FR_005_hanhChinhChiXem_khongCoPhanGhiNhanTienNop', async () => {
-    setup([{ function: 'BALANCE_LEDGER', operation: 'VIEW' }])
-    expect(await screen.findByRole('button', { name: 'Tình trạng số dư' })).toBeInTheDocument()
+  // Demo 2026-11-26: Tình trạng số dư, Giao dịch chờ duyệt chỉ Kế toán, Quản lý viện xem được (backend chặn theo vai trò,
+  // FR-013, FR-028); Hành chính không thấy hai nút này, vào thẳng Theo người cao tuổi
+  it('FR_005_hanhChinhChiXem_khongCoGhiNhanTienNop_tinhTrang_choDuyet', async () => {
+    setup([{ function: 'BALANCE_LEDGER', operation: 'VIEW' }], { role: 'OFFICE_STAFF' })
+    expect(await screen.findByRole('button', { name: 'Theo người cao tuổi' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Tìm người cao tuổi')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi nhận tiền nộp' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Tình trạng số dư' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Giao dịch chờ duyệt' })).not.toBeInTheDocument()
+  })
+
+  it('FR_013_keToan_vanThayTinhTrang_choDuyet', async () => {
+    setup(ALL, { role: 'ACCOUNTANT' })
+    expect(await screen.findByRole('button', { name: 'Tình trạng số dư' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Giao dịch chờ duyệt' })).toBeInTheDocument()
+  })
+
+  // Demo 2026-11-26: nút Xử lý ở điều kiện (h) của Kết thúc lưu trú mở thẳng số dư, quyết toán của đúng người; Hành chính
+  // chỉ xem nên trước đây rơi vào "Tình trạng số dư" (chỉ Kế toán, Quản lý viện) và báo không có quyền
+  it('FR_063h_moTuKetThucLuuTru_vaoThangSoDuCuaNguoiDo_hanhChinhChiXem', async () => {
+    setup(
+      [
+        { function: 'BALANCE_LEDGER', operation: 'VIEW' },
+        { function: 'SETTLEMENT_RECORD', operation: 'VIEW' },
+      ],
+      { residentId: 7, focus: 'resident' },
+    )
+    expect(await screen.findByRole('heading', { name: 'Số dư của Nguyễn Thị Ánh' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Tìm người cao tuổi')).not.toBeInTheDocument()
   })
 
   it('FR_028_khongCoQuyenXemSoDu_hienTrangThaiKhongCoQuyen', async () => {

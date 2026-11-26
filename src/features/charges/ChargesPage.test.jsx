@@ -90,6 +90,16 @@ beforeEach(() => {
   )
 })
 
+// Demo 2026-11-26: mở từ thông báo bảng đã chốt (Xử lý) thì hiện ngay bảng đó
+it('moTuThongBao_hienNgayBangChiPhi', async () => {
+  render(
+    <PermissionsProvider>
+      <ChargesPage statementId={31} />
+    </PermissionsProvider>,
+  )
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Bảng #31' })).toBeInTheDocument())
+})
+
 async function openStatement() {
   render(
     <PermissionsProvider>
@@ -278,6 +288,28 @@ it('nutGomChiPhiPhatSinh_moManGom', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Gom chi phí phát sinh' }))
   expect(await screen.findByRole('heading', { name: 'Gom chi phí phát sinh' })).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'Gom toàn bộ chi phí chưa lập' })).toBeInTheDocument()
+})
+
+// Demo 2026-11-26 (E): mở từ điều kiện (a) của Kết thúc lưu trú: vào thẳng Gom chi phí của người đó, khoảng ngày tự tính
+it('moTuKetThucLuuTru_vaoThangGomChiPhi_khoangNgayTuTinh', async () => {
+  api.on(
+    'GET',
+    '/me/permissions',
+    json(200, [
+      { function: 'COST_ADJUSTMENT', operation: 'VIEW' },
+      { function: 'COST_ADJUSTMENT', operation: 'CREATE' },
+    ]),
+  )
+  api.on('GET', '/contracts', json(200, [{ id: 4, status: 'ACTIVE', startDate: '2026-11-01' }]))
+  render(
+    <PermissionsProvider>
+      <ChargesPage residentId={5} workspace="sources" until="2026-11-28" />
+    </PermissionsProvider>,
+  )
+  expect(await screen.findByRole('heading', { name: 'Gom chi phí phát sinh' })).toBeInTheDocument()
+  expect(
+    await screen.findByText('Khoảng ngày: 01/11/2026 (bắt đầu hợp đồng) đến 28/11/2026 (kết thúc dự kiến).'),
+  ).toBeInTheDocument()
 })
 
 // Demo 2026-11-25 (E, chờ chủ dự án duyệt): bảng kỳ cuối do Hành chính chốt luôn khi gửi; Quản lý viện chỉ được báo

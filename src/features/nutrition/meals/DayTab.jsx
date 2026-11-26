@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { Info, ReasonField, SELECT } from '../NutritionParts'
@@ -68,23 +69,14 @@ function ExtraPortionForm({ meal, floors, residents, onClose, onDone }) {
     <div className="flex flex-col gap-3 border-t pt-4">
       <h3 className="type-card-title">Yêu cầu suất bổ sung</h3>
       <FieldGroup>
-        <Field data-invalid={!!show('residentId') || undefined}>
-          <FieldLabel htmlFor="extra-resident">Người cao tuổi</FieldLabel>
-          <select
-            id="extra-resident"
-            className={SELECT}
-            value={form.residentId}
-            onChange={(e) => set({ residentId: e.target.value })}
-          >
-            <option value="">Chọn người cao tuổi</option>
-            {residents.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-          {show('residentId') && <FieldError>{show('residentId')}</FieldError>}
-        </Field>
+        {/* Demo 2026-11-26 (E): ô tìm theo tên hoặc mã hồ sơ thay dropdown */}
+        <ResidentCombobox
+          id="extra-resident"
+          options={residents.map((r) => ({ value: String(r.id), label: r.code ? `${r.name} (${r.code})` : r.name }))}
+          value={form.residentId}
+          onChange={(residentId) => set({ residentId })}
+          error={show('residentId')}
+        />
         <Field data-invalid={!!show('floorAreaId') || undefined}>
           <FieldLabel htmlFor="extra-floor">Tầng/khu nhận</FieldLabel>
           <select

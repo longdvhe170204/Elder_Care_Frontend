@@ -25,7 +25,8 @@ const FILTERS = [
   ['CANCELLED', 'Đã hủy'],
 ]
 
-export function EndingsPage({ role, onNavigate }) {
+// endingId (demo 2026-11-26): mở từ nút Xử lý của thông báo, hiện ngay hồ sơ đó (chuyển sang nhóm trạng thái của hồ sơ)
+export function EndingsPage({ role, onNavigate, endingId = null }) {
   const { can } = usePermissions()
   const [filter, setFilter] = useState('PREPARING')
   const [endings, setEndings] = useState(null)
@@ -35,6 +36,7 @@ export function EndingsPage({ role, onNavigate }) {
   const [announcement, setAnnouncement] = useState('')
   const [names, setNames] = useState({})
   const requested = useRef(new Set())
+  const wanted = useRef(endingId)
 
   const loadNames = useCallback((rows) => {
     for (const id of new Set(rows.map((e) => e.residentId))) {
@@ -53,6 +55,12 @@ export function EndingsPage({ role, onNavigate }) {
           setEndings(data)
           setFailure(null)
           loadNames(data)
+          const found = wanted.current && data.find((e) => e.id === wanted.current)
+          if (found) {
+            wanted.current = null
+            setFilter(found.status)
+            setEnding(found)
+          }
         })
         .catch((e) => {
           setEndings([])

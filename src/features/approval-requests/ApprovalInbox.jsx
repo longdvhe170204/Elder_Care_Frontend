@@ -36,11 +36,12 @@ function toQuery({ inbox, status, type }, cursor) {
   return { inbox, status: status || undefined, type: type || undefined, cursor }
 }
 
-export function ApprovalInbox() {
+// requestId (demo 2026-11-26): mở từ nút Xử lý của thông báo, hiện ngay chi tiết yêu cầu đó
+export function ApprovalInbox({ requestId = null } = {}) {
   const [filter, setFilter] = useState({ inbox: 'AWAITING_MY_APPROVAL', status: '', type: '' })
   const [state, setState] = useState({ status: 'loading', items: [], nextCursor: null })
   const [awaitingCount, setAwaitingCount] = useState(null)
-  const [opened, setOpened] = useState(null)
+  const [opened, setOpened] = useState(requestId)
 
   const load = useCallback(async (nextFilter, cursor) => {
     setState((s) => (cursor ? { ...s, loadingMore: true } : { status: 'loading', items: [], nextCursor: null }))
@@ -166,8 +167,7 @@ export function ApprovalInbox() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Mã</TableHead>
-                  <TableHead>Loại</TableHead>
+                  <TableHead>Yêu cầu</TableHead>
                   <TableHead className="min-w-40">Người cao tuổi</TableHead>
                   <TableHead>Trạng thái</TableHead>
                   <TableHead>Người yêu cầu</TableHead>
@@ -183,16 +183,17 @@ export function ApprovalInbox() {
                     className="align-top data-[state=selected]:bg-accent"
                   >
                     <TableCell>
+                      {/* Demo 2026-11-26 (E): tên chức năng là dòng chính, mã yêu cầu là dòng phụ */}
                       <Button
                         variant="link"
-                        className="h-auto p-0 tabular-nums"
+                        className="h-auto flex-col items-start p-0 text-left"
                         aria-pressed={r.id === opened}
                         onClick={() => setOpened(r.id)}
                       >
-                        {r.displayCode}
+                        <span>{typeLabel(r.type, r.content)}</span>
+                        <span className="type-caption tabular-nums text-muted-foreground">{r.displayCode}</span>
                       </Button>
                     </TableCell>
-                    <TableCell>{typeLabel(r.type)}</TableCell>
                     <SubjectCell content={r.content} />
                     <TableCell>
                       <StatusBadge status={statusLabel(r.status)} />

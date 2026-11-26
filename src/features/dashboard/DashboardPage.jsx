@@ -11,7 +11,7 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { BreakdownChart } from '@/common/charts/BreakdownChart'
 import { chartKind } from '@/common/charts/chartRules'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { SOURCE_PAGES } from '@/common/notifications/sourceTargets'
+import { sourceNavigation } from '@/common/notifications/sourceTargets'
 import { problemOf } from '@/common/problem'
 import { MetricCatalogNotice } from '@/features/reports/MetricCatalogNotice'
 import { MetricDetailSheet } from '@/features/reports/MetricDetailSheet'
@@ -147,8 +147,8 @@ const ASSIGNED_LIMIT = 5
 function AssignedWork({ inbox, onNavigate }) {
   if (!inbox || inbox.items.length === 0) return null
   const open = (n) => {
-    const target = SOURCE_PAGES[n.sourceRecord?.type]
-    if (target && n.sourceRecord?.id) onNavigate?.(target[0], { [target[1]]: Number(n.sourceRecord.id) })
+    const target = sourceNavigation(n.sourceRecord)
+    if (target) onNavigate?.(...target)
     else onNavigate?.('notifications', { notificationId: n.id })
   }
   return (

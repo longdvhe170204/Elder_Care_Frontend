@@ -15,6 +15,22 @@ export const TYPE_LABELS = {
   'M15.CORRECTION': 'Đính chính',
   'M02.RESIDENCY_CHANGE': 'Điều chỉnh hợp đồng',
   'M12.UNCLAIMED_BELONGING_DISPOSAL': 'Xử lý đồ không người nhận',
+  // Demo 2026-11-26 (E): đủ nhãn cho các loại backend đăng ký, không hiện mã loại
+  'M02.CONTRACT_TERMS_APPROVAL': 'Duyệt điều khoản hợp đồng',
+  'M02.ENDING_EXCEPTION': 'Ngoại lệ kết thúc lưu trú',
+  'M03.ASSET_DISPOSAL': 'Thanh lý tài sản',
+  'M03.NHAP_BU_PHAN_BO': 'Nhập bù phân bổ giường',
+  'M09.LEAVE_REQUEST': 'Nghỉ đột xuất',
+  'M09.SHIFT_SWAP': 'Đổi ca',
+  'M15.RESIDENT_ACCOUNT_LOCK': 'Khóa tài khoản người cao tuổi',
+  'M11.BALANCE_TRANSACTION': 'Giao dịch số dư',
+}
+
+// Giao dịch số dư ghi đúng loại giao dịch trong nội dung yêu cầu (api-017)
+const BALANCE_TRANSACTION_LABELS = {
+  REFUND: 'Hoàn số dư',
+  DEPOSIT_REFUND: 'Hoàn tiền cọc',
+  ADJUSTMENT: 'Điều chỉnh số dư',
 }
 
 export const ACTION_LABELS = {
@@ -39,7 +55,9 @@ export function statusLabel(status) {
   return STATUS_LABELS[status] ?? status
 }
 
-export function typeLabel(type) {
+export function typeLabel(type, content) {
+  if (type === 'M11.BALANCE_TRANSACTION' && BALANCE_TRANSACTION_LABELS[content?.type])
+    return BALANCE_TRANSACTION_LABELS[content.type]
   return TYPE_LABELS[type] ?? type
 }
 

@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { getResidentsById } from '@/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PageHeader } from '@/common/PageHeader'
@@ -17,25 +18,44 @@ import { ResidentPicker } from './ResidentPicker'
 // lọc: Ghi nhận tiền nộp (Kế toán lập), Tình trạng số dư, Phiếu chờ phát hành, Giao dịch chờ duyệt, Xuất sao kê và báo
 // cáo, Theo người cao tuổi (số dư, giao dịch, quyết toán, phiếu đã phát hành). Người thân xem số dư, chứng từ ở cổng người thân (012), không ở màn này.
 
+// roles: backend còn chặn theo vai trò (FR-013, FR-028: danh sách tình trạng, giao dịch chờ duyệt chỉ Kế toán, Quản lý
+// viện); ẩn nút với vai trò khác để không mở ra màn báo không có quyền (demo 2026-11-26)
+const LEDGER_VIEWERS = ['ACCOUNTANT', 'NURSING_HOME_MANAGER']
 const SECTIONS = [
   { value: 'payments', label: 'Ghi nhận tiền nộp', function: 'BALANCE_LEDGER', operation: 'CREATE' },
-  { value: 'statuses', label: 'Tình trạng số dư', function: 'BALANCE_LEDGER' },
+  { value: 'statuses', label: 'Tình trạng số dư', function: 'BALANCE_LEDGER', roles: LEDGER_VIEWERS },
   { value: 'notices', label: 'Phiếu chờ phát hành', function: 'PAYMENT_NOTICE' },
-  { value: 'pending', label: 'Giao dịch chờ duyệt', function: 'BALANCE_LEDGER' },
+  { value: 'pending', label: 'Giao dịch chờ duyệt', function: 'BALANCE_LEDGER', roles: LEDGER_VIEWERS },
   { value: 'exports', label: 'Xuất sao kê, báo cáo', function: 'STATEMENT_REPORT' },
   { value: 'resident', label: 'Theo người cao tuổi', function: 'BALANCE_LEDGER' },
 ]
 
-// residentId: mở từ bước Đặt cọc của Hồ sơ tiếp nhận, vào thẳng Ghi nhận tiền nộp với người cao tuổi đó (audit 2026-11-18)
-export function BalancePage({ residentId = null } = {}) {
+// residentId: mở từ bước Đặt cọc của Hồ sơ tiếp nhận, vào thẳng Ghi nhận tiền nộp với người cao tuổi đó (audit 2026-11-18).
+// focus="resident" (demo 2026-11-26): mở từ điều kiện (h) của Kết thúc lưu trú, vào thẳng số dư, giao dịch, quyết toán của
+// người đó; Hành chính chỉ xem cũng mở được (trước đây rơi vào Tình trạng số dư, chỉ Kế toán, Quản lý viện xem được).
+export function BalancePage({ residentId = null, focus = null, role = null } = {}) {
   const { status, hasFunction, can } = usePermissions()
-  const [section, setSection] = useState(residentId != null ? 'payments' : 'resident')
+  const focused = residentId != null && focus === 'resident'
+  const [section, setSection] = useState(residentId != null && !focused ? 'payments' : 'resident')
   const [resident, setResident] = useState(null)
+
+  useEffect(() => {
+    if (!focused) return
+    let live = true
+    getResidentsById({ path: { id: residentId } })
+      .then(({ data }) => live && setResident({ residentId, fullName: data.personalInfo?.fullName ?? data.fullName }))
+      .catch(() => live && setResident({ residentId, fullName: `mã ${residentId}` }))
+    return () => {
+      live = false
+    }
+  }, [focused, residentId])
 
   if (status === 'loading') return <Skeleton className="mx-auto h-32 w-full max-w-[1600px]" />
   if (!['BALANCE_LEDGER', 'PAYMENT_NOTICE', 'STATEMENT_REPORT', 'SETTLEMENT_RECORD'].some(hasFunction))
     return <PermissionDeniedState label="Số dư, thu chi" />
-  const sections = SECTIONS.filter((s) => (s.operation ? can(s.function, s.operation) : hasFunction(s.function)))
+  const sections = SECTIONS.filter((s) =>
+    s.operation ? can(s.function, s.operation) : hasFunction(s.function),
+  ).filter((s) => !s.roles || !role || s.roles.includes(role))
   const current = sections.some((s) => s.value === section) ? section : sections[0].value
 
   return (
@@ -59,7 +79,7 @@ export function BalancePage({ residentId = null } = {}) {
       {current === 'exports' && <BalanceExports />}
       {current === 'resident' && (
         <div className="flex flex-col gap-5">
-          <ResidentPicker onPick={setResident} />
+          {!focused && <ResidentPicker onPick={setResident} />}
           {resident && (
             <ResidentBalance key={resident.residentId} residentId={resident.residentId} fullName={resident.fullName} />
           )}

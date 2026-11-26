@@ -48,10 +48,10 @@ export function amountText(item, unit) {
   return unit ? `${number.format(item.quantity)} ${unit}` : number.format(item.quantity)
 }
 
-// Dòng mô tả đồ trong danh sách chọn (form trả, form xác nhận người nhận khác): có mã đồ, số lượng và vị trí để phân biệt
-// hai đồ cùng tên
+// Dòng mô tả đồ trong danh sách chọn (form trả, form xác nhận người nhận khác): số lượng và vị trí để phân biệt hai đồ
+// cùng tên. Demo 2026-11-26 (E): bỏ mã đồ gửi khỏi chữ hiện ra (nhãn đọc màn hình của ô chọn vẫn có mã)
 export function pickLabel(item, locationName) {
-  const parts = [item.description, amountText(item), `mã ${item.id}`]
+  const parts = [item.description, amountText(item)]
   if (locationName) parts.push(locationName(item.storageLocationId))
   return parts.filter(Boolean).join(', ')
 }
