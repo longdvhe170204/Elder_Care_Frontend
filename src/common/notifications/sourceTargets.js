@@ -15,6 +15,8 @@ export const SOURCE_PAGES = {
   // Demo 2026-11-26 (E): luồng kết thúc lưu trú; phần tử thứ tư là tham số thêm của màn đích
   'M15.APPROVAL_REQUEST': ['approval-requests', 'requestId', 'Mở yêu cầu phê duyệt'],
   'M11.BALANCE': ['balance', 'residentId', 'Mở số dư của người cao tuổi', { focus: 'resident' }],
+  'M11.COST_STATEMENT': ['charges', 'statementId', 'Mở bảng chi phí'],
+  'M02.RESIDENCY_ENDING': ['residency-endings', 'endingId', 'Mở hồ sơ kết thúc lưu trú'],
 }
 
 // [màn, tham số] để mở bản ghi nguồn của thông báo; null khi nguồn chưa mở thẳng được

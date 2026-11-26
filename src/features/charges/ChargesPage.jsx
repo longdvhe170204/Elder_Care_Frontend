@@ -28,7 +28,14 @@ import { residentLabel, residentMatches, useResidentDirectory } from './useResid
 // 010 T019: chỉ đọc dữ liệu thật qua client sinh; không lập sẵn bảng, không tự chọn khoản.
 // residentId, workspace, until (demo 2026-11-26): mở từ điều kiện (a) của Kết thúc lưu trú, vào thẳng Gom chi phí của người
 // đó với khoảng ngày tự tính (BillingSources preset)
-export function ChargesPage({ role, residentId = null, workspace: initialWorkspace = 'statements', until = null }) {
+// statementId (demo 2026-11-26): mở từ nút Xử lý của thông báo bảng chi phí, hiện ngay bảng đó
+export function ChargesPage({
+  role,
+  residentId = null,
+  workspace: initialWorkspace = 'statements',
+  until = null,
+  statementId = null,
+}) {
   const { status, can } = usePermissions()
   const canView = can('COST_ADJUSTMENT', 'VIEW')
   const [periods, setPeriods] = useState(null)
@@ -37,7 +44,7 @@ export function ChargesPage({ role, residentId = null, workspace: initialWorkspa
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
   const residents = useResidentDirectory()
-  const [opened, setOpened] = useState(null)
+  const [opened, setOpened] = useState(statementId)
   const [failure, setFailure] = useState(null)
   const [denied, setDenied] = useState(false)
   const [revision, setRevision] = useState(0)
