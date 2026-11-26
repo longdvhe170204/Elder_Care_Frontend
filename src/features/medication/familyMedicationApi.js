@@ -29,6 +29,12 @@ export const CHECKS = [
   ['packagingOk', 'Bao bì'],
   ['nameOk', 'Đúng tên người cao tuổi'],
 ]
+export const EXTRA_CHECKS = [
+  ['ingredientOk', 'Đúng hoạt chất'],
+  ['concentrationOk', 'Đúng hàm lượng'],
+  ['dosageFormOk', 'Đúng dạng thuốc'],
+  ['storageOk', 'Điều kiện bảo quản đạt'],
+]
 
 export async function loadFamilyMedications(residentId) {
   const [batches, prescriptions] = await Promise.all([
