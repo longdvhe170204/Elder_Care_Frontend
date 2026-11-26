@@ -7,9 +7,9 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AllergyNote } from '@/common/CareNotes'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
+import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
-import { hhmm } from './doseRoundView'
 import { ChangeDosageSheet } from './ChangeDosageSheet'
 import { CommandSheet } from './CommandSheet'
 import { PrescriptionSheet } from './PrescriptionSheet'
@@ -107,6 +107,8 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
   const [board, setBoard] = useState(null)
   const [problem, setProblem] = useState(null)
   const [statusFilter, setStatusFilter] = useState('Tất cả')
+  const [typeFilter, setTypeFilter] = useState('ALL')
+  const [page, setPage] = useState(1)
   const [creating, setCreating] = useState(false)
   const [changing, setChanging] = useState(null)
   const [commanding, setCommanding] = useState(null)
@@ -125,6 +127,7 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
     setResident(r)
     setBoard(null)
     setProblem(null)
+    setPage(1)
     load(r.id)
   }
 
@@ -135,7 +138,12 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
 
   const awaiting = (board?.prescriptions ?? []).filter((p) => p.awaitingReconciliation).length
   const residentName = resident?.personalInfo?.fullName ?? `người cao tuổi mã ${resident?.id}`
-  const prescriptions = (board?.prescriptions ?? []).filter((p) => statusFilter === 'Tất cả' || p.status === statusFilter)
+  const prescriptions = (board?.prescriptions ?? []).filter((p) => {
+    const matchStatus = statusFilter === 'Tất cả' || p.status === statusFilter
+    const isPrn = p.typeLabel === 'Khi cần (PRN)' || p.prescriptionType === 'PRN' || p.raw?.prescriptionType === 'PRN'
+    const matchType = typeFilter === 'ALL' || (typeFilter === 'PRN' ? isPrn : !isPrn)
+    return matchStatus && matchType
+  })
   const activeCount = (board?.prescriptions ?? []).filter((p) => p.status === 'ACTIVE' || p.status === 'Hiệu lực').length
 
   return (
@@ -196,7 +204,12 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
               variant="default"
               size="sm"
               value={[statusFilter]}
-              onValueChange={(val) => val[0] && setStatusFilter(val[0])}
+              onValueChange={(val) => {
+                if (val[0]) {
+                  setStatusFilter(val[0])
+                  setPage(1)
+                }
+              }}
               className="flex flex-wrap items-center gap-2"
               aria-label="Lọc theo trạng thái"
             >
@@ -226,15 +239,41 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
               })}
             </ToggleGroup>
 
-            {canPrescribe && board && (
-              <Button
-                onClick={() => setCreating(true)}
-                className="h-9.5 gap-2 rounded-xl bg-[#24496f] hover:bg-[#193552] text-white px-4 text-xs font-bold shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                <Plus className="size-4" aria-hidden="true" />
-                {isDoctor ? 'Nhập đơn thuốc mới' : 'Nhập đơn bên ngoài (theo toa)'}
-              </Button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              {board && (
+                <select
+                  aria-label="Lọc theo loại đơn"
+                  value={typeFilter}
+                  onChange={(e) => {
+                    setTypeFilter(e.target.value)
+                    setPage(1)
+                  }}
+                  className="h-9.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 shadow-xs dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+                >
+                  <option value="ALL">Loại: Tất cả</option>
+                  <option value="PERIODIC">Loại: Định kỳ</option>
+                  <option value="PRN">Loại: Khi cần (PRN)</option>
+                </select>
+              )}
+              {canPrescribe && board && isDoctor && (
+                <Button
+                  onClick={() => setCreating(true)}
+                  className="h-9.5 gap-2 rounded-xl bg-[#24496f] hover:bg-[#193552] text-white px-4 text-xs font-bold shadow-sm transition-all hover:shadow-md hover:-translate-y-0.5"
+                >
+                  <Plus className="size-4" aria-hidden="true" />
+                  Nhập đơn thuốc mới
+                </Button>
+              )}
+              {!isDoctor && board && onReconcile && (
+                <Button
+                  variant="outline"
+                  onClick={() => onReconcile(resident)}
+                  className="h-9.5 gap-2 rounded-xl border-sky-300 bg-sky-50 text-sky-900 hover:bg-sky-100 px-4 text-xs font-bold shadow-xs"
+                >
+                  Lập phiếu đối chiếu thuốc (đơn ngoài)
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -286,9 +325,24 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
           </div>
         )}
 
-        {/* Lưới danh sách thẻ đơn thuốc chi tiết */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-          {prescriptions.map((p) => {
+        {/* Nhóm đơn nhiều thuốc & Lưới danh sách thẻ đơn thuốc chi tiết */}
+        {(() => {
+          const grouped = new Map()
+          for (const p of prescriptions) {
+            const key = p.prescriptionGroupId ? `grp:${p.prescriptionGroupId}` : `single:${p.id}`
+            if (!grouped.has(key)) grouped.set(key, [])
+            grouped.get(key).push(p)
+          }
+          const multiGroups = []
+          const singles = []
+          for (const [key, list] of grouped.entries()) {
+            if (key.startsWith('grp:') && list.length > 1) {
+              multiGroups.push({ groupId: list[0].prescriptionGroupId, list })
+            } else {
+              singles.push(...list)
+            }
+          }
+          const renderCard = (p) => {
             // Tiếp tục tạm (BR-M07-28): Điều dưỡng cũng làm được với đơn bên ngoài, backend kiểm đơn nội bộ chỉ Bác sĩ (Q-413)
             const buttons = COMMAND_BUTTONS.filter(
               (b) => p.allowedCommands.includes(b.command) && (isDoctor || b.command === 'RESUME_TEMPORARILY'),
@@ -299,87 +353,121 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
                 key={p.id}
                 className="flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
               >
-                <CardHeader className="flex flex-row items-center gap-3 border-b border-slate-100 p-4 pb-3 dark:border-slate-800">
-                  <div className="flex min-w-0 flex-1 flex-col">
+                <CardHeader className="flex flex-row items-start justify-between gap-3 border-b border-slate-100 p-4 pb-3 dark:border-slate-800">
+                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="truncate text-base font-bold text-slate-900 dark:text-slate-100">
                       {p.drug}
                     </span>
-                    <span className="text-xs text-slate-400 tabular-nums font-medium">Đơn #{p.id}</span>
+                    <span className="text-xs text-slate-500 tabular-nums font-medium">
+                      Đơn #{p.id} · {p.typeLabel}
+                    </span>
                   </div>
                   <PrescriptionStatusBadge status={p.status} />
                 </CardHeader>
 
                 <CardContent className="flex flex-1 flex-col gap-3 p-4 pt-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">
-                      Liều: <strong className="font-bold text-slate-900 dark:text-slate-100">{p.dose}</strong>, đường dùng: {p.route}
-                    </p>
-                    <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-[11px] font-bold border-slate-300 text-slate-700 bg-slate-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                      {p.typeLabel}
-                    </Badge>
+                  {/* Tầng 2: Thông tin cốt lõi khi phát thuốc (Liều + Giờ uống) */}
+                  <div className="flex flex-col gap-2 rounded-xl border border-slate-200/80 bg-slate-50/70 p-3 dark:border-slate-800 dark:bg-slate-800/40">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {p.dose} · {p.route}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300">
+                      <Clock className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                      {p.frequencyText?.startsWith('Các mốc giờ:') ? (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {p.frequencyText
+                            .replace('Các mốc giờ:', '')
+                            .split(',')
+                            .map((t) => t.trim())
+                            .filter(Boolean)
+                            .sort()
+                            .map((slot) => (
+                              <span
+                                key={slot}
+                                className="rounded-md bg-white border border-slate-200 px-2 py-0.5 text-xs font-bold text-slate-800 tabular-nums shadow-2xs dark:bg-slate-900 dark:border-slate-700 dark:text-slate-200"
+                              >
+                                {slot}
+                              </span>
+                            ))}
+                        </div>
+                      ) : (
+                        <span className="font-semibold">{p.frequencyText}</span>
+                      )}
+                    </div>
                   </div>
 
-                  {p.replacesId && (
-                    <Badge variant="secondary" className="w-fit rounded-lg px-2.5 py-0.5 text-xs bg-slate-100 text-slate-700 font-semibold dark:bg-slate-800 dark:text-slate-300">
-                      Đơn thay thế đơn #{p.replacesId}
-                    </Badge>
-                  )}
-                  {p.replacedById && (
-                    <span className="text-xs text-slate-500 font-medium">
-                      Đã được thay thế bởi đơn <strong className="font-bold text-slate-800 dark:text-slate-200">#{p.replacedById}</strong>
-                    </span>
-                  )}
-                  {p.awaitingReconciliation && (
-                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-700 dark:text-amber-400">
-                      <ShieldAlert className="size-3.5" />
-                      Chờ đối chiếu thuốc
-                    </span>
-                  )}
-                  {p.critical && (
-                    <Badge variant="outline" className="w-fit rounded-full px-2.5 py-0.5 text-xs font-bold border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
-                      Quan trọng về thời gian
-                    </Badge>
-                  )}
-                  {p.measurements.length > 0 && (
-                    <div className="inline-flex items-center gap-1.5 rounded-xl bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950/40 dark:border-amber-900/50 dark:text-amber-200 w-fit">
-                      <span>Đo trước khi dùng: {p.measurements.map(measurementLabel).join(', ')}</span>
+                  {/* Tầng 3: Cảnh báo an toàn lâm sàng */}
+                  {(p.critical || p.measurements.length > 0 || p.awaitingReconciliation || p.noMedicationAvailable) && (
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {p.critical && (
+                        <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs font-bold border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                          Quan trọng về thời gian
+                        </Badge>
+                      )}
+                      {p.measurements.length > 0 && (
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-bold text-amber-900 dark:bg-amber-950/40 dark:border-amber-900/50 dark:text-amber-200">
+                          {`⚠️ Đo trước khi dùng: ${p.measurements.map(measurementLabel).join(', ')}`}
+                        </span>
+                      )}
+                      {p.awaitingReconciliation && (
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700 dark:text-amber-400">
+                          <ShieldAlert className="size-3.5" />
+                          Chờ đối chiếu thuốc
+                        </span>
+                      )}
+                      {p.noMedicationAvailable && (
+                        <span className="text-xs text-red-600 font-bold">
+                          Chưa có thuốc để phát (FR-009)
+                        </span>
+                      )}
                     </div>
-                  )}
-                  {p.indication && (
-                    <div className="inline-flex items-center gap-1.5 rounded-xl bg-sky-50 border border-sky-100 px-2.5 py-1 text-xs font-bold text-sky-900 dark:bg-sky-950/40 dark:border-sky-900 dark:text-sky-200 w-fit">
-                      <span className="text-sky-600 font-bold dark:text-sky-400">Chỉ định:</span>
-                      <span>{p.indication}</span>
-                    </div>
-                  )}
-                  {p.tempResumed && (
-                    <span className="text-xs text-slate-500 italic font-medium">
-                      Đang Tiếp tục tạm theo giấy ra viện, chờ phiếu đối chiếu
-                    </span>
-                  )}
-                  {p.noMedicationAvailable && (
-                    <span className="text-xs text-red-600 font-bold">
-                      Chưa có thuốc để phát (FR-009)
-                    </span>
                   )}
 
-                  {/* Hộp thời gian & Hiệu lực */}
-                  <div className="flex flex-col gap-1.5 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-xs dark:border-slate-800 dark:bg-slate-800/40">
-                    <span className="flex items-center gap-1.5 text-slate-700 dark:text-slate-300 font-semibold">
-                      <Clock className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                      {p.frequencyText}
-                    </span>
-                    <span className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-medium">
-                      <Calendar className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
-                      {p.prescribedAt ? `Kê ngày ${p.prescribedAt.split('-').reverse().join('/')}, ` : `Hiệu lực từ ${hhmm(p.startedAt)}, `}
+                  {/* Chỉ định, liên kết đơn & ghi chú */}
+                  <div className="flex flex-col gap-1.5 text-xs text-slate-600 dark:text-slate-400">
+                    {p.indication && (
+                      <div>
+                        <span className="font-semibold text-sky-700 dark:text-sky-400">Chỉ định: </span>
+                        <span className="font-medium text-slate-800 dark:text-slate-200">{p.indication}</span>
+                      </div>
+                    )}
+                    {p.instructionNote && (
+                      <p className="italic text-slate-500 dark:text-slate-400">"{p.instructionNote}"</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      {p.prescriptionGroupId && (
+                        <Badge variant="outline" className="w-fit rounded-lg px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                          Cùng đơn #{p.prescriptionGroupId.slice(0, 8)}
+                        </Badge>
+                      )}
+                      {p.replacesId && (
+                        <Badge variant="secondary" className="w-fit rounded-lg px-2 py-0.5 text-[11px] bg-slate-100 text-slate-700 font-semibold dark:bg-slate-800 dark:text-slate-300">
+                          Thay thế đơn #{p.replacesId}
+                        </Badge>
+                      )}
+                      {p.replacedById && (
+                        <span className="text-[11px] text-slate-500">
+                          Đã thay thế bởi đơn <strong>#{p.replacedById}</strong>
+                        </span>
+                      )}
+                      {p.tempResumed && (
+                        <span className="text-[11px] text-slate-500 italic">
+                          Tiếp tục tạm theo giấy ra viện
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Chân thông tin hiệu lực */}
+                  <div className="mt-auto flex items-center gap-1.5 border-t border-slate-100 pt-2.5 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <Calendar className="size-3.5 shrink-0 text-slate-400" aria-hidden="true" />
+                    <span>
+                      {p.prescribedAt ? `Kê ngày ${p.prescribedAt.split('-').reverse().join('/')}, ` : p.startedAt ? `Hiệu lực từ ${formatDateTime(p.startedAt)}, ` : ''}
                       {p.prescriberText}
                     </span>
                   </div>
-
-                  {p.instructionNote && (
-                    <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2 text-xs italic text-slate-700 dark:border-slate-800 dark:bg-slate-800/30 dark:text-slate-300">
-                      "{p.instructionNote}"
-                    </div>
-                  )}
 
                   {p.confirmedIssues.length > 0 && (
                     <div className="flex flex-col gap-1 rounded-xl border border-amber-200 bg-amber-50 p-2.5 text-xs text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
@@ -429,8 +517,171 @@ export function PrescriptionPanel({ role, onSaved, onReconcile }) {
                 )}
               </Card>
             )
-          })}
-        </div>
+          }
+          return (
+            <div className="flex flex-col gap-5">
+              {multiGroups.map(({ groupId, list }) => (
+                <Card
+                  key={`grp-${groupId}`}
+                  aria-label={`Toa thuốc #${groupId.slice(0, 8)}`}
+                  className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
+                >
+                  <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/70 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-800/40">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {`Toa thuốc #${groupId.slice(0, 8)} · ${list[0].prescriberText} (${list.length} thuốc)`}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        {list[0].prescribedAt ? `Kê ngày ${list[0].prescribedAt.split('-').reverse().join('/')}` : list[0].startedAt ? `Hiệu lực từ ${formatDateTime(list[0].startedAt)}` : ''}
+                      </span>
+                    </div>
+                    <Badge variant="outline" className="rounded-full px-2.5 py-0.5 text-xs font-semibold">
+                      {`${list.length} thuốc trong toa`}
+                    </Badge>
+                  </CardHeader>
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {list.map((p, idx) => {
+                      const buttons = COMMAND_BUTTONS.filter(
+                        (b) => p.allowedCommands.includes(b.command) && (isDoctor || b.command === 'RESUME_TEMPORARILY'),
+                      )
+                      const canChange = isDoctor && p.allowedCommands.includes('CHANGE_DOSE')
+                      return (
+                        <div key={p.id} className="flex flex-col gap-2.5 px-5 py-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                                {`${idx + 1}. ${p.drug}`}
+                              </span>
+                              <span className="text-xs text-slate-400 tabular-nums font-medium">{`Đơn #${p.id}`}</span>
+                              <Badge variant="outline" className="rounded-full px-2 py-0.5 text-[11px] font-semibold">
+                                {p.typeLabel}
+                              </Badge>
+                            </div>
+                            <PrescriptionStatusBadge status={p.status} />
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400">
+                            <span>
+                              Liều: <strong className="text-slate-900 dark:text-slate-100">{p.dose}</strong>, đường dùng: {p.route}
+                            </span>
+                            <span>
+                              Tần suất: <strong className="text-slate-800 dark:text-slate-200">{p.frequencyText}</strong>
+                            </span>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2">
+                            {p.measurements.length > 0 && (
+                              <span className="inline-flex items-center rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200">
+                                {`Đo trước khi dùng: ${p.measurements.map(measurementLabel).join(', ')}`}
+                              </span>
+                            )}
+                            {p.indication && (
+                              <span className="inline-flex items-center rounded-lg border border-sky-100 bg-sky-50 px-2.5 py-0.5 text-xs font-semibold text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200">
+                                {`Chỉ định: ${p.indication}`}
+                              </span>
+                            )}
+                            {p.critical && (
+                              <Badge variant="outline" className="rounded-full border-amber-300 bg-amber-50 text-xs font-semibold text-amber-800">
+                                Quan trọng về thời gian
+                              </Badge>
+                            )}
+                            {p.awaitingReconciliation && (
+                              <span className="inline-flex items-center gap-1 text-xs font-bold text-amber-700">
+                                <ShieldAlert className="size-3.5" />
+                                Chờ đối chiếu thuốc
+                              </span>
+                            )}
+                            {p.replacesId && (
+                              <Badge variant="secondary" className="text-xs">
+                                {`Đơn thay thế đơn #${p.replacesId}`}
+                              </Badge>
+                            )}
+                          </div>
+
+                          {p.instructionNote && (
+                            <p className="text-xs italic text-slate-500">{p.instructionNote}</p>
+                          )}
+
+                          {(buttons.length > 0 || canChange) && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {buttons.map(({ command, label, Icon, className }) => (
+                                <Button
+                                  key={command}
+                                  variant="outline"
+                                  size="sm"
+                                  className={cn(
+                                    'h-8 gap-1.5 rounded-xl px-3 text-xs font-bold shadow-2xs transition-all',
+                                    className,
+                                  )}
+                                  onClick={() => setCommanding({ command, prescription: p })}
+                                >
+                                  <Icon className="size-3.5" aria-hidden="true" />
+                                  {label}
+                                </Button>
+                              ))}
+                              {canChange && (
+                                <Button
+                                  size="sm"
+                                  className="h-8 gap-1.5 rounded-xl bg-[#24496f] hover:bg-[#193552] text-white px-3 text-xs font-bold shadow-sm"
+                                  onClick={() => setChanging(p)}
+                                >
+                                  <RefreshCw className="size-3" aria-hidden="true" />
+                                  Đổi liều
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </Card>
+              ))}
+              {singles.length > 0 && (() => {
+                const pageSize = 6
+                const totalPages = Math.max(1, Math.ceil(singles.length / pageSize))
+                const safePage = Math.min(page, totalPages)
+                const pagedSingles = singles.slice((safePage - 1) * pageSize, safePage * pageSize)
+                return (
+                  <div className="flex flex-col gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {pagedSingles.map(renderCard)}
+                    </div>
+                    {totalPages > 1 && (
+                      <div className="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-2.5 text-xs shadow-xs dark:border-slate-800 dark:bg-slate-900">
+                        <span className="text-slate-500 font-medium">
+                          Trang <strong className="text-slate-900 dark:text-slate-100">{safePage}</strong> / {totalPages} ({singles.length} đơn)
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-xl px-3 text-xs font-semibold"
+                            disabled={safePage <= 1}
+                            onClick={() => setPage((p) => Math.max(1, p - 1))}
+                          >
+                            Trước
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 rounded-xl px-3 text-xs font-semibold"
+                            disabled={safePage >= totalPages}
+                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                          >
+                            Sau
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
+          )
+        })()}
       </div>
 
       {resident && board && (
