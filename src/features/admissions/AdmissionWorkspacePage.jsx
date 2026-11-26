@@ -29,7 +29,7 @@ import {
   RESIDENCE_TYPES,
   labelOf,
 } from './admissionLabels'
-import { ApplicationSheet, OpinionForm } from './ApplicationParts'
+import { ApplicationSheet, OpinionSheet } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
 import { admissionProgress } from './admissionProgress'
 
@@ -463,7 +463,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       )}
 
       <Sheet
-        open={!!sheet && !['new-contract', 'edit-contract', 'edit-application', 'part'].includes(sheet.kind)}
+        open={!!sheet && !['new-contract', 'edit-contract', 'edit-application', 'part', 'opinion'].includes(sheet.kind)}
         onOpenChange={(open) => !open && changed()}
       >
         <SheetContent className="overflow-y-auto p-6 sm:max-w-3xl">
@@ -477,15 +477,6 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
               Title={SheetTitle}
               Description={SheetDescription}
             />
-          )}
-          {sheet?.kind === 'opinion' && (
-            <>
-              <SheetHeader className="p-0">
-                <SheetTitle>Ghi ý kiến về việc vào ở</SheetTitle>
-                <SheetDescription>{name}</SheetDescription>
-              </SheetHeader>
-              <OpinionForm applicationId={application.id} onCancel={() => setSheet(null)} onDone={changed} />
-            </>
           )}
           {sheet?.kind === 'bed' && (
             <>
@@ -551,6 +542,16 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
       {sheet?.kind === 'edit-contract' && (
         <ContractSheet contract={sheet.contract} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+      )}
+      {sheet?.kind === 'opinion' && (
+        <OpinionSheet
+          applicationId={application.id}
+          residentId={resident.id}
+          residentName={name}
+          current={opinion}
+          onClose={() => setSheet(null)}
+          onDone={changed}
+        />
       )}
       {sheet?.kind === 'edit-application' && (
         <ApplicationSheet application={application} onClose={() => setSheet(null)} onDone={changed} />

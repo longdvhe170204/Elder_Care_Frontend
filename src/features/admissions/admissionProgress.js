@@ -26,7 +26,8 @@ export const PHASES = [
         action: 'opinion',
         done: (ctx) => !!ctx.opinion,
         doLabel: 'Ghi ý kiến',
-        mine: (ctx) => ctx.can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE'),
+        // Lệnh ghi ý kiến kiểm quyền Tạo hợp đồng, đặt cọc (AdmissionOpinionService.record)
+        mine: (ctx) => ctx.can('ADMISSION_CONTRACT_DEPOSIT', 'CREATE'),
         who: 'Hành chính',
       },
       {
