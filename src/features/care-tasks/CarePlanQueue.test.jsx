@@ -59,3 +59,34 @@ it('Q448_thoiGianCho', () => {
   expect(waitingText('2026-11-26T05:00:00Z', now)).toBe('Chờ 5 giờ')
   expect(waitingText('2026-11-26T09:30:00Z', now)).toBe('Chờ dưới 1 giờ')
 })
+
+it('Q450_banChoDuyet_hienNhomRieng_khongTinhVaoHangCho', async () => {
+  api.on(
+    'GET',
+    '/care-plan-reviews/queue',
+    json(200, [
+      rows[0],
+      {
+        residentId: 9,
+        fullName: 'Ngô Quang Hiếu',
+        profileCode: 'NCT-009',
+        reasons: [],
+        draftId: 50,
+        draftReturned: false,
+        pendingApproval: true,
+        createdBy: 'Hoàng Thị Dung',
+        waitingSince: '2026-11-26T09:40:00Z',
+      },
+    ]),
+  )
+  const onChoose = vi.fn()
+  render(<CarePlanQueue onChoose={onChoose} />)
+  expect(await screen.findByRole('heading', { name: 'Cần lập hoặc sửa kế hoạch (1)' })).toBeInTheDocument()
+  const pending = screen.getByRole('table', { name: 'Kế hoạch đang chờ Bác sĩ duyệt' })
+  expect(screen.getByRole('heading', { name: 'Đang chờ Bác sĩ duyệt (1)' })).toBeInTheDocument()
+  const row = within(pending).getByRole('row', { name: /Ngô Quang Hiếu/ })
+  expect(within(row).getByText('Hoàng Thị Dung')).toBeInTheDocument()
+  expect(screen.getByRole('table', { name: 'Người cần lập hoặc sửa kế hoạch' })).not.toHaveTextContent('Ngô Quang Hiếu')
+  fireEvent.click(within(row).getByRole('button', { name: 'Xem bản sửa của Ngô Quang Hiếu' }))
+  expect(onChoose).toHaveBeenCalledWith({ id: 9, profileCode: 'NCT-009', personalInfo: { fullName: 'Ngô Quang Hiếu' } })
+})

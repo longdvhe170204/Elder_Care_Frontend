@@ -302,25 +302,13 @@ export function CarePlanDetail({
             </p>
           )}
           <div className="flex flex-col gap-1 sm:col-span-2">
-            {editable
-              ? hasPlan && (
-                  <CareField
-                    label="Lý do sửa *"
-                    name="Lý do sửa"
-                    value={reason}
-                    onChange={setReason}
-                    type="textarea"
-                    maxLength={2000}
-                    hint="Bắt buộc khi sửa kế hoạch đã có."
-                  />
-                )
-              : plan.changeReason && (
-                  <>
-                    <p className="type-caption text-muted-foreground">Lý do sửa</p>
-                    <p className="type-body">{plan.changeReason}</p>
-                  </>
-                )}
-            {editable && reasonAlert}
+            {/* Q-450: bỏ ô "Lý do sửa" khi soạn; hệ thống ghi lý do từ các yêu cầu xem xét lúc gửi duyệt */}
+            {!editable && plan.changeReason && (
+              <>
+                <p className="type-caption text-muted-foreground">Lý do sửa</p>
+                <p className="type-body">{plan.changeReason}</p>
+              </>
+            )}
           </div>
         </section>
         <p role="status" className="type-body-sm empty:hidden">

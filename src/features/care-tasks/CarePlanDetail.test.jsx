@@ -28,26 +28,24 @@ it('Q447_guiBacSiDuyet_luuMucRoiGuiKhongCoNgay', async () => {
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
   expect(await screen.findByText('Bản sửa đang soạn')).toBeInTheDocument()
   expect(screen.queryByLabelText('Ngày hiệu lực đề xuất')).not.toBeInTheDocument()
-  fireEvent.change(screen.getByLabelText('Lý do sửa'), { target: { value: 'Theo đánh giá mới' } })
+  // Q-450: không còn ô "Lý do sửa"; hệ thống ghi lý do từ các yêu cầu xem xét
+  expect(screen.queryByLabelText('Lý do sửa')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Gửi Bác sĩ duyệt' }))
   await waitFor(() => expect(api.calls('POST', '/care-plans/17/submit')).toHaveLength(1))
   expect(api.calls('PUT', '/care-plans/17/items')[0][1].headers['If-Match']).toBe('"4"')
-  expect(JSON.parse(api.calls('POST', '/care-plans/17/submit')[0][1].body)).toEqual({
-    changeReason: 'Theo đánh giá mới',
-  })
+  expect(JSON.parse(api.calls('POST', '/care-plans/17/submit')[0][1].body)).toEqual({})
 })
 
-it('Q447_guiLaiSauKhiThieuLyDo_dungETagMoiKhongBao412', async () => {
+it('Q447_guiLaiSauKhiGuiLoi_dungETagMoiKhongBao412', async () => {
   api.on('PUT', '/care-plans/17/items', json(200, null))
-  api.on('POST', '/care-plans/17/submit', problem(422, 'REASON_REQUIRED'))
+  api.on('POST', '/care-plans/17/submit', problem(409, 'EMPTY_PLAN'))
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
   await screen.findByText('Bản sửa đang soạn')
   // Sau khi lưu mục, backend tăng phiên bản dữ liệu
   api.on('GET', '/care-plans/17', json(200, plan, { ETag: '"5"' }))
   fireEvent.click(screen.getByRole('button', { name: 'Gửi Bác sĩ duyệt' }))
-  expect(await screen.findByText('Nhập lý do trước khi thực hiện.')).toBeInTheDocument()
+  await waitFor(() => expect(api.calls('POST', '/care-plans/17/submit')).toHaveLength(1))
   api.on('POST', '/care-plans/17/submit', json(200, null))
-  fireEvent.change(screen.getByLabelText('Lý do sửa'), { target: { value: 'Sau ngã' } })
   fireEvent.click(screen.getByRole('button', { name: 'Gửi Bác sĩ duyệt' }))
   await waitFor(() => expect(api.calls('PUT', '/care-plans/17/items')).toHaveLength(2))
   expect(api.calls('PUT', '/care-plans/17/items')[1][1].headers['If-Match']).toBe('"5"')

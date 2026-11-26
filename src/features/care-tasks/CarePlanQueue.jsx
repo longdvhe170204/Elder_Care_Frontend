@@ -28,9 +28,14 @@ export function CarePlanQueue({ onChoose }) {
     }
   }, [])
   const now = new Date()
+  // Q-450: bản đã gửi Bác sĩ duyệt hiện ở nhóm riêng, không tính vào hàng chờ
+  const waiting = rows?.filter((row) => !row.pendingApproval) ?? null
+  const pending = rows?.filter((row) => row.pendingApproval) ?? []
+  const choose = (row) =>
+    onChoose({ id: row.residentId, profileCode: row.profileCode, personalInfo: { fullName: row.fullName } })
   return (
     <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={rows === null && !failure}>
-      <h2 className="type-title">Cần lập hoặc sửa kế hoạch{rows ? ` (${rows.length})` : ''}</h2>
+      <h2 className="type-title">Cần lập hoặc sửa kế hoạch{waiting ? ` (${waiting.length})` : ''}</h2>
       <ProblemAlert problem={failure} />
       {rows === null && !failure && (
         <div className="flex flex-col gap-2">
@@ -38,7 +43,7 @@ export function CarePlanQueue({ onChoose }) {
           <Skeleton className="h-12 w-full" />
         </div>
       )}
-      {rows?.length === 0 && (
+      {waiting?.length === 0 && (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>Không có ai cần lập hoặc sửa kế hoạch</EmptyTitle>
@@ -49,7 +54,7 @@ export function CarePlanQueue({ onChoose }) {
           </EmptyHeader>
         </Empty>
       )}
-      {rows?.length > 0 && (
+      {waiting?.length > 0 && (
         <Table aria-label="Người cần lập hoặc sửa kế hoạch">
           <TableHeader>
             <TableRow className="bg-muted hover:bg-muted">
@@ -62,7 +67,7 @@ export function CarePlanQueue({ onChoose }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((row) => (
+            {waiting.map((row) => (
               <TableRow key={row.residentId} className="align-top">
                 <TableCell className="whitespace-normal">
                   <span className="block font-semibold">{row.fullName}</span>
@@ -83,17 +88,7 @@ export function CarePlanQueue({ onChoose }) {
                 </TableCell>
                 <TableCell className="whitespace-nowrap">{waitingText(row.waitingSince, now)}</TableCell>
                 <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    aria-label={`Mở kế hoạch của ${row.fullName}`}
-                    onClick={() =>
-                      onChoose({
-                        id: row.residentId,
-                        profileCode: row.profileCode,
-                        personalInfo: { fullName: row.fullName },
-                      })
-                    }
-                  >
+                  <Button variant="outline" aria-label={`Mở kế hoạch của ${row.fullName}`} onClick={() => choose(row)}>
                     Mở kế hoạch
                   </Button>
                 </TableCell>
@@ -101,6 +96,49 @@ export function CarePlanQueue({ onChoose }) {
             ))}
           </TableBody>
         </Table>
+      )}
+      {pending.length > 0 && (
+        <>
+          <h2 className="type-title pt-2">Đang chờ Bác sĩ duyệt ({pending.length})</h2>
+          <Table aria-label="Kế hoạch đang chờ Bác sĩ duyệt">
+            <TableHeader>
+              <TableRow className="bg-muted hover:bg-muted">
+                <TableHead>Người cao tuổi</TableHead>
+                <TableHead>Người gửi</TableHead>
+                <TableHead>Gửi lúc</TableHead>
+                <TableHead>
+                  <span className="sr-only">Thao tác</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pending.map((row) => (
+                <TableRow key={row.residentId} className="align-top">
+                  <TableCell className="whitespace-normal">
+                    <span className="block font-semibold">{row.fullName}</span>
+                    <span className="block type-body-sm text-muted-foreground">{row.profileCode}</span>
+                  </TableCell>
+                  <TableCell className="whitespace-normal">{row.createdBy ?? '—'}</TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <span className="block">{formatDateTime(row.waitingSince)}</span>
+                    <span className="block type-body-sm text-muted-foreground">
+                      {waitingText(row.waitingSince, now)}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      aria-label={`Xem bản sửa của ${row.fullName}`}
+                      onClick={() => choose(row)}
+                    >
+                      Xem bản sửa
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </>
       )}
     </section>
   )

@@ -211,15 +211,16 @@ it('Q447_dongKhiChuaLuu_hoiTruocKhiDong', async () => {
   )
   renderPage()
   fireEvent.click(await screen.findByRole('button', { name: 'Xem / tiếp tục bản nháp' }))
-  fireEvent.change(await screen.findByLabelText('Lý do sửa'), { target: { value: 'Sau ngã' } })
+  // Q-450: không còn ô "Lý do sửa"; thêm một mục để có thay đổi chưa lưu
+  fireEvent.click(await screen.findByRole('button', { name: /Thêm mục công việc/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
   const ask = await screen.findByRole('alertdialog', { name: 'Bạn có thay đổi chưa lưu' })
   fireEvent.click(within(ask).getByRole('button', { name: 'Ở lại' }))
   await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
-  expect(screen.getByLabelText('Lý do sửa')).toHaveValue('Sau ngã')
+  expect(screen.getByRole('button', { name: /Thêm mục công việc/ })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
   fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Đóng không lưu' }))
-  await waitFor(() => expect(screen.queryByLabelText('Lý do sửa')).not.toBeInTheDocument())
+  await waitFor(() => expect(screen.queryByRole('button', { name: /Thêm mục công việc/ })).not.toBeInTheDocument())
 })
 
 it('Q448_coYeuCauXemXet_hienLyDo_khongCanThayDoiBatBuocLyDo', async () => {
