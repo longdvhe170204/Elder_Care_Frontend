@@ -92,3 +92,27 @@ it('Q450_banChoDuyet_hienNhomRieng_khongTinhVaoHangCho', async () => {
   fireEvent.click(within(row).getByRole('button', { name: 'Xem bản sửa của Ngô Quang Hiếu' }))
   expect(onChoose).toHaveBeenCalledWith({ id: 9, profileCode: 'NCT-009', personalInfo: { fullName: 'Ngô Quang Hiếu' } })
 })
+
+it('PhanTrang_10DongMoiTrang_doiTabVeTrangDau', async () => {
+  const many = Array.from({ length: 12 }, (_, i) => ({
+    ...rows[0],
+    residentId: 100 + i,
+    fullName: `Người kiểm thử ${i + 1}`,
+    profileCode: `NCT-${100 + i}`,
+  }))
+  api.on('GET', '/care-plan-reviews/queue', json(200, many))
+  render(<CarePlanQueue onChoose={() => {}} />)
+  const table = await screen.findByRole('table', { name: 'Người cần lập hoặc sửa kế hoạch' })
+  expect(within(table).getAllByRole('row')).toHaveLength(11)
+  expect(screen.getByText('Trang 1/2')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Trang trước' })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }))
+  expect(screen.getByText('Trang 2/2')).toBeInTheDocument()
+  expect(
+    within(screen.getByRole('table', { name: 'Người cần lập hoặc sửa kế hoạch' })).getAllByRole('row'),
+  ).toHaveLength(3)
+  expect(screen.getByText('Người kiểm thử 12')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('tab', { name: 'Đang chờ duyệt (0)' }))
+  fireEvent.click(screen.getByRole('tab', { name: 'Cần lập hoặc sửa (12)' }))
+  expect(screen.getByText('Trang 1/2')).toBeInTheDocument()
+})

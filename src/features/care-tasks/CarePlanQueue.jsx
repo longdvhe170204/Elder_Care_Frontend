@@ -12,10 +12,13 @@ import { reviewSource, waitingText } from './carePlanLabels'
 
 // Q-448 (FR-059): hàng chờ "Cần lập hoặc sửa kế hoạch" theo phạm vi xem, chờ lâu nhất trước. Bấm một dòng thì mở kế hoạch
 // của người đó trên chính màn này.
+const PAGE_SIZE = 10
+
 export function CarePlanQueue({ onChoose }) {
   const [rows, setRows] = useState(null)
   const [failure, setFailure] = useState(null)
   const [tab, setTab] = useState('waiting')
+  const [page, setPage] = useState(1)
   useEffect(() => {
     let cancelled = false
     getCarePlanReviewsQueue()
@@ -33,6 +36,11 @@ export function CarePlanQueue({ onChoose }) {
   // Q-450: bản đã gửi Bác sĩ duyệt hiện ở nhóm riêng, không tính vào hàng chờ
   const waiting = rows?.filter((row) => !row.pendingApproval) ?? null
   const pending = rows?.filter((row) => row.pendingApproval) ?? []
+  // Phân trang ở trình duyệt, 10 dòng mỗi trang; mỗi tab tính riêng, đổi tab về trang đầu
+  const shown = tab === 'waiting' ? (waiting ?? []) : pending
+  const pages = Math.max(1, Math.ceil(shown.length / PAGE_SIZE))
+  const current = Math.min(page, pages)
+  const slice = (list) => list.slice((current - 1) * PAGE_SIZE, current * PAGE_SIZE)
   const choose = (row) =>
     onChoose({ id: row.residentId, profileCode: row.profileCode, personalInfo: { fullName: row.fullName } })
   return (
@@ -42,7 +50,10 @@ export function CarePlanQueue({ onChoose }) {
       <SectionTabs
         label="Nhóm kế hoạch"
         value={tab}
-        onChange={setTab}
+        onChange={(next) => {
+          setTab(next)
+          setPage(1)
+        }}
         tabs={[
           ['waiting', `Cần lập hoặc sửa${waiting ? ` (${waiting.length})` : ''}`],
           ['pending', `Đang chờ duyệt${rows ? ` (${pending.length})` : ''}`],
@@ -79,7 +90,7 @@ export function CarePlanQueue({ onChoose }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {waiting.map((row) => (
+            {slice(waiting).map((row) => (
               <TableRow key={row.residentId} className="align-top">
                 <TableCell className="whitespace-normal">
                   <span className="block font-semibold">{row.fullName}</span>
@@ -133,7 +144,7 @@ export function CarePlanQueue({ onChoose }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {pending.map((row) => (
+              {slice(pending).map((row) => (
                 <TableRow key={row.residentId} className="align-top">
                   <TableCell className="whitespace-normal">
                     <span className="block font-semibold">{row.fullName}</span>
@@ -160,6 +171,19 @@ export function CarePlanQueue({ onChoose }) {
             </TableBody>
           </Table>
         </>
+      )}
+      {pages > 1 && (
+        <div className="flex items-center justify-end gap-2">
+          <Button variant="outline" size="sm" disabled={current <= 1} onClick={() => setPage(current - 1)}>
+            Trang trước
+          </Button>
+          <span className="type-body-sm tabular-nums">
+            Trang {current}/{pages}
+          </span>
+          <Button variant="outline" size="sm" disabled={current >= pages} onClick={() => setPage(current + 1)}>
+            Trang sau
+          </Button>
+        </div>
       )}
     </section>
   )
