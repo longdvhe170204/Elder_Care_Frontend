@@ -231,13 +231,9 @@ it('FR_017_caCungGioNhieuTang_ghiTenTang_tieuDeKhongLapCa', async () => {
   api.on('GET', '/floors/4', json(200, { id: 4, name: 'Tầng kiểm thử 2' }))
   view({ at: '2030-01-10T03:00:00Z' })
   const batch = await openBatch()
-  const options = within(batch).getByLabelText('Ca đã công bố')
-  await waitFor(() =>
-    expect([...options.options].map((o) => o.textContent)).toEqual([
-      'Tầng kiểm thử · Ca 07:00–18:00',
-      'Tầng kiểm thử 2 · Ca 07:00–18:00',
-    ]),
-  )
+  // Q-453: hộp thoại không còn ô ngày, ô ca; lập cho ca đang chọn sẵn
+  expect(within(batch).queryByLabelText('Ca đã công bố')).not.toBeInTheDocument()
+  expect(within(batch).queryByLabelText('Ngày lập')).not.toBeInTheDocument()
   expect(within(batch).getByText('01/11/2026 · Tầng kiểm thử')).toBeInTheDocument()
 })
 
@@ -575,8 +571,6 @@ it('FR_020_moTuThongBao_chonCaChuaThoiDiem_vaBaoNguoiCaoTuoi', async () => {
   expect(query.get('from')).toBe('2030-01-10')
   expect(query.get('to')).toBe('2030-01-11')
   const batch = await openBatch()
-  expect(within(batch).getByLabelText('Ngày lập')).toHaveValue('2030-01-10')
-  expect(within(batch).getByLabelText('Ca đã công bố')).toHaveValue('5')
   fireEvent.click(within(batch).getByRole('button', { name: 'Đối chiếu nguồn' }))
   const dialog = await screen.findByRole('dialog', { name: 'Chi tiết công việc của ca' })
   expect(within(dialog).getByRole('button', { name: /\[Họ tên kiểm thử\]/ })).toHaveAttribute('aria-pressed', 'true')

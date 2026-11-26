@@ -147,13 +147,13 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     return from > now ? from : now
   })
   const [date, setDate] = useState(() => (initialShiftId ? '' : dateOf(target)))
-  const [shifts, setShifts] = useState([])
+  const [, setShifts] = useState([])
   const [shiftId, setShiftId] = useState(initialShiftId || '')
   const [source, setSource] = useState(null)
   const [shiftTasks, setShiftTasks] = useState([])
   const [shiftMembers, setShiftMembers] = useState([])
   const [floorName, setFloorName] = useState('')
-  const [floorNames, setFloorNames] = useState({})
+  const [, setFloorNames] = useState({})
   const [residents, setResidents] = useState([])
   const [residentsReady, setResidentsReady] = useState(false)
   const [types, setTypes] = useState([])
@@ -352,8 +352,6 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     residents.map((r) => [r.id, r.personalInfo?.fullName || `Người cao tuổi · mã ${r.id}`]),
   )
   const shift = source?.shift
-  const shiftOptions = initialShiftId ? (shift ? [shift] : []) : shifts
-  const manyFloors = new Set(shiftOptions.map((x) => x.floorId).filter(Boolean)).size > 1
   const subtitle = shift ? [formatDate(dateOf(shift.startsAt)), floorName].filter(Boolean).join(' · ') : ''
   const focusName = focusResidentId && (people[focusResidentId] || `Người cao tuổi · mã ${focusResidentId}`)
   const focusInShift = source?.residents.some((r) => r.residentId === focusResidentId)
@@ -374,7 +372,6 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   const pendingPlanStart = (currentPendingPlanPage - 1) * PENDING_PLAN_PAGE_SIZE
   const pendingPlanRows = residentsWithPendingPlan.slice(pendingPlanStart, pendingPlanStart + PENDING_PLAN_PAGE_SIZE)
   const pages = Math.max(1, Math.ceil(history.total / PAGE_SIZE))
-  const locked = rows.length > 0
   const setFilterOf = (key) => (value) => {
     setFilter((old) => ({ ...old, [key]: value }))
     setPage(0)
@@ -395,43 +392,6 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     }
     setDialog('batch')
   }
-
-  // Ngày và ca dùng chung giữa hàng chờ và hộp thoại, khóa khi có dòng đang soạn.
-  const shiftPicker = (
-    <div className="flex flex-wrap gap-2">
-      <input
-        type="date"
-        required
-        aria-label="Ngày lập"
-        value={date}
-        disabled={!!initialShiftId || locked}
-        onChange={(e) => {
-          setDate(e.target.value)
-          setShifts([])
-          setShiftId('')
-          setPendingPlanPage(1)
-        }}
-        className={`${control} w-40`}
-      />
-      <select
-        aria-label="Ca đã công bố"
-        value={shiftId}
-        disabled={!!initialShiftId || locked}
-        onChange={(e) => {
-          setShiftId(e.target.value)
-          setPendingPlanPage(1)
-        }}
-        className={`${control} w-48`}
-      >
-        {!shiftOptions.length && <option value="">Không có ca đã công bố</option>}
-        {shiftOptions.map((s) => (
-          <option key={s.id} value={s.id}>
-            {manyFloors ? `${floorNames[s.floorId] || 'Tầng'} · ${shiftLabel(s)}` : shiftLabel(s)}
-          </option>
-        ))}
-      </select>
-    </div>
-  )
 
   return (
     <div className="flex flex-col gap-5">
@@ -669,7 +629,6 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
           open={dialog === 'batch'}
           onOpenChange={(open) => !open && setDialog(null)}
           subtitle={subtitle}
-          shiftPicker={shiftPicker}
           shiftId={shiftId}
           source={source}
           tasks={shiftTasks}
