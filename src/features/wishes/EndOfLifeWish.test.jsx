@@ -71,12 +71,12 @@ function routes({ current = CURRENT, history = [CURRENT, OLD], forbidden = false
   api.on('GET', '/staff', json(200, [{ id: 2, accountId: 8, fullName: 'Phạm Văn Bác', position: 'Bác sĩ' }]))
   api.on(
     'GET',
-    '/residents/5/relationships',
+    '/residents/5/family-contacts',
     json(200, [
-      { id: 1, status: 'ACTIVE', familyMember: { id: 31, fullName: 'Trần Văn Minh' } },
-      { id: 2, status: 'ACTIVE', familyMember: { id: 32, fullName: 'Đỗ Thị Lan' } },
-      { id: 3, status: 'ACTIVE', familyMember: { id: 41, fullName: 'Lê Thị Hoa' } },
-      { id: 4, status: 'ACTIVE', familyMember: { id: 99, fullName: 'Ngô Văn Khác' } },
+      { familyMemberId: 31, fullName: 'Trần Văn Minh' },
+      { familyMemberId: 32, fullName: 'Đỗ Thị Lan' },
+      { familyMemberId: 41, fullName: 'Lê Thị Hoa' },
+      { familyMemberId: 99, fullName: 'Ngô Văn Khác' },
     ]),
   )
 }
@@ -134,7 +134,7 @@ describe('EndOfLifeWish', () => {
     expect(within(now).getByText(/Người cao tuổi · Nguyễn Văn A/)).toBeInTheDocument()
     const assessment = within(now).getByRole('region', { name: 'Nhận định của Bác sĩ cho phiếu này' })
     expect(within(assessment).getByText('Dùng tranh minh họa, hỏi lại từng ý')).toBeInTheDocument()
-    expect(within(assessment).getByText('2026-11-20')).toBeInTheDocument()
+    expect(within(assessment).getByText('20/11/2026')).toBeInTheDocument()
     const opinions = within(now).getByRole('list', { name: 'Ý kiến khác' })
     expect(within(opinions).getByText(/Người thân \(mã 31\)/)).toBeInTheDocument()
     expect(within(opinions).getByText('Muốn chuyển bệnh viện')).toBeInTheDocument()
@@ -147,6 +147,15 @@ describe('EndOfLifeWish', () => {
     ).toBeInTheDocument()
     // không có nhãn năng lực chung
     expect(screen.queryByText(/năng lực/i)).not.toBeInTheDocument()
+  })
+
+  it('BF_01_buoc3a_ngayKy_ngayXemLai_hienDdMmYyyy', async () => {
+    routes({ history: [CURRENT] })
+    open()
+    expect(await screen.findByText('20/11/2026')).toBeInTheDocument()
+    expect(screen.queryByText('2026-11-20')).not.toBeInTheDocument()
+    // Ngày ký nhập bằng ô ngày: chỉ hiện ngày
+    expect(screen.getAllByText('10/10/2026').length).toBeGreaterThan(0)
   })
 
   it('nút ghi phiếu chỉ hiện theo allowedCommands và hồ sơ chưa ở trạng thái cuối', async () => {

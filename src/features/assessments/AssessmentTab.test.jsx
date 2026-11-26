@@ -153,12 +153,31 @@ describe('AssessmentTab', () => {
     const reference = screen.getByRole('complementary', { name: 'Thông tin tham khảo' })
     expect(within(reference).getByText('Đi lại cần gậy')).toBeInTheDocument()
     expect(within(reference).getByText(/Penicillin, mức Nặng/)).toBeInTheDocument()
-    // 007 chưa kết nối: nói đúng trạng thái, không dữ liệu giả
-    expect(within(reference).getByText(/Chưa có dữ liệu chỉ số đo/)).toBeInTheDocument()
+    // 007 đã nối (LatestVitalSignSource); chưa đo lần nào thì nói đúng như vậy
+    expect(within(reference).getByText('Chưa có lần đo chỉ số nào.')).toBeInTheDocument()
     expect(screen.queryByLabelText(/điểm/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
     expect(screen.queryByText(/mức đề xuất|gợi ý mức/i)).not.toBeInTheDocument()
     expect(screen.getByText(/chưa áp dụng cho tới khi Bác sĩ xác nhận/)).toBeInTheDocument()
+  })
+
+  it('BF_01_buoc4_chiSoDoGanNhat_hienTenGiaTriDonViVaLucDo', async () => {
+    const draft = detail()
+    draft.reference.latestVitalSigns = [
+      {
+        indicatorId: 1,
+        indicatorCode: 'BLOOD_PRESSURE',
+        indicatorName: 'Huyết áp',
+        unit: 'mmHg',
+        values: { systolic: 130, diastolic: 85 },
+        measuredAt: '2026-11-26T02:00:00Z',
+      },
+    ]
+    routes({ list: [assessment()], draft })
+    open()
+
+    const reference = await screen.findByRole('complementary', { name: 'Thông tin tham khảo' })
+    expect(within(reference).getByText('Huyết áp: 130/85 mmHg, đo 26/11/2026 09:00')).toBeInTheDocument()
   })
 
   it('Điều dưỡng không có nút Xác nhận; Lưu nháp gửi If-Match và các trường đã nhập', async () => {

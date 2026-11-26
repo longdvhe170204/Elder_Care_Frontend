@@ -6,6 +6,7 @@ import { Field, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { getStaff } from '@/api'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDateTime } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
@@ -14,6 +15,7 @@ import { PrescriptionSheet } from './PrescriptionSheet'
 import { idempotencyKeys } from './prescriptions'
 import { issueText } from './prescriptionView'
 import {
+  cancelReconciliation,
   confirmCorrection,
   confirmReconciliation,
   createReconciliation,
@@ -46,7 +48,29 @@ import {
 const select = 'h-11 w-full rounded-md border bg-background px-3 text-sm'
 const WORKING = ['OPEN', 'PENDING_CONFIRMATION']
 
-const staff = (accountId) => (accountId ? `tài khoản mã ${accountId}` : null)
+// Tên người lập, gửi, xác nhận theo danh sách nhân viên người xem được (api-008, thường là người cùng ca); không tra được
+// thì giữ mã tài khoản (api-006 chỉ trả mã)
+function useStaffName() {
+  const [names, setNames] = useState({})
+  useEffect(() => {
+    let live = true
+    getStaff({ query: { status: 'WORKING' } })
+      .then(
+        ({ data }) =>
+          live &&
+          setNames(
+            Object.fromEntries(
+              (data ?? []).filter((s) => s.accountId != null).map((s) => [String(s.accountId), s.fullName]),
+            ),
+          ),
+      )
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  return (accountId) => (accountId ? (names[String(accountId)] ?? `tài khoản mã ${accountId}`) : null)
+}
 
 export function ReconciliationPanel({
   residentId,
@@ -259,6 +283,7 @@ const editable = (items) =>
   }))
 
 function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChanged }) {
+  const staff = useStaffName()
   const [state, setState] = useState({ loading: true })
   const [items, setItems] = useState([])
   const [dirty, setDirty] = useState(false)
@@ -440,6 +465,7 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
               item={item}
               errors={errors[index] ?? {}}
               prescriptions={prescriptions}
+              medications={sources?.medications ?? []}
               onChange={(patch) => update(index, patch)}
               onRemove={() => removeLine(index)}
               onCollect={() => setCollecting(index)}
@@ -477,6 +503,34 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
             </Button>
           )}
         </div>
+      )}
+      {allowed('HUY') && !action && (
+        <div>
+          <Button
+            variant="outline"
+            className="h-10 rounded-xl border-rose-300 bg-rose-50/50 text-rose-900 px-4 text-xs font-bold shadow-xs hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/30 dark:text-rose-200"
+            onClick={() => setAction('cancel')}
+          >
+            Hủy phiếu
+          </Button>
+        </div>
+      )}
+      {action === 'cancel' && (
+        <ReasonForm
+          id={`cancel-${id}`}
+          label="Lý do hủy phiếu"
+          missing="Nhập lý do hủy phiếu"
+          submitLabel="Xác nhận hủy phiếu"
+          saving={saving}
+          onCancel={() => setAction(null)}
+          onSubmit={(reason) =>
+            run(
+              (key) => cancelReconciliation(id, reason, key),
+              'Đã hủy phiếu đối chiếu. Hạn đối chiếu giữ mốc cũ.',
+              keyFor({ cancel: id, reason }),
+            )
+          }
+        />
       )}
       {action === 'confirm' && (
         <Alert variant="attention">
@@ -560,6 +614,7 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
       {(ticket.corrections ?? []).length > 0 && (
         <CorrectionList
           corrections={ticket.corrections}
+          staff={staff}
           saving={saving}
           onConfirm={(c) =>
             run(
@@ -595,9 +650,15 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
   )
 }
 
-function LineEditor({ index, item, errors, prescriptions, onChange, onRemove, onCollect }) {
+function LineEditor({ index, item, errors, prescriptions, medications, onChange, onRemove, onCollect }) {
   const n = index + 1
   const fid = (name) => `line-${index}-${name}`
+  // Dòng tải lại từ phiếu không còn nhãn lúc lập đơn: tra tên thuốc theo danh mục
+  const newDrug =
+    item.newPrescription &&
+    (item.newPrescriptionLabel ??
+      medications.find((m) => m.id === item.newPrescription.medicationId)?.name ??
+      `thuốc mã ${item.newPrescription.medicationId}`)
   return (
     <FieldSet className="gap-3 rounded-lg border p-3">
       <FieldLegend className="type-label">{`Dòng ${n}`}</FieldLegend>
@@ -696,7 +757,7 @@ function LineEditor({ index, item, errors, prescriptions, onChange, onRemove, on
       {needsPrescription(item) && (
         <Field data-invalid={!!errors.newPrescription || undefined} className="gap-2">
           {item.newPrescription && (
-            <span className="type-body-sm">{`Đơn mới: ${item.newPrescriptionLabel ?? `thuốc mã ${item.newPrescription.medicationId}`}, liều ${item.newPrescription.dosage}, ${item.newPrescription.route}`}</span>
+            <span className="type-body-sm">{`Đơn mới: ${newDrug}, liều ${item.newPrescription.dosage}, ${item.newPrescription.route}`}</span>
           )}
           <div>
             <Button variant="outline" className="h-11" aria-label={`Lập đơn mới cho dòng ${n}`} onClick={onCollect}>
@@ -751,7 +812,7 @@ const contentText = (content) =>
 
 // Đề nghị đính chính của phiếu (FR-039; 006 T077): người xác nhận là Bác sĩ hoặc Điều dưỡng khác người lập; nút theo
 // allowedCommands của từng đề nghị, backend kiểm quy tắc hai người
-function CorrectionList({ corrections, saving, onConfirm, onReturn }) {
+function CorrectionList({ corrections, staff, saving, onConfirm, onReturn }) {
   const [returning, setReturning] = useState(null)
   return (
     <section aria-labelledby="reconciliation-corrections" className="flex flex-col gap-2 border-t pt-3">

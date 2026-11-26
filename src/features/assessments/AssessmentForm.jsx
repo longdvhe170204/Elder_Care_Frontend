@@ -20,6 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChoiceTray } from '@/common/ChoiceTray'
+import { formatDateTime } from '@/common/dateTime'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { ASSESSMENT_BASIS, ASSESSMENT_DISCARD_REASONS, CARE_NOTES } from '@/common/quickChoices'
 import { StatusBadge } from '@/common/StatusBadge'
@@ -141,13 +142,13 @@ function Reference({ reference }) {
           Chỉ số đo gần nhất
         </h4>
         {vitals.length === 0 ? (
-          <p className="type-body-sm text-muted-foreground">
-            Chưa có dữ liệu chỉ số đo: phần này chờ kết nối với tính năng đo chỉ số sức khỏe.
-          </p>
+          <p className="type-body-sm text-muted-foreground">Chưa có lần đo chỉ số nào.</p>
         ) : (
           <ul className="type-body-sm">
-            {vitals.map((v, index) => (
-              <li key={index}>{Object.values(v).join(' · ')}</li>
+            {vitals.map((v) => (
+              <li key={v.indicatorId}>
+                {`${v.indicatorName}: ${Object.values(v.values ?? {}).join('/')}${v.unit ? ` ${v.unit}` : ''}, đo ${formatDateTime(v.measuredAt)}`}
+              </li>
             ))}
           </ul>
         )}

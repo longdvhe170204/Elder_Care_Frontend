@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button'
 import { CareField, CareCheck } from './CareField'
 import { CARE_ROLES, FREQUENCIES, IMPORTANCE, RESULT_TYPES } from './carePlanLabels'
 
+// Vai trò thực hiện của mục: chỉ vai trò có trong phân công chăm sóc (Q-449, 005 FR-002)
+const PERFORMER_ROLES = { CAREGIVER: CARE_ROLES.CAREGIVER, NURSING_STAFF: CARE_ROLES.NURSING_STAFF }
+
 // Ô bắt buộc kiểm trước khi gửi, báo bằng chữ tại ô thay cho bong bóng của trình duyệt (DESIGN.md 7.4, D14)
 const blank = (value) => value == null || String(value).trim() === ''
 const belowOne = (value) => blank(value) || Number(value) < 1
@@ -23,7 +26,10 @@ function rowErrors(row) {
 }
 
 export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
-  const [rows, setRows] = useState(() => items.map((row) => ({ ...row, timesText: (row.times ?? []).join(', ') })))
+  // Máy chủ trả mốc giờ dạng HH:mm:ss; ô nhập hiện HH:mm
+  const [rows, setRows] = useState(() =>
+    items.map((row) => ({ ...row, timesText: (row.times ?? []).map((t) => t.slice(0, 5)).join(', ') })),
+  )
   const [errors, setErrors] = useState([])
   const errorOf = (index, key) => errors[index]?.[key]
   const set = (index, key, value) => {
@@ -38,7 +44,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
           ? {
               ...row,
               taskTypeId: Number(value),
-              performerRole: type?.defaultRole ?? '',
+              performerRole: PERFORMER_ROLES[type?.defaultRole] ? type.defaultRole : '',
               resultType: type?.resultType ?? '',
               importance: type?.defaultImportance ?? '',
               billable: type?.billable ?? false,
@@ -167,7 +173,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave }) {
               label={`Vai trò thực hiện mục ${index + 1}`}
               value={row.performerRole}
               onChange={(value) => set(index, 'performerRole', value)}
-              options={CARE_ROLES}
+              options={PERFORMER_ROLES}
               required
               error={errorOf(index, 'performerRole')}
             />

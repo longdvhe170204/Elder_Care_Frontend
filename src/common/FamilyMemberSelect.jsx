@@ -1,4 +1,12 @@
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { membersUnavailable } from './useFamilyMembers'
+
+const emptyLabel = (members) =>
+  membersUnavailable(members)
+    ? 'Không đọc được danh sách người thân'
+    : members.length === 0
+      ? 'Chưa có người thân có quan hệ Hiệu lực'
+      : 'Chọn người thân'
 
 // Ô chọn một người thân theo tên (danh sách từ useFamilyMembers); giá trị là mã người thân dạng chuỗi.
 export function FamilyMemberSelect({ id, label, members, value, onChange, error, hint }) {
@@ -12,7 +20,7 @@ export function FamilyMemberSelect({ id, label, members, value, onChange, error,
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!error || undefined}
       >
-        <option value="">{members.length === 0 ? 'Chưa có người thân có quan hệ Hiệu lực' : 'Chọn người thân'}</option>
+        <option value="">{emptyLabel(members)}</option>
         {members.map((m) => (
           <option key={m.id} value={String(m.id)}>
             {m.fullName}

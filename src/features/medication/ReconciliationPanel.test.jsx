@@ -147,6 +147,37 @@ describe('ReconciliationPanel', () => {
     expect(within(line).getByRole('button', { name: 'Lập đơn mới cho dòng 1' })).toBeTruthy()
   })
 
+  it('BF_01_buoc12_dongDaLuuCoDonMoi_hienTenThuocTuDanhMuc', async () => {
+    setup({
+      ...OPEN,
+      items: [
+        {
+          id: 12,
+          source: 'ADMISSION_CURRENT_MEDICATION',
+          medicationDescription: 'Amlodipin 5mg sáng',
+          decision: 'CONTINUE',
+          newPrescription: { medicationId: 1, dosage: 1, route: 'Uống' },
+        },
+      ],
+    })
+    renderPanel()
+    expect(await screen.findByText('Đơn mới: Amlodipin, liều 1, Uống')).toBeTruthy()
+  })
+
+  it('BF_01_buoc12_nguoiLapGuiTraTenTuDanhSachNhanVien_khongTraDuocThiGiuMa', async () => {
+    setup(PENDING)
+    api.on('GET', '/staff', json(200, [{ id: 3, accountId: 21, fullName: 'Phạm Đức Bình', position: 'Bác sĩ' }]))
+    renderPanel()
+    expect(await screen.findByText('Lập bởi Phạm Đức Bình, gửi bởi Phạm Đức Bình')).toBeTruthy()
+  })
+
+  it('BF_01_buoc12_khongTraDuocTenNguoiLap_giuMaTaiKhoan', async () => {
+    setup(PENDING)
+    api.on('GET', '/staff', json(200, []))
+    renderPanel()
+    expect(await screen.findByText('Lập bởi tài khoản mã 21, gửi bởi tài khoản mã 21')).toBeTruthy()
+  })
+
   it('FR_035_luu412_baoDuLieuDaDoi_taiLaiPhieu', async () => {
     setup(OPEN)
     api.on('PUT', '/medication-reconciliations/4/items', problem(412, 'PRECONDITION_FAILED'))
@@ -172,6 +203,30 @@ describe('ReconciliationPanel', () => {
     expect(await screen.findByText('Thiếu dòng đối chiếu cho đơn thuốc ID=7')).toBeTruthy()
     const [, init] = api.calls('POST', '/medication-reconciliations/4/submit')[0]
     expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
+  })
+
+  it('Q_447_huyPhieuMo_batBuocLyDo_guiLenhHuy', async () => {
+    setup({ ...OPEN, allowedCommands: ['CAP_NHAT_DONG', 'GUI_XAC_NHAN', 'HUY'] })
+    api.on('POST', '/medication-reconciliations/4/cancel', json(200, {}))
+    renderPanel()
+    fireEvent.click(await screen.findByRole('button', { name: 'Hủy phiếu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy phiếu' }))
+    expect(await screen.findByText('Nhập lý do hủy phiếu')).toBeTruthy()
+    expect(api.calls('POST', '/medication-reconciliations/4/cancel')).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Lý do hủy phiếu'), { target: { value: 'Lập nhầm lý do' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy phiếu' }))
+    await waitFor(() => expect(api.calls('POST', '/medication-reconciliations/4/cancel')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/medication-reconciliations/4/cancel')[0][1].body)).toEqual({
+      reason: 'Lập nhầm lý do',
+    })
+  })
+
+  it('Q_447_khongCoLenhHuy_khongCoNutHuy', async () => {
+    setup(OPEN)
+    renderPanel()
+    await screen.findByRole('button', { name: 'Thêm dòng' })
+    expect(screen.queryByRole('button', { name: 'Hủy phiếu' })).toBeNull()
   })
 
   it('FR_038_choXacNhan_traLaiBatBuocLyDo_tuXacNhanBiChanHaiNguoi', async () => {

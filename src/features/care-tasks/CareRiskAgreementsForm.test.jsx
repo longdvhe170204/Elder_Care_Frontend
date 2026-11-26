@@ -30,8 +30,8 @@ it('chonTheoTen_guiDungMa', async () => {
   )
   api.on(
     'GET',
-    '/residents/77/relationships',
-    json(200, [{ id: 1, status: 'ACTIVE', familyMember: { id: 41, fullName: 'Trần Văn Minh' } }]),
+    '/residents/77/family-contacts',
+    json(200, [{ familyMemberId: 41, fullName: 'Trần Văn Minh' }]),
   )
   const onSave = vi.fn()
   render(<CareRiskAgreementsForm residentId={77} agreements={[ROW]} busy={false} onSave={onSave} />)

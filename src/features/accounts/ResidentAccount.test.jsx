@@ -268,8 +268,8 @@ describe('Tài khoản người cao tuổi: chọn theo tên', () => {
     api.on('GET', '/staff', json(200, [{ id: 7, fullName: 'Lê Thị Nghe', position: 'Hành chính' }]))
     api.on(
       'GET',
-      '/residents/501/relationships',
-      json(200, [{ id: 1, status: 'ACTIVE', familyMember: { id: 55, fullName: 'Trần Văn Con' } }]),
+      '/residents/501/family-contacts',
+      json(200, [{ familyMemberId: 55, fullName: 'Trần Văn Con' }]),
     )
     api.on('POST', '/approval-requests', json(201, { id: 88, status: 'PENDING' }))
     const sheet = await openDetail(residentAccount({ residentId: 501 }))

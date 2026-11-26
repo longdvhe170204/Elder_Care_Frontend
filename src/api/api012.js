@@ -15,6 +15,9 @@ export const getFamilyMembersById = (params) => request('GET', '/family-members/
 /** Sửa thông tin liên hệ (nhật ký trước/sau); bỏ giấy tờ bị chặn khi đang có quyền được phép đón (FR-001, FR-007) */
 export const putFamilyMembersById = (params) => request('PUT', '/family-members/{id}', params)
 
+/** Danh sách liên hệ người thân (chỉ quan hệ Hiệu lực; không có quyền, giấy tờ, địa chỉ; bổ sung 2026-11-26, Q-448) (FR-077) */
+export const getResidentsByResidentIdFamilyContacts = (params) => request('GET', '/residents/{residentId}/family-contacts', params)
+
 /** Quan hệ của người cao tuổi, vai trò, quyền đang bật và quyền có tác dụng (FR-002, FR-007, FR-011, DBR-02, DBR-03) */
 export const getResidentsByResidentIdRelationships = (params) => request('GET', '/residents/{residentId}/relationships', params)
 
