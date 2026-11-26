@@ -145,9 +145,15 @@ export function ApplicationForm({
       .catch((e) => setFailure(problemOf(e)))
   }, [editing, application?.id])
 
+  // Ngày theo giờ Việt Nam (so chuỗi yyyy-mm-dd)
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
-    date: !applicationDate && 'Nhập ngày đăng ký',
+    date: (!applicationDate && 'Nhập ngày đăng ký') || (applicationDate > today && 'Ngày đăng ký không ở tương lai'),
+    desired:
+      desiredDate && applicationDate && desiredDate < applicationDate && 'Ngày vào dự kiến không trước ngày đăng ký',
+    contact: contact.trim().length > 200 && 'Người liên hệ tối đa 200 ký tự',
+    note: note.trim().length > 2000 && 'Ghi chú tối đa 2000 ký tự',
     type: !type && 'Chọn loại lưu trú',
     level: !level && 'Chọn mức chăm sóc',
     reason: editing && !reason.trim() && 'Nhập lý do',
@@ -216,6 +222,7 @@ export function ApplicationForm({
           <Input
             id="application-date"
             type="date"
+            max={today}
             className="h-11"
             value={applicationDate}
             aria-invalid={!!shown('date') || undefined}
@@ -237,24 +244,30 @@ export function ApplicationForm({
           onChange={setLevel}
           error={shown('level')}
         />
-        <Field>
+        <Field data-invalid={!!shown('desired') || undefined}>
           <FieldLabel htmlFor="application-desired">Ngày vào dự kiến</FieldLabel>
           <Input
             id="application-desired"
             type="date"
+            min={applicationDate || undefined}
             className="h-11"
             value={desiredDate}
+            aria-invalid={!!shown('desired') || undefined}
             onChange={(e) => setDesiredDate(e.target.value)}
           />
+          {shown('desired') && <FieldError>{shown('desired')}</FieldError>}
         </Field>
-        <Field>
+        <Field data-invalid={!!shown('contact') || undefined}>
           <FieldLabel htmlFor="application-contact">Người liên hệ</FieldLabel>
           <Input
             id="application-contact"
             className="h-11"
+            maxLength={200}
             value={contact}
+            aria-invalid={!!shown('contact') || undefined}
             onChange={(e) => setContact(e.target.value)}
           />
+          {shown('contact') && <FieldError>{shown('contact')}</FieldError>}
         </Field>
         <ChoiceTray
           id="application-needs"
@@ -264,9 +277,17 @@ export function ApplicationForm({
           value={needs}
           onChange={setNeeds}
         />
-        <Field>
+        <Field data-invalid={!!shown('note') || undefined}>
           <FieldLabel htmlFor="application-note">Ghi chú</FieldLabel>
-          <Textarea id="application-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} />
+          <Textarea
+            id="application-note"
+            rows={2}
+            maxLength={2000}
+            value={note}
+            aria-invalid={!!shown('note') || undefined}
+            onChange={(e) => setNote(e.target.value)}
+          />
+          {shown('note') && <FieldError>{shown('note')}</FieldError>}
         </Field>
         {editing && <ReasonField id="application-reason" value={reason} onChange={setReason} error={shown('reason')} />}
       </FieldGroup>

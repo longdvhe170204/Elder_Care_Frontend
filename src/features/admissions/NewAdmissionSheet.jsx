@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { getResidents } from '@/api'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Field, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
@@ -15,15 +16,25 @@ import { ApplicationForm } from './ApplicationParts'
 // hồ sơ; chỉ người Đang tiếp nhận lập đăng ký được (004 FR-001). (2) Không thấy thì "Tạo hồ sơ mới" (chỉ vai trò tạo được
 // hồ sơ). (3) Form lập đăng ký của người đã chọn hoặc vừa tạo; lưu xong gọi onDone với lượt đăng ký để mở màn Hồ sơ tiếp
 // nhận. Mỗi bước vẫn là một lệnh do Hành chính bấm (Q-306, Q-307); không chọn sẵn kết quả tìm.
-// startStage: 'find' (màn Đăng ký tiếp nhận) hoặc 'create' (nút tạo hồ sơ ở màn Người cao tuổi, đi thẳng tạo hồ sơ)
+// startStage: 'find' (màn Đăng ký tiếp nhận) hoặc 'create' (nút tạo hồ sơ ở màn Người cao tuổi, đi thẳng tạo hồ sơ).
+// onOpenProfile(id): mở hồ sơ đã có khi tra căn cước thấy (2026-11-26); không truyền thì không có nút Mở hồ sơ.
+// Đang tạo hồ sơ mà đã nhập chưa lưu thì đóng khung (Esc, nút Đóng, nền, Hủy) phải xác nhận.
 export function NewAdmissionSheet({
   startStage = 'find',
   canCreateProfile = true,
   onClose,
   onResidentCreated,
   onDone,
+  onOpenProfile,
 }) {
   const [stage, setStage] = useState(startStage)
+  const [dirty, setDirty] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+
+  function requestClose() {
+    if (stage === 'create' && dirty) setConfirmClose(true)
+    else onClose()
+  }
   const [query, setQuery] = useState('')
   const [results, setResults] = useState(null)
   const [failure, setFailure] = useState(null)
@@ -70,11 +81,14 @@ export function NewAdmissionSheet({
     body = (
       <CreateResident
         onCreated={(data) => {
+          setDirty(false)
           setCreated(data)
           setStage('apply')
           onResidentCreated?.(data)
         }}
-        onClose={onClose}
+        onClose={requestClose}
+        onDirtyChange={setDirty}
+        onOpenProfile={onOpenProfile}
       />
     )
   } else {
@@ -138,10 +152,31 @@ export function NewAdmissionSheet({
   }
 
   return (
-    <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className={stage === 'create' ? 'sm:max-w-lg' : 'overflow-y-auto p-6 sm:max-w-lg'}>
+    <Sheet open onOpenChange={(next) => !next && requestClose()}>
+      <SheetContent className={stage === 'create' ? 'gap-0 sm:max-w-xl' : 'overflow-y-auto p-6 sm:max-w-lg'}>
         {body}
       </SheetContent>
+      <Dialog open={confirmClose} onOpenChange={setConfirmClose}>
+        <DialogContent showCloseButton={false}>
+          <DialogTitle>Bỏ thông tin đang nhập?</DialogTitle>
+          <DialogDescription>Hồ sơ chưa được tạo. Đóng khung thì các ô đã nhập sẽ mất.</DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" className="h-11" onClick={() => setConfirmClose(false)}>
+              Tiếp tục nhập
+            </Button>
+            <Button
+              variant="destructive"
+              className="h-11"
+              onClick={() => {
+                setConfirmClose(false)
+                onClose()
+              }}
+            >
+              Bỏ và đóng
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   )
 }

@@ -84,6 +84,7 @@ describe('ResidentListPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo hồ sơ' }))
     const dialog = await screen.findByRole('dialog')
+    fireEvent.change(within(dialog).getByLabelText('Loại giấy tờ'), { target: { value: 'NONE' } })
     fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: 'Đỗ Thị Hoa' } })
     fireEvent.change(within(dialog).getByLabelText('Ngày sinh'), { target: { value: '1944-03-02' } })
     fireEvent.change(within(dialog).getByLabelText('Giới tính'), { target: { value: 'FEMALE' } })

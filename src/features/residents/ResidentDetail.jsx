@@ -22,6 +22,7 @@ import { FINAL_STATUSES } from '../wishes/wishLabels'
 import { WishTab } from '../wishes/WishTab'
 import { HealthTab } from './HealthTab'
 import { GENDER_LABELS, ID_DOCUMENT_LABELS, STATUS_LABELS } from './residentLabels'
+import { VN_PHONE, normalizePhone } from './vnPhone'
 
 // Hồ sơ trong khung chi tiết (001 T022; US1 #6 → #9; FR-006 → FR-009; DESIGN.md 5, 6.7.0; hợp đồng GET /residents/{id},
 // POST /residents/{id}/update-personal-info, GET /residents/{id}/linked-profiles). Khung chỉ có trường của Profile:
@@ -258,8 +259,12 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
     if (!form.dateOfBirth) next.dateOfBirth = 'Chọn ngày sinh'
     else if (form.dateOfBirth > new Date().toISOString().slice(0, 10)) next.dateOfBirth = 'Ngày sinh không ở tương lai'
     if (!form.gender) next.gender = 'Chọn giới tính'
-    if (form.idDocumentType && !form.idDocumentNumber.trim()) next.idDocumentNumber = 'Nhập số giấy tờ'
-    if (!form.idDocumentType && form.idDocumentNumber.trim()) next.idDocumentType = 'Chọn loại giấy tờ'
+    // CCCD bắt buộc, chỉ nhận CCCD 12 chữ số (test BF-01 2026-11-26, như màn tạo hồ sơ)
+    if (!form.idDocumentNumber.trim()) next.idDocumentNumber = 'Nhập số CCCD'
+    else if (!/^\d{12}$/.test(form.idDocumentNumber.trim())) next.idDocumentNumber = 'Số CCCD gồm đúng 12 chữ số'
+    const phone = form.phoneNumber.trim()
+    if (phone && !VN_PHONE.test(normalizePhone(phone)))
+      next.phoneNumber = 'Số điện thoại Việt Nam: di động 10 số (03, 05, 07, 08, 09…), cố định 11 số (02…)'
     if (!form.reason.trim()) next.reason = 'Nhập lý do cập nhật'
     return next
   }
@@ -272,7 +277,8 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
     if (Object.keys(next).length > 0) return
     setSaving(true)
     try {
-      const phoneNumber = blank(form.phoneNumber)
+      const phoneNumber = blank(form.phoneNumber) && normalizePhone(form.phoneNumber.trim())
+      // Ô thư điện tử đã bỏ (test BF-01 2026-11-26); giữ thư điện tử đã ghi trước đây
       const email = blank(form.email)
       const { data, etag: tag } = await postResidentsByIdUpdatePersonalInfo({
         path: { id: residentId },
@@ -281,8 +287,8 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
           fullName: form.fullName.trim(),
           dateOfBirth: form.dateOfBirth,
           gender: form.gender,
-          idDocumentType: form.idDocumentType || undefined,
-          idDocumentNumber: blank(form.idDocumentNumber),
+          idDocumentType: 'CITIZEN_ID',
+          idDocumentNumber: form.idDocumentNumber.trim(),
           permanentAddress: blank(form.permanentAddress),
           contactAddress: blank(form.contactAddress),
           contact: phoneNumber || email ? { phoneNumber, email } : undefined,
@@ -537,35 +543,19 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
                         {errors.gender && <FieldError>{errors.gender}</FieldError>}
                       </Field>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field data-invalid={!!errors.idDocumentType || undefined}>
-                        <FieldLabel htmlFor="edit-doc-type">Loại giấy tờ</FieldLabel>
-                        <select
-                          id="edit-doc-type"
-                          value={form.idDocumentType}
-                          onChange={set('idDocumentType')}
-                          className="h-10 w-full rounded-lg border border-input bg-transparent px-3 text-base"
-                        >
-                          <option value="">Không có</option>
-                          {Object.entries(ID_DOCUMENT_LABELS).map(([code, label]) => (
-                            <option key={code} value={code}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
-                        {errors.idDocumentType && <FieldError>{errors.idDocumentType}</FieldError>}
-                      </Field>
-                      <Field data-invalid={!!errors.idDocumentNumber || undefined}>
-                        <FieldLabel htmlFor="edit-doc-number">Số giấy tờ</FieldLabel>
-                        <Input
-                          id="edit-doc-number"
-                          value={form.idDocumentNumber}
-                          onChange={set('idDocumentNumber')}
-                          className="h-10 tabular-nums"
-                        />
-                        {errors.idDocumentNumber && <FieldError>{errors.idDocumentNumber}</FieldError>}
-                      </Field>
-                    </div>
+                    <Field data-invalid={!!errors.idDocumentNumber || undefined}>
+                      <FieldLabel htmlFor="edit-doc-number">Số CCCD</FieldLabel>
+                      <Input
+                        id="edit-doc-number"
+                        value={form.idDocumentNumber}
+                        onChange={set('idDocumentNumber')}
+                        inputMode="numeric"
+                        maxLength={12}
+                        className="h-10 tabular-nums sm:max-w-xs"
+                        aria-invalid={!!errors.idDocumentNumber || undefined}
+                      />
+                      {errors.idDocumentNumber && <FieldError>{errors.idDocumentNumber}</FieldError>}
+                    </Field>
                     <Field>
                       <FieldLabel htmlFor="edit-permanent">Địa chỉ thường trú</FieldLabel>
                       <Input
@@ -584,28 +574,20 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
                         className="h-10"
                       />
                     </Field>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <Field>
-                        <FieldLabel htmlFor="edit-phone">Số điện thoại</FieldLabel>
-                        <Input
-                          id="edit-phone"
-                          inputMode="tel"
-                          value={form.phoneNumber}
-                          onChange={set('phoneNumber')}
-                          className="h-10"
-                        />
-                      </Field>
-                      <Field>
-                        <FieldLabel htmlFor="edit-email">Thư điện tử</FieldLabel>
-                        <Input
-                          id="edit-email"
-                          type="email"
-                          value={form.email}
-                          onChange={set('email')}
-                          className="h-10"
-                        />
-                      </Field>
-                    </div>
+                    <Field data-invalid={!!errors.phoneNumber || undefined}>
+                      <FieldLabel htmlFor="edit-phone">Số điện thoại</FieldLabel>
+                      <Input
+                        id="edit-phone"
+                        type="tel"
+                        inputMode="tel"
+                        maxLength={16}
+                        value={form.phoneNumber}
+                        onChange={set('phoneNumber')}
+                        className="h-10 sm:max-w-xs"
+                        aria-invalid={!!errors.phoneNumber || undefined}
+                      />
+                      {errors.phoneNumber && <FieldError>{errors.phoneNumber}</FieldError>}
+                    </Field>
                     <Field>
                       <FieldLabel htmlFor="edit-notes">Thông tin đặc biệt</FieldLabel>
                       <Textarea id="edit-notes" value={form.specialNotes} onChange={set('specialNotes')} />

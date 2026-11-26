@@ -51,7 +51,8 @@ function ReassessmentCell({ item }) {
   )
 }
 
-export function ResidentListPage({ role, onNavigate = () => {} }) {
+// residentId: mở sẵn khung chi tiết của hồ sơ này (từ nút "Mở hồ sơ" khi tra căn cước ở màn khác)
+export function ResidentListPage({ role, onNavigate = () => {}, residentId = null }) {
   const [text, setText] = useState('')
   const [applied, setApplied] = useState('')
   const [filter, setFilter] = useState('ALL')
@@ -60,7 +61,7 @@ export function ResidentListPage({ role, onNavigate = () => {} }) {
   const [failure, setFailure] = useState(null)
   const [due, setDue] = useState(null)
   const [dueProfiles, setDueProfiles] = useState(null)
-  const [selectedId, setSelectedId] = useState(null)
+  const [selectedId, setSelectedId] = useState(residentId != null ? Number(residentId) : null)
   const [creating, setCreating] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
 
@@ -282,6 +283,10 @@ export function ResidentListPage({ role, onNavigate = () => {} }) {
           startStage="create"
           onClose={() => setCreating(false)}
           onResidentCreated={() => setReloadKey((k) => k + 1)}
+          onOpenProfile={(id) => {
+            setCreating(false)
+            setSelectedId(id)
+          }}
           onDone={(_, application) => {
             setCreating(false)
             if (application?.id) onNavigate('admission-workspace', { id: application.id })

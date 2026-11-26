@@ -55,6 +55,7 @@ describe('CreateResident: xác nhận không trùng', () => {
           })
     })
     renderForm()
+    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'NONE' } })
     fireEvent.change(screen.getByLabelText('Họ tên'), { target: { value: 'Trần Thị Mai' } })
     fireEvent.change(screen.getByLabelText('Ngày sinh'), { target: { value: '1948-03-14' } })
     fireEvent.change(screen.getByLabelText('Giới tính'), { target: { value: 'FEMALE' } })

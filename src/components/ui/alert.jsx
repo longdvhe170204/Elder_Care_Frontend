@@ -13,6 +13,9 @@ const alertVariants = cva(
         // alert-banner (DESIGN.md): chỉ cho cảnh báo cần xử lý ngay
         urgent:
           "border-transparent bg-destructive-subtle text-destructive *:data-[slot=alert-description]:text-destructive *:[svg]:text-current",
+        // Đạt, kết quả tốt (tông settled, DESIGN.md 3.5): ví dụ tra căn cước chưa có hồ sơ
+        success:
+          "border-transparent bg-success text-success-foreground *:data-[slot=alert-description]:text-success-foreground *:[svg]:text-current",
         // Cần chú ý, không gấp (DESIGN.md 2.2): trái mong muốn, chưa ghi ý kiến
         attention:
           "border-warning-foreground/40 bg-warning text-warning-foreground *:data-[slot=alert-description]:text-warning-foreground *:[svg]:text-current",
