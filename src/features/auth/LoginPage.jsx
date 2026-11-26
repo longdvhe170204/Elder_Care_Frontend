@@ -195,18 +195,12 @@ export function LoginPage({ onNavigate = goTo }) {
                   onNavigate(home === '/' ? `/${window.location.hash}` : home)
                 }}
               />
-              <div className="flex flex-col gap-2 text-center text-xs text-muted-foreground">
-                {!resetAvailable && (
-                  <p>
-                    Quên mật khẩu? Nhân viên liên hệ Quản lý viện; người thân liên hệ Hành chính của viện để được cấp
-                    lại sau khi xác minh danh tính.
-                  </p>
-                )}
-                <p>
-                  Chưa có tài khoản? Viện cấp tài khoản cho nhân viên và cho người thân sau khi gia đình làm thủ tục
-                  với viện.
+              {!resetAvailable && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Quên mật khẩu? Nhân viên liên hệ Quản lý viện; người thân liên hệ Hành chính của viện để được cấp lại
+                  sau khi xác minh danh tính.
                 </p>
-              </div>
+              )}
             </>
           )}
         </div>
