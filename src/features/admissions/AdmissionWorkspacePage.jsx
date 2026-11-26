@@ -177,9 +177,12 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   // Mở bản ghi của bước (bước đã xong bấm tên để xem); null khi bước không có chỗ xem
   function openerOf(step) {
     if (step.page) {
-      const [page, , withResident] = step.page
-      // Màn nhận người cao tuổi chọn sẵn theo mã (Số dư, Người thân và quyền)
-      return () => (withResident ? onNavigate(page, { residentId: resident.id }) : onNavigate(page))
+      const [page, , withResident, extra] = step.page
+      // Màn nhận người cao tuổi chọn sẵn theo mã (Số dư, Người thân và quyền); extra (mở luôn form) chỉ khi bước chưa xong
+      return () =>
+        withResident
+          ? onNavigate(page, { residentId: resident.id, ...(step.view !== 'done' && extra) })
+          : onNavigate(page)
     }
     if (step.action === 'resident')
       return () => setSheet(step.part ? { kind: 'part', part: step.part } : { kind: 'resident' })
