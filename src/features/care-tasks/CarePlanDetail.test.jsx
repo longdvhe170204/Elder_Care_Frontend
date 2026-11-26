@@ -222,3 +222,19 @@ it('Q449_boBanCuaNguoiKhac_vanBatBuocLyDo', async () => {
   expect(await within(dialog).findByText('Nhập lý do bỏ bản sửa.')).toBeInTheDocument()
   expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(0)
 })
+
+it('FR_003_bacSiBamTraLai_goiLenhTraLaiKemLyDo_khongGoiDuyet', async () => {
+  api.on(
+    'GET',
+    '/care-plans/17',
+    json(200, { ...plan, status: 'PENDING_APPROVAL', allowedCommands: ['approve', 'return'] }, { ETag: '"4"' }),
+  )
+  api.on('POST', '/care-plans/17/return', json(200, null))
+  api.on('POST', '/care-plans/17/approve', json(200, null))
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  fireEvent.change(await screen.findByLabelText('Lý do'), { target: { value: 'làm lại đê' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Trả lại' }))
+  await waitFor(() => expect(api.calls('POST', '/care-plans/17/return')).toHaveLength(1))
+  expect(api.calls('POST', '/care-plans/17/approve')).toHaveLength(0)
+  expect(JSON.parse(api.calls('POST', '/care-plans/17/return')[0][1].body)).toEqual({ reason: 'làm lại đê' })
+})
