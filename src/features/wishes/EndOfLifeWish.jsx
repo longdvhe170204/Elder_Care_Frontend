@@ -15,6 +15,8 @@ import { Field, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet 
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { ChoiceTray } from '@/common/ChoiceTray'
+import { SUPPORT_METHOD_CHOICES } from '@/common/quickChoices'
 import { DateField } from '@/common/DateField'
 import { isoDate } from '@/common/dateText'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -347,8 +349,23 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
   const group02 = (
     <div className="flex flex-col gap-5">
       <DoctorSelect id="eol-doctor" value={v.doctorId} onChange={set('doctorId')} error={errors.doctorId} />
+      {/* Giúp hiểu trước, nhận định sau (Q-348; chủ dự án yêu cầu 2026-11-26 cho dễ hiểu): ô chọn nhanh có "Khác" */}
+      <Field data-invalid={!!errors.supportMethod || undefined}>
+        <ChoiceTray
+          id="eol-support"
+          label="Đã giúp người cao tuổi hiểu lựa chọn bằng cách nào"
+          required
+          options={SUPPORT_METHOD_CHOICES}
+          multiple
+          value={v.supportMethod}
+          onChange={set('supportMethod')}
+          invalid={!!errors.supportMethod}
+          placeholder="Bấm để chọn hoặc gõ"
+        />
+        {errors.supportMethod && <FieldError>{errors.supportMethod}</FieldError>}
+      </Field>
       <RadioRow
-        label="Người cao tuổi tự quyết được việc chọn này"
+        label="Sau khi được giải thích, người cao tuổi có tự quyết được lựa chọn này không"
         labelId="eol-can-self"
         required
         options={[
@@ -359,20 +376,6 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
         onChange={set('canSelf')}
         error={errors.canSelf}
       />
-      <Field data-invalid={!!errors.supportMethod || undefined}>
-        <FieldLabel htmlFor="eol-support">
-          Cách đã hỗ trợ người cao tuổi hiểu thông tin <Required />
-        </FieldLabel>
-        <Textarea
-          id="eol-support"
-          rows={2}
-          value={v.supportMethod}
-          placeholder="Giải thích bằng lời, có người thân cùng nghe, nhắc lại sau một ngày"
-          onChange={(e) => set('supportMethod')(e.target.value)}
-          aria-invalid={!!errors.supportMethod || undefined}
-        />
-        {errors.supportMethod && <FieldError>{errors.supportMethod}</FieldError>}
-      </Field>
       {dateField('eol-review-date', 'Ngày xem lại nhận định', 'reviewDate')}
     </div>
   )

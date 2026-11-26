@@ -38,6 +38,19 @@ export const ASSESSMENT_BASIS = ['Đánh giá đầu vào khi tiếp nhận']
 
 export const ASSESSMENT_DISCARD_REASONS = ['Lập nhầm người', 'Thông tin chưa đủ, lập lại']
 
+// Cách đã giúp người cao tuổi hiểu lựa chọn trước khi Bác sĩ nhận định tự quyết (Q-348, BR-M01-15; chủ dự án yêu cầu
+// 2026-11-26 cho dễ hiểu): danh sách gợi ý, kèm "Khác", không chọn sẵn
+export const SUPPORT_METHOD_CHOICES = [
+  'Giải thích bằng lời, chậm, từng ý',
+  'Có người thân cùng nghe',
+  'Dùng tranh hoặc giấy viết',
+  'Đeo máy trợ thính, kính',
+  'Nói vào lúc tỉnh táo',
+  'Hỏi lại sau một ngày',
+  'Người cao tuổi nhắc lại được ý chính',
+  'Đã giải thích nhưng không nhắc lại được',
+]
+
 export const CARE_NOTES = [
   'Nguy cơ ngã',
   'Ăn mềm, dễ nuốt',
