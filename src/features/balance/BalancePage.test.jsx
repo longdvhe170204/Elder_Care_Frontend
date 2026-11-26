@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { json, mockRoutes } from '@/test/fetchRoutes'
+import { pickResident } from '@/test/pickResident'
 import { BalancePage } from './BalancePage'
 
 // Màn Số dư, thu chi (017 T027, T033, T036, T039): các phần của Kế toán, Quản lý viện duyệt ở màn của 000.
@@ -90,9 +91,7 @@ describe('BalancePage (017)', () => {
   it('FR_004_timNguoiCaoTuoi_moSoDuGiaoDichQuyetToanPhieu', async () => {
     setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Theo người cao tuổi' }))
-    fireEvent.change(screen.getByLabelText('Tìm người cao tuổi'), { target: { value: 'Ánh' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Tìm' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Ánh, HS-0007' }))
+    await pickResident('Nguyễn Thị Ánh', { label: 'Tìm người cao tuổi' })
     expect(await screen.findByRole('heading', { name: 'Số dư của Nguyễn Thị Ánh' })).toBeInTheDocument()
     expect(await screen.findByText('Chưa có phiếu báo phí')).toBeInTheDocument()
   })
