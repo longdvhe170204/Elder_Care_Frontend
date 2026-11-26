@@ -154,19 +154,19 @@ export function ReconciliationPanel({
   })
   const filterTabs = isDoctor
     ? [
-        ['ALL', 'Tất cả', tickets.length],
-        ['DRAFT', 'Bản nháp', draftCount],
-        ['PENDING_CONFIRMATION', 'Chờ xác nhận', pendingCount],
-        ['CONFIRMED', 'Đã xong', confirmedCount],
-        ['OVERDUE', 'Quá hạn xử lý', overdueCount],
-      ]
+      ['ALL', 'Tất cả', tickets.length],
+      ['DRAFT', 'Bản nháp', draftCount],
+      ['PENDING_CONFIRMATION', 'Chờ xác nhận', pendingCount],
+      ['CONFIRMED', 'Đã xong', confirmedCount],
+      ['OVERDUE', 'Quá hạn xử lý', overdueCount],
+    ]
     : [
-        ['ALL', 'Tất cả', tickets.length],
-        ['PENDING_CONFIRMATION', 'Chờ BS xác nhận', pendingCount],
-        ['RETURNED', 'Bị trả lại', returnedCount],
-        ['CONFIRMED', 'Đã xong', confirmedCount],
-        ['OVERDUE', 'Quá hạn xử lý', overdueCount],
-      ]
+      ['ALL', 'Tất cả', tickets.length],
+      ['PENDING_CONFIRMATION', 'Chờ BS xác nhận', pendingCount],
+      ['RETURNED', 'Bị trả lại', returnedCount],
+      ['CONFIRMED', 'Đã xong', confirmedCount],
+      ['OVERDUE', 'Quá hạn xử lý', overdueCount],
+    ]
 
   async function handleDraftSaved(message) {
     setAnnouncement(message)
@@ -1529,7 +1529,7 @@ function TicketDetail({ id, sources, residentId, residentName, isDoctor, onChang
           onSubmit={(reason) =>
             run(
               (key) => cancelReconciliation(id, reason, key),
-              'Đã hủy phiếu đối chiếu. Hạn đối chiếu giữ mốc cũ.',
+              'Đã hủy phiếu đối chiếu.',
               keyFor({ cancel: id, reason }),
             )
           }

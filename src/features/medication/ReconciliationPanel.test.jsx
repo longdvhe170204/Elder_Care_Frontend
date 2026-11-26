@@ -143,7 +143,7 @@ describe('ReconciliationPanel', () => {
         },
       ],
     })
-    renderPanel()
+    renderPanel(true)
     expect(await screen.findByText('Đơn mới: Amlodipin, liều 1, Uống')).toBeTruthy()
   })
 
