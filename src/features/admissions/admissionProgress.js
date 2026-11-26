@@ -62,9 +62,12 @@ export const PHASES = [
         part: 'health',
         done: (ctx) => !hasWarning(ctx, 'UNCONFIRMED_HEALTH_RECORD'),
         doLabel: 'Ghi sức khỏe ban đầu',
+        // Đã có bản Nháp thì bước chỉ còn chờ Bác sĩ xác nhận (chủ dự án duyệt 2026-11-26)
         mine: (ctx) =>
-          hasCommand(ctx, 'WRITE_INITIAL_HEALTH_RECORD', 'CONFIRM_INITIAL_HEALTH_RECORD', 'RECORD_HEALTH_ITEM'),
-        who: 'Hành chính, Bác sĩ',
+          ctx.healthDraft
+            ? hasCommand(ctx, 'CONFIRM_INITIAL_HEALTH_RECORD')
+            : hasCommand(ctx, 'WRITE_INITIAL_HEALTH_RECORD', 'CONFIRM_INITIAL_HEALTH_RECORD', 'RECORD_HEALTH_ITEM'),
+        who: (ctx) => (ctx.healthDraft ? 'Bác sĩ' : 'Hành chính, Bác sĩ'),
       },
       {
         key: 'wishes',
@@ -178,10 +181,11 @@ export function admissionProgress({
   can,
   canComplete,
   closed,
+  healthDraft = false,
 }) {
   const lines = conditions?.conditions ?? []
   const conditionOf = conditionFinder(lines)
-  const ctx = { opinion, residentCommands, hasContract, can, warnings: conditions?.warnings ?? [] }
+  const ctx = { opinion, residentCommands, hasContract, can, healthDraft, warnings: conditions?.warnings ?? [] }
 
   function stateOf(step) {
     if (step.after) return 'after'
@@ -203,7 +207,8 @@ export function admissionProgress({
       const isMine = !!step.mine?.(ctx)
       const pending = state === 'todo' || state === 'optional'
       const view = pending ? (isMine ? 'mine' : 'wait') : state
-      const row = { ...step, state, isMine, view, required: !!step.condition }
+      const who = typeof step.who === 'function' ? step.who(ctx) : step.who
+      const row = { ...step, who, state, isMine, view, required: !!step.condition }
       steps[step.key] = row
       return row
     })

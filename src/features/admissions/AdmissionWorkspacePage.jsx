@@ -5,6 +5,7 @@ import {
   getAdmissionApplicationsByIdAdmissionConditions,
   getContracts,
   getResidentsById,
+  getResidentsByIdInitialHealthRecord,
 } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -32,6 +33,7 @@ import {
 import { ApplicationSheet, OpinionSheet } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
 import { ConsentRecordSheet } from '../consents/ConsentRecordSheet'
+import { InitialHealthSheet } from '../residents/InitialHealthSheet'
 import { admissionProgress } from './admissionProgress'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.3): một màn cho một lượt tiếp nhận, đi theo các
@@ -81,11 +83,13 @@ function useWorkspace(id) {
         const { data: application } = await getAdmissionApplicationsById({ path: { id } })
         // Lượt đã đóng (Đã tiếp nhận, Đã hủy) không còn danh sách điều kiện: backend trả 409 APPLICATION_CLOSED (004 FR-004)
         const open = OPEN_STATUSES.includes(application.status)
-        const [conditions, resident, contracts] = await Promise.all([
+        const [conditions, resident, contracts, health] = await Promise.all([
           open ? getAdmissionApplicationsByIdAdmissionConditions({ path: { id } }) : { data: null },
           getResidentsById({ path: { id: application.residentId } }),
           // Không tải được hợp đồng thì báo ở bước Hợp đồng, không coi như chưa có hợp đồng (audit 2026-11-18)
           getContracts({ query: { residentId: application.residentId } }).catch(() => ({ data: [], failed: true })),
+          // Hồ sơ sức khỏe ban đầu đã có bản Nháp chưa (bước Sức khỏe chuyển "Chờ Bác sĩ"); không đọc được thì coi như chưa có
+          getResidentsByIdInitialHealthRecord({ path: { id: application.residentId } }).catch(() => ({ data: null })),
         ])
         if (cancelled) return
         const openContracts = (contracts.data ?? [])
@@ -98,6 +102,7 @@ function useWorkspace(id) {
           resident: resident.data,
           contract: openContracts[0] ?? null,
           contractsFailed: !!contracts.failed,
+          healthDraft: !!health.data && !health.data.confirmed,
         })
       } catch (e) {
         if (!cancelled) setState({ loading: false, failure: problemOf(e) })
@@ -157,6 +162,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
     conditions,
     opinion,
     residentCommands: resident.allowedCommands ?? [],
+    healthDraft: state.healthDraft,
     hasContract: !!contract,
     can,
     canComplete,
@@ -205,6 +211,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
     }
     // Bản đồng ý: mở thẳng khung ghi nhận, không qua tab Đồng ý (chủ dự án duyệt 2026-11-26)
     if (step.part === 'consent') return button(step.doLabel, () => setSheet({ kind: 'consent' }))
+    if (step.part === 'health') return button(step.doLabel, () => setSheet({ kind: 'health' }))
     if (step.action === 'resident') return button(step.doLabel ?? 'Mở hồ sơ', openerOf(step))
     // Ý kiến chỉ ghi được khi lượt Đang xử lý hoặc Đang chờ (api-004 admission-opinion)
     if (step.action === 'opinion' && !closed) return button(step.doLabel, () => setSheet({ kind: 'opinion' }))
@@ -472,7 +479,9 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       <Sheet
         open={
           !!sheet &&
-          !['new-contract', 'edit-contract', 'edit-application', 'part', 'opinion', 'consent'].includes(sheet.kind)
+          !['new-contract', 'edit-contract', 'edit-application', 'part', 'opinion', 'consent', 'health'].includes(
+            sheet.kind,
+          )
         }
         onOpenChange={(open) => !open && changed()}
       >
@@ -552,6 +561,15 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
       {sheet?.kind === 'edit-contract' && (
         <ContractSheet contract={sheet.contract} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+      )}
+      {sheet?.kind === 'health' && (
+        <InitialHealthSheet
+          residentId={resident.id}
+          residentName={name}
+          allowedCommands={resident.allowedCommands ?? []}
+          onClose={() => setSheet(null)}
+          onDone={(message) => changed(message)}
+        />
       )}
       {sheet?.kind === 'consent' && (
         <ConsentRecordSheet

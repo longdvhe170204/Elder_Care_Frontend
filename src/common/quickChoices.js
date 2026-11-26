@@ -55,3 +55,33 @@ export const FAMILY_DECLARED_CHOICES = {
   COGNITION: ['Tỉnh táo', 'Hay quên', 'Lú lẫn về đêm', 'Đi lang thang'],
   KNOWN_RISKS: ['Nguy cơ ngã', 'Nghẹn, sặc khi ăn', 'Loét tì đè', 'Hay đi ra ngoài một mình'],
 }
+
+// Hồ sơ sức khỏe ban đầu (chủ dự án duyệt 2026-11-26): mỗi ô có khay chọn nhanh, chọn nhiều, kèm Khác. Ba ô khả năng dùng
+// lại danh sách Gia đình khai; ghi chú nhu cầu dùng lại CARE_NOTES; các ô khác là bản nháp.
+export const HEALTH_RECORD_CHOICES = {
+  mobility: FAMILY_DECLARED_CHOICES.MOBILITY,
+  selfCareAbility: FAMILY_DECLARED_CHOICES.SELF_CARE,
+  cognition: FAMILY_DECLARED_CHOICES.COGNITION,
+  initialNeedsNote: CARE_NOTES,
+  nutritionNeeds: ['Ăn mềm, dễ nuốt', 'Ăn ít muối', 'Ăn ít đường', 'Ăn chay', 'Cần hỗ trợ khi ăn', 'Ăn qua ống thông'],
+  currentMedications: [
+    'Không dùng thuốc thường xuyên',
+    'Thuốc huyết áp',
+    'Thuốc tiểu đường',
+    'Thuốc tim mạch',
+    'Thuốc giảm đau khi cần',
+  ],
+  rehabilitationNeeds: ['Không cần', 'Tập đi lại', 'Phục hồi sau tai biến', 'Tập vận động tay', 'Tập nuốt'],
+}
+
+// Gợi ý nội dung mục bệnh nền, tiền sử bệnh (chọn một, hoặc Khác để gõ)
+export const CHRONIC_CONDITION_CHOICES = [
+  'Tăng huyết áp',
+  'Đái tháo đường',
+  'Bệnh tim',
+  'Bệnh phổi tắc nghẽn mạn tính',
+  'Thoái hóa khớp',
+  'Sa sút trí tuệ',
+]
+
+export const MEDICAL_HISTORY_CHOICES = ['Tai biến mạch máu não', 'Nhồi máu cơ tim', 'Gãy xương', 'Phẫu thuật']
