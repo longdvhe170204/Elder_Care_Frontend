@@ -53,12 +53,12 @@ export function LoginForm({ onLoggedIn, submitLabel = 'Đăng nhập', large = f
     }
   }
 
-  const labelClass = large ? 'text-base font-semibold lg:text-lg' : undefined
-  const inputClass = large ? 'h-12 rounded-[10px] px-3.5 text-base md:text-base lg:h-14' : 'h-11'
+  const labelClass = large ? 'text-sm font-semibold' : undefined
+  const inputClass = large ? 'h-11 rounded-lg px-3 text-sm md:text-sm' : 'h-11'
 
   return (
-    <form onSubmit={submit} noValidate className={cn('flex flex-col', large ? 'gap-5' : 'gap-4')}>
-      <FieldGroup className={large ? 'gap-6' : undefined}>
+    <form onSubmit={submit} noValidate className={cn('flex flex-col', large ? 'gap-3.5' : 'gap-4')}>
+      <FieldGroup className={large ? 'gap-4' : undefined}>
         <Field data-invalid={!!errors.username || undefined}>
           <FieldLabel htmlFor="login-user" className={labelClass}>
             Tên đăng nhập
@@ -107,7 +107,7 @@ export function LoginForm({ onLoggedIn, submitLabel = 'Đăng nhập', large = f
       </ProblemAlert>
       <Button
         type="submit"
-        className={large ? 'h-14 rounded-lg text-lg font-semibold lg:h-[70px] lg:text-2xl' : 'h-11'}
+        className={large ? 'h-12 rounded-lg text-base font-semibold' : 'h-11'}
         disabled={saving}
       >
         {submitLabel}
@@ -137,7 +137,7 @@ export function LoginPage({ onNavigate = goTo }) {
     <div className="flex justify-end">
       <button
         type="button"
-        className="min-h-11 rounded-md px-1 text-base font-semibold text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none lg:text-xl"
+        className="min-h-11 rounded-md px-1 text-sm font-semibold text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
         onClick={() => {
           setResetDone(false)
           setMode('forgot')
@@ -151,21 +151,26 @@ export function LoginPage({ onNavigate = goTo }) {
   return (
     <div className="grid min-h-screen bg-card lg:grid-cols-[11fr_9fr]">
       {/* Cột minh họa: nền xanh giữ nguyên ở chế độ tối để hình nét trắng luôn đủ tương phản */}
-      <div className="relative hidden overflow-hidden bg-sidebar-primary lg:block" aria-hidden>
+      {/* Hình đặt giữa cột theo chiều dọc; mép dưới hình là nét cắt nên làm mờ dần cho khỏi thành đường thẳng */}
+      <div className="hidden items-center justify-center overflow-hidden bg-sidebar-primary px-12 py-10 lg:flex" aria-hidden>
         <img
           src={illustration}
           alt=""
-          className="absolute bottom-0 left-1/2 h-[78%] max-w-none -translate-x-[51.5%] object-contain object-bottom"
+          className="h-auto max-h-[78vh] w-full max-w-[640px] object-contain"
+          style={{
+            maskImage: 'linear-gradient(to bottom, #000 82%, transparent)',
+            WebkitMaskImage: 'linear-gradient(to bottom, #000 82%, transparent)',
+          }}
         />
       </div>
 
       <main className="flex items-center justify-center px-4 py-10 sm:px-10">
-        <div className="flex w-full max-w-[508px] flex-col gap-8 lg:gap-9">
-          <div className="flex flex-col items-center gap-4 text-center lg:gap-9">
-            <span className="text-3xl leading-tight font-semibold text-primary lg:text-[39px]">
+        <div className="flex w-full max-w-[356px] flex-col gap-6">
+          <div className="flex flex-col items-center gap-3 text-center lg:gap-5">
+            <span className="text-2xl leading-tight font-semibold text-primary lg:text-[27px]">
               Elder_Care
             </span>
-            <h1 className="text-4xl leading-tight font-semibold text-foreground lg:text-[56px]">
+            <h1 className="text-3xl leading-tight font-semibold text-foreground lg:text-[39px]">
               {mode === 'forgot' ? 'Quên mật khẩu' : 'Đăng nhập'}
             </h1>
           </div>
@@ -190,7 +195,7 @@ export function LoginPage({ onNavigate = goTo }) {
                   onNavigate(home === '/' ? `/${window.location.hash}` : home)
                 }}
               />
-              <div className="flex flex-col gap-2 text-center text-sm text-muted-foreground">
+              <div className="flex flex-col gap-2 text-center text-xs text-muted-foreground">
                 {!resetAvailable && (
                   <p>
                     Quên mật khẩu? Nhân viên liên hệ Quản lý viện; người thân liên hệ Hành chính của viện để được cấp
