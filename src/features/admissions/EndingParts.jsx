@@ -489,8 +489,14 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const requesterOptions = useRequesterOptions(residentId)
-  const cases =
-    role === 'DOCTOR' ? END_CASES.filter(([c]) => ['DISCHARGE', 'TRANSFER_TO_ANOTHER_FACILITY'].includes(c)) : END_CASES
+  // Demo 2026-11-26 (E): Bác sĩ lập xuất viện, chuyển cơ sở (kèm lý do y tế, nơi chuyển đến); vai trò khác (Hành chính) chỉ
+  // lập hết hạn, chấm dứt hợp đồng, không có hai ô đó
+  const clinical = role === 'DOCTOR'
+  const cases = END_CASES.filter(([c]) =>
+    clinical
+      ? ['DISCHARGE', 'TRANSFER_TO_ANOTHER_FACILITY'].includes(c)
+      : ['CONTRACT_EXPIRED', 'CONTRACT_TERMINATION'].includes(c),
+  )
 
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
@@ -551,12 +557,14 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
             onChange={setEndCase}
             error={shown('endCase')}
           />
-          <Field>
-            <label className="flex items-center gap-2 type-body-sm">
-              <input type="checkbox" checked={medical} onChange={(e) => setMedical(e.target.checked)} />
-              Vì lý do y tế
-            </label>
-          </Field>
+          {clinical && (
+            <Field>
+              <label className="flex items-center gap-2 type-body-sm">
+                <input type="checkbox" checked={medical} onChange={(e) => setMedical(e.target.checked)} />
+                Vì lý do y tế
+              </label>
+            </Field>
+          )}
           <Field data-invalid={!!shown('date') || undefined}>
             <FieldLabel htmlFor="ending-date">Ngày kết thúc dự kiến</FieldLabel>
             <Input
@@ -568,16 +576,18 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
             />
             {shown('date') && <FieldError>{shown('date')}</FieldError>}
           </Field>
-          <Field data-invalid={!!shown('destination') || undefined}>
-            <FieldLabel htmlFor="ending-destination">Nơi chuyển đến</FieldLabel>
-            <Input
-              id="ending-destination"
-              className="h-11"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-            />
-            {shown('destination') && <FieldError>{shown('destination')}</FieldError>}
-          </Field>
+          {clinical && (
+            <Field data-invalid={!!shown('destination') || undefined}>
+              <FieldLabel htmlFor="ending-destination">Nơi chuyển đến</FieldLabel>
+              <Input
+                id="ending-destination"
+                className="h-11"
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+              />
+              {shown('destination') && <FieldError>{shown('destination')}</FieldError>}
+            </Field>
+          )}
           <SuggestField
             id="ending-requested-by"
             label="Người đề nghị"
