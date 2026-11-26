@@ -19,9 +19,9 @@ import { loadDoseRound, recordDoses } from './doseRound'
 import { hhmm } from './doseRoundView'
 import { windowOf } from './medicationTime'
 import { FamilyMedicationPanel } from './FamilyMedicationPanel'
+import { DoseHistoryPanel } from './DoseHistoryPanel'
 import { LateDoseSheet } from './LateDoseSheet'
 import { PrescriptionPanel } from './PrescriptionPanel'
-import { PrnPanel } from './PrnPanel'
 import { ReconciliationPanel } from './ReconciliationPanel'
 import { listWorklist } from './reconciliationApi'
 import { STATUS as RECONCILIATION_STATUS } from './reconciliationView'
@@ -169,7 +169,7 @@ function DoseCard({ group, canRecord, onOpen, onLate }) {
             {r.name}
           </span>
           <span className="text-xs font-medium text-slate-500 tabular-nums">
-            {r.room === '—' ? 'Bán trú' : r.room}
+            {r.room === '—' ? 'Chưa có phòng' : r.room}
           </span>
         </div>
         <DoseStatus status={group.status} />
@@ -310,8 +310,26 @@ function ReconciliationMode({ resident, setResident, isDoctor, onSaved }) {
     )
   }, [needsName, resident?.id, setResident])
   const name = resident && (resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`)
+  const pendingCount = entries.filter((e) => e.status === 'PENDING_CONFIRMATION').length
+  const overdueCount = entries.filter((e) => e.overdue).length
+  const openCount = entries.filter((e) => !e.reconciliationId || e.status === 'OPEN').length
   return (
     <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border bg-card p-4 shadow-xs">
+          <p className="text-xs font-semibold text-muted-foreground">Chờ bác sĩ xác nhận</p>
+          <p className="mt-1 text-2xl font-extrabold tabular-nums">{pendingCount}</p>
+        </div>
+        <div className="rounded-2xl border bg-card p-4 shadow-xs">
+          <p className="text-xs font-semibold text-muted-foreground">Quá hạn xử lý</p>
+          <p className="mt-1 text-2xl font-extrabold tabular-nums text-rose-600">{overdueCount}</p>
+        </div>
+        <div className="rounded-2xl border bg-card p-4 shadow-xs">
+          <p className="text-xs font-semibold text-muted-foreground">Chờ lập / Đang mở</p>
+          <p className="mt-1 text-2xl font-extrabold tabular-nums">{openCount}</p>
+        </div>
+      </div>
+
       <NowStrip
         label="Cần đối chiếu"
         items={entries.map((e) => ({
@@ -501,17 +519,6 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
               )}
             </ToggleGroupItem>
             <ToggleGroupItem
-              value="prn"
-              className={cn(
-                'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
-                mode === 'prn'
-                  ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
-              )}
-            >
-              Thuốc khi cần (PRN)
-            </ToggleGroupItem>
-            <ToggleGroupItem
               value="prescriptions"
               className={cn(
                 'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
@@ -543,6 +550,17 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
               )}
             >
               Thuốc gia đình gửi
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              value="history"
+              className={cn(
+                'rounded-full px-4 py-2.5 text-sm font-extrabold transition-all duration-200',
+                mode === 'history'
+                  ? '!bg-white !text-[#24496F] shadow-md border-2 border-[#24496F] -translate-y-0.5'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/70 hover:shadow-xs dark:text-slate-300 dark:hover:bg-slate-700 dark:hover:text-white',
+              )}
+            >
+              Lịch sử phát thuốc
             </ToggleGroupItem>
             {role === MANAGER_ROLE && (
               <ToggleGroupItem
@@ -706,8 +724,8 @@ export function MedicationPage({ role, mode: initialMode = 'scheduled', resident
         {announcement}
       </p>
 
-      {mode === 'prn' ? (
-        <PrnPanel canRecord={canRecord} now={shift.now} onSaved={setAnnouncement} />
+      {mode === 'history' ? (
+        <DoseHistoryPanel />
       ) : mode === 'family' ? (
         <FamilyMedicationPanel canRecord={canRecord} onSaved={setAnnouncement} />
       ) : mode === 'temporary' ? (
