@@ -1,4 +1,4 @@
-﻿import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { json, mockRoutes } from '@/test/fetchRoutes'
 import { DoseSheet } from './DoseSheet'
@@ -39,7 +39,7 @@ const group = (dose = DOSE) => ({ key: 'g', time: '08:00', resident: RESIDENT, d
 describe('DoseSheet BF-07', () => {
   it('BR_M07_26_hoan_batBuocLyDo_roiGuiKetQuaHoan', () => {
     const onSave = vi.fn()
-    render(<DoseSheet group={group()} now="08:10" onOpenChange={() => {}} onSave={onSave} />)
+    render(<DoseSheet group={group()} now="08:10" onOpenChange={() => { }} onSave={onSave} />)
     expect(screen.getByText('Quan trọng về thời gian')).toBeTruthy()
 
     fireEvent.click(screen.getByRole('button', { name: 'Hoãn có chủ đích' }))
@@ -55,7 +55,7 @@ describe('DoseSheet BF-07', () => {
 
   it('BR_M07_26_chiSo_batBuocKhiDaDung', () => {
     const onSave = vi.fn()
-    render(<DoseSheet group={group()} now="08:10" onOpenChange={() => {}} onSave={onSave} />)
+    render(<DoseSheet group={group()} now="08:10" onOpenChange={() => { }} onSave={onSave} />)
     fireEvent.click(screen.getByRole('button', { name: 'Đã dùng' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu xác nhận' }))
     expect(screen.getByText(/Nhập chỉ số đo trước khi dùng: Đường huyết/)).toBeTruthy()
@@ -66,12 +66,24 @@ describe('DoseSheet BF-07', () => {
     expect(onSave.mock.calls[0][0][0].measure).toEqual({ BLOOD_GLUCOSE: '6,4' })
   })
 
-  it('BR_M07_26_nhanLieu_guiClaimVaHienGioHetHan', async () => {
-    api.on('POST', '/medication-doses/10-202611050800/claim', json(200, { claimExpiresAt: '2026-11-05T01:20:00Z' }))
-    render(<DoseSheet group={group()} now="08:10" onOpenChange={() => {}} onSave={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Nhận liều' }))
-    expect(await screen.findByText(/Bạn đã nhận liều đến 08:20/)).toBeTruthy()
-    expect(api.calls('POST', '/medication-doses/10-202611050800/claim')).toHaveLength(1)
+  it('M07_boChucNangNhanLieu_khongHienNutNhanLieu', () => {
+    render(<DoseSheet group={group()} now="08:10" onOpenChange={() => { }} onSave={() => { }} />)
+    expect(screen.queryByRole('button', { name: 'Nhận liều' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Bỏ nhận' })).toBeNull()
+  })
+
+  it('M07_11_tamGiu1Lieu_batBuocLyDo_vaGuiHold', async () => {
+    api.on('POST', '/medication-doses/10-202611050800/hold', json(200, {}))
+    const onSave = vi.fn()
+    render(<DoseSheet group={group()} now="08:10" onOpenChange={() => { }} onSave={onSave} />)
+    fireEvent.click(screen.getByRole('button', { name: 'Tạm giữ 1 liều' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu xác nhận' }))
+    expect(screen.getByText('Nhập lý do tạm giữ liều (chỉ số bất thường)')).toBeTruthy()
+    fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Huyết áp 175/100' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu xác nhận' }))
+    expect(onSave).toHaveBeenCalledOnce()
+    await recordDoses(onSave.mock.calls[0][0], new Date('2026-11-05T08:10:00+07:00'))
+    expect(api.calls('POST', '/medication-doses/10-202611050800/hold')).toHaveLength(1)
   })
 })
 
@@ -97,7 +109,7 @@ describe('LateDoseSheet', () => {
   it('Q327_boLo_ghiDaDungMuon_guiBanDinhChinhApi000', async () => {
     api.on('POST', '/corrections/M07.DOSE_RESULT/555', json(201, { id: 1 }))
     const onSaved = vi.fn()
-    render(<LateDoseSheet dose={{ ...DOSE, status: 'Bỏ lỡ', resultId: 555 }} now="09:30" onSaved={onSaved} onClose={() => {}} />)
+    render(<LateDoseSheet dose={{ ...DOSE, status: 'Bỏ lỡ', resultId: 555 }} now="09:30" onSaved={onSaved} onClose={() => { }} />)
     fireEvent.click(screen.getByRole('button', { name: 'Ghi đã dùng muộn' }))
     expect(screen.getByText('Nhập lý do')).toBeTruthy()
 
@@ -106,7 +118,7 @@ describe('LateDoseSheet', () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled())
     const [, init] = api.calls('POST', '/corrections/M07.DOSE_RESULT/555')[0]
     const body = JSON.parse(init.body)
-    expect(body).toMatchObject({ type: 'AMEND_CONTENT', reason: 'Quên ghi, đã cho dùng' })
+    expect(body).toMatchObject({ type: 'AMEND_CONTENT', reason: '[Uống muộn thực tế] Quên ghi, đã cho dùng' })
     expect(body.correctedContent.resultType).toBe('ADMINISTERED')
     expect(body.correctedContent.administeredAt).toMatch(/T09:30:00\+07:00$/)
     expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
@@ -159,7 +171,7 @@ describe('FamilyMedicationPanel', () => {
   })
 
   async function open() {
-    render(<FamilyMedicationPanel canRecord onSaved={() => {}} />)
+    render(<FamilyMedicationPanel canRecord onSaved={() => { }} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, HS-0005' }))
     await screen.findByText('Paracetamol')
   }
@@ -201,7 +213,7 @@ describe('PrnPanel hiệu quả', () => {
     api.on('GET', '/medications', json(200, [{ id: 4, name: 'Paracetamol', concentration: '500mg', usageUnit: 'viên' }]))
     api.on('GET', '/prescriptions/7/prn-administrations', json(200, { prescriptionId: 7, indication: 'đau', canAdministerNow: true, administrations: [{ id: 88, administeredAt: recent }] }))
     api.on('POST', '/prescriptions/7/prn-administrations/88/effectiveness', json(201, {}))
-    render(<PrnPanel canRecord now="10:00" onSaved={() => {}} />)
+    render(<PrnPanel canRecord now="10:00" onSaved={() => { }} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     expect(await screen.findByText(/Chỉ định: đau/)).toBeTruthy()
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi hiệu quả' }))
