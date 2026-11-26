@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getContractsById,
   getContractsByIdAddenda,
@@ -41,12 +41,17 @@ import {
 import { getRoomTypes } from '@/api/api003'
 import { CONTRACT_REASONS } from '@/common/quickChoices'
 
-// Loại dịch vụ đặt theo lựa chọn mức chăm sóc, loại phòng của hợp đồng (Q-300, 6.4), không có ô tick
-const FIXED_SERVICE_TYPES = ['CARE', 'RESIDENCY_FEE']
 import { Choices, Info, ReasonField, ResidentSelect } from './FormParts'
 import { FileInput } from '@/common/FileInput'
 import { MoneyInput } from '@/common/MoneyInput'
+import { DateField } from '@/common/DateField'
+import { DiscardChangesDialog } from '@/common/DiscardChangesDialog'
+import { displayDate, isoDate } from '@/common/dateText'
+import { Toggle } from '@/components/ui/toggle'
+import { ChevronDown } from 'lucide-react'
+import { cn } from 'cn'
 import { useBedChangeNames } from './useBedChangeNames'
+import { bedText, roomTypeMismatch, useAllocatedBed } from './useAllocatedBed'
 
 // Hôm nay ở Việt Nam, dạng yyyy-MM-dd (en-CA định dạng đúng kiểu này)
 const vietnamToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
@@ -183,6 +188,8 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
   const bedNames = useBedChangeNames(
     addenda.filter((a) => a.changeTypes?.includes('BED')).flatMap((a) => [a.contentBefore, a.contentAfter]),
   )
+  const allocated = useAllocatedBed(contract.residentId, contract.id)
+  const mismatch = roomTypeMismatch(allocated, contract.roomTypeId)
   const allowed = contract.allowedCommands ?? []
   const hidden = contract.hiddenFields ?? []
   const draft = contract.status === 'DRAFT'
@@ -272,6 +279,19 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
         </Info>
         {contract.roomTypeId && (
           <Info label="Loại phòng">{roomTypeName ?? `Loại phòng mã ${contract.roomTypeId}`}</Info>
+        )}
+        {allocated.bed && (
+          <Info label="Giường đã phân bổ">
+            {bedText(allocated.bed.location) +
+              (allocated.roomTypeName(allocated.bed.roomTypeId)
+                ? ` (${allocated.roomTypeName(allocated.bed.roomTypeId)})`
+                : '')}
+          </Info>
+        )}
+        {mismatch && (
+          <p className="type-body-sm rounded-md border border-warning-foreground/40 bg-warning px-3 py-2 text-warning-foreground">
+            {mismatch}
+          </p>
         )}
         <Info label="Mức chăm sóc">{labelOf(CARE_LEVELS, shown.careLevel)}</Info>
         <Info label="Kỳ tính phí lưu trú">{labelOf(BILLING_PERIODS, shown.residencyFeeBillingPeriod)}</Info>
@@ -425,28 +445,38 @@ const DAYS = [
 ]
 
 // Lập hợp đồng Nháp hoặc sửa Nháp (tải lại để lấy ETag cho If-Match). residentId: người cao tuổi đã biết khi lập mới
-// (mở từ màn Hồ sơ tiếp nhận); khi đó và khi sửa chỉ hiện họ tên (residentName), không có ô chọn người cao tuổi khác
+// (mở từ màn Hồ sơ tiếp nhận); khi đó và khi sửa chỉ hiện họ tên ở đầu khung, không có ô chọn người cao tuổi khác
 // (chủ dự án yêu cầu 2026-11-17). Ô chọn chỉ còn khi lập từ danh sách Hợp đồng, chưa gắn với ai.
-// Lập hợp đồng ba bước kèm tóm tắt chi phí (nhóm A BF-01 phương án B, chủ dự án chọn 2026-11-21). Kỳ tính phí theo loại
-// lưu trú: nội trú tháng hoặc ngày, bán trú buổi (chủ dự án xác nhận). Dịch vụ chia nhóm theo loại (api-004 Service.type);
-// tóm tắt là số tính để hiển thị theo phiên bản đơn giá hiệu lực tại ngày bắt đầu, không lưu.
-const CONTRACT_STEPS = ['Loại lưu trú, ngày', 'Mức, phòng', 'Dịch vụ, đặt cọc']
-const STEP_OF_ERROR = { resident: 0, type: 0, start: 0, end: 0, level: 1, roomType: 1, period: 1 }
+// Audit BF-01 2026-11-27 (chủ dự án duyệt): một trang ba phần (Lưu trú; Mức, phòng; Dịch vụ, đặt cọc), cột phải Tóm tắt chi
+// phí, đầu và chân khung cố định, đóng khi đã nhập thì hỏi lại. Dịch vụ theo Q-426: dịch vụ chăm sóc theo mức, phí lưu trú
+// theo loại phòng, buổi bán trú theo loại lưu trú là tác động kèm lựa chọn (Q-300), không tick tay; chỉ phục hồi, hoạt động,
+// đưa đi khám, tiêm là dịch vụ đi kèm chọn được (gập lại, không bắt buộc); suất ăn, người thân ở lại, thuốc, vật phẩm, vật tư
+// đi theo luồng riêng nên không có trong form. Đặt cọc: chọn "Có đặt cọc" hoặc "Không yêu cầu đặt cọc" (spec 004 US4); nghiệp
+// vụ chưa có chính sách tính khoản cọc nên Hành chính nhập số tiền.
+// defaults (lập mới từ Hồ sơ tiếp nhận; chủ dự án duyệt 2026-11-27, chép lại thông tin Hành chính đã ghi, không phải gợi ý
+// Q-307): residenceType, startDate (yyyy-MM-dd) từ lượt đăng ký; careLevel là mức hiện hành, chưa có thì mức dự kiến; roomTypeId
+// của giường đã phân bổ. Sửa được trước khi lưu. Kỳ tính phí, dịch vụ đi kèm, đặt cọc không điền sẵn.
+const FORM_ID = 'contract-form'
 const PERIODS_OF = { DAY_CARE: ['SESSION'] }
 const RESIDENTIAL_PERIODS = ['MONTH', 'DAY']
-const SUPPLY_TYPES = ['FACILITY_SUPPLIED_MEDICATION', 'CONSUMABLE', 'MEDICAL_SUPPLY']
+const REGISTRABLE_TYPES = ['REHABILITATION', 'ACTIVITY', 'MEDICAL_ESCORT', 'INJECTION']
 const UNIT_OF = { MONTH: 'tháng', DAY: 'ngày', SESSION: 'buổi', OCCURRENCE: 'lần', UNIT: 'đơn vị' }
+const DEPOSIT_CHOICES = [
+  ['yes', 'Có đặt cọc'],
+  ['no', 'Không yêu cầu đặt cọc'],
+]
 
 function priceOn(versions, date) {
-  return versions.find((v) => v.effectiveFrom <= date && (!v.effectiveTo || v.effectiveTo >= date))?.unitPrice
+  return versions?.find((v) => v.effectiveFrom <= date && (!v.effectiveTo || v.effectiveTo >= date))?.unitPrice
 }
 
-function ContractCostSummary({ lines, date }) {
+// Phiên bản đơn giá của các dịch vụ cần hiện giá (tóm tắt và dịch vụ đi kèm); null khi không xem được
+function usePriceVersions(ids) {
   const [prices, setPrices] = useState({})
-  const ids = lines.map((l) => l.id).join(',')
+  const key = [...new Set(ids)].sort().join(',')
   useEffect(() => {
     let active = true
-    for (const id of ids ? ids.split(',').map(Number) : []) {
+    for (const id of key ? key.split(',').map(Number) : []) {
       getServicesByIdPriceVersions({ path: { id } })
         .then(({ data }) => active && setPrices((p) => ({ ...p, [id]: data })))
         .catch(() => active && setPrices((p) => ({ ...p, [id]: null })))
@@ -454,48 +484,93 @@ function ContractCostSummary({ lines, date }) {
     return () => {
       active = false
     }
-  }, [ids])
-  const priced = lines.map((l) => ({ ...l, price: prices[l.id] ? priceOn(prices[l.id], date) : undefined }))
-  const monthly = priced.filter((l) => l.billingPeriod === 'MONTH')
+  }, [key])
+  return prices
+}
+
+const priceText = (price, period) =>
+  price === undefined ? 'Chưa xem được đơn giá' : `${money(price)}/${UNIT_OF[period] ?? 'lần'}`
+
+function ContractCostSummary({ lines, deposit }) {
+  const monthly = lines.filter((l) => l.billingPeriod === 'MONTH' && !l.inPackage)
   const total = monthly.every((l) => l.price !== undefined) ? monthly.reduce((sum, l) => sum + l.price, 0) : null
   return (
     <section
       aria-labelledby="contract-cost"
-      className="flex h-fit flex-col gap-2 rounded-xl border bg-card p-4 md:sticky md:top-0"
+      className="flex h-fit flex-col gap-3 rounded-xl bg-muted/50 p-4 md:sticky md:top-0"
     >
       <h3 id="contract-cost" className="type-card-title">
         Tóm tắt chi phí
       </h3>
       {lines.length === 0 ? (
-        <p className="type-body-sm text-muted-foreground">Chọn mức chăm sóc, loại phòng và dịch vụ để xem chi phí.</p>
+        <p className="type-body-sm text-muted-foreground">Chưa có khoản nào.</p>
       ) : (
-        <ul className="flex flex-col gap-1.5">
-          {priced.map((l) => (
+        <ul className="flex flex-col gap-2">
+          {lines.map((l) => (
             <li key={l.id} className="flex flex-col">
               <span className="type-body-sm">{l.name}</span>
               <span className="type-caption tabular-nums text-muted-foreground">
-                {l.price === undefined
-                  ? 'Chưa xem được đơn giá'
-                  : `${money(l.price)}/${UNIT_OF[l.billingPeriod] ?? 'lần'}`}
+                {l.inPackage ? 'Thuộc gói' : priceText(l.price, l.billingPeriod)}
               </span>
             </li>
           ))}
         </ul>
       )}
       {monthly.length > 0 && total !== null && (
-        <p className="flex items-baseline justify-between gap-2 border-t pt-2">
-          <span className="type-label">Ước tính mỗi tháng</span>
-          <span className="type-card-title tabular-nums">{money(total)}</span>
+        <p className="flex items-baseline justify-between gap-2 border-t pt-3">
+          <span className="type-label">Mỗi tháng</span>
+          <span className="type-card-title tabular-nums whitespace-nowrap">{money(total)}</span>
         </p>
       )}
-      <p className="type-caption text-muted-foreground">
-        Theo đơn giá hiện hành tại ngày bắt đầu; khoản theo ngày, buổi, lần chưa cộng vào ước tính.
-      </p>
+      {deposit && (
+        <p className="flex items-baseline justify-between gap-2 border-t pt-3">
+          <span className="type-label">Đặt cọc</span>
+          <span className="type-body-sm tabular-nums whitespace-nowrap">{deposit}</span>
+        </p>
+      )}
     </section>
   )
 }
 
-export function ContractSheet({ contract, residentId: presetResidentId = null, residentName = null, onClose, onDone }) {
+function Required() {
+  return (
+    <span aria-hidden="true" className="text-destructive">
+      *
+    </span>
+  )
+}
+
+function Section({ number, title, children }) {
+  return (
+    <section aria-label={title} className="flex flex-col gap-5 border-t py-6 first:border-0 first:pt-0">
+      <h3 className="type-label">{`${number} · ${title}`}</h3>
+      {children}
+    </section>
+  )
+}
+
+function DateInput({ id, label, required, value, onChange, error }) {
+  return (
+    <Field data-invalid={!!error || undefined}>
+      <FieldLabel htmlFor={id}>
+        {label}
+        {required && <Required />}
+      </FieldLabel>
+      <DateField id={id} value={value} onChange={onChange} invalid={!!error} aria-required={required || undefined} />
+      {error && <FieldError>{error}</FieldError>}
+    </Field>
+  )
+}
+
+export function ContractSheet({
+  contract,
+  residentId: presetResidentId = null,
+  residentName = null,
+  residentCode = null,
+  defaults = {},
+  onClose,
+  onDone,
+}) {
   const editing = !!contract
   const fixedResident = editing || presetResidentId != null
   const [etag, setEtag] = useState(null)
@@ -503,24 +578,32 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
   const [residentId, setResidentId] = useState(
     contract ? String(contract.residentId) : presetResidentId ? String(presetResidentId) : '',
   )
-  const [type, setType] = useState(contract?.residenceType ?? '')
-  const [startDate, setStartDate] = useState(contract?.startDate ?? '')
-  const [endDate, setEndDate] = useState(contract?.endDate ?? '')
-  const [level, setLevel] = useState(contract?.careLevel ?? '')
+  const [type, setType] = useState(contract?.residenceType ?? defaults.residenceType ?? '')
+  const [startText, setStartText] = useState(displayDate(contract?.startDate ?? defaults.startDate))
+  const [endText, setEndText] = useState(displayDate(contract?.endDate))
+  const [level, setLevel] = useState(contract?.careLevel ?? defaults.careLevel ?? '')
   const [period, setPeriod] = useState(contract?.residencyFeeBillingPeriod ?? '')
   const [picked, setPicked] = useState(
     () => new Map((contract?.services ?? []).map((s) => [s.serviceId, !!s.inPackage])),
   )
-  const [noDeposit, setNoDeposit] = useState(!!contract?.noDepositRequired)
+  const [depositChoice, setDepositChoice] = useState(
+    contract?.noDepositRequired ? 'no' : contract?.depositAmount != null ? 'yes' : '',
+  )
   const [deposit, setDeposit] = useState(contract?.depositAmount != null ? String(contract.depositAmount) : '')
   const [schedule, setSchedule] = useState(contract?.arrivalSchedule ?? [])
   const [roomTypes, setRoomTypes] = useState(null)
-  const [roomTypeId, setRoomTypeId] = useState(contract?.roomTypeId ? String(contract.roomTypeId) : '')
+  const [roomTypeId, setRoomTypeId] = useState(() => {
+    const id = contract ? contract.roomTypeId : defaults.roomTypeId
+    return id ? String(id) : ''
+  })
+  // Dịch vụ đi kèm gập sẵn; sửa hợp đồng đã có dòng ngoài chăm sóc, phí lưu trú thì mở sẵn
+  const [extrasOpen, setExtrasOpen] = useState(() => (contract?.services ?? []).length > 2)
   const [submitted, setSubmitted] = useState(false)
-  const [step, setStep] = useState(0)
-  const [checked, setChecked] = useState([false, false, false])
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const form = useRef(null)
+  const allocated = useAllocatedBed(residentId, null)
 
   useEffect(() => {
     getServices({ query: {} })
@@ -535,62 +618,105 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
         .catch((e) => setFailure(problemOf(e)))
   }, [editing, contract?.id])
 
+  const startDate = isoDate(startText)
+  const endDate = isoDate(endText)
   // 004 FR-019: hợp đồng nội trú ghi loại phòng (giường do phân bổ của 003); chỉ loại phòng phục vụ loại lưu trú đã chọn
   const residential = type === 'LONG_TERM_RESIDENTIAL' || type === 'SHORT_TERM_RESIDENTIAL'
-  const roomTypeOptions = (roomTypes ?? []).filter((t) =>
-    type === 'SHORT_TERM_RESIDENTIAL' ? t.servesShortTerm : t.servesLongTerm,
-  )
+  const roomTypeOptions = (roomTypes ?? [])
+    .filter((t) => (type === 'SHORT_TERM_RESIDENTIAL' ? t.servesShortTerm : t.servesLongTerm))
+    .sort((a, b) => (a.standardBeds ?? 99) - (b.standardBeds ?? 99))
+    .map((t) => [String(t.id), t.name])
+  const periodOptions = BILLING_PERIODS.filter(([value]) => (PERIODS_OF[type] ?? RESIDENTIAL_PERIODS).includes(value))
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
     type: !type && 'Chọn loại lưu trú',
-    roomType: residential && !roomTypeId && 'Chọn loại phòng',
-    start: !startDate && 'Nhập ngày bắt đầu',
-    end: type === 'SHORT_TERM_RESIDENTIAL' && !endDate && 'Nội trú ngắn ngày cần ngày kết thúc',
+    start: startText.trim() ? !startDate && 'Nhập ngày có thật, dạng DD/MM/YYYY' : 'Nhập ngày bắt đầu',
+    end: endText.trim()
+      ? !endDate
+        ? 'Nhập ngày có thật, dạng DD/MM/YYYY'
+        : startDate && endDate < startDate && 'Ngày kết thúc không trước ngày bắt đầu'
+      : type === 'SHORT_TERM_RESIDENTIAL' && 'Nội trú ngắn ngày cần ngày kết thúc',
     level: !level && 'Chọn mức chăm sóc',
-    period: !period && 'Chọn kỳ tính phí lưu trú',
+    roomType: residential && !roomTypeId && 'Chọn loại phòng',
+    period: type && !period && 'Chọn kỳ tính phí lưu trú',
+    deposit: !depositChoice && 'Chọn đặt cọc',
+    depositAmount: depositChoice === 'yes' && !(Number(deposit) > 0) && 'Nhập khoản đặt cọc',
   }
-  const shown = (key) => (submitted || checked[STEP_OF_ERROR[key]] ? errors[key] : null)
-  const periodOptions = BILLING_PERIODS.filter(([value]) => (PERIODS_OF[type] ?? RESIDENTIAL_PERIODS).includes(value))
-  const stepHasError = (i) => Object.entries(errors).some(([key, value]) => value && STEP_OF_ERROR[key] === i)
+  const shown = (key) => (submitted ? errors[key] || null : null)
 
   function changeType(next) {
     setType(next)
     // Kỳ đã chọn không hợp loại lưu trú mới thì bỏ, người dùng chọn lại (không tự chọn thay)
     if (period && !(PERIODS_OF[next] ?? RESIDENTIAL_PERIODS).includes(period)) setPeriod('')
+    if (next === 'DAY_CARE') setRoomTypeId('')
   }
 
-  function next() {
-    setChecked((c) => c.map((v, i) => (i === step ? true : v)))
-    if (!stepHasError(step)) setStep(step + 1)
-  }
-
-  // Q-300, 6.4 (chủ dự án duyệt 2026-11-20): dịch vụ chăm sóc theo mức của hợp đồng và phí lưu trú theo loại phòng là tác
-  // động kèm lựa chọn mức, loại phòng của Hành chính, không tick tay; dòng cũ của mức, loại phòng khác bị thay khi lưu.
-  // Dịch vụ đi kèm vẫn chọn tay.
+  // Q-300, 6.4, Q-426: dịch vụ theo lựa chọn mức, loại phòng, loại lưu trú; dòng cũ của mức, loại phòng khác bị thay khi lưu
   const services = catalog ?? []
   const careService = services.find((s) => s.type === 'CARE' && s.careLevelCode === level)
   const feeService = residential
     ? services.find((s) => s.type === 'RESIDENCY_FEE' && s.roomTypeId === Number(roomTypeId))
-    : undefined
+    : type === 'DAY_CARE'
+      ? services.find((s) => s.type === 'DAY_CARE_SESSION')
+      : undefined
   const fixedServices = [careService, feeService].filter(Boolean)
-  const isFixed = (id) => FIXED_SERVICE_TYPES.includes(services.find((s) => s.id === id)?.type)
-  const optionalServices = services.filter(
-    (s) => !FIXED_SERVICE_TYPES.includes(s.type) && (s.type !== 'DAY_CARE_SESSION' || type === 'DAY_CARE'),
+  const fixedTypes = ['CARE', 'RESIDENCY_FEE', 'DAY_CARE_SESSION']
+  // Dịch vụ đi kèm: bốn loại của Q-426; hợp đồng nháp cũ có dòng loại khác thì vẫn hiện để bỏ được
+  const extraServices = services.filter(
+    (s) => REGISTRABLE_TYPES.includes(s.type) || (picked.has(s.id) && !fixedTypes.includes(s.type)),
   )
-  const extraServices = optionalServices.filter((s) => !SUPPLY_TYPES.includes(s.type))
-  const supplyServices = optionalServices.filter((s) => SUPPLY_TYPES.includes(s.type))
-  const summaryLines = [...fixedServices, ...optionalServices.filter((s) => picked.has(s.id))].map((s) => ({
+  const prices = usePriceVersions([...fixedServices, ...extraServices].map((s) => s.id))
+  const priceDate = startDate ?? vietnamToday()
+  const priceOf = (s) => (prices[s.id] ? priceOn(prices[s.id], priceDate) : undefined)
+  const summaryLines = [...fixedServices, ...extraServices.filter((s) => picked.has(s.id))].map((s) => ({
     id: s.id,
     name: s.name,
     billingPeriod: s.billingPeriod,
+    inPackage: !fixedTypes.includes(s.type) && !!picked.get(s.id),
+    price: priceOf(s),
   }))
+  const depositSummary =
+    depositChoice === 'no'
+      ? 'Không yêu cầu'
+      : depositChoice === 'yes' && Number(deposit) > 0
+        ? money(Number(deposit))
+        : null
 
-  async function save() {
+  const snapshot = JSON.stringify([
+    residentId,
+    type,
+    startText,
+    endText,
+    level,
+    period,
+    [...picked],
+    depositChoice,
+    deposit,
+    schedule,
+    roomTypeId,
+  ])
+  const [initialSnapshot] = useState(snapshot)
+  const dirty = snapshot !== initialSnapshot
+
+  function requestClose() {
+    if (busy) return
+    if (dirty) setConfirmClose(true)
+    else onClose()
+  }
+
+  async function save(event) {
+    event.preventDefault()
     setSubmitted(true)
-    const firstError = [0, 1, 2].find(stepHasError)
-    if (firstError !== undefined) setStep(firstError)
     // danh mục chưa tải xong thì chưa biết dòng nào là dịch vụ theo mức, theo loại phòng
-    if (firstError !== undefined || catalog === null) return
+    if (Object.values(errors).some(Boolean)) {
+      requestAnimationFrame(() => {
+        const first = form.current?.querySelector('[data-invalid="true"]')
+        first?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        first?.querySelector('input, button')?.focus({ preventScroll: true })
+      })
+      return
+    }
+    if (catalog === null) return
     setBusy(true)
     setFailure(null)
     const body = {
@@ -601,13 +727,13 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
       careLevel: level,
       residencyFeeBillingPeriod: period,
       services: [
-        ...fixedServices.map((s) => ({ serviceId: s.id, inPackage: !!picked.get(s.id) })),
-        ...[...picked]
-          .filter(([serviceId]) => !isFixed(serviceId))
-          .map(([serviceId, inPackage]) => ({ serviceId, inPackage })),
+        ...fixedServices.map((s) => ({ serviceId: s.id, inPackage: false })),
+        ...extraServices
+          .filter((s) => picked.has(s.id))
+          .map((s) => ({ serviceId: s.id, inPackage: !!picked.get(s.id) })),
       ],
-      noDepositRequired: noDeposit,
-      ...(!noDeposit && deposit !== '' && { depositAmount: Number(deposit) }),
+      noDepositRequired: depositChoice === 'no',
+      ...(depositChoice === 'yes' && { depositAmount: Number(deposit) }),
       ...(type === 'DAY_CARE' && { arrivalSchedule: schedule }),
       ...(residential && { roomTypeId: Number(roomTypeId) }),
     }
@@ -635,297 +761,304 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
     })
   }
 
+  const pickedExtras = extraServices.filter((s) => picked.has(s.id)).length
+  const showExtras = extrasOpen
+
   return (
-    <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent side="center" className="overflow-y-auto p-6 sm:max-w-5xl">
-        <SheetTitle>{editing ? 'Sửa hợp đồng nháp' : 'Lập hợp đồng nháp'}</SheetTitle>
-        <SheetDescription>
-          Đúng một dịch vụ chăm sóc theo mức của hợp đồng; người cao tuổi phải có người đại diện.
-        </SheetDescription>
-        <nav aria-label="Các bước lập hợp đồng" className="mt-4">
-          <ol className="flex flex-wrap gap-2">
-            {CONTRACT_STEPS.map((label, i) => (
-              <li key={label}>
-                <Button
-                  type="button"
-                  variant={i === step ? 'default' : 'outline'}
-                  className="h-9"
-                  aria-current={i === step ? 'step' : undefined}
-                  onClick={() => setStep(i)}
-                >
-                  {label}
-                </Button>
-              </li>
-            ))}
-          </ol>
-        </nav>
-        <div className="mt-4 grid gap-6 md:grid-cols-[minmax(0,1fr)_15rem]">
-          <FieldGroup>
-            {step === 0 && (
-              <>
-                {fixedResident ? (
-                  <Info label="Người cao tuổi">{residentName ?? `Mã ${residentId}`}</Info>
-                ) : (
-                  <ResidentSelect
-                    id="contract-resident"
-                    value={residentId}
-                    onChange={setResidentId}
-                    error={shown('resident')}
-                    onFailure={(e) => setFailure(problemOf(e))}
-                  />
-                )}
-                <Choices
-                  label="Loại lưu trú"
-                  options={RESIDENCE_TYPES}
-                  value={type}
-                  onChange={changeType}
-                  error={shown('type')}
-                />
-                <Field data-invalid={!!shown('start') || undefined}>
-                  <FieldLabel htmlFor="contract-start">Ngày bắt đầu</FieldLabel>
-                  <Input
-                    id="contract-start"
-                    type="date"
-                    className="h-11"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                  />
-                  {shown('start') && <FieldError>{shown('start')}</FieldError>}
-                </Field>
-                <Field data-invalid={!!shown('end') || undefined}>
-                  <FieldLabel htmlFor="contract-end">Ngày kết thúc</FieldLabel>
-                  <Input
-                    id="contract-end"
-                    type="date"
-                    className="h-11"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                  />
-                  {shown('end') && <FieldError>{shown('end')}</FieldError>}
-                </Field>
-                {type === 'DAY_CARE' && (
-                  <Field>
-                    <FieldLabel>Lịch đến theo tuần</FieldLabel>
-                    {schedule.map((row, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2">
-                        <select
-                          aria-label={`Thứ trong tuần dòng ${i + 1}`}
-                          className={SELECT}
-                          value={row.dayOfWeek ?? ''}
-                          onChange={(e) =>
-                            setSchedule((s) =>
-                              s.map((r, j) => (j === i ? { ...r, dayOfWeek: Number(e.target.value) } : r)),
-                            )
-                          }
-                        >
-                          <option value="">Chọn thứ</option>
-                          {DAYS.map(([d, text]) => (
-                            <option key={d} value={d}>
-                              {text}
-                            </option>
-                          ))}
-                        </select>
-                        <Input
-                          aria-label={`Giờ đến dòng ${i + 1}`}
-                          type="time"
-                          className="h-11 w-32"
-                          value={row.arrivalTime ?? ''}
-                          onChange={(e) =>
-                            setSchedule((s) => s.map((r, j) => (j === i ? { ...r, arrivalTime: e.target.value } : r)))
-                          }
-                        />
-                        <Input
-                          aria-label={`Giờ về dòng ${i + 1}`}
-                          type="time"
-                          className="h-11 w-32"
-                          value={row.departureTime ?? ''}
-                          onChange={(e) =>
-                            setSchedule((s) => s.map((r, j) => (j === i ? { ...r, departureTime: e.target.value } : r)))
-                          }
-                        />
-                        <Button
-                          variant="ghost"
-                          className="h-11"
-                          onClick={() => setSchedule((s) => s.filter((_, j) => j !== i))}
-                        >
-                          {`Bỏ dòng ${i + 1}`}
-                        </Button>
-                      </div>
-                    ))}
-                    <Button
-                      variant="outline"
-                      className="h-11 self-start"
-                      onClick={() => setSchedule((s) => [...s, {}])}
-                    >
-                      Thêm dòng lịch
-                    </Button>
-                  </Field>
-                )}
-              </>
+    <Sheet open onOpenChange={(next) => !next && requestClose()}>
+      <SheetContent side="center" className="gap-0 p-0 sm:max-w-5xl">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex shrink-0 flex-col gap-1 border-b px-6 pt-6 pb-4 pr-12">
+            <SheetTitle className="type-title">{editing ? 'Sửa hợp đồng nháp' : 'Lập hợp đồng nháp'}</SheetTitle>
+            {fixedResident && (
+              <SheetDescription>
+                {[residentName ?? `Mã ${residentId}`, residentCode].filter(Boolean).join(' · ')}
+              </SheetDescription>
             )}
-            {step === 1 && (
-              <>
-                <Choices
-                  label="Mức chăm sóc"
-                  options={CARE_LEVELS}
-                  value={level}
-                  onChange={setLevel}
-                  error={shown('level')}
-                />
-                {residential && (
-                  <Field data-invalid={!!shown('roomType') || undefined}>
-                    <FieldLabel htmlFor="contract-room-type">Loại phòng</FieldLabel>
-                    <select
-                      id="contract-room-type"
-                      className={SELECT}
-                      value={roomTypeId}
-                      aria-invalid={!!shown('roomType') || undefined}
-                      onChange={(e) => setRoomTypeId(e.target.value)}
-                    >
-                      <option value="">{roomTypes === null ? 'Đang tải…' : 'Chọn loại phòng'}</option>
-                      {roomTypeOptions.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                    {shown('roomType') && <FieldError>{shown('roomType')}</FieldError>}
-                  </Field>
-                )}
-                {type ? (
-                  <Choices
-                    label="Kỳ tính phí lưu trú"
-                    options={periodOptions}
-                    value={period}
-                    onChange={setPeriod}
-                    error={shown('period')}
-                  />
-                ) : (
-                  <p className="type-body-sm text-muted-foreground">Chọn loại lưu trú ở bước 1 để chọn kỳ tính phí.</p>
-                )}
-              </>
-            )}
-            {step === 2 && (
-              <>
-                <Field>
-                  <FieldLabel>Theo mức chăm sóc và loại phòng</FieldLabel>
-                  <ul className="flex flex-col gap-1 type-body-sm">
-                    <li>
-                      {careService
-                        ? `${careService.name}, theo mức chăm sóc`
-                        : level
-                          ? 'Danh mục chưa có dịch vụ chăm sóc hiệu lực cho mức này'
-                          : 'Dịch vụ chăm sóc: chọn mức chăm sóc'}
-                    </li>
-                    {residential && (
-                      <li>
-                        {feeService
-                          ? `${feeService.name}, theo loại phòng`
-                          : roomTypeId
-                            ? 'Danh mục chưa có phí lưu trú hiệu lực cho loại phòng này'
-                            : 'Phí lưu trú: chọn loại phòng'}
-                      </li>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+            <div className="grid gap-6 md:grid-cols-[minmax(0,1fr)_18rem]">
+              <form
+                id={FORM_ID}
+                ref={form}
+                onSubmit={save}
+                noValidate
+                aria-busy={busy || undefined}
+                aria-label={editing ? 'Sửa hợp đồng nháp' : 'Lập hợp đồng nháp'}
+              >
+                <FieldGroup className="gap-0">
+                  <Section number="01" title="Lưu trú">
+                    {!fixedResident && (
+                      <ResidentSelect
+                        id="contract-resident"
+                        value={residentId}
+                        onChange={setResidentId}
+                        error={shown('resident')}
+                        onFailure={(e) => setFailure(problemOf(e))}
+                      />
                     )}
-                  </ul>
-                </Field>
-                {catalog !== null && optionalServices.length === 0 && (
-                  <p className="type-body-sm text-muted-foreground">Chưa có dịch vụ đi kèm hiệu lực trong danh mục.</p>
-                )}
-                {extraServices.length > 0 && (
-                  <div role="group" aria-label="Dịch vụ đi kèm" className="flex flex-col gap-2 rounded-lg border p-3">
-                    <span className="type-label">Dịch vụ đi kèm</span>
-                    <ul className="flex flex-col gap-2">
-                      {extraServices.map((s) => (
-                        <li key={s.id} className="flex flex-wrap items-center gap-3">
-                          <label className="flex items-center gap-2 type-body-sm">
-                            <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggleService(s.id)} />
-                            {s.name}
-                          </label>
-                          {picked.has(s.id) && (
-                            <label className="flex items-center gap-2 type-caption text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={picked.get(s.id)}
-                                onChange={(e) => setPicked((c) => new Map(c).set(s.id, e.target.checked))}
-                              />
-                              {`Thuộc gói (${s.name})`}
-                            </label>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {supplyServices.length > 0 && (
-                  <div
-                    role="group"
-                    aria-label="Vật tư, thuốc nguồn viện"
-                    className="flex flex-col gap-2 rounded-lg border p-3"
-                  >
-                    <span className="type-label">Vật tư, thuốc nguồn viện</span>
-                    <ul className="flex flex-col gap-2">
-                      {supplyServices.map((s) => (
-                        <li key={s.id} className="flex flex-wrap items-center gap-3">
-                          <label className="flex items-center gap-2 type-body-sm">
-                            <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggleService(s.id)} />
-                            {s.name}
-                          </label>
-                          {picked.has(s.id) && (
-                            <label className="flex items-center gap-2 type-caption text-muted-foreground">
-                              <input
-                                type="checkbox"
-                                checked={picked.get(s.id)}
-                                onChange={(e) => setPicked((c) => new Map(c).set(s.id, e.target.checked))}
-                              />
-                              {`Thuộc gói (${s.name})`}
-                            </label>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <Field>
-                  <label className="flex items-center gap-2 type-body-sm">
-                    <input type="checkbox" checked={noDeposit} onChange={(e) => setNoDeposit(e.target.checked)} />
-                    Không yêu cầu đặt cọc
-                  </label>
-                </Field>
-                {!noDeposit && (
-                  <Field>
-                    <FieldLabel htmlFor="contract-deposit">Khoản đặt cọc</FieldLabel>
-                    {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ */}
-                    <MoneyInput id="contract-deposit" value={deposit} onChange={setDeposit} />
-                  </Field>
-                )}
-              </>
+                    <Choices
+                      label="Loại lưu trú"
+                      required
+                      options={RESIDENCE_TYPES}
+                      value={type}
+                      onChange={changeType}
+                      error={shown('type')}
+                    />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <DateInput
+                        id="contract-start"
+                        label="Ngày bắt đầu"
+                        required
+                        value={startText}
+                        onChange={setStartText}
+                        error={shown('start')}
+                      />
+                      <DateInput
+                        id="contract-end"
+                        label="Ngày kết thúc"
+                        required={type === 'SHORT_TERM_RESIDENTIAL'}
+                        value={endText}
+                        onChange={setEndText}
+                        error={shown('end')}
+                      />
+                    </div>
+                    {type === 'DAY_CARE' && (
+                      <Field>
+                        <FieldLabel>Lịch đến theo tuần</FieldLabel>
+                        {schedule.map((row, i) => (
+                          <div key={i} className="flex flex-wrap items-center gap-2">
+                            <select
+                              aria-label={`Thứ trong tuần dòng ${i + 1}`}
+                              className={SELECT}
+                              value={row.dayOfWeek ?? ''}
+                              onChange={(e) =>
+                                setSchedule((s) =>
+                                  s.map((r, j) => (j === i ? { ...r, dayOfWeek: Number(e.target.value) } : r)),
+                                )
+                              }
+                            >
+                              <option value="">Chọn thứ</option>
+                              {DAYS.map(([d, text]) => (
+                                <option key={d} value={d}>
+                                  {text}
+                                </option>
+                              ))}
+                            </select>
+                            <Input
+                              aria-label={`Giờ đến dòng ${i + 1}`}
+                              type="time"
+                              className="h-11 w-32"
+                              value={row.arrivalTime ?? ''}
+                              onChange={(e) =>
+                                setSchedule((s) =>
+                                  s.map((r, j) => (j === i ? { ...r, arrivalTime: e.target.value } : r)),
+                                )
+                              }
+                            />
+                            <Input
+                              aria-label={`Giờ về dòng ${i + 1}`}
+                              type="time"
+                              className="h-11 w-32"
+                              value={row.departureTime ?? ''}
+                              onChange={(e) =>
+                                setSchedule((s) =>
+                                  s.map((r, j) => (j === i ? { ...r, departureTime: e.target.value } : r)),
+                                )
+                              }
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              className="h-11"
+                              onClick={() => setSchedule((s) => s.filter((_, j) => j !== i))}
+                            >
+                              {`Bỏ dòng ${i + 1}`}
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 self-start"
+                          onClick={() => setSchedule((s) => [...s, {}])}
+                        >
+                          Thêm dòng lịch
+                        </Button>
+                      </Field>
+                    )}
+                  </Section>
+
+                  <Section number="02" title="Mức, phòng">
+                    <Choices
+                      label="Mức chăm sóc"
+                      required
+                      options={CARE_LEVELS}
+                      value={level}
+                      onChange={setLevel}
+                      error={shown('level')}
+                    />
+                    {residential && allocated.bed && (
+                      <Info label="Giường đã phân bổ">
+                        {bedText(allocated.bed.location) +
+                          (allocated.roomTypeName(allocated.bed.roomTypeId)
+                            ? ` (${allocated.roomTypeName(allocated.bed.roomTypeId)})`
+                            : '')}
+                      </Info>
+                    )}
+                    {residential && (
+                      <Choices
+                        label="Loại phòng"
+                        required
+                        options={roomTypeOptions}
+                        value={roomTypeId}
+                        onChange={setRoomTypeId}
+                        error={shown('roomType')}
+                      />
+                    )}
+                    {residential && roomTypeMismatch(allocated, roomTypeId) && (
+                      <p className="type-body-sm rounded-md border border-warning-foreground/40 bg-warning px-3 py-2 text-warning-foreground">
+                        {roomTypeMismatch(allocated, roomTypeId)}
+                      </p>
+                    )}
+                    {type && (
+                      <Choices
+                        label="Kỳ tính phí lưu trú"
+                        required
+                        options={periodOptions}
+                        value={period}
+                        onChange={setPeriod}
+                        error={shown('period')}
+                      />
+                    )}
+                  </Section>
+
+                  <Section number="03" title="Dịch vụ, đặt cọc">
+                    {fixedServices.length > 0 && (
+                      <ul aria-label="Theo mức chăm sóc, loại phòng" className="flex flex-col gap-1 type-body-sm">
+                        {fixedServices.map((s) => (
+                          <li key={s.id} className="flex flex-wrap justify-between gap-x-4">
+                            <span>{s.name}</span>
+                            <span className="tabular-nums text-muted-foreground">
+                              {priceText(priceOf(s), s.billingPeriod)}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {extraServices.length > 0 && (
+                      <div className="flex flex-col gap-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-auto justify-start gap-1 self-start px-0 type-label hover:bg-transparent"
+                          aria-expanded={showExtras}
+                          aria-controls="contract-extras"
+                          onClick={() => setExtrasOpen((v) => !v)}
+                        >
+                          {`Dịch vụ đi kèm${pickedExtras ? ` (${pickedExtras})` : ''}`}
+                          <ChevronDown
+                            aria-hidden="true"
+                            className={cn('size-4 transition-transform', showExtras && 'rotate-180')}
+                          />
+                        </Button>
+                        {showExtras && (
+                          <ul id="contract-extras" className="flex flex-col">
+                            {extraServices.map((s) => {
+                              const on = picked.has(s.id)
+                              return (
+                                <li
+                                  key={s.id}
+                                  className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 border-b py-3 last:border-0"
+                                >
+                                  <span className="flex min-w-0 flex-col">
+                                    <span className="type-body-sm">{s.name}</span>
+                                    <span className="type-caption tabular-nums text-muted-foreground">
+                                      {priceText(priceOf(s), s.billingPeriod)}
+                                    </span>
+                                  </span>
+                                  <span className="flex flex-wrap justify-end gap-2">
+                                    {on && (
+                                      <Toggle
+                                        variant="outline"
+                                        className="h-9 px-3"
+                                        pressed={!!picked.get(s.id)}
+                                        aria-label={`Thuộc gói: ${s.name}`}
+                                        onPressedChange={(value) => setPicked((c) => new Map(c).set(s.id, value))}
+                                      >
+                                        Thuộc gói
+                                      </Toggle>
+                                    )}
+                                    <Toggle
+                                      variant="outline"
+                                      className="h-9 px-3"
+                                      pressed={on}
+                                      aria-label={`Chọn ${s.name}`}
+                                      onPressedChange={() => toggleService(s.id)}
+                                    >
+                                      {on ? 'Đã chọn' : 'Chọn'}
+                                    </Toggle>
+                                  </span>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    )}
+                    <Choices
+                      label="Đặt cọc"
+                      required
+                      options={DEPOSIT_CHOICES}
+                      value={depositChoice}
+                      onChange={setDepositChoice}
+                      error={shown('deposit')}
+                    />
+                    {depositChoice === 'yes' && (
+                      <Field data-invalid={!!shown('depositAmount') || undefined} className="sm:max-w-xs">
+                        <FieldLabel htmlFor="contract-deposit">
+                          Khoản đặt cọc
+                          <Required />
+                        </FieldLabel>
+                        <MoneyInput
+                          id="contract-deposit"
+                          value={deposit}
+                          onChange={setDeposit}
+                          aria-required="true"
+                          aria-invalid={!!shown('depositAmount') || undefined}
+                        />
+                        {shown('depositAmount') && <FieldError>{shown('depositAmount')}</FieldError>}
+                      </Field>
+                    )}
+                  </Section>
+                </FieldGroup>
+              </form>
+              <ContractCostSummary lines={summaryLines} deposit={depositSummary} />
+            </div>
+            {failure && (
+              <div className="mt-4">
+                <ProblemAlert problem={failure} />
+              </div>
             )}
-          </FieldGroup>
-          <ContractCostSummary lines={summaryLines} date={startDate || new Date().toISOString().slice(0, 10)} />
-        </div>
-        <div className="mt-4">
-          <ProblemAlert problem={failure} />
-        </div>
-        <div className="mt-4 flex flex-wrap justify-end gap-2">
-          <Button variant="ghost" className="h-11" onClick={onClose}>
-            Đóng
-          </Button>
-          {step > 0 && (
-            <Button variant="outline" className="h-11" onClick={() => setStep(step - 1)}>
-              Quay lại
+          </div>
+          <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t px-6 py-4">
+            <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={requestClose}>
+              Hủy
             </Button>
-          )}
-          {step < CONTRACT_STEPS.length - 1 ? (
-            <Button className="h-11" onClick={next}>
-              Tiếp
+            <Button type="submit" form={FORM_ID} className="h-11" disabled={busy || (editing && !etag)}>
+              {busy ? 'Đang lưu…' : 'Lưu hợp đồng nháp'}
             </Button>
-          ) : (
-            <Button className="h-11" disabled={busy || (editing && !etag)} onClick={save}>
-              Lưu hợp đồng nháp
-            </Button>
-          )}
+          </div>
         </div>
       </SheetContent>
+      <DiscardChangesDialog
+        open={confirmClose}
+        onKeep={() => setConfirmClose(false)}
+        onDiscard={() => {
+          setConfirmClose(false)
+          onClose()
+        }}
+      />
     </Sheet>
   )
 }

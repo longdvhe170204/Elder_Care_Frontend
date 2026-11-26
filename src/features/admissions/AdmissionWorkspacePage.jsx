@@ -36,6 +36,7 @@ import { ConsentRecordSheet } from '../consents/ConsentRecordSheet'
 import { InitialHealthSheet } from '../residents/InitialHealthSheet'
 import { WishDraftSheet } from '../wishes/WishDraftSheet'
 import { admissionProgress } from './admissionProgress'
+import { bedText, roomTypeMismatch, useAllocatedBed } from './useAllocatedBed'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.3): một màn cho một lượt tiếp nhận, đi theo các
 // bước BF-01. Trạng thái từng bước lấy từ điều kiện tiếp nhận của 004 (FR-004; mã ADM_A → ADM_F);
@@ -140,6 +141,8 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   const [announcement, setAnnouncement] = useState('')
   const [filter, setFilter] = useState(null)
   const [collapsed, setCollapsed] = useState([])
+  // Giường đã phân bổ hiện ở bước Giường, lệch loại phòng với hợp đồng thì báo ở bước Giường và Hợp đồng (hướng 1, 2026-11-27)
+  const allocated = useAllocatedBed(state.resident?.id, state.conditions)
 
   if (state.loading) {
     return (
@@ -153,6 +156,8 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   if (state.failure) return <ProblemAlert problem={state.failure} />
 
   const { application, conditions, resident, contract, contractsFailed } = state
+  const mismatch = roomTypeMismatch(allocated, contract?.roomTypeId)
+  const allocatedType = allocated.bed && allocated.roomTypeName(allocated.bed.roomTypeId)
   const info = resident.personalInfo ?? {}
   const name = info.fullName ?? `Người cao tuổi mã ${resident.id}`
   // Lượt đã đóng: ý kiến hiện hành lấy từ lượt đăng ký (api-004 AdmissionApplication.admissionOpinion, hiện hành trước)
@@ -432,6 +437,14 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                               )}
                             </span>
                             {showNote && <span className="type-caption text-muted-foreground">{step.note}</span>}
+                            {step.key === 'bed' && allocated.bed && (
+                              <span className="type-caption text-muted-foreground">
+                                {bedText(allocated.bed.location) + (allocatedType ? ` (${allocatedType})` : '')}
+                              </span>
+                            )}
+                            {(step.key === 'bed' || step.key === 'contract') && mismatch && (
+                              <span className="type-caption text-warning-foreground">{mismatch}</span>
+                            )}
                           </span>
                           <span className={ACTION}>{rightOf(step)}</span>
                         </li>
@@ -523,6 +536,13 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
         <ContractSheet
           residentId={resident.id}
           residentName={name}
+          residentCode={resident.profileCode}
+          defaults={{
+            residenceType: application.desiredResidenceType,
+            startDate: application.desiredAdmissionDate,
+            careLevel: resident.currentCareLevel ?? application.expectedCareLevel,
+            roomTypeId: allocated.bed?.roomTypeId,
+          }}
           onClose={() => setSheet(null)}
           onDone={(message, saved) => {
             changed(message)
@@ -551,7 +571,13 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       )}
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
       {sheet?.kind === 'edit-contract' && (
-        <ContractSheet contract={sheet.contract} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+        <ContractSheet
+          contract={sheet.contract}
+          residentName={name}
+          residentCode={resident.profileCode}
+          onClose={() => setSheet(null)}
+          onDone={changed}
+        />
       )}
       {sheet?.kind === 'wishes' && (
         <WishDraftSheet
