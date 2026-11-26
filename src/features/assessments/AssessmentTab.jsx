@@ -158,7 +158,14 @@ export function AssessmentTab(props) {
   return <AssessmentTabContent {...props} />
 }
 
-function AssessmentTabContent({ residentId, residentName, residentStatus, allowedCommands = [], onChanged }) {
+function AssessmentTabContent({
+  residentId,
+  residentName,
+  residentProfile,
+  residentStatus,
+  allowedCommands = [],
+  onChanged,
+}) {
   const [state, setState] = useState('loading')
   const [level, setLevel] = useState(null)
   const [reassessment, setReassessment] = useState(null)
@@ -310,6 +317,7 @@ function AssessmentTabContent({ residentId, residentName, residentStatus, allowe
               assessmentId={draft.id}
               residentId={residentId}
               residentName={residentName}
+              resident={residentProfile}
               residentStatus={residentStatus}
               currentLevel={level?.careLevel ?? null}
               careNeedOptions={careNeeds}

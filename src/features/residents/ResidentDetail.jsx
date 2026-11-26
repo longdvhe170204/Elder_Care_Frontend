@@ -126,6 +126,7 @@ function PartContent({ part, residentId, profile, onChanged }) {
         <AssessmentTab
           residentId={residentId}
           residentName={profile.personalInfo?.fullName}
+          residentProfile={profile}
           residentStatus={profile.status}
           allowedCommands={allowedCommands}
           onChanged={onChanged}

@@ -69,6 +69,46 @@ export const FAMILY_DECLARED_CHOICES = {
   KNOWN_RISKS: ['Nguy cơ ngã', 'Nghẹn, sặc khi ăn', 'Loét tì đè', 'Hay đi ra ngoài một mình'],
 }
 
+// Nhận xét đánh giá của Bác sĩ theo năm chủ đề FR-025 (chủ dự án yêu cầu 2026-11-26): khay chọn nhanh, chọn nhiều, kèm
+// Khác; dựa trên danh sách Gia đình khai, thêm lựa chọn chuyên môn
+export const ASSESSMENT_COMMENT_CHOICES = {
+  GENERAL_CONDITION: [
+    'Tỉnh táo, tiếp xúc tốt',
+    'Mệt mỏi',
+    'Ăn uống được',
+    'Ăn uống kém',
+    'Ngủ được',
+    'Ngủ kém',
+    'Sụt cân gần đây',
+    'Huyết áp ổn định',
+  ],
+  MOBILITY: [
+    'Đi lại tự lập',
+    'Đi chậm, cần người đi kèm',
+    'Đi cần gậy hoặc khung',
+    'Dùng xe lăn',
+    'Nằm tại giường',
+    'Từng ngã',
+  ],
+  SELF_CARE: [
+    'Tự làm được hết',
+    'Tự ăn được',
+    'Cần hỗ trợ tắm rửa',
+    'Cần hỗ trợ vệ sinh',
+    'Cần hỗ trợ mặc quần áo',
+    'Phụ thuộc hoàn toàn',
+  ],
+  COGNITION: ['Tỉnh táo, định hướng tốt', 'Hay quên', 'Lú lẫn về đêm', 'Đi lang thang', 'Khó giao tiếp', 'Nghe kém'],
+  KNOWN_RISKS: [
+    'Nguy cơ ngã',
+    'Nghẹn, sặc khi ăn',
+    'Loét tì đè',
+    'Hay đi ra ngoài một mình',
+    'Quên uống thuốc',
+    'Chưa thấy nguy cơ đáng kể',
+  ],
+}
+
 // Hồ sơ sức khỏe ban đầu (chủ dự án duyệt 2026-11-26): mỗi ô có khay chọn nhanh, chọn nhiều, kèm Khác. Ba ô khả năng dùng
 // lại danh sách Gia đình khai; ghi chú nhu cầu dùng lại CARE_NOTES; các ô khác là bản nháp.
 export const HEALTH_RECORD_CHOICES = {

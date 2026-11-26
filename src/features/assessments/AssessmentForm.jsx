@@ -20,18 +20,23 @@ import {
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChoiceTray } from '@/common/ChoiceTray'
 import { DiscardChangesDialog } from '@/common/DiscardChangesDialog'
 import { formatDateTime } from '@/common/dateTime'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { ASSESSMENT_BASIS, ASSESSMENT_DISCARD_REASONS, CARE_NOTES } from '@/common/quickChoices'
+import {
+  ASSESSMENT_BASIS,
+  ASSESSMENT_COMMENT_CHOICES,
+  ASSESSMENT_DISCARD_REASONS,
+  CARE_NOTES,
+} from '@/common/quickChoices'
 import { StatusBadge } from '@/common/StatusBadge'
-import { useFamilyMembers } from '@/common/useFamilyMembers'
+import { memberNameOf, useFamilyMembers } from '@/common/useFamilyMembers'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { HEALTH_RECORD_FIELDS, HEALTH_TYPE_LABELS, HEALTH_TYPE_ORDER } from '../residents/healthLabels'
+import { residentLine } from '../residents/residentLabels'
 import {
   ASSESSMENT_STATUS_LABELS,
   ASSESSMENT_TYPE_LABELS,
@@ -40,15 +45,48 @@ import {
   CARE_LEVEL_SHORT_LABELS,
   RESIDENCE_TYPE_LABELS,
 } from './assessmentLabels'
-import { FamilyDeclaredList } from './FamilyDeclared'
 
 // Phiếu đánh giá đang soạn mở trong khung riêng (001 T042; US3; FR-024 → FR-029, FR-031; hợp đồng GET, PUT
 // /assessments/{id}, POST …/confirm, …/discard-draft; chủ dự án duyệt hướng 1 ngày 2026-11-26): khung rộng, đầu, chân cố
 // định; trái là phiếu, phải là thông tin tham khảo (sức khỏe ban đầu trước, rồi mục Hiệu lực, chỉ số đo, Gia đình khai).
 // Không có ô điểm, không mức đề xuất, không chọn sẵn (Q-307): Bác sĩ tự chọn mức. Căn cứ, loại hình đề xuất không bắt buộc
 // nên gập lại. Sửa nháp dùng If-Match lấy từ ETag lần đọc gần nhất; chỉ Bác sĩ xác nhận; quyền thật do backend kiểm.
+// Rà soát 2026-11-26 (chủ dự án duyệt A, B): nhận xét viết theo năm chủ đề của FR-025, dưới mỗi ô là tham khảo đúng chủ đề
+// (sức khỏe ban đầu, Gia đình khai); cột phải chỉ còn phần không thuộc năm chủ đề. API giữ một trường comment: lưu thì ghép
+// "Chủ đề: nội dung" từng dòng, mở lại thì tách theo tiêu đề dòng; nội dung không có tiêu đề vào ô Tình trạng chung.
 
 const FORM_ID = 'assessment-draft-form'
+
+// [mã chủ đề Gia đình khai, nhãn, trường sức khỏe ban đầu cùng chủ đề]; danh sách chọn nhanh ở ASSESSMENT_COMMENT_CHOICES
+const COMMENT_TOPICS = [
+  ['GENERAL_CONDITION', 'Tình trạng chung', null],
+  ['MOBILITY', 'Vận động', 'mobility'],
+  ['SELF_CARE', 'Tự chăm sóc', 'selfCareAbility'],
+  ['COGNITION', 'Nhận thức', 'cognition'],
+  ['KNOWN_RISKS', 'Nguy cơ cần lưu ý', null],
+]
+const TOPIC_FIELDS = COMMENT_TOPICS.map((t) => t[2]).filter(Boolean)
+
+function splitComment(text) {
+  const topics = Object.fromEntries(COMMENT_TOPICS.map(([key]) => [key, []]))
+  let current = 'GENERAL_CONDITION'
+  for (const line of (text ?? '').split(/\r?\n/)) {
+    const topic = COMMENT_TOPICS.find(([, label]) => line.startsWith(`${label}:`))
+    if (topic) {
+      current = topic[0]
+      topics[current].push(line.slice(topic[1].length + 1).trimStart())
+    } else {
+      topics[current].push(line)
+    }
+  }
+  return Object.fromEntries(Object.entries(topics).map(([key, lines]) => [key, lines.join('\n').trim()]))
+}
+
+function composeComment(topics) {
+  return COMMENT_TOPICS.filter(([key]) => topics[key]?.trim())
+    .map(([key, label]) => `${label}: ${topics[key].trim()}`)
+    .join('\n')
+}
 
 function blank(value) {
   const text = value.trim()
@@ -58,7 +96,7 @@ function blank(value) {
 function formOf(a) {
   return {
     basis: a.basis ?? '',
-    comment: a.comment ?? '',
+    topics: splitComment(a.comment),
     careNote: a.careNote ?? '',
     careLevel: a.careLevel ?? '',
     careNeedIds: (a.careNeeds ?? []).map((n) => String(n.id)),
@@ -69,7 +107,7 @@ function formOf(a) {
 function bodyOf(form) {
   return {
     basis: blank(form.basis),
-    comment: blank(form.comment),
+    comment: blank(composeComment(form.topics)),
     careNote: blank(form.careNote),
     careLevel: form.careLevel || undefined,
     careNeedIds: form.careNeedIds.map(Number),
@@ -104,7 +142,7 @@ function RefSection({ id, title, children }) {
   )
 }
 
-function Reference({ reference, familyDeclared, members }) {
+function Reference({ reference }) {
   const initial = reference?.initialHealthRecord
   const items = reference?.activeHealthItems ?? []
   const vitals = reference?.latestVitalSigns ?? []
@@ -121,7 +159,7 @@ function Reference({ reference, familyDeclared, members }) {
       >
         {initial ? (
           <dl className="flex flex-col gap-2">
-            {HEALTH_RECORD_FIELDS.filter((f) => initial[f.name]).map((f) => (
+            {HEALTH_RECORD_FIELDS.filter((f) => initial[f.name] && !TOPIC_FIELDS.includes(f.name)).map((f) => (
               <div key={f.name} className="flex flex-col">
                 <dt className="type-caption text-muted-foreground">{f.label}</dt>
                 <dd className="type-body-sm whitespace-pre-wrap">{initial[f.name]}</dd>
@@ -155,10 +193,8 @@ function Reference({ reference, familyDeclared, members }) {
         )}
       </RefSection>
 
-      <RefSection id="ref-vitals" title="Chỉ số đo gần nhất">
-        {vitals.length === 0 ? (
-          <p className="type-body-sm text-muted-foreground">Chưa có lần đo</p>
-        ) : (
+      {vitals.length > 0 && (
+        <RefSection id="ref-vitals" title="Chỉ số đo gần nhất">
           <ul className="type-body-sm">
             {vitals.map((v) => (
               <li key={v.indicatorId}>
@@ -166,10 +202,8 @@ function Reference({ reference, familyDeclared, members }) {
               </li>
             ))}
           </ul>
-        )}
-      </RefSection>
-
-      <FamilyDeclaredList entries={familyDeclared} members={members} />
+        </RefSection>
+      )}
     </aside>
   )
 }
@@ -221,6 +255,7 @@ export function AssessmentSheet({
   assessmentId,
   residentId,
   residentName,
+  resident,
   residentStatus,
   currentLevel,
   careNeedOptions: givenNeeds,
@@ -262,7 +297,7 @@ export function AssessmentSheet({
       setDetail(data)
       setEtag(tag)
       setForm(formOf(data))
-      setMoreOpen(!!(data.basis || data.proposedResidenceType))
+      setMoreOpen(data.type === 'INITIAL' ? !!data.proposedResidenceType : !!data.basis)
       setFailure(null)
       setState('ready')
     } catch (error) {
@@ -283,6 +318,24 @@ export function AssessmentSheet({
     setSaved(false)
     setFieldErrors((current) => ({ ...current, [name]: undefined }))
     setForm((current) => ({ ...current, [name]: value }))
+  }
+  const setTopic = (key) => (value) => {
+    setSaved(false)
+    setFieldErrors((current) => ({ ...current, comment: undefined }))
+    setForm((current) => ({ ...current, topics: { ...current.topics, [key]: value } }))
+  }
+
+  // Tham khảo theo chủ đề: sức khỏe ban đầu cùng chủ đề, các mục Gia đình khai (ghi tên người thân)
+  function refsOf(key, field) {
+    const initial = detail?.reference?.initialHealthRecord
+    const lines = []
+    if (field && initial?.[field]) lines.push(`Sức khỏe ban đầu: ${initial[field]}`)
+    for (const e of detail?.familyDeclared ?? []) {
+      if (e.topic !== key) continue
+      const who = e.source?.type === 'FAMILY_MEMBER' ? memberNameOf(members, e.source.familyMemberId) : 'người cao tuổi'
+      lines.push(`Gia đình khai (${who}): ${e.content}`)
+    }
+    return lines
   }
 
   // Lưu nháp; trả ETag mới để lệnh Xác nhận dùng ngay.
@@ -372,7 +425,11 @@ export function AssessmentSheet({
               <SheetTitle className="type-title">{title}</SheetTitle>
               {detail && <StatusBadge status={ASSESSMENT_STATUS_LABELS[detail.status]} />}
             </div>
-            <SheetDescription>{detail ? `Người lập: ${detail.createdBy}` : 'Đang tải phiếu'}</SheetDescription>
+            <SheetDescription>
+              {detail
+                ? [residentLine(resident), `Người lập: ${detail.createdBy}`].filter(Boolean).join(' · ')
+                : 'Đang tải phiếu'}
+            </SheetDescription>
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
@@ -393,24 +450,41 @@ export function AssessmentSheet({
                   aria-busy={busy || undefined}
                   className="flex flex-col gap-5"
                 >
-                  <Field data-invalid={!!fieldErrors.comment || undefined}>
-                    <FieldLabel htmlFor="assessment-comment">
+                  <fieldset className="flex flex-col gap-4" data-invalid={!!fieldErrors.comment || undefined}>
+                    <legend className="type-label mb-3">
                       Nhận xét đánh giá
                       <span aria-hidden="true" className="text-destructive">
+                        {' '}
                         *
                       </span>
-                    </FieldLabel>
-                    <Textarea
-                      id="assessment-comment"
-                      rows={6}
-                      className="min-h-36"
-                      value={form.comment}
-                      placeholder="Tình trạng chung, vận động, tự chăm sóc, nhận thức, nguy cơ cần lưu ý"
-                      onChange={(event) => set('comment')(event.target.value)}
-                      aria-invalid={!!fieldErrors.comment || undefined}
-                    />
+                    </legend>
+                    {COMMENT_TOPICS.map(([key, label, field]) => {
+                      const refs = refsOf(key, field)
+                      return (
+                        <Field key={key}>
+                          {/* Khay chọn nhanh, chọn nhiều, kèm Khác (chủ dự án yêu cầu 2026-11-26) */}
+                          <ChoiceTray
+                            id={`assessment-comment-${key}`}
+                            label={label}
+                            options={ASSESSMENT_COMMENT_CHOICES[key]}
+                            multiple
+                            value={form.topics[key]}
+                            onChange={setTopic(key)}
+                            invalid={!!fieldErrors.comment}
+                            placeholder="Bấm để chọn hoặc gõ"
+                          />
+                          {refs.length > 0 && (
+                            <ul className="flex flex-col type-caption text-muted-foreground">
+                              {refs.map((line) => (
+                                <li key={line}>{line}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </Field>
+                      )
+                    })}
                     {fieldErrors.comment && <FieldError>{fieldErrors.comment}</FieldError>}
-                  </Field>
+                  </fieldset>
 
                   <ChoiceTray
                     id="assessment-care-note"
@@ -477,21 +551,24 @@ export function AssessmentSheet({
 
                   <Collapsible open={moreOpen} onOpenChange={setMoreOpen} className="flex flex-col gap-5">
                     <CollapsibleTrigger className="flex items-center gap-1.5 self-start type-body-sm font-medium text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
-                      {isInitial ? 'Thêm căn cứ, loại hình đề xuất' : 'Thêm căn cứ'}
+                      {isInitial ? 'Thêm loại hình đề xuất' : 'Thêm căn cứ'}
                       <ChevronDown
                         aria-hidden
                         className={cn('size-4 transition-transform', moreOpen && 'rotate-180')}
                       />
                     </CollapsibleTrigger>
                     <CollapsibleContent className="flex flex-col gap-5">
-                      <ChoiceTray
-                        id="assessment-basis"
-                        label="Căn cứ, lý do"
-                        options={ASSESSMENT_BASIS}
-                        value={form.basis}
-                        onChange={set('basis')}
-                        placeholder="Bấm để chọn hoặc gõ"
-                      />
+                      {/* Đánh giá đầu vào: căn cứ đã rõ theo loại phiếu nên không có ô căn cứ */}
+                      {!isInitial && (
+                        <ChoiceTray
+                          id="assessment-basis"
+                          label="Căn cứ, lý do"
+                          options={ASSESSMENT_BASIS}
+                          value={form.basis}
+                          onChange={set('basis')}
+                          placeholder="Bấm để chọn hoặc gõ"
+                        />
+                      )}
                       {isInitial && (
                         <Field>
                           <FieldLabel id="assessment-residence-label">Loại hình lưu trú đề xuất</FieldLabel>
@@ -523,7 +600,7 @@ export function AssessmentSheet({
                   </ProblemAlert>
                 </form>
 
-                <Reference reference={detail.reference} familyDeclared={detail.familyDeclared} members={members} />
+                <Reference reference={detail.reference} />
               </div>
             )}
           </div>

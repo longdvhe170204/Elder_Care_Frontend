@@ -20,7 +20,8 @@ import { cn } from '@/lib/utils'
 import { AssessmentSheet } from '../assessments/AssessmentForm'
 import { InitialHealthSheet } from './InitialHealthSheet'
 import { ResidentPartSheet } from './ResidentDetail'
-import { GENDER_LABELS, STATUS_LABELS } from './residentLabels'
+import { CARE_LEVEL_LABELS } from '../assessments/assessmentLabels'
+import { GENDER_LABELS, STATUS_LABELS, ageOf } from './residentLabels'
 
 // Việc tiếp nhận của Bác sĩ, Điều dưỡng (chủ dự án duyệt 2026-11-26; DESIGN.md 5.3): mở từ tab Đang tiếp nhận của màn
 // Người cao tuổi, cùng kiểu dòng với Hồ sơ tiếp nhận (dấu trạng thái, tên bước, cột thao tác). Bác sĩ không đọc được lượt
@@ -29,14 +30,6 @@ import { GENDER_LABELS, STATUS_LABELS } from './residentLabels'
 // đã có, đóng thì nạp lại. Chỉ hiển thị, không tự tạo việc (Q-307).
 
 const DONE = 'done'
-
-function ageOf(dateOfBirth) {
-  if (!dateOfBirth) return null
-  const [y, m, d] = dateOfBirth.split('-').map(Number)
-  const now = new Date()
-  const before = now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)
-  return now.getFullYear() - y - (before ? 1 : 0)
-}
 
 const found = (result) => result.status === 'fulfilled'
 const missing = (result) =>
@@ -115,6 +108,7 @@ export function AdmissionTasksSheet({ residentId, onClose, onOpenProfile, onChan
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const [opened, setOpened] = useState(null)
+  const [notice, setNotice] = useState(null)
 
   const load = useCallback(async () => {
     try {
@@ -137,6 +131,7 @@ export function AdmissionTasksSheet({ residentId, onClose, onOpenProfile, onChan
   }
 
   async function run(action) {
+    setNotice(null)
     if (action.open !== 'create-assessment') return setOpened(action)
     setFailure(null)
     setBusy(true)
@@ -188,6 +183,11 @@ export function AdmissionTasksSheet({ residentId, onClose, onOpenProfile, onChan
               {data && (
                 <p className="type-caption text-muted-foreground tabular-nums">
                   {doneCount} trên {steps.length} việc xong
+                </p>
+              )}
+              {notice && (
+                <p role="status" className="type-body-sm text-success-foreground">
+                  {notice}
                 </p>
               )}
             </div>
@@ -291,12 +291,17 @@ export function AdmissionTasksSheet({ residentId, onClose, onOpenProfile, onChan
           assessmentId={opened.draftId}
           residentId={residentId}
           residentName={info?.fullName}
+          resident={profile}
           residentStatus={profile?.status}
           currentLevel={profile?.currentCareLevel ?? null}
           canConfirm={(profile?.allowedCommands ?? []).includes('CONFIRM_ASSESSMENT')}
           onClose={closeInner}
           onChanged={load}
-          onConfirmed={closeInner}
+          onConfirmed={(result) => {
+            closeInner()
+            const level = CARE_LEVEL_LABELS[result?.assessment?.careLevel]
+            setNotice(level ? `Đã xác nhận đánh giá đầu vào: ${level}` : 'Đã xác nhận đánh giá đầu vào')
+          }}
         />
       )}
     </>
