@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { CarePlanItemsForm } from './CarePlanItemsForm'
 
 const types = [
@@ -39,28 +39,54 @@ it('FR_002_mocGioDangChip_themVaBoChip_guiMangGio', () => {
 })
 
 it('D14_thieuTruongBatBuoc_baoLoiTiengVietTaiO_khongDungKiemTraCuaTrinhDuyet', () => {
-  const save = renderForm([{ ...base, timesPerDay: '', performerRole: '' }])
+  const save = renderForm([{ ...base, times: [], performerRole: '' }])
   const button = screen.getByRole('button', { name: 'Lưu nháp' })
   expect(button.closest('form')).toHaveAttribute('novalidate')
   fireEvent.click(button)
   expect(save).not.toHaveBeenCalled()
-  expect(screen.getByLabelText('Số lần trong ngày mục 1')).toHaveAttribute('aria-invalid', 'true')
-  expect(screen.getByText('Nhập số lần trong ngày.')).toBeInTheDocument()
+  expect(screen.getByText('Thêm ít nhất một mốc giờ.')).toBeInTheDocument()
   expect(screen.getByText('Chọn vai trò thực hiện.')).toBeInTheDocument()
 
-  fireEvent.change(screen.getByLabelText('Số lần trong ngày mục 1'), { target: { value: '2' } })
+  fireEvent.change(screen.getByLabelText('Các mốc giờ mục 1'), { target: { value: '08:00' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm mốc giờ mục 1' }))
   fireEvent.change(screen.getByLabelText('Vai trò thực hiện mục 1'), { target: { value: 'CAREGIVER' } })
   fireEvent.click(button)
-  expect(save).toHaveBeenCalledWith([expect.objectContaining({ timesPerDay: 2, performerRole: 'CAREGIVER' })])
+  expect(save).toHaveBeenCalledWith([expect.objectContaining({ times: ['08:00'], performerRole: 'CAREGIVER' })])
 })
 
-it('Figma_tanSuatDangNutChon_chiHienODungLuaChon', () => {
-  renderForm([base])
-  expect(screen.getByRole('radio', { name: 'Số lần trong ngày' })).toBeChecked()
-  expect(screen.queryByLabelText('Mỗi N giờ mục 1')).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('radio', { name: 'Mỗi N giờ' }))
-  expect(screen.getByLabelText('Mỗi N giờ mục 1')).toBeInTheDocument()
+it('Q447_tanSuatChiConHaiLuaChon_soLanTheoSoMocGio', () => {
+  const save = renderForm([{ ...base, timesPerDay: 5 }])
+  const group = screen.getByRole('radiogroup', { name: 'Tần suất' })
+  expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual([
+    'Số lần trong ngày',
+    'Theo ngày trong tuần',
+  ])
   expect(screen.queryByLabelText('Số lần trong ngày mục 1')).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Các mốc giờ mục 1'), { target: { value: '14:00' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm mốc giờ mục 1' }))
+  expect(screen.getByText('Làm 2 lần mỗi ngày lúc 08:00, 14:00.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+  expect(save).toHaveBeenCalledWith([
+    expect.objectContaining({ frequencyType: 'TIMES_PER_DAY', times: ['08:00', '14:00'], timesPerDay: 2 }),
+  ])
+})
+
+it('Q447_boKhungTruocSau_hienKhungTheoLoai', () => {
+  renderForm([{ ...base, windowBeforeMinutes: 30, windowAfterMinutes: 60 }])
+  expect(screen.queryByLabelText('Khung trước mục 1 (phút)')).not.toBeInTheDocument()
+  expect(screen.queryByLabelText('Khung sau mục 1 (phút)')).not.toBeInTheDocument()
+  expect(screen.getByText('Được làm từ 30 phút trước đến 60 phút sau giờ hẹn.')).toBeInTheDocument()
+})
+
+it('Q447_tanSuatCu_mocNGio_giuNguyenNeuKhongDoi', () => {
+  const save = renderForm([
+    { ...base, frequencyType: 'EVERY_N_HOURS', intervalHours: 2, startsAt: '06:00:00', times: [], timesPerDay: null },
+  ])
+  expect(screen.getByText('Tần suất cũ: Mỗi 2 giờ, bắt đầu 06:00. Chọn tần suất mới nếu muốn đổi.')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+  expect(save).toHaveBeenCalledWith([
+    expect.objectContaining({ frequencyType: 'EVERY_N_HOURS', intervalHours: 2, startsAt: '06:00:00' }),
+  ])
 })
 
 it('Q447_khongChonMucQuanTrong_layTheoLoaiCongViec', () => {

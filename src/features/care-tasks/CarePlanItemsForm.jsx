@@ -9,6 +9,26 @@ import { CARE_ROLES, FREQUENCIES, IMPORTANCE, RESULT_TYPES, frequencyText } from
 // Q-447, thiết kế Figma "Kế hoạch chăm sóc · Mục công việc": mỗi mục là một thẻ, chỉ mở mục đang sửa; tần suất và
 // mốc giờ nhập dạng chip; mục tiêu nước chỉ với loại Hỗ trợ uống nước. Mức quan trọng không chọn trên form, lấy theo
 // mức mặc định của loại công việc trong danh mục (chủ dự án 2026-11-26); mức vẫn quyết định nhắc, cảnh báo khi quá hạn.
+// Chủ dự án 2026-11-26: form chỉ còn hai tần suất; "mỗi N giờ", "một lần mỗi ca" diễn đạt bằng các mốc giờ của "Số lần
+// trong ngày". Mục cũ đang dùng hai tần suất đó giữ nguyên tới khi người soạn chọn tần suất mới. Khung trước, khung sau
+// không nhập trên form: lấy theo mục (đã đóng băng khi gửi), loại công việc rồi cấu hình chung CFG-M04-02.
+const FORM_FREQUENCIES = { TIMES_PER_DAY: FREQUENCIES.TIMES_PER_DAY, DAYS_OF_WEEK: FREQUENCIES.DAYS_OF_WEEK }
+const DAY_NAMES = { 1: 'Thứ 2', 2: 'Thứ 3', 3: 'Thứ 4', 4: 'Thứ 5', 5: 'Thứ 6', 6: 'Thứ 7', 7: 'Chủ nhật' }
+const hhmm = (value) => (value ? String(value).slice(0, 5) : '')
+function legacyText(row) {
+  if (row.frequencyType === 'EVERY_N_HOURS')
+    return `Mỗi ${row.intervalHours} giờ${row.startsAt ? `, bắt đầu ${hhmm(row.startsAt)}` : ''}`
+  if (row.frequencyType === 'ONCE_PER_SHIFT') return 'Một lần mỗi ca'
+  return null
+}
+function summaryOf(row) {
+  const times = (row.times ?? []).join(', ')
+  if (!times) return null
+  if (row.frequencyType === 'TIMES_PER_DAY') return `Làm ${row.times.length} lần mỗi ngày lúc ${times}.`
+  if (row.frequencyType === 'DAYS_OF_WEEK' && (row.weekdays ?? []).length > 0)
+    return `Làm ${[...row.weekdays].sort().map((day) => DAY_NAMES[day]).join(', ')} lúc ${times}.`
+  return null
+}
 const PLAN_ROLES = Object.fromEntries(['CAREGIVER', 'NURSING_STAFF', 'DOCTOR'].map((code) => [code, CARE_ROLES[code]]))
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
@@ -24,7 +44,9 @@ function rowErrors(row) {
     if (belowOne(row.intervalHours)) errors.intervalHours = 'Nhập số giờ giữa hai lần.'
     if (blank(row.startsAt)) errors.startsAt = 'Nhập giờ bắt đầu.'
   }
-  if (row.frequencyType === 'TIMES_PER_DAY' && belowOne(row.timesPerDay)) errors.timesPerDay = 'Nhập số lần trong ngày.'
+  if (['TIMES_PER_DAY', 'DAYS_OF_WEEK'].includes(row.frequencyType) && (row.times ?? []).length === 0)
+    errors.times = 'Thêm ít nhất một mốc giờ.'
+  if (row.frequencyType === 'DAYS_OF_WEEK' && (row.weekdays ?? []).length === 0) errors.weekdays = 'Chọn ngày trong tuần.'
   if (blank(row.performerRole)) errors.performerRole = 'Chọn vai trò thực hiện.'
   if (blank(row.resultType)) errors.resultType = 'Chọn kết quả cần ghi.'
   return errors
@@ -62,7 +84,7 @@ function Segmented({ label, options, value, onChange, error }) {
   )
 }
 
-function TimeChips({ index, times, onChange }) {
+function TimeChips({ index, times, onChange, error }) {
   const [draft, setDraft] = useState('')
   const add = () => {
     const at = draft.trim()
@@ -109,7 +131,8 @@ function TimeChips({ index, times, onChange }) {
           <Plus className="size-4" aria-hidden="true" />
         </button>
       </div>
-      <span className="type-caption text-muted-foreground">Để trống là làm trong ca. Mỗi giờ chỉ thêm một lần.</span>
+      <span className="type-caption text-muted-foreground">Mỗi mốc giờ là một lần làm. Mỗi giờ chỉ thêm một lần.</span>
+      {error && <p className="type-body-sm text-destructive">{error}</p>}
     </div>
   )
 }
@@ -154,6 +177,15 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
   const typeById = Object.fromEntries(taskTypes.map((type) => [String(type.id), type]))
   const errorOf = (index, key) => errors[index]?.[key]
   // Mức luôn theo loại công việc, kể cả mục lập từ trước khi bỏ ô chọn (chủ dự án 2026-11-26)
+  // Khung giờ được làm: của mục (đã đóng băng khi gửi) rồi của loại công việc; không có thì cấu hình chung
+  const windowText = (row) => {
+    const type = typeById[String(row.taskTypeId)]
+    const before = row.windowBeforeMinutes ?? type?.windowBeforeMinutes
+    const after = row.windowAfterMinutes ?? type?.windowAfterMinutes
+    return before != null && after != null
+      ? `Được làm từ ${before} phút trước đến ${after} phút sau giờ hẹn.`
+      : 'Được làm trong khoảng thời gian quanh giờ hẹn theo cấu hình chung của viện.'
+  }
   const importanceOf = (row) => typeById[String(row.taskTypeId)]?.defaultImportance || row.importance || null
   const set = (index, key, value) => {
     setRows((all) => all.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
@@ -172,6 +204,9 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
               importance: type?.defaultImportance ?? '',
               billable: type?.billable ?? false,
               waterTargetMl: type?.group === 'DRINKING_ASSISTANCE' ? row.waterTargetMl : null,
+              // Đổi loại thì khung giờ lấy lại theo loại mới
+              windowBeforeMinutes: null,
+              windowAfterMinutes: null,
             }
           : row,
       ),
@@ -202,6 +237,8 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
         ),
         startsAt: row.startsAt || null,
         importance: importanceOf(row),
+        // Số lần trong ngày lấy theo số mốc giờ
+        ...(row.frequencyType === 'TIMES_PER_DAY' && { timesPerDay: (row.times ?? []).length }),
       })),
     )
   }
@@ -285,49 +322,23 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
             </div>
             <Segmented
               label="Tần suất *"
-              options={FREQUENCIES}
+              options={FORM_FREQUENCIES}
               value={kind}
               onChange={(value) => set(index, 'frequencyType', value)}
               error={errorOf(index, 'frequencyType')}
             />
-            {kind && kind !== 'ONCE_PER_SHIFT' && (
-              <div className="grid gap-4 sm:grid-cols-2">
-                {kind === 'EVERY_N_HOURS' && (
-                  <>
-                    <CareField
-                      label="Mỗi N giờ *"
-                      name={`Mỗi N giờ mục ${index + 1}`}
-                      value={row.intervalHours}
-                      onChange={(value) => set(index, 'intervalHours', value)}
-                      type="number"
-                      min={1}
-                      error={errorOf(index, 'intervalHours')}
-                    />
-                    <CareField
-                      label="Giờ bắt đầu *"
-                      name={`Giờ bắt đầu mục ${index + 1}`}
-                      value={row.startsAt}
-                      onChange={(value) => set(index, 'startsAt', value)}
-                      type="time"
-                      error={errorOf(index, 'startsAt')}
-                    />
-                  </>
-                )}
-                {kind === 'TIMES_PER_DAY' && (
-                  <CareField
-                    label="Số lần trong ngày *"
-                    name={`Số lần trong ngày mục ${index + 1}`}
-                    value={row.timesPerDay}
-                    onChange={(value) => set(index, 'timesPerDay', value)}
-                    type="number"
-                    min={1}
-                    error={errorOf(index, 'timesPerDay')}
-                  />
-                )}
-                {kind !== 'EVERY_N_HOURS' && (
-                  <TimeChips index={index} times={row.times ?? []} onChange={(value) => set(index, 'times', value)} />
-                )}
-              </div>
+            {legacyText(row) && (
+              <p className="type-body-sm text-muted-foreground">
+                Tần suất cũ: {legacyText(row)}. Chọn tần suất mới nếu muốn đổi.
+              </p>
+            )}
+            {(kind === 'TIMES_PER_DAY' || kind === 'DAYS_OF_WEEK') && (
+              <TimeChips
+                index={index}
+                times={row.times ?? []}
+                onChange={(value) => set(index, 'times', value)}
+                error={errorOf(index, 'times')}
+              />
             )}
             {kind === 'DAYS_OF_WEEK' && (
               <fieldset className="flex flex-wrap gap-x-4">
@@ -346,27 +357,14 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
                     }
                   />
                 ))}
+                {errorOf(index, 'weekdays') && (
+                  <p className="w-full type-body-sm text-destructive">{errorOf(index, 'weekdays')}</p>
+                )}
               </fieldset>
             )}
+            {summaryOf(row) && <p className="type-body-sm font-semibold text-primary">{summaryOf(row)}</p>}
+            <p className="type-body-sm text-muted-foreground">{windowText(row)}</p>
             <div className="grid gap-4 sm:grid-cols-2">
-              <CareField
-                label="Khung trước (phút)"
-                name={`Khung trước mục ${index + 1} (phút)`}
-                value={row.windowBeforeMinutes}
-                onChange={(value) => set(index, 'windowBeforeMinutes', value)}
-                type="number"
-                min={0}
-                placeholder="Theo cấu hình"
-              />
-              <CareField
-                label="Khung sau (phút)"
-                name={`Khung sau mục ${index + 1} (phút)`}
-                value={row.windowAfterMinutes}
-                onChange={(value) => set(index, 'windowAfterMinutes', value)}
-                type="number"
-                min={0}
-                placeholder="Theo cấu hình"
-              />
               <CareField
                 label="Vai trò thực hiện *"
                 name={`Vai trò thực hiện mục ${index + 1}`}
