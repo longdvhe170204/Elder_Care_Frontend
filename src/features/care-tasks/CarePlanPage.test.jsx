@@ -125,7 +125,7 @@ it('Q447_dangCoBanSua_khongLapThemMaMoBanDo', async () => {
 it('F5_timNguoiCaoTuoi_goiYHoTenVaMaHoSo_chonThiTaiKeHoach', async () => {
   renderPage({})
   // Q-448: chưa chọn người thì hiện hàng chờ (đang tải vì route hàng chờ không khai báo)
-  expect(screen.getByRole('heading', { name: 'Cần lập hoặc sửa kế hoạch' })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Cần lập hoặc sửa' })).toBeInTheDocument()
   fireEvent.change(screen.getByRole('combobox', { name: 'Tìm người cao tuổi' }), { target: { value: 'kiểm thử' } })
   fireEvent.click(await screen.findByRole('option', { name: '[Họ tên kiểm thử] · NCT-077' }))
   expect(await screen.findByText('Xoay trở người kiểm thử')).toBeInTheDocument()

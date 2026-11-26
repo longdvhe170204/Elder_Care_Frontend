@@ -5,6 +5,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/u
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { SectionTabs } from '@/common/SectionTabs'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { reviewSource, waitingText } from './carePlanLabels'
@@ -14,6 +15,7 @@ import { reviewSource, waitingText } from './carePlanLabels'
 export function CarePlanQueue({ onChoose }) {
   const [rows, setRows] = useState(null)
   const [failure, setFailure] = useState(null)
+  const [tab, setTab] = useState('waiting')
   useEffect(() => {
     let cancelled = false
     getCarePlanReviewsQueue()
@@ -35,7 +37,17 @@ export function CarePlanQueue({ onChoose }) {
     onChoose({ id: row.residentId, profileCode: row.profileCode, personalInfo: { fullName: row.fullName } })
   return (
     <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={rows === null && !failure}>
-      <h2 className="type-title">Cần lập hoặc sửa kế hoạch{waiting ? ` (${waiting.length})` : ''}</h2>
+      <h2 className="sr-only">Hàng chờ kế hoạch chăm sóc</h2>
+      {/* Q-450: hai nhóm là hai tab cạnh nhau (chủ dự án 2026-11-26), không xếp dọc */}
+      <SectionTabs
+        label="Nhóm kế hoạch"
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          ['waiting', `Cần lập hoặc sửa${waiting ? ` (${waiting.length})` : ''}`],
+          ['pending', `Đang chờ duyệt${rows ? ` (${pending.length})` : ''}`],
+        ]}
+      />
       <ProblemAlert problem={failure} />
       {rows === null && !failure && (
         <div className="flex flex-col gap-2">
@@ -43,7 +55,7 @@ export function CarePlanQueue({ onChoose }) {
           <Skeleton className="h-12 w-full" />
         </div>
       )}
-      {waiting?.length === 0 && (
+      {tab === 'waiting' && waiting?.length === 0 && (
         <Empty>
           <EmptyHeader>
             <EmptyTitle>Không có ai cần lập hoặc sửa kế hoạch</EmptyTitle>
@@ -54,7 +66,7 @@ export function CarePlanQueue({ onChoose }) {
           </EmptyHeader>
         </Empty>
       )}
-      {waiting?.length > 0 && (
+      {tab === 'waiting' && waiting?.length > 0 && (
         <Table aria-label="Người cần lập hoặc sửa kế hoạch">
           <TableHeader>
             <TableRow className="bg-muted hover:bg-muted">
@@ -97,9 +109,18 @@ export function CarePlanQueue({ onChoose }) {
           </TableBody>
         </Table>
       )}
-      {pending.length > 0 && (
+      {tab === 'pending' && rows && pending.length === 0 && (
+        <Empty>
+          <EmptyHeader>
+            <EmptyTitle>Không có kế hoạch nào đang chờ duyệt</EmptyTitle>
+            <EmptyDescription>
+              Bản kế hoạch gửi Bác sĩ duyệt sẽ hiện ở đây cho tới khi được duyệt hoặc trả lại.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      )}
+      {tab === 'pending' && pending.length > 0 && (
         <>
-          <h2 className="type-title pt-2">Đang chờ Bác sĩ duyệt ({pending.length})</h2>
           <Table aria-label="Kế hoạch đang chờ Bác sĩ duyệt">
             <TableHeader>
               <TableRow className="bg-muted hover:bg-muted">
