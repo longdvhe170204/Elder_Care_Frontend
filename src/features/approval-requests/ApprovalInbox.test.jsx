@@ -56,11 +56,29 @@ function listCalls() {
 async function openDetail(detail = request()) {
   api.on('GET', '/approval-requests/7', json(200, detail, { ETag: `"${detail.version}"` }))
   render(<ApprovalInbox />)
-  fireEvent.click(await screen.findByRole('button', { name: 'YC-2026-000007' }))
+  fireEvent.click(await screen.findByRole('button', { name: /YC-2026-000007/ }))
   return screen.findByRole('dialog')
 }
 
 describe('ApprovalInbox', () => {
+  // Demo 2026-11-26 (E): ghi tên chức năng thay mã loại; giao dịch số dư ghi đúng loại (hoàn số dư, hoàn cọc, điều chỉnh)
+  it('yeuCauHoanSoDu_ghiTenChucNang_khongHienMaLoai', async () => {
+    const refund = request({
+      type: 'M11.BALANCE_TRANSACTION',
+      content: { type: 'REFUND', amount: -7916675, transactionId: 6 },
+    })
+    api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, { items: [refund], nextCursor: null }))
+    api.on('GET', '/approval-requests/7', json(200, refund, { ETag: '"1"' }))
+    render(<ApprovalInbox />)
+    const row = (await screen.findAllByRole('row'))[1]
+    expect(row).toHaveTextContent('Hoàn số dư')
+    expect(row).not.toHaveTextContent('M11.BALANCE_TRANSACTION')
+    fireEvent.click(within(row).getByRole('button', { name: /Hoàn số dư/ }))
+    const panel = await screen.findByRole('dialog')
+    expect(await within(panel).findByRole('heading', { name: 'Hoàn số dư' })).toBeInTheDocument()
+    expect(within(panel).getByText(/YC-2026-000007/)).toBeInTheDocument()
+  })
+
   // Demo 2026-11-26: mở từ thông báo (Xử lý) thì hiện ngay chi tiết yêu cầu đó
   it('moTuThongBao_hienNgayChiTietYeuCau', async () => {
     api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, PAGE))
@@ -289,7 +307,7 @@ describe('ApprovalInbox', () => {
     await waitFor(() => expect(screen.getAllByRole('row')[1]).toHaveTextContent('Đặng Văn Long · HĐ HD-2026-000003'))
 
     api.on('GET', '/approval-requests/7', json(200, change, { ETag: '"1"' }))
-    fireEvent.click(screen.getByRole('button', { name: 'YC-2026-000007' }))
+    fireEvent.click(screen.getByRole('button', { name: /YC-2026-000007/ }))
     const panel = await screen.findByRole('dialog')
 
     expect(await within(panel).findByText('Trước: Cơ bản; sau: Đặc biệt')).toBeInTheDocument()
@@ -330,7 +348,7 @@ describe('ApprovalInbox', () => {
     expect((await screen.findAllByRole('row'))[1]).toHaveTextContent('Xử lý đồ không người nhận')
 
     api.on('GET', '/approval-requests/7', json(200, disposal, { ETag: '"1"' }))
-    fireEvent.click(screen.getByRole('button', { name: 'YC-2026-000007' }))
+    fireEvent.click(screen.getByRole('button', { name: /YC-2026-000007/ }))
     const panel = await screen.findByRole('dialog')
 
     expect(await within(panel).findByText('Tiêu hủy')).toBeInTheDocument()
