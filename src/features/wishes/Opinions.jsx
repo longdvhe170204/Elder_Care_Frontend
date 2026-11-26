@@ -12,7 +12,7 @@ import { OPINION_SOURCE_LABELS } from './wishLabels'
 // xóa sau khi lưu. Người cao tuổi và người thân nói khác nhau thì hai dòng riêng, không gộp, không chọn hộ.
 
 // residentId: để chọn người thân nêu ý kiến theo tên thay cho ô nhập mã (demo 2026-11-25)
-export function OpinionEditor({ idPrefix, residentId, items, onChange, error }) {
+export function OpinionEditor({ idPrefix, residentId, items, onChange, error, compact = false }) {
   const members = useFamilyMembers(residentId)
   const [type, setType] = useState('FAMILY_MEMBER')
   const [familyMemberId, setFamilyMemberId] = useState('')
@@ -32,11 +32,13 @@ export function OpinionEditor({ idPrefix, residentId, items, onChange, error }) 
 
   return (
     <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
-      <legend className="type-label px-1">Ý kiến khác với lựa chọn (không bắt buộc)</legend>
-      <FieldDescription>
-        Mỗi ý kiến một mục có nguồn. Lựa chọn trên phiếu ghi theo người quyết định; ý kiến khác không đổi lựa chọn và
-        không sửa được sau khi lưu.
-      </FieldDescription>
+      <legend className="type-label px-1">{compact ? 'Ý kiến khác' : 'Ý kiến khác với lựa chọn (không bắt buộc)'}</legend>
+      {!compact && (
+        <FieldDescription>
+          Mỗi ý kiến một mục có nguồn. Lựa chọn trên phiếu ghi theo người quyết định; ý kiến khác không đổi lựa chọn và
+          không sửa được sau khi lưu.
+        </FieldDescription>
+      )}
       {items.length > 0 && (
         <ul aria-label="Ý kiến khác đã thêm" className="flex flex-col gap-2">
           {items.map((item, index) => (

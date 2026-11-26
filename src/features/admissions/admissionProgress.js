@@ -12,6 +12,10 @@
 const DONE_CONDITION = ['MET', 'MET_BY_EXCEPTION', 'AUTOMATIC', 'NOT_APPLICABLE']
 const hasCommand = (ctx, ...commands) => commands.some((c) => ctx.residentCommands.includes(c))
 const hasWarning = (ctx, ...codes) => codes.some((code) => ctx.warnings.some((w) => w.code === code))
+// Mỗi phiếu nguyện vọng đã có phiếu hoặc có bản Nháp chờ kiểm chứng
+const bothWishesDrafted = (ctx) =>
+  (!hasWarning(ctx, 'MISSING_END_OF_LIFE_WISH') || hasWarning(ctx, 'UNVERIFIED_END_OF_LIFE_WISH_DRAFT')) &&
+  (!hasWarning(ctx, 'MISSING_TREATMENT_WISH') || hasWarning(ctx, 'UNVERIFIED_TREATMENT_WISH_DRAFT'))
 
 // action: resident (hồ sơ người cao tuổi, mở sẵn phần `part` nếu có), opinion, bed, contract, hoặc màn sở hữu ở `page`
 export const PHASES = [
@@ -83,14 +87,17 @@ export const PHASES = [
             'UNVERIFIED_END_OF_LIFE_WISH_DRAFT',
             'UNVERIFIED_TREATMENT_WISH_DRAFT',
           ),
+        // Đủ hai phiếu (Nháp hoặc đã có) thì chỉ còn chờ Bác sĩ, Điều dưỡng kiểm chứng (chủ dự án duyệt 2026-11-26)
         mine: (ctx) =>
-          hasCommand(
-            ctx,
-            'RECORD_END_OF_LIFE_WISH',
-            'RECORD_TREATMENT_WISH',
-            'DRAFT_END_OF_LIFE_WISH',
-            'DRAFT_TREATMENT_WISH',
-          ),
+          bothWishesDrafted(ctx)
+            ? hasCommand(ctx, 'RECORD_END_OF_LIFE_WISH', 'RECORD_TREATMENT_WISH')
+            : hasCommand(
+                ctx,
+                'RECORD_END_OF_LIFE_WISH',
+                'RECORD_TREATMENT_WISH',
+                'DRAFT_END_OF_LIFE_WISH',
+                'DRAFT_TREATMENT_WISH',
+              ),
         who: 'Bác sĩ, Điều dưỡng',
       },
       {

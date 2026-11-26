@@ -45,12 +45,12 @@ function Required() {
 }
 
 // Chọn tệp với nút, chữ tiếng Việt (ô tệp gốc của trình duyệt hiện "Choose File" theo ngôn ngữ máy)
-function FilePick({ id, label, file, onPick, error }) {
+export function FilePick({ id, label, file, onPick, error, required = true }) {
   const input = useRef(null)
   return (
     <Field data-invalid={!!error || undefined}>
       <FieldLabel htmlFor={id}>
-        {label} <Required />
+        {label} {required && <Required />}
       </FieldLabel>
       <div
         className={cn(

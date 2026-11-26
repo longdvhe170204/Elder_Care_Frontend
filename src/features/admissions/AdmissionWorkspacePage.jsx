@@ -34,6 +34,7 @@ import { ApplicationSheet, OpinionSheet } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
 import { ConsentRecordSheet } from '../consents/ConsentRecordSheet'
 import { InitialHealthSheet } from '../residents/InitialHealthSheet'
+import { WishDraftSheet } from '../wishes/WishDraftSheet'
 import { admissionProgress } from './admissionProgress'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.3): một màn cho một lượt tiếp nhận, đi theo các
@@ -212,6 +213,12 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
     // Bản đồng ý: mở thẳng khung ghi nhận, không qua tab Đồng ý (chủ dự án duyệt 2026-11-26)
     if (step.part === 'consent') return button(step.doLabel, () => setSheet({ kind: 'consent' }))
     if (step.part === 'health') return button(step.doLabel, () => setSheet({ kind: 'health' }))
+    // Hành chính lập bản Nháp tự khai; Bác sĩ, Điều dưỡng ghi phiếu ở tab Nguyện vọng của hồ sơ
+    if (
+      step.part === 'wishes' &&
+      !resident.allowedCommands?.some((c) => c.startsWith('RECORD_') && c.endsWith('_WISH'))
+    )
+      return button(step.doLabel, () => setSheet({ kind: 'wishes' }))
     if (step.action === 'resident') return button(step.doLabel ?? 'Mở hồ sơ', openerOf(step))
     // Ý kiến chỉ ghi được khi lượt Đang xử lý hoặc Đang chờ (api-004 admission-opinion)
     if (step.action === 'opinion' && !closed) return button(step.doLabel, () => setSheet({ kind: 'opinion' }))
@@ -479,9 +486,16 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       <Sheet
         open={
           !!sheet &&
-          !['new-contract', 'edit-contract', 'edit-application', 'part', 'opinion', 'consent', 'health'].includes(
-            sheet.kind,
-          )
+          ![
+            'new-contract',
+            'edit-contract',
+            'edit-application',
+            'part',
+            'opinion',
+            'consent',
+            'health',
+            'wishes',
+          ].includes(sheet.kind)
         }
         onOpenChange={(open) => !open && changed()}
       >
@@ -561,6 +575,16 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
       {sheet?.kind === 'edit-contract' && (
         <ContractSheet contract={sheet.contract} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+      )}
+      {sheet?.kind === 'wishes' && (
+        <WishDraftSheet
+          residentId={resident.id}
+          residentName={name}
+          hasEndOfLifeWish={resident.hasEndOfLifeWish}
+          hasTreatmentWish={resident.hasTreatmentWish}
+          onClose={() => setSheet(null)}
+          onDone={() => changed('Đã lưu bản Nháp nguyện vọng')}
+        />
       )}
       {sheet?.kind === 'health' && (
         <InitialHealthSheet
