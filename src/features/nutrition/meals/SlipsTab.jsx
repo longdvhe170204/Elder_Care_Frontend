@@ -18,6 +18,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AllergyNote } from '@/common/CareNotes'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { Info, ReasonField, SELECT } from '../NutritionParts'
@@ -72,23 +73,15 @@ function ServingForm({ portion, residents, onClose, onDone }) {
     <div className="flex flex-col gap-3 rounded-md border p-3">
       <h4 className="type-label">{`Xác nhận phục vụ suất của ${portion.fullName}`}</h4>
       <FieldGroup>
-        <Field data-invalid={(submitted && !residentId) || undefined}>
-          <FieldLabel htmlFor={`serve-resident-${portion.id}`}>Người đang được phục vụ</FieldLabel>
-          <select
-            id={`serve-resident-${portion.id}`}
-            className={SELECT}
-            value={residentId}
-            onChange={(e) => setResidentId(e.target.value)}
-          >
-            <option value="">Chọn người cao tuổi</option>
-            {residents.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-          {submitted && !residentId && <FieldError>Chọn đúng người đang được phục vụ</FieldError>}
-        </Field>
+        {/* Demo 2026-11-26 (E): ô tìm theo tên hoặc mã hồ sơ thay dropdown */}
+        <ResidentCombobox
+          id={`serve-resident-${portion.id}`}
+          label="Người đang được phục vụ"
+          options={residents.map((r) => ({ value: String(r.id), label: r.code ? `${r.name} (${r.code})` : r.name }))}
+          value={residentId}
+          onChange={setResidentId}
+          error={submitted && !residentId ? 'Chọn đúng người đang được phục vụ' : null}
+        />
         {allergen && (
           <>
             <Field data-invalid={(submitted && eaten === null) || undefined}>

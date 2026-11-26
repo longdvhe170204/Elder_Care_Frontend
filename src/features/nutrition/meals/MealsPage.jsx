@@ -35,7 +35,11 @@ export function MealsPage({ initialDate = todayInVietnam() }) {
         safe(getNutritionDiets()),
         safe(getNutritionDishes({ query: {} })),
         safe(getResidents({ query: { status: ['IN_RESIDENCE'] } }), { items: [] }).then((p) =>
-          (p.items ?? []).map((r) => ({ id: r.id, name: r.personalInfo?.fullName ?? `Người cao tuổi mã ${r.id}` })),
+          (p.items ?? []).map((r) => ({
+            id: r.id,
+            name: r.personalInfo?.fullName ?? `Người cao tuổi mã ${r.id}`,
+            code: r.profileCode,
+          })),
         ),
         safe(getCatalogsByType({ path: { type: 'allergens' }, query: { group: 'FOOD' } })),
       ]).then(([floors, diets, dishes, residents, allergens]) => ({ floors, diets, dishes, residents, allergens })),
