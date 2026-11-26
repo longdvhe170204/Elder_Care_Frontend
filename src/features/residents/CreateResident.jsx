@@ -12,6 +12,7 @@ import { SearchSelect } from '@/common/SearchSelect'
 import { problemOf } from '@/common/problem'
 import { GENDER_LABELS, STATUS_LABELS } from './residentLabels'
 import { VN_PHONE, normalizePhone } from './vnPhone'
+import { displayDate, isoDate, maskDate } from '@/common/dateText'
 
 // Tạo hồ sơ người cao tuổi (001 T022; US1 #1 → #4, #10; FR-001 → FR-004; hợp đồng POST /residents), nằm trong khung
 // `admission-start` (NewAdmissionSheet). Idempotency-Key giữ suốt lần nhập để bấm lại không tạo hai hồ sơ.
@@ -31,7 +32,6 @@ const CITIZEN_ID = /^\d{12}$/
 // (Unikey "Unicode tổ hợp") vẫn hợp lệ
 const NAME = /^\p{L}[\p{L}\s.'-]*$/u
 const MAX_ADDRESS = 500
-const DATE_TEXT = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
 
 const EMPTY = {
   idDocumentNumber: '',
@@ -52,46 +52,6 @@ function blank(value) {
 
 const cleanName = (value) => value.normalize('NFC').trim().replace(/\s+/g, ' ')
 const today = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
-
-// dd/mm/yyyy → yyyy-mm-dd; ngày không có thật thì null
-function isoDate(text) {
-  const match = DATE_TEXT.exec(text.trim())
-  if (!match) return null
-  const [, d, m, y] = match.map(Number)
-  const date = new Date(Date.UTC(y, m - 1, d))
-  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-}
-const displayDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '')
-
-// Gõ số thì tự chèn "/" và tự thêm số 0 (chủ dự án yêu cầu 2026-11-26): ngày bắt đầu bằng 4–9, tháng bắt đầu bằng
-// 2–9 thì đã đủ một phần, thêm 0 rồi sang phần sau; 1221945 → 12/02/1945, 14031948 → 14/03/1948. Gõ "/" sau một chữ số
-// cũng thêm 0 (1/3 → 01/03/). Khi xóa lùi thì không chèn lại "/" để xóa được. Không tự chuyển ô (DESIGN.md 9.4)
-function maskDate(value, previous) {
-  const growing = value.length > previous.length
-  const parts = value.split('/')
-  const digits = parts
-    .map((part, index) => {
-      const d = part.replace(/\D/g, '')
-      return index < Math.min(parts.length - 1, 2) && d.length === 1 ? `0${d}` : d
-    })
-    .join('')
-  let i = 0
-  const take = (firstMax) => {
-    if (i >= digits.length) return ''
-    const first = digits[i++]
-    if (Number(first) > firstMax) return `0${first}`
-    return i < digits.length ? first + digits[i++] : first
-  }
-  const day = take(3)
-  const month = take(1)
-  const year = digits.slice(i, i + 4)
-  let text = day
-  if (day.length === 2 && (month || growing)) text += '/'
-  text += month
-  if (month.length === 2 && (year || growing)) text += '/'
-  return text + year
-}
 
 // Danh mục 34 tỉnh, 3.321 xã/phường (Quyết định 19/2025/QĐ-TTg, áp dụng từ 01/7/2025), rút gọn từ
 // github.com/ThangLeQuoc/vietnamese-provinces-database (MIT, tải 2026-11-26) vào src/common/administrativeUnits.json:

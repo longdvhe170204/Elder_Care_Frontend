@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   getAdmissionApplicationsById,
   postAdmissionApplications,
@@ -6,11 +6,13 @@ import {
   postAdmissionApplicationsByIdUpdate,
 } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { ChoiceTray } from '@/common/ChoiceTray'
+import { DiscardChangesDialog } from '@/common/DiscardChangesDialog'
+import { displayDate, isoDate, maskDate, todayIso } from '@/common/dateText'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { APPLICATION_NEEDS } from '@/common/quickChoices'
 import { formatDateTime } from '@/common/dateTime'
@@ -103,13 +105,36 @@ export function OpinionForm({ applicationId, onDone, onCancel }) {
 // Lập mới (chưa có application) hoặc cập nhật (có application: tải lại để lấy ETag cho If-Match, lý do bắt buộc).
 // residentId, residentName: người cao tuổi đã biết (vừa tạo hồ sơ ở luồng Tiếp nhận mới), chỉ hiện họ tên, không có ô chọn.
 // notice: nội dung hiện đầu form (kết quả tạo hồ sơ). onDone(message, application) nhận lượt đăng ký backend trả khi lập mới.
+// Bố cục (chủ dự án duyệt 2026-11-26, cùng kiểu form Tạo hồ sơ): đầu, chân khung cố định, chỉ phần form cuộn; ba nhóm
+// đánh số; dấu * cho ô bắt buộc; ngày nhập DD/MM/YYYY; onDirtyChange báo khung cha để hỏi lại khi đóng mà chưa lưu.
 export function ApplicationSheet(props) {
+  const [dirty, setDirty] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
+  const requestClose = () => (dirty ? setConfirmClose(true) : props.onClose())
   return (
-    <Sheet open onOpenChange={(next) => !next && props.onClose()}>
-      <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
-        <ApplicationForm {...props} />
+    <Sheet open onOpenChange={(next) => !next && requestClose()}>
+      <SheetContent className="gap-0 p-0 sm:max-w-xl">
+        <ApplicationForm {...props} onClose={requestClose} onDirtyChange={setDirty} />
       </SheetContent>
+      <DiscardChangesDialog
+        open={confirmClose}
+        onKeep={() => setConfirmClose(false)}
+        onDiscard={() => {
+          setConfirmClose(false)
+          props.onClose()
+        }}
+      />
     </Sheet>
+  )
+}
+
+const FORM_ID = 'application-form'
+
+function Required() {
+  return (
+    <span aria-hidden="true" className="text-destructive">
+      *
+    </span>
   )
 }
 
@@ -120,23 +145,29 @@ export function ApplicationForm({
   notice = null,
   onClose,
   onDone,
+  onDirtyChange,
 }) {
   const editing = !!application
   const [etag, setEtag] = useState(null)
-  const [residentId, setResidentId] = useState(
-    application ? String(application.residentId) : presetResidentId != null ? String(presetResidentId) : '',
-  )
-  const [applicationDate, setApplicationDate] = useState(application?.applicationDate ?? '')
-  const [type, setType] = useState(application?.desiredResidenceType ?? '')
-  const [level, setLevel] = useState(application?.expectedCareLevel ?? '')
-  const [desiredDate, setDesiredDate] = useState(application?.desiredAdmissionDate ?? '')
-  const [contact, setContact] = useState(application?.contactPerson ?? '')
-  const [needs, setNeeds] = useState(application?.needs ?? '')
-  const [note, setNote] = useState(application?.note ?? '')
-  const [reason, setReason] = useState('')
+  const [initial] = useState(() => ({
+    residentId: application ? String(application.residentId) : presetResidentId != null ? String(presetResidentId) : '',
+    applicationDate: displayDate(application?.applicationDate),
+    type: application?.desiredResidenceType ?? '',
+    level: application?.expectedCareLevel ?? '',
+    desiredDate: displayDate(application?.desiredAdmissionDate),
+    contact: application?.contactPerson ?? '',
+    needs: application?.needs ?? '',
+    note: application?.note ?? '',
+    reason: '',
+  }))
+  const [form, setForm] = useState(initial)
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const formRef = useRef(null)
+
+  const dirty = Object.keys(initial).some((k) => form[k] !== initial[k])
+  useEffect(() => onDirtyChange?.(dirty), [dirty, onDirtyChange])
 
   useEffect(() => {
     if (!editing) return
@@ -145,45 +176,65 @@ export function ApplicationForm({
       .catch((e) => setFailure(problemOf(e)))
   }, [editing, application?.id])
 
-  // Ngày theo giờ Việt Nam (so chuỗi yyyy-mm-dd)
-  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' })
-  const errors = {
-    resident: !residentId && 'Chọn người cao tuổi',
-    date: (!applicationDate && 'Nhập ngày đăng ký') || (applicationDate > today && 'Ngày đăng ký không ở tương lai'),
-    desired:
-      desiredDate && applicationDate && desiredDate < applicationDate && 'Ngày vào dự kiến không trước ngày đăng ký',
-    contact: contact.trim().length > 200 && 'Người liên hệ tối đa 200 ký tự',
-    note: note.trim().length > 2000 && 'Ghi chú tối đa 2000 ký tự',
-    type: !type && 'Chọn loại lưu trú',
-    level: !level && 'Chọn mức chăm sóc',
-    reason: editing && !reason.trim() && 'Nhập lý do',
-  }
+  const setValue = (name) => (value) => setForm((current) => ({ ...current, [name]: value }))
+  const setText = (name) => (event) => setValue(name)(event.target.value)
+  const setDate = (name) => (event) =>
+    setForm((current) => ({ ...current, [name]: maskDate(event.target.value, current[name]) }))
 
-  async function save() {
+  const applicationIso = isoDate(form.applicationDate)
+  const desiredIso = isoDate(form.desiredDate)
+  const errors = {
+    resident: !form.residentId && 'Chọn người cao tuổi',
+    date:
+      (!form.applicationDate.trim() && 'Nhập ngày đăng ký') ||
+      (!applicationIso && 'Nhập ngày có thật, dạng DD/MM/YYYY') ||
+      (applicationIso > todayIso() && 'Ngày đăng ký không ở tương lai'),
+    type: !form.type && 'Chọn loại lưu trú',
+    level: !form.level && 'Chọn mức chăm sóc',
+    desired:
+      (form.desiredDate.trim() && !desiredIso && 'Nhập ngày có thật, dạng DD/MM/YYYY') ||
+      (desiredIso && applicationIso && desiredIso < applicationIso && 'Ngày vào dự kiến không trước ngày đăng ký'),
+    contact: form.contact.trim().length > 200 && 'Người liên hệ tối đa 200 ký tự',
+    note: form.note.trim().length > 2000 && 'Ghi chú tối đa 2000 ký tự',
+    reason: editing && !form.reason.trim() && 'Nhập lý do cập nhật',
+  }
+  const shown = (key) => (submitted ? errors[key] || null : null)
+
+  async function submit(event) {
+    event.preventDefault()
+    if (busy) return
     setSubmitted(true)
-    if (Object.values(errors).some(Boolean)) return
+    if (Object.values(errors).some(Boolean)) {
+      // Đưa con trỏ tới ô lỗi đầu tiên theo thứ tự trên form
+      requestAnimationFrame(() =>
+        formRef.current?.querySelector('[aria-invalid="true"], [data-invalid="true"] button')?.focus(),
+      )
+      return
+    }
     setBusy(true)
     setFailure(null)
     const body = {
-      residentId: Number(residentId),
-      applicationDate,
-      desiredResidenceType: type,
-      expectedCareLevel: level,
-      ...(desiredDate && { desiredAdmissionDate: desiredDate }),
-      ...(contact.trim() && { contactPerson: contact.trim() }),
-      ...(needs.trim() && { needs: needs.trim() }),
-      ...(note.trim() && { note: note.trim() }),
+      residentId: Number(form.residentId),
+      applicationDate: applicationIso,
+      desiredResidenceType: form.type,
+      expectedCareLevel: form.level,
+      ...(desiredIso && { desiredAdmissionDate: desiredIso }),
+      ...(form.contact.trim() && { contactPerson: form.contact.trim() }),
+      ...(form.needs.trim() && { needs: form.needs.trim() }),
+      ...(form.note.trim() && { note: form.note.trim() }),
     }
     try {
       if (editing) {
         await postAdmissionApplicationsByIdUpdate({
           path: { id: application.id },
           headers: { ...newKey(), 'If-Match': etag },
-          body: { ...body, reason: reason.trim() },
+          body: { ...body, reason: form.reason.trim() },
         })
+        onDirtyChange?.(false)
         onDone('Đã cập nhật đăng ký')
       } else {
         const { data } = await postAdmissionApplications({ headers: newKey(), body })
+        onDirtyChange?.(false)
         onDone('Đã lập đăng ký tiếp nhận', data)
       }
     } catch (e) {
@@ -193,115 +244,168 @@ export function ApplicationForm({
     }
   }
 
-  const shown = (key) => (submitted ? errors[key] : null)
-
   return (
-    <>
-      <SheetTitle>{editing ? 'Cập nhật đăng ký tiếp nhận' : 'Lập đăng ký tiếp nhận'}</SheetTitle>
-      <SheetDescription>
-        Người cao tuổi phải đang ở trạng thái Đang tiếp nhận; mỗi người một lượt đang mở.
-      </SheetDescription>
-      {notice && <div className="mt-4">{notice}</div>}
-      <FieldGroup className="mt-4">
-        {editing ? (
-          <Info label="Người cao tuổi">{`Mã ${application.residentId}`}</Info>
-        ) : presetResidentId != null ? (
-          <Info label="Người cao tuổi">{residentName ?? `Mã ${presetResidentId}`}</Info>
-        ) : (
-          <ResidentSelect
-            id="application-resident"
-            statuses={['ADMISSION_IN_PROGRESS']}
-            value={residentId}
-            onChange={setResidentId}
-            error={shown('resident')}
-            onFailure={(e) => setFailure(problemOf(e))}
-          />
+    <div className="flex h-full min-h-0 flex-col">
+      <div className="flex shrink-0 flex-col gap-1 border-b px-6 pt-6 pb-4 pr-12">
+        <SheetTitle className="type-title">
+          {editing ? 'Cập nhật đăng ký tiếp nhận' : 'Lập đăng ký tiếp nhận'}
+        </SheetTitle>
+        <SheetDescription>
+          Người cao tuổi phải đang ở trạng thái Đang tiếp nhận; mỗi người một lượt đang mở.
+        </SheetDescription>
+      </div>
+
+      <form
+        id={FORM_ID}
+        ref={formRef}
+        onSubmit={submit}
+        noValidate
+        aria-busy={busy || undefined}
+        className="flex min-h-0 flex-1 flex-col divide-y overflow-y-auto px-6"
+      >
+        {notice && <div className="py-4">{notice}</div>}
+
+        <div className="py-6">
+          <FieldSet disabled={busy}>
+            <FieldLegend className="type-label mb-4">01 · Người cao tuổi</FieldLegend>
+            {editing ? (
+              <Info label="Người cao tuổi">{`Mã ${application.residentId}`}</Info>
+            ) : presetResidentId != null ? (
+              <Info label="Người cao tuổi">{residentName ?? `Mã ${presetResidentId}`}</Info>
+            ) : (
+              <ResidentSelect
+                id="application-resident"
+                statuses={['ADMISSION_IN_PROGRESS']}
+                value={form.residentId}
+                onChange={setValue('residentId')}
+                error={shown('resident')}
+                onFailure={(e) => setFailure(problemOf(e))}
+              />
+            )}
+            <Field data-invalid={!!shown('date') || undefined}>
+              <FieldLabel htmlFor="application-date">
+                Ngày đăng ký <Required />
+              </FieldLabel>
+              <Input
+                id="application-date"
+                inputMode="numeric"
+                placeholder="DD/MM/YYYY"
+                maxLength={10}
+                autoComplete="off"
+                required
+                className="h-11 tabular-nums sm:max-w-xs"
+                value={form.applicationDate}
+                onChange={setDate('applicationDate')}
+                aria-invalid={!!shown('date') || undefined}
+                aria-describedby={shown('date') ? 'application-date-error' : undefined}
+              />
+              {shown('date') && <FieldError id="application-date-error">{shown('date')}</FieldError>}
+            </Field>
+          </FieldSet>
+        </div>
+
+        <div className="py-6">
+          <FieldSet disabled={busy}>
+            <FieldLegend className="type-label mb-4">02 · Nhu cầu lưu trú</FieldLegend>
+            <Choices
+              label="Loại lưu trú mong muốn"
+              options={RESIDENCE_TYPES}
+              value={form.type}
+              onChange={setValue('type')}
+              error={shown('type')}
+              required
+            />
+            <Choices
+              label="Mức chăm sóc dự kiến"
+              options={CARE_LEVELS}
+              value={form.level}
+              onChange={setValue('level')}
+              error={shown('level')}
+              required
+            />
+            <Field data-invalid={!!shown('desired') || undefined}>
+              <FieldLabel htmlFor="application-desired">Ngày vào dự kiến</FieldLabel>
+              <Input
+                id="application-desired"
+                inputMode="numeric"
+                placeholder="DD/MM/YYYY"
+                maxLength={10}
+                autoComplete="off"
+                className="h-11 tabular-nums sm:max-w-xs"
+                value={form.desiredDate}
+                onChange={setDate('desiredDate')}
+                aria-invalid={!!shown('desired') || undefined}
+                aria-describedby={shown('desired') ? 'application-desired-error' : undefined}
+              />
+              {shown('desired') && <FieldError id="application-desired-error">{shown('desired')}</FieldError>}
+            </Field>
+            <ChoiceTray
+              id="application-needs"
+              label="Nhu cầu"
+              options={APPLICATION_NEEDS}
+              multiple
+              value={form.needs}
+              onChange={setValue('needs')}
+            />
+          </FieldSet>
+        </div>
+
+        <div className="py-6">
+          <FieldSet disabled={busy}>
+            <FieldLegend className="type-label mb-4">03 · Liên hệ và ghi chú</FieldLegend>
+            <Field data-invalid={!!shown('contact') || undefined}>
+              <FieldLabel htmlFor="application-contact">Người liên hệ</FieldLabel>
+              <Input
+                id="application-contact"
+                className="h-11"
+                maxLength={200}
+                placeholder="Họ tên, quan hệ, số điện thoại"
+                value={form.contact}
+                onChange={setText('contact')}
+                aria-invalid={!!shown('contact') || undefined}
+              />
+              {shown('contact') && <FieldError>{shown('contact')}</FieldError>}
+            </Field>
+            <Field data-invalid={!!shown('note') || undefined}>
+              <FieldLabel htmlFor="application-note">Ghi chú</FieldLabel>
+              <Textarea
+                id="application-note"
+                rows={2}
+                maxLength={2000}
+                placeholder="Thông tin bổ sung (nếu có)"
+                value={form.note}
+                onChange={setText('note')}
+                aria-invalid={!!shown('note') || undefined}
+              />
+              {shown('note') && <FieldError>{shown('note')}</FieldError>}
+            </Field>
+            {editing && (
+              <ReasonField
+                id="application-reason"
+                label="Lý do cập nhật"
+                value={form.reason}
+                onChange={setValue('reason')}
+                error={shown('reason')}
+              />
+            )}
+          </FieldSet>
+        </div>
+
+        {failure && (
+          <div className="py-6">
+            <ProblemAlert problem={failure} />
+          </div>
         )}
-        <Field data-invalid={!!shown('date') || undefined}>
-          <FieldLabel htmlFor="application-date">Ngày đăng ký</FieldLabel>
-          <Input
-            id="application-date"
-            type="date"
-            max={today}
-            className="h-11"
-            value={applicationDate}
-            aria-invalid={!!shown('date') || undefined}
-            onChange={(e) => setApplicationDate(e.target.value)}
-          />
-          {shown('date') && <FieldError>{shown('date')}</FieldError>}
-        </Field>
-        <Choices
-          label="Loại lưu trú mong muốn"
-          options={RESIDENCE_TYPES}
-          value={type}
-          onChange={setType}
-          error={shown('type')}
-        />
-        <Choices
-          label="Mức chăm sóc dự kiến"
-          options={CARE_LEVELS}
-          value={level}
-          onChange={setLevel}
-          error={shown('level')}
-        />
-        <Field data-invalid={!!shown('desired') || undefined}>
-          <FieldLabel htmlFor="application-desired">Ngày vào dự kiến</FieldLabel>
-          <Input
-            id="application-desired"
-            type="date"
-            min={applicationDate || undefined}
-            className="h-11"
-            value={desiredDate}
-            aria-invalid={!!shown('desired') || undefined}
-            onChange={(e) => setDesiredDate(e.target.value)}
-          />
-          {shown('desired') && <FieldError>{shown('desired')}</FieldError>}
-        </Field>
-        <Field data-invalid={!!shown('contact') || undefined}>
-          <FieldLabel htmlFor="application-contact">Người liên hệ</FieldLabel>
-          <Input
-            id="application-contact"
-            className="h-11"
-            maxLength={200}
-            value={contact}
-            aria-invalid={!!shown('contact') || undefined}
-            onChange={(e) => setContact(e.target.value)}
-          />
-          {shown('contact') && <FieldError>{shown('contact')}</FieldError>}
-        </Field>
-        <ChoiceTray
-          id="application-needs"
-          label="Nhu cầu"
-          options={APPLICATION_NEEDS}
-          multiple
-          value={needs}
-          onChange={setNeeds}
-        />
-        <Field data-invalid={!!shown('note') || undefined}>
-          <FieldLabel htmlFor="application-note">Ghi chú</FieldLabel>
-          <Textarea
-            id="application-note"
-            rows={2}
-            maxLength={2000}
-            value={note}
-            aria-invalid={!!shown('note') || undefined}
-            onChange={(e) => setNote(e.target.value)}
-          />
-          {shown('note') && <FieldError>{shown('note')}</FieldError>}
-        </Field>
-        {editing && <ReasonField id="application-reason" value={reason} onChange={setReason} error={shown('reason')} />}
-      </FieldGroup>
-      <div className="mt-4">
-        <ProblemAlert problem={failure} />
-      </div>
-      <div className="mt-4 flex justify-end gap-2">
-        <Button variant="ghost" className="h-11" onClick={onClose}>
-          Đóng
+      </form>
+
+      <div className="flex shrink-0 flex-wrap justify-end gap-3 border-t px-6 py-4">
+        <Button type="button" variant="outline" className="h-11" onClick={onClose}>
+          Hủy
         </Button>
-        <Button className="h-11" disabled={busy || (editing && !etag)} onClick={save}>
-          Lưu đăng ký
+        <Button type="submit" form={FORM_ID} className="h-11" disabled={busy || (editing && !etag)}>
+          {busy ? 'Đang lưu…' : 'Lưu đăng ký'}
         </Button>
       </div>
-    </>
+    </div>
   )
 }
