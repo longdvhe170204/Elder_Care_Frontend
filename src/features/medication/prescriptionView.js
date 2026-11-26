@@ -47,6 +47,7 @@ export function prescriptionView({ prescription: p, medication }) {
   return {
     id: p.id,
     residentId: p.residentId,
+    prescriptionGroupId: p.prescriptionGroupId ?? null,
     drug: medicationLabel(medication, p.medicationId),
     dose: [number(p.dosage), medication?.usageUnit].filter(Boolean).join(' '),
     route: p.route,
@@ -104,7 +105,8 @@ function confirmationsOf(confirmations = {}) {
 
 // form: giá trị các ô của khung Nhập đơn (chuỗi); thời điểm bắt đầu là bây giờ theo giờ Việt Nam
 export function newPrescriptionBody(form, now = new Date()) {
-  const day = todayVN(now)
+  const day = form.startedDate || todayVN(now)
+  const startTime = form.startedDate && form.startedDate !== todayVN(now) ? '00:00' : hhmm(now)
   const periodic = form.prescriptionType === 'PERIODIC'
   const external = form.prescriberType === 'EXTERNAL'
   const confirmations = confirmationsOf(form.confirmations)
@@ -115,7 +117,8 @@ export function newPrescriptionBody(form, now = new Date()) {
     prescriptionType: form.prescriptionType,
     ...(periodic && { frequency: frequencyBody(form, day) }),
     ...(!periodic && { minIntervalMinutes: Number(form.minIntervalMinutes), maxDosesPer24h: Number(form.maxDosesPer24h) }),
-    startedAt: at(day, hhmm(now)),
+    startedAt: at(day, startTime),
+    ...(form.endedAt && { endedAt: form.endedAt }),
     medicationSource: form.medicationSource,
     prescriber: external
       ? { type: 'EXTERNAL', facilityName: form.facilityName.trim(), prescriberName: form.prescriberName.trim(), prescribedAt: form.prescribedAt }
@@ -123,7 +126,9 @@ export function newPrescriptionBody(form, now = new Date()) {
     ...(form.instructionNote?.trim() && { instructionNote: form.instructionNote.trim() }),
     ...(form.timeCriticality === 'CRITICAL' && { timeCriticality: 'CRITICAL' }),
     ...(form.requiredMeasurements?.length > 0 && { requiredMeasurements: form.requiredMeasurements }),
-    ...(!periodic && form.indication?.trim() && { indication: form.indication.trim() }),
+    ...(form.measurementConditions?.length > 0 && { measurementConditions: form.measurementConditions }),
+    ...(form.chronicDisease && { chronicDisease: true }),
+    ...(form.indication?.trim() && { indication: form.indication.trim() }),
     ...(confirmations.length > 0 && { issueConfirmations: confirmations }),
   }
 }
