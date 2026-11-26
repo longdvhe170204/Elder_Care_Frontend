@@ -239,3 +239,17 @@ it('Q448_chuaChonNguoi_hienHangChoThayChoLoiNhac', async () => {
   expect(await screen.findByText('Không có ai cần lập hoặc sửa kế hoạch')).toBeInTheDocument()
   expect(screen.queryByText('Chọn người cao tuổi để xem kế hoạch.')).not.toBeInTheDocument()
 })
+
+it('Q448_oTim_khongTuMoKhiChuaGo_dongKhiBamRaNgoai', async () => {
+  api.on('GET', '/care-plan-reviews/queue', json(200, []))
+  renderPage({})
+  const box = screen.getByRole('combobox', { name: 'Tìm người cao tuổi' })
+  fireEvent.focus(box)
+  expect(box).toHaveAttribute('aria-expanded', 'false')
+
+  fireEvent.change(box, { target: { value: 'kiểm thử' } })
+  expect(await screen.findByRole('listbox')).toBeInTheDocument()
+  fireEvent.pointerDown(document.body)
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+  expect(box).toHaveAttribute('aria-expanded', 'false')
+})
