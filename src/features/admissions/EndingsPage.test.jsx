@@ -254,8 +254,23 @@ describe('EndingsPage', () => {
     )
   })
 
-  it('FR_062_lapHoSo_chuyenCoSoThieuNoiChuyenDen_baoTaiO', async () => {
+  // Demo 2026-11-26 (E): Hành chính chỉ lập hết hạn, chấm dứt hợp đồng; xuất viện, chuyển cơ sở (kèm nơi chuyển đến, lý do
+  // y tế) còn ở form của Bác sĩ
+  it('lapHoSo_hanhChinh_chiHetHanVaChamDut_khongCoNoiChuyenDenVaLyDoYTe', async () => {
     renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
+    const dialog = screen.getByRole('dialog')
+    const group = within(dialog).getByRole('group', { name: 'Trường hợp kết thúc' })
+    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Hết hạn hợp đồng',
+      'Chấm dứt hợp đồng',
+    ])
+    expect(within(dialog).queryByLabelText('Nơi chuyển đến')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('Vì lý do y tế')).not.toBeInTheDocument()
+  })
+
+  it('FR_062_lapHoSo_chuyenCoSoThieuNoiChuyenDen_baoTaiO', async () => {
+    renderPage('DOCTOR')
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
     const dialog = screen.getByRole('dialog')
     await pickResident('Nguyễn Thị Lan', { container: dialog })
