@@ -61,7 +61,6 @@ export function NotificationsPage({ role, onNavigate, notificationId = null }) {
             <NotificationDetail
               id={notificationId}
               onOpened={noop}
-              onHidden={() => setDetail(null)}
               onNavigate={onNavigate}
               {...titles}
             />

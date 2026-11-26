@@ -158,15 +158,6 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
     setState((s) => ({ ...s, items: s.items.map((n) => (n.id === data.id ? data : n)) }))
   }, [])
 
-  const hide = useCallback(
-    (id) => {
-      setState((s) => ({ ...s, items: s.items.filter((n) => n.id !== id) }))
-      onClose()
-      setAnnouncement('Đã ẩn thông báo khỏi danh sách')
-    },
-    [onClose],
-  )
-
   const openReminder = useCallback(
     (id, startRecording = false) => {
       onClose()
@@ -184,7 +175,6 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
           key={id}
           id={id}
           onOpened={replace}
-          onHidden={hide}
           onNavigate={onNavigate}
           sourceAction={(n) => {
             if (reminderIdOf(n) !== null)
