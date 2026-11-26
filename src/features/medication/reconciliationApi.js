@@ -3,8 +3,10 @@ import {
   getMedicationReconciliationWorklist,
   getMedicationReconciliationsById,
   getResidentsByResidentIdMedicationReconciliations,
+  patchMedicationReconciliationsByIdNotes,
   postMedicationReconciliationsByIdCancel,
   postMedicationReconciliationsByIdConfirm,
+  postMedicationReconciliationsByIdDraft,
   postMedicationReconciliationsByIdProposeCorrection,
   postMedicationReconciliationsByIdReturn,
   postMedicationReconciliationsByIdSubmit,
@@ -28,11 +30,17 @@ export const getReconciliation = (id) => getMedicationReconciliationsById({ path
 export const createReconciliation = (residentId, body, key) =>
   postResidentsByResidentIdMedicationReconciliations({ path: { residentId }, headers: keyed(key), body })
 
+export const updateReconciliationNotes = (id, body) =>
+  patchMedicationReconciliationsByIdNotes({ path: { id }, body })
+
 export const saveItems = (id, etag, items, key) =>
   putMedicationReconciliationsByIdItems({ path: { id }, headers: { 'If-Match': etag, ...keyed(key) }, body: items })
 
 export const submitReconciliation = (id, key) =>
   postMedicationReconciliationsByIdSubmit({ path: { id }, headers: keyed(key) })
+
+export const saveReconciliationDraft = (id, key) =>
+  postMedicationReconciliationsByIdDraft({ path: { id }, headers: keyed(key) })
 
 export const confirmReconciliation = (id, key) =>
   postMedicationReconciliationsByIdConfirm({ path: { id }, headers: keyed(key) })
