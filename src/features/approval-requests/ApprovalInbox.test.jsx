@@ -61,6 +61,15 @@ async function openDetail(detail = request()) {
 }
 
 describe('ApprovalInbox', () => {
+  // Demo 2026-11-26: mở từ thông báo (Xử lý) thì hiện ngay chi tiết yêu cầu đó
+  it('moTuThongBao_hienNgayChiTietYeuCau', async () => {
+    api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, PAGE))
+    api.on('GET', '/approval-requests/7', json(200, request(), { ETag: '"1"' }))
+    render(<ApprovalInbox requestId={7} />)
+    const panel = await screen.findByRole('dialog')
+    expect(await within(panel).findByRole('button', { name: 'Duyệt' })).toBeInTheDocument()
+  })
+
   it('US5_1_tabChoToiDuyet_hienDong_loai_trangThai_ngayHieuLuc', async () => {
     api.on('GET', isList('AWAITING_MY_APPROVAL'), json(200, PAGE))
     api.on('GET', isList('MINE'), json(200, { items: [], nextCursor: null }))
