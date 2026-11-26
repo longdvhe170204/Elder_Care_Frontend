@@ -3,14 +3,13 @@ import { getResidents, getResidentsById, getResidentsByResidentIdBelongings } fr
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
-import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DetailLayout } from '@/common/DetailLayout'
 import { PageHeader } from '@/common/PageHeader'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { ResidentAvatar } from '@/common/ResidentAvatar'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
@@ -30,70 +29,38 @@ import { useBelongingCatalogs } from './useBelongingCatalogs'
 // người cao tuổi (tìm qua GET /residents của 001), bảng đồ gửi theo api-013 GET /residents/{residentId}/belongings, bấm
 // đồ mở khung chi tiết (DESIGN.md mục 5). Nút "Tiếp nhận đồ" mở form trong Sheet (T011).
 
+// Demo 2026-11-26 (E): ô tìm theo tên hoặc mã hồ sơ, danh sách thả xuống hiện ngay khi gõ (ResidentCombobox) thay hàng
+// nút liệt kê hết người cao tuổi
 function ResidentPicker({ onPick, selectedId }) {
-  const [q, setQ] = useState('')
   const [state, setState] = useState({ status: 'loading', items: [] })
 
-  const load = useCallback(async (text) => {
-    setState({ status: 'loading', items: [] })
-    try {
-      const { data } = await getResidents({ query: { q: text || undefined } })
-      setState({ status: 'ready', items: data.items })
-    } catch (error) {
-      setState({ status: 'error', items: [], problem: problemOf(error) })
+  useEffect(() => {
+    let live = true
+    getResidents({ query: {} })
+      .then(({ data }) => live && setState({ status: 'ready', items: data.items ?? [] }))
+      .catch((error) => live && setState({ status: 'error', items: [], problem: problemOf(error) }))
+    return () => {
+      live = false
     }
   }, [])
 
-  // Mở màn là hiện trang đầu danh sách người cao tuổi trong phạm vi để chọn, ô tìm để lọc thêm
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- tải danh sách khi mở màn
-    load('')
-  }, [load])
-
-  function search(event) {
-    event.preventDefault()
-    load(q.trim())
-  }
-
   return (
-    <div className="flex flex-col gap-3">
-      <form role="search" className="flex flex-wrap items-center gap-2" onSubmit={search}>
-        <Input
-          aria-label="Tìm người cao tuổi"
-          placeholder="Họ tên hoặc mã hồ sơ"
-          className="h-11 w-full sm:w-72"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <Button type="submit" variant="outline" className="h-11">
-          Tìm
-        </Button>
-      </form>
+    <div className="flex w-full max-w-xl flex-col gap-3">
+      <ResidentCombobox
+        id="belongings-resident"
+        label="Tìm người cao tuổi"
+        options={state.items.map((r) => ({
+          value: String(r.id),
+          label: r.profileCode ? `${r.personalInfo.fullName} (${r.profileCode})` : r.personalInfo.fullName,
+        }))}
+        value={selectedId == null ? '' : String(selectedId)}
+        loading={state.status === 'loading'}
+        onChange={(next) => {
+          const r = state.items.find((x) => String(x.id) === next)
+          if (r) onPick(r)
+        }}
+      />
       {state.status === 'error' && <ProblemAlert problem={state.problem} />}
-      {state.status === 'ready' && state.items.length === 0 && (
-        <p className="type-body-sm text-muted-foreground">
-          Không có người cao tuổi khớp với từ tìm trong phạm vi của bạn.
-        </p>
-      )}
-      {state.items.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {state.items.map((r) => (
-            <li key={r.id}>
-              <Button
-                variant={r.id === selectedId ? 'default' : 'outline'}
-                className="h-11 gap-2"
-                aria-label={`${r.personalInfo.fullName}, ${r.profileCode}`}
-                aria-pressed={r.id === selectedId}
-                onClick={() => onPick(r)}
-              >
-                <ResidentAvatar name={r.personalInfo.fullName} code={String(r.id)} />
-                <span className="type-label">{r.personalInfo.fullName}</span>
-                <span className="type-caption text-muted-foreground">{r.profileCode}</span>
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
     </div>
   )
 }
