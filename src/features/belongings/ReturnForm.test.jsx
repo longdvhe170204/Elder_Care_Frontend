@@ -272,7 +272,9 @@ describe('ReturnForm: xác nhận người nhận khác ngay trong màn trả', 
     pickId(18, 'Áo len')
     otherPerson()
     fireEvent.click(await screen.findByRole('button', { name: 'Chọn xác nhận mã 8' }))
-    expect(screen.getByText(/xác nhận chuyển Đã dùng/)).toHaveTextContent('mã 19')
+    // Demo 2026-11-26: đồ còn lại nêu bằng tên, số lượng (không hiện mã đồ gửi)
+    expect(screen.getByText(/xác nhận chuyển Đã dùng/)).toHaveTextContent('Áo len, 2')
+    expect(screen.getByText(/xác nhận chuyển Đã dùng/)).not.toHaveTextContent('mã 19')
   })
 
   it('FR_017_nguoiKhacChuaChonXacNhan_baoLoiTaiCho_khongGui', async () => {
