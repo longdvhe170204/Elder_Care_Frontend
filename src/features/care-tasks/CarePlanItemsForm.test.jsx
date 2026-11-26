@@ -3,8 +3,9 @@ import { fireEvent, render, screen } from '@testing-library/react'
 import { CarePlanItemsForm } from './CarePlanItemsForm'
 
 const types = [
-  { id: 8, name: 'Loại kiểm thử', status: 'ACTIVE', group: 'OTHER' },
-  { id: 9, name: 'Hỗ trợ uống nước', status: 'ACTIVE', group: 'DRINKING_ASSISTANCE' },
+  { id: 8, name: 'Loại kiểm thử', status: 'ACTIVE', group: 'OTHER', defaultImportance: 'NORMAL' },
+  { id: 9, name: 'Hỗ trợ uống nước', status: 'ACTIVE', group: 'DRINKING_ASSISTANCE', defaultImportance: 'IMPORTANT' },
+  { id: 10, name: 'Xoay trở', status: 'ACTIVE', group: 'MOVEMENT', defaultImportance: 'MANDATORY', defaultRole: 'CAREGIVER', resultType: 'PERFORMED' },
 ]
 const base = {
   id: 1,
@@ -60,8 +61,16 @@ it('Figma_tanSuatDangNutChon_chiHienODungLuaChon', () => {
   fireEvent.click(screen.getByRole('radio', { name: 'Mỗi N giờ' }))
   expect(screen.getByLabelText('Mỗi N giờ mục 1')).toBeInTheDocument()
   expect(screen.queryByLabelText('Số lần trong ngày mục 1')).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('radio', { name: 'Bắt buộc' }))
-  expect(screen.getByRole('radio', { name: 'Bắt buộc' })).toBeChecked()
+})
+
+it('Q447_khongChonMucQuanTrong_layTheoLoaiCongViec', () => {
+  const save = renderForm([base])
+  expect(screen.queryByRole('radiogroup', { name: 'Mức quan trọng' })).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Loại công việc mục 1'), { target: { value: '10' } })
+  expect(screen.getByText('Bắt buộc')).toBeInTheDocument()
+  expect(screen.getByText('Mức quan trọng theo loại công việc')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+  expect(save).toHaveBeenCalledWith([expect.objectContaining({ taskTypeId: 10, importance: 'MANDATORY' })])
 })
 
 it('Figma_nhieuMuc_chiMoMucDangSua_mucKhacThuGon', () => {
@@ -86,4 +95,14 @@ it('Figma_loiOMucDangThuGon_moMucDoDeThayLoi', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
   expect(save).not.toHaveBeenCalled()
   expect(screen.getByText('Nhập nội dung.')).toBeInTheDocument()
+})
+
+it('Q447_mocGioTuBackendCoGiay_hienVaGuiDangHHmm', () => {
+  const save = renderForm([{ ...base, times: ['09:00:00', '17:00:00'] }])
+  expect(screen.getByText('09:00')).toBeInTheDocument()
+  expect(screen.queryByText('09:00:00')).not.toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Các mốc giờ mục 1'), { target: { value: '09:00' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm mốc giờ mục 1' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+  expect(save).toHaveBeenCalledWith([expect.objectContaining({ times: ['09:00', '17:00'] })])
 })

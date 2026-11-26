@@ -7,7 +7,8 @@ import { CareField, CareCheck } from './CareField'
 import { CARE_ROLES, FREQUENCIES, IMPORTANCE, RESULT_TYPES, frequencyText } from './carePlanLabels'
 
 // Q-447, thiết kế Figma "Kế hoạch chăm sóc · Mục công việc": mỗi mục là một thẻ, chỉ mở mục đang sửa; tần suất và
-// mức quan trọng chọn bằng nút liền nhau; mốc giờ nhập dạng chip; mục tiêu nước chỉ với loại Hỗ trợ uống nước.
+// mốc giờ nhập dạng chip; mục tiêu nước chỉ với loại Hỗ trợ uống nước. Mức quan trọng không chọn trên form, lấy theo
+// mức mặc định của loại công việc trong danh mục (chủ dự án 2026-11-26); mức vẫn quyết định nhắc, cảnh báo khi quá hạn.
 const PLAN_ROLES = Object.fromEntries(['CAREGIVER', 'NURSING_STAFF', 'DOCTOR'].map((code) => [code, CARE_ROLES[code]]))
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
@@ -26,7 +27,6 @@ function rowErrors(row) {
   if (row.frequencyType === 'TIMES_PER_DAY' && belowOne(row.timesPerDay)) errors.timesPerDay = 'Nhập số lần trong ngày.'
   if (blank(row.performerRole)) errors.performerRole = 'Chọn vai trò thực hiện.'
   if (blank(row.resultType)) errors.resultType = 'Chọn kết quả cần ghi.'
-  if (blank(row.importance)) errors.importance = 'Chọn mức quan trọng.'
   return errors
 }
 const hasErrors = (e) => Object.values(e ?? {}).some(Boolean)
@@ -139,7 +139,10 @@ function ItemSummary({ index, row, typeName, onOpen }) {
 
 // leading: lệnh đặt đầu thanh dưới cố định (vd. "Bỏ bản sửa" của panel, thiết kế Figma)
 export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForApproval, leading }) {
-  const [rows, setRows] = useState(() => items.map((row) => ({ ...row, times: row.times ?? [] })))
+  // Backend trả giờ dạng HH:mm:ss; chip và lần gửi dùng HH:mm để so trùng đúng
+  const [rows, setRows] = useState(() =>
+    items.map((row) => ({ ...row, times: (row.times ?? []).map((at) => String(at).slice(0, 5)) })),
+  )
   const [errors, setErrors] = useState([])
   const [open, setOpen] = useState(0)
   const typeById = Object.fromEntries(taskTypes.map((type) => [String(type.id), type]))
@@ -190,6 +193,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
           ]),
         ),
         startsAt: row.startsAt || null,
+        importance: row.importance || typeById[String(row.taskTypeId)]?.defaultImportance || null,
       })),
     )
   }
@@ -363,14 +367,15 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
                 error={errorOf(index, 'resultType')}
               />
             </div>
-            <div className="grid items-end gap-4 sm:grid-cols-2">
-              <Segmented
-                label="Mức quan trọng *"
-                options={IMPORTANCE}
-                value={row.importance}
-                onChange={(value) => set(index, 'importance', value)}
-                error={errorOf(index, 'importance')}
-              />
+            <div className="grid items-center gap-4 sm:grid-cols-2">
+              <div className="flex flex-col gap-1">
+                <span className="type-label">Mức quan trọng theo loại công việc</span>
+                {row.importance ? (
+                  <StatusBadge status={IMPORTANCE[row.importance]} className="self-start" />
+                ) : (
+                  <span className="type-body-sm text-muted-foreground">Chọn loại công việc để có mức</span>
+                )}
+              </div>
               <CareCheck
                 label="Có tính phí"
                 checked={row.billable ?? false}
