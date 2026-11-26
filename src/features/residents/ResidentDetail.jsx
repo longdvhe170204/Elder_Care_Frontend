@@ -52,11 +52,13 @@ function formOf(info) {
   }
 }
 
+// Ô trống thì không hiện (rà soát cho Bác sĩ 2026-11-26)
 function Row({ label, children }) {
+  if (!children) return null
   return (
     <div className="flex flex-col">
       <dt className="type-caption text-muted-foreground">{label}</dt>
-      <dd className="type-body-sm">{children || 'Chưa có'}</dd>
+      <dd className="type-body-sm">{children}</dd>
     </div>
   )
 }
@@ -110,12 +112,20 @@ const PARTS = [
 // Nội dung một phần của hồ sơ; dùng trong khung phần của ResidentDetail và ResidentPartSheet
 function PartContent({ part, residentId, profile, onChanged }) {
   const allowedCommands = profile.allowedCommands ?? []
-  if (part === 'health') return <HealthTab residentId={residentId} allowedCommands={allowedCommands} />
+  if (part === 'health')
+    return (
+      <HealthTab
+        residentId={residentId}
+        residentName={profile.personalInfo?.fullName}
+        allowedCommands={allowedCommands}
+      />
+    )
   if (part === 'assessment')
     return (
       <>
         <AssessmentTab
           residentId={residentId}
+          residentName={profile.personalInfo?.fullName}
           residentStatus={profile.status}
           allowedCommands={allowedCommands}
           onChanged={onChanged}
@@ -395,6 +405,37 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
             </Section>
           )}
 
+          {/* Rà soát cho Bác sĩ 2026-11-26: nút các phần ngay dưới An toàn, khối Chăm sóc trước Thông tin cá nhân */}
+          <div className="flex flex-wrap gap-2">
+            {parts.map((p) => (
+              <Button
+                key={p.value}
+                type="button"
+                variant="outline"
+                className="h-11"
+                aria-haspopup="dialog"
+                onClick={() => {
+                  setPart(p.value)
+                  setPartOpen(true)
+                }}
+              >
+                {p.label}
+              </Button>
+            ))}
+          </div>
+
+          <Section title="Chăm sóc">
+            <p className="type-body-sm">
+              {[
+                CARE_LEVEL_LABELS[profile.currentCareLevel] ?? 'Chưa có mức chăm sóc',
+                RESIDENCE_TYPE_LABELS[profile.currentResidenceType],
+              ]
+                .filter(Boolean)
+                .join(' · ')}
+            </p>
+            {profile.careNeeds?.length > 0 && <p className="type-body-sm">{profile.careNeeds.join(', ')}</p>}
+          </Section>
+
           <Section title="Thông tin cá nhân">
             <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
               <Row label="Ngày sinh">{formatDate(info.dateOfBirth)}</Row>
@@ -403,41 +444,23 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
                 {info.idDocumentType && `${ID_DOCUMENT_LABELS[info.idDocumentType]} ${info.idDocumentNumber ?? ''}`}
               </Row>
               <Row label="Điện thoại">{info.contact?.phoneNumber}</Row>
-              <Row label="Mức chăm sóc hiện hành">{CARE_LEVEL_LABELS[profile.currentCareLevel]}</Row>
-              <Row label="Loại hình lưu trú">{RESIDENCE_TYPE_LABELS[profile.currentResidenceType]}</Row>
-              <div className="col-span-2">
-                <Row label="Địa chỉ thường trú">{info.permanentAddress}</Row>
-              </div>
-              <div className="col-span-2">
-                <Row label="Địa chỉ liên hệ">{info.contactAddress}</Row>
-              </div>
-              <div className="col-span-2">
-                <Row label="Thư điện tử">{info.contact?.email}</Row>
-              </div>
-              <div className="col-span-2">
-                <Row label="Thông tin đặc biệt">{info.specialNotes}</Row>
-              </div>
+              {[
+                ['Địa chỉ thường trú', info.permanentAddress],
+                ['Địa chỉ liên hệ', info.contactAddress],
+                ['Thư điện tử', info.contact?.email],
+                ['Thông tin đặc biệt', info.specialNotes],
+              ]
+                .filter(([, value]) => value)
+                .map(([label, value]) => (
+                  <div key={label} className="col-span-2">
+                    <Row label={label}>{value}</Row>
+                  </div>
+                ))}
             </dl>
             {hidden.length > 0 && (
               <p className="type-caption text-muted-foreground">Một số thông tin không hiển thị theo quyền của bạn.</p>
             )}
           </Section>
-
-          {profile.careNeeds && (
-            <Section title="Nhu cầu chăm sóc">
-              {profile.careNeeds.length > 0 ? (
-                <ul className="flex flex-wrap gap-1.5">
-                  {profile.careNeeds.map((need) => (
-                    <li key={need} className="rounded-full bg-muted px-2.5 py-0.5 type-body-sm">
-                      {need}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="type-body-sm">Chưa ghi nhận</p>
-              )}
-            </Section>
-          )}
 
           {linked.length > 0 && (
             <Section title="Hồ sơ trước của cùng người">
@@ -451,26 +474,6 @@ export function ResidentDetail({ residentId, onChanged, Title = 'h2', Descriptio
               </ul>
             </Section>
           )}
-
-          <Section title="Các phần của hồ sơ">
-            <div className="flex flex-wrap gap-2">
-              {parts.map((p) => (
-                <Button
-                  key={p.value}
-                  type="button"
-                  variant="outline"
-                  className="h-11"
-                  aria-haspopup="dialog"
-                  onClick={() => {
-                    setPart(p.value)
-                    setPartOpen(true)
-                  }}
-                >
-                  {p.label}
-                </Button>
-              ))}
-            </div>
-          </Section>
 
           {!FINAL_STATUSES.includes(profile.status) && <CriticalCareSection residentId={profile.id} />}
 

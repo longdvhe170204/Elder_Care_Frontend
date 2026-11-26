@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Search } from 'lucide-react'
-import { getReassessmentsDue, getResidents, getResidentsById } from '@/api'
+import { getReassessmentsDue, getResidents } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -18,18 +18,39 @@ import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { CARE_LEVEL_LABELS, RESIDENCE_TYPE_LABELS } from '../assessments/assessmentLabels'
 import { NewAdmissionSheet } from '../admissions/NewAdmissionSheet'
+import { AdmissionTasksSheet } from './AdmissionTasksSheet'
 import { ResidentDetail } from './ResidentDetail'
 import { PROFILE_CREATORS, STATUS_LABELS } from './residentLabels'
+import { useInitialAssessmentQueue } from './useInitialAssessmentQueue'
 
 // Màn Người cao tuổi (001 T022, T066; DESIGN.md 5, 5.1, 6.7.0): một ô tìm (tham số q của GET /residents), thanh lọc
 // trạng thái (tham số status), bảng chỉ có trường của Profile trong api-001; bấm tên mở hồ sơ trong khung chi tiết.
 // Kết quả đã lọc theo phạm vi ở backend; vai trò không được xem nhận 403 và màn hiện lỗi đó (FR-007).
-// Đánh giá lại (T066; US6; FR-041): cột Đánh giá lại và bộ lọc "Cần đánh giá lại n" lấy từ GET /reassessments/due;
-// vai trò không xem được đánh giá (403) thì không có cột và bộ lọc. Hợp đồng không trả số đếm theo trạng thái nên
-// các mục lọc trạng thái không có số.
+// Đánh giá lại (T066; US6; FR-041): cột Đánh giá lại lấy từ GET /reassessments/due, chỉ hiện khi có người cần; không có
+// mục lọc riêng (chủ dự án bỏ 2026-11-26). Hợp đồng không trả số đếm theo trạng thái nên các mục lọc không có số.
+// Đánh giá đầu vào (chủ dự án yêu cầu 2026-11-26): ở tab Đang tiếp nhận, Bác sĩ, Điều dưỡng có cột "Đánh giá đầu vào"
+// (Chưa lập phiếu, Có phiếu nháp, Đã xác nhận; kèm trạng thái sức khỏe ban đầu); bấm dòng mở khung Việc tiếp nhận
+// (AdmissionTasksSheet, chủ dự án duyệt 2026-11-26). Tính ở web, không thông báo (useInitialAssessmentQueue).
 
 const STATUS_FILTERS = ['ADMISSION_IN_PROGRESS', 'IN_RESIDENCE', 'TEMPORARILY_ABSENT', 'HOSPITALIZED']
-const DUE_FILTER = 'DUE'
+const ASSESSORS = ['DOCTOR', 'NURSING_STAFF']
+const HEALTH_TEXT = {
+  NONE: 'Chưa có sức khỏe ban đầu',
+  DRAFT: 'Sức khỏe ban đầu: bản nháp',
+  CONFIRMED: 'Sức khỏe ban đầu: đã xác nhận',
+  UNKNOWN: '',
+}
+
+function InitialAssessmentCell({ entry }) {
+  if (!entry) return null
+  if (entry.confirmed) return <span className="type-body-sm text-muted-foreground">Đã xác nhận</span>
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <span className="type-body-sm">{entry.hasDraft ? 'Có phiếu nháp' : 'Chưa lập phiếu'}</span>
+      <span className="type-caption text-muted-foreground">{HEALTH_TEXT[entry.health]}</span>
+    </div>
+  )
+}
 
 function ReassessmentCell({ item }) {
   if (!item) return null
@@ -60,13 +81,14 @@ export function ResidentListPage({ role, onNavigate = () => {}, residentId = nul
   const [nextCursor, setNextCursor] = useState(null)
   const [failure, setFailure] = useState(null)
   const [due, setDue] = useState(null)
-  const [dueProfiles, setDueProfiles] = useState(null)
   const [selectedId, setSelectedId] = useState(residentId != null ? Number(residentId) : null)
   const [creating, setCreating] = useState(false)
   const [reloadKey, setReloadKey] = useState(0)
+  const [tasksFor, setTasksFor] = useState(null)
+  const queue = useInitialAssessmentQueue(ASSESSORS.includes(role), reloadKey)
 
   const status = STATUS_FILTERS.includes(filter) ? filter : undefined
-  const onlyDue = filter === DUE_FILTER
+  const showInitial = !!queue && filter === 'ADMISSION_IN_PROGRESS'
 
   const load = useCallback(
     async (cursor) => {
@@ -98,20 +120,11 @@ export function ResidentListPage({ role, onNavigate = () => {}, residentId = nul
     }
   }, [reloadKey])
 
-  useEffect(() => {
-    if (!onlyDue || !due) return undefined
-    let cancelled = false
-    Promise.allSettled(due.map((d) => getResidentsById({ path: { id: d.residentId } }))).then((results) => {
-      if (!cancelled) setDueProfiles(results.filter((r) => r.status === 'fulfilled').map((r) => r.value.data))
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [onlyDue, due])
-
   const dueById = new Map((due ?? []).map((d) => [d.residentId, d]))
-  // Bộ lọc Cần đánh giá lại: chỉ những người đó, theo thứ tự backend trả (quá hạn trước, rồi theo hạn)
-  const rows = onlyDue ? (dueProfiles ?? []) : items
+  const queueById = new Map((queue ?? []).map((e) => [e.profile.id, e]))
+  const rows = items
+  const lastColumn = showInitial ? 'Đánh giá đầu vào' : due?.length > 0 ? 'Đánh giá lại' : null
+  const open = (id) => (showInitial ? setTasksFor(id) : setSelectedId(id))
 
   function submit(event) {
     event.preventDefault()
@@ -175,27 +188,13 @@ export function ResidentListPage({ role, onNavigate = () => {}, residentId = nul
               {STATUS_LABELS[s]}
             </ToggleGroupItem>
           ))}
-          {due && (
-            <ToggleGroupItem value={DUE_FILTER} className="h-11">
-              Cần đánh giá lại <span className="tabular-nums">{due.length}</span>
-            </ToggleGroupItem>
-          )}
         </ToggleGroup>
       </PageHeader>
 
       <ProblemAlert problem={failure} />
 
       <Card className="@container py-0">
-        {onlyDue && due?.length === 0 ? (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>Chưa có ai cần đánh giá lại</EmptyTitle>
-              <EmptyDescription>
-                Hệ thống báo khi tới hạn định kỳ, sau sự cố, sau nằm viện hoặc sau đính chính đổi mức.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : rows?.length === 0 && !failure ? (
+        {rows?.length === 0 && !failure ? (
           <Empty>
             <EmptyHeader>
               <EmptyTitle>Không có hồ sơ khớp điều kiện</EmptyTitle>
@@ -211,15 +210,15 @@ export function ResidentListPage({ role, onNavigate = () => {}, residentId = nul
                   <TableHead className="hidden @4xl:table-cell">Ngày sinh</TableHead>
                   <TableHead className="hidden @xl:table-cell">Mức chăm sóc</TableHead>
                   <TableHead className="hidden @4xl:table-cell">Loại hình</TableHead>
-                  <TableHead className={due ? undefined : 'pr-4'}>Trạng thái</TableHead>
-                  {due && <TableHead className="hidden pr-4 @xl:table-cell">Đánh giá lại</TableHead>}
+                  <TableHead className={lastColumn ? undefined : 'pr-4'}>Trạng thái</TableHead>
+                  {lastColumn && <TableHead className="hidden pr-4 @xl:table-cell">{lastColumn}</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((p) => (
                   <TableRow
                     key={p.id}
-                    onClick={() => setSelectedId(p.id)}
+                    onClick={() => open(p.id)}
                     data-state={p.id === selectedId ? 'selected' : undefined}
                     className="cursor-pointer data-[state=selected]:bg-accent"
                   >
@@ -231,7 +230,7 @@ export function ResidentListPage({ role, onNavigate = () => {}, residentId = nul
                         aria-pressed={p.id === selectedId}
                         onClick={(e) => {
                           e.stopPropagation()
-                          setSelectedId(p.id)
+                          open(p.id)
                         }}
                         className="flex items-center gap-3 rounded-lg text-left"
                       >
@@ -256,12 +255,16 @@ export function ResidentListPage({ role, onNavigate = () => {}, residentId = nul
                     <TableCell className="hidden whitespace-normal text-muted-foreground @4xl:table-cell">
                       {RESIDENCE_TYPE_LABELS[p.currentResidenceType] ?? 'Chưa có hợp đồng'}
                     </TableCell>
-                    <TableCell className={cn('whitespace-normal', !due && 'pr-4')}>
+                    <TableCell className={cn('whitespace-normal', !lastColumn && 'pr-4')}>
                       <StatusBadge status={STATUS_LABELS[p.status] ?? p.status} />
                     </TableCell>
-                    {due && (
+                    {lastColumn && (
                       <TableCell className="hidden pr-4 @xl:table-cell">
-                        <ReassessmentCell item={dueById.get(p.id)} />
+                        {showInitial ? (
+                          <InitialAssessmentCell entry={queueById.get(p.id)} />
+                        ) : (
+                          <ReassessmentCell item={dueById.get(p.id)} />
+                        )}
                       </TableCell>
                     )}
                   </TableRow>
@@ -271,10 +274,22 @@ export function ResidentListPage({ role, onNavigate = () => {}, residentId = nul
           )
         )}
       </Card>
-      {!onlyDue && nextCursor && (
+      {nextCursor && (
         <Button variant="outline" className="h-11 self-start" onClick={() => load(nextCursor)}>
           Xem thêm
         </Button>
+      )}
+
+      {tasksFor !== null && (
+        <AdmissionTasksSheet
+          residentId={tasksFor}
+          onClose={() => setTasksFor(null)}
+          onOpenProfile={(id) => {
+            setTasksFor(null)
+            setSelectedId(id)
+          }}
+          onChanged={() => setReloadKey((k) => k + 1)}
+        />
       )}
 
       {/* Hồ sơ mới luôn ở Đang tiếp nhận: tạo xong sang ngay lập đăng ký, rồi mở Hồ sơ tiếp nhận (chủ dự án yêu cầu 2026-11-18) */}
