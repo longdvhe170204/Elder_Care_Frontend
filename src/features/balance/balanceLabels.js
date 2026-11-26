@@ -43,6 +43,10 @@ export function formatMoney(value) {
   return value === undefined || value === null ? '—' : `${Number(value).toLocaleString('vi-VN')} đ`
 }
 
-// Q-451: khoản nộp đã xác nhận mới có biên nhận (backend kiểm lại)
-const RECEIPT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
-export const hasReceipt = (t) => RECEIPT_TYPES.includes(t.type) && t.status === 'CONFIRMED' && t.amount > 0
+// Q-451: khoản nộp, khoản hoàn đã xác nhận có biên nhận (backend kiểm lại)
+const PAYMENT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
+const REFUND_TYPES = ['REFUND', 'DEPOSIT_REFUND']
+export const hasReceipt = (t) =>
+  t.status === 'CONFIRMED' &&
+  ((PAYMENT_TYPES.includes(t.type) && t.amount > 0) || (REFUND_TYPES.includes(t.type) && t.amount < 0))
+export const receiptName = (t) => `${t.amount > 0 ? 'BN' : 'HT'}-${String(t.id).padStart(6, '0')}.pdf`

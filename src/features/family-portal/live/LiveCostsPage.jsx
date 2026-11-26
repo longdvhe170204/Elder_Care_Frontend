@@ -24,10 +24,13 @@ import { LivePurchaseConsent } from './LivePurchaseConsent'
 const MONEY = new Intl.NumberFormat('vi-VN')
 const money = (n) => `${MONEY.format(n ?? 0)} đồng`
 
-// Q-451: khoản nộp (cổng chỉ trả giao dịch Đã xác nhận) có biên nhận
-const RECEIPT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
+// Q-451: khoản nộp, khoản hoàn (cổng chỉ trả giao dịch Đã xác nhận) có biên nhận
+const PAYMENT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
+const REFUND_TYPES = ['REFUND', 'DEPOSIT_REFUND']
+const hasReceipt = (t) =>
+  (PAYMENT_TYPES.includes(t.type) && t.amount > 0) || (REFUND_TYPES.includes(t.type) && t.amount < 0)
 
-function ReceiptButton({ id }) {
+function ReceiptButton({ id, prefix }) {
   const [failure, setFailure] = useState(null)
   async function download() {
     setFailure(null)
@@ -36,7 +39,7 @@ function ReceiptButton({ id }) {
       const url = URL.createObjectURL(data)
       const link = document.createElement('a')
       link.href = url
-      link.download = `BN-${String(id).padStart(6, '0')}.pdf`
+      link.download = `${prefix}-${String(id).padStart(6, '0')}.pdf`
       link.click()
       URL.revokeObjectURL(url)
     } catch (error) {
@@ -168,7 +171,7 @@ export function LiveCostsPage({ viewer }) {
                     {formatDate(t.at)}
                     {t.ledger === 'DEPOSIT' && ', sổ tiền cọc'}
                   </span>
-                  {RECEIPT_TYPES.includes(t.type) && t.amount > 0 && <ReceiptButton id={t.id} />}
+                  {hasReceipt(t) && <ReceiptButton id={t.id} prefix={t.amount > 0 ? 'BN' : 'HT'} />}
                 </span>
                 <span className="type-label tabular-nums">{money(t.amount)}</span>
               </li>

@@ -24,11 +24,14 @@ export const postResidentsByResidentIdBankTransferPayments = (params) => request
 /** Kế toán lập hoàn tiền, hoàn cọc hoặc điều chỉnh (Chờ duyệt); tạo yêu cầu M11.BALANCE_TRANSACTION của 000 (FR-010, FR-011, FR-013, FR-014, BR-M11-10, BR-M11-14) */
 export const postBalanceTransactions = (params) => request('POST', '/balance-transactions', params)
 
-/** Kế toán, Quản lý viện tải biên nhận nộp tiền (FR-005, FR-006) */
+/** Kế toán, Quản lý viện tải biên nhận nộp, hoàn tiền (FR-005, FR-006) */
 export const getBalanceTransactionsByIdReceipt = (params) => request('GET', '/balance-transactions/{id}/receipt', params)
 
-/** Người thân có quyền xem chi phí tải biên nhận nộp tiền (FR-005, FR-006) */
+/** Người thân có quyền xem chi phí tải biên nhận nộp, hoàn tiền (FR-005, FR-006) */
 export const getFamilyPortalBalanceTransactionsByIdReceipt = (params) => request('GET', '/family-portal/balance-transactions/{id}/receipt', params)
+
+/** Kế toán, Quản lý viện in bảng kê các giao dịch đã chọn (FR-005, FR-006) */
+export const getResidentsByResidentIdBalanceTransactionsSummary = (params) => request('GET', '/residents/{residentId}/balance-transactions/summary', params)
 
 /** Giao dịch Chờ duyệt (Quản lý viện, Kế toán) kèm kết quả kiểm tra hiện tại (FR-013) */
 export const getBalanceTransactionsPendingApproval = (params) => request('GET', '/balance-transactions/pending-approval', params)

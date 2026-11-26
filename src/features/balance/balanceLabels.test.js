@@ -1,3 +1,4 @@
+import { hasReceipt, receiptName } from './balanceLabels'
 import { describe, expect, it } from 'vitest'
 import {
   BALANCE_STATUS_LABELS,
@@ -46,5 +47,19 @@ describe('balanceLabels (017)', () => {
   it('FR_010_labelOf_maLaThiGiuNguyen', () => {
     expect(labelOf(TYPE_LABELS, 'REFUND')).toBe('Hoàn tiền')
     expect(labelOf(TYPE_LABELS, 'LAI')).toBe('LAI')
+  })
+})
+
+// Q-451: khoản nộp và khoản hoàn đã xác nhận có biên nhận, số BN- hoặc HT-
+describe('biên nhận', () => {
+  it('khoanNopVaKhoanHoan', () => {
+    const paid = { id: 7, type: 'CASH_PAYMENT', status: 'CONFIRMED', amount: 100 }
+    const refund = { id: 8, type: 'DEPOSIT_REFUND', status: 'CONFIRMED', amount: -100 }
+    expect(hasReceipt(paid)).toBe(true)
+    expect(hasReceipt(refund)).toBe(true)
+    expect(hasReceipt({ ...refund, status: 'PENDING_APPROVAL' })).toBe(false)
+    expect(hasReceipt({ ...paid, type: 'STATEMENT_PAYMENT', amount: -100 })).toBe(false)
+    expect(receiptName(paid)).toBe('BN-000007.pdf')
+    expect(receiptName(refund)).toBe('HT-000008.pdf')
   })
 })
