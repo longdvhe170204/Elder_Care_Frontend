@@ -19,7 +19,7 @@ const NUMERIC = {
 }
 
 // FR-038: chọn form bằng snapshot của công việc; danh mục hiện hành chỉ cung cấp lựa chọn mã.
-export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
+export function CareResultForm({ type, busy, failure, importance, windowFrom, onSubmit }) {
   const completionId = useId()
   const [completionTime, setCompletionTime] = useState('now')
   const [timeError, setTimeError] = useState(null)
@@ -69,6 +69,22 @@ export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
       setTimeError('Nhập thời điểm thực tế đã thực hiện.')
       return
     }
+    const actualTime = performedAt && (!simple || completionTime === 'earlier') ? `${performedAt}:00+07:00` : null
+    if (actualTime) {
+      const actual = Date.parse(actualTime)
+      if (!Number.isFinite(actual)) {
+        setTimeError('Nhập thời điểm thực hiện hợp lệ.')
+        return
+      }
+      if (actual < Date.parse(windowFrom)) {
+        setTimeError('Nhập giờ từ đầu khung thực hiện.')
+        return
+      }
+      if (actual > Date.now()) {
+        setTimeError('Thời điểm thực hiện không được ở tương lai.')
+        return
+      }
+    }
     if (
       (NUMERIC[type] && (numeric === '' || !Number.isFinite(Number(numeric)))) ||
       (needsCode && !code) ||
@@ -83,7 +99,7 @@ export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
       ...(type === 'BEHAVIOR' && {
         jsonValue: { occurred: occurred === 'yes', ...(occurred === 'yes' && { behaviorCode: code, description }) },
       }),
-      ...(performedAt && (!simple || completionTime === 'earlier') && { performedAt: `${performedAt}:00+07:00` }),
+      ...(actualTime && { performedAt: actualTime }),
       ...(note && { note }),
       ...(reason && { reason }),
       ...(confirmed && { upperLimitConfirmed: true }),

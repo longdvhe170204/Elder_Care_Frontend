@@ -71,6 +71,7 @@ export function CareChecklistDetail({ task, reasons, Title, Description, onSaved
         <CareResultForm
           type={task.raw.resultType}
           importance={task.raw.importance}
+          windowFrom={task.raw.windowFrom}
           busy={busy}
           failure={failure}
           onSubmit={(body) => command('record', body)}
