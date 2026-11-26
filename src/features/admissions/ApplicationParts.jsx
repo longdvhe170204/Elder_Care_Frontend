@@ -12,7 +12,8 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Textarea } from '@/components/ui/textarea'
 import { ChoiceTray } from '@/common/ChoiceTray'
 import { DiscardChangesDialog } from '@/common/DiscardChangesDialog'
-import { displayDate, isoDate, maskDate, todayIso } from '@/common/dateText'
+import { DateField } from '@/common/DateField'
+import { displayDate, isoDate, todayIso } from '@/common/dateText'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { APPLICATION_NEEDS } from '@/common/quickChoices'
 import { formatDateTime } from '@/common/dateTime'
@@ -178,8 +179,6 @@ export function ApplicationForm({
 
   const setValue = (name) => (value) => setForm((current) => ({ ...current, [name]: value }))
   const setText = (name) => (event) => setValue(name)(event.target.value)
-  const setDate = (name) => (event) =>
-    setForm((current) => ({ ...current, [name]: maskDate(event.target.value, current[name]) }))
 
   const applicationIso = isoDate(form.applicationDate)
   const desiredIso = isoDate(form.desiredDate)
@@ -286,17 +285,13 @@ export function ApplicationForm({
               <FieldLabel htmlFor="application-date">
                 Ngày đăng ký <Required />
               </FieldLabel>
-              <Input
+              <DateField
                 id="application-date"
-                inputMode="numeric"
-                placeholder="DD/MM/YYYY"
-                maxLength={10}
-                autoComplete="off"
                 required
-                className="h-11 tabular-nums sm:max-w-xs"
+                max={todayIso()}
                 value={form.applicationDate}
-                onChange={setDate('applicationDate')}
-                aria-invalid={!!shown('date') || undefined}
+                onChange={setValue('applicationDate')}
+                invalid={!!shown('date')}
                 aria-describedby={shown('date') ? 'application-date-error' : undefined}
               />
               {shown('date') && <FieldError id="application-date-error">{shown('date')}</FieldError>}
@@ -325,16 +320,12 @@ export function ApplicationForm({
             />
             <Field data-invalid={!!shown('desired') || undefined}>
               <FieldLabel htmlFor="application-desired">Ngày vào dự kiến</FieldLabel>
-              <Input
+              <DateField
                 id="application-desired"
-                inputMode="numeric"
-                placeholder="DD/MM/YYYY"
-                maxLength={10}
-                autoComplete="off"
-                className="h-11 tabular-nums sm:max-w-xs"
+                min={applicationIso ?? undefined}
                 value={form.desiredDate}
-                onChange={setDate('desiredDate')}
-                aria-invalid={!!shown('desired') || undefined}
+                onChange={setValue('desiredDate')}
+                invalid={!!shown('desired')}
                 aria-describedby={shown('desired') ? 'application-desired-error' : undefined}
               />
               {shown('desired') && <FieldError id="application-desired-error">{shown('desired')}</FieldError>}
