@@ -31,6 +31,7 @@ import {
 } from './admissionLabels'
 import { ApplicationSheet, OpinionSheet } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
+import { ConsentRecordSheet } from '../consents/ConsentRecordSheet'
 import { admissionProgress } from './admissionProgress'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.3): một màn cho một lượt tiếp nhận, đi theo các
@@ -202,6 +203,8 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       const [, pageLabel] = step.page
       return button(step.minePage ?? step.doLabel ?? pageLabel, openerOf(step))
     }
+    // Bản đồng ý: mở thẳng khung ghi nhận, không qua tab Đồng ý (chủ dự án duyệt 2026-11-26)
+    if (step.part === 'consent') return button(step.doLabel, () => setSheet({ kind: 'consent' }))
     if (step.action === 'resident') return button(step.doLabel ?? 'Mở hồ sơ', openerOf(step))
     // Ý kiến chỉ ghi được khi lượt Đang xử lý hoặc Đang chờ (api-004 admission-opinion)
     if (step.action === 'opinion' && !closed) return button(step.doLabel, () => setSheet({ kind: 'opinion' }))
@@ -467,7 +470,10 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       )}
 
       <Sheet
-        open={!!sheet && !['new-contract', 'edit-contract', 'edit-application', 'part', 'opinion'].includes(sheet.kind)}
+        open={
+          !!sheet &&
+          !['new-contract', 'edit-contract', 'edit-application', 'part', 'opinion', 'consent'].includes(sheet.kind)
+        }
         onOpenChange={(open) => !open && changed()}
       >
         <SheetContent className="overflow-y-auto p-6 sm:max-w-3xl">
@@ -546,6 +552,14 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
       {sheet?.kind === 'edit-contract' && (
         <ContractSheet contract={sheet.contract} residentName={name} onClose={() => setSheet(null)} onDone={changed} />
+      )}
+      {sheet?.kind === 'consent' && (
+        <ConsentRecordSheet
+          residentId={resident.id}
+          residentName={name}
+          onClose={() => setSheet(null)}
+          onDone={() => changed('Đã ghi nhận bản đồng ý')}
+        />
       )}
       {sheet?.kind === 'opinion' && (
         <OpinionSheet

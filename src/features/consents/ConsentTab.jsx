@@ -1,17 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ApiError,
   getResidentsByIdConsents,
   getResidentsByResidentIdRelationships,
   postConsentsByIdWithdraw,
-  postResidentsByIdConsents,
 } from '@/api'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -20,21 +17,15 @@ import { formatDate, formatDateTime } from '@/common/dateTime'
 import { openFile, uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { CONSENTER_LABELS, FINAL_STATUSES, STATUS_LABELS } from './consentLabels'
+import { ConsentRecordSheet } from './ConsentRecordSheet'
 import { FileInput } from '@/common/FileInput'
 
 // Tab "Đồng ý" trong khung chi tiết hồ sơ (001 T059; US5; FR-010 → FR-016; bố cục duyệt 2026-10-23): thẻ bản đồng ý hiện
 // hành kèm nút theo allowedCommands, form ghi nhận hoặc rút lại mở ngay dưới thẻ, lịch sử các bản đã rút lại hoặc được
 // thay thế. Bản ký và bằng chứng tải lên bằng POST /files, tải xuống qua GET /files/{id} (backend kiểm quyền mỗi lần).
-// Tạm thời: feature 012 chưa có danh sách người thân nên mã người thân nhập tay; backend kiểm quan hệ của người ký
-// (409 INVALID_SIGNER), còn mã trong danh sách được xem sức khỏe thì không kiểm tồn tại (phạm vi theo quan hệ của 002 đã
-// lọc khi xem).
+// Ghi nhận bản mới mở khung riêng ConsentRecordSheet (chủ dự án duyệt 2026-11-26), thay form nằm trong tab.
 
 const FILE_HINT = 'PDF, JPEG hoặc PNG, tối đa 10 MB.'
-const POSITIVE_INTEGER = /^[1-9]\d{0,17}$/
-
-function today() {
-  return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
-}
 
 function uploadProblem(problem) {
   if (problem.errorCode === 'FILE_TYPE_NOT_ALLOWED') return `Tệp phải là ${FILE_HINT.replace('.', '')}`
@@ -164,267 +155,6 @@ function ConsentDetails({ consent, members = [], onDownloadFailure }) {
   )
 }
 
-function RecordForm({ residentId, members, onCancel, onDone }) {
-  const [signer, setSigner] = useState('RESIDENT')
-  const [signerId, setSignerId] = useState('')
-  const [court, setCourt] = useState({ number: '', date: '', court: '' })
-  const [courtFile, setCourtFile] = useState(null)
-  const [evidence, setEvidence] = useState(null)
-  const [ids, setIds] = useState([])
-  const [photo, setPhoto] = useState(false)
-  const [notification, setNotification] = useState(false)
-  const [date, setDate] = useState(today)
-  const [errors, setErrors] = useState({})
-  const [failure, setFailure] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const [key] = useState(() => crypto.randomUUID())
-  // tệp đã tải lên theo đối tượng File, để gửi lại sau lỗi không tải lên lần nữa
-  const uploaded = useRef(new Map())
-
-  async function upload(file) {
-    if (!uploaded.current.has(file)) uploaded.current.set(file, await uploadFile(file))
-    return uploaded.current.get(file)
-  }
-
-  function validate() {
-    const next = {}
-    if (!evidence) next.evidence = 'Chọn tệp bản ký đã scan'
-    if (!date) next.date = 'Chọn ngày đồng ý'
-    else if (date > today()) next.date = 'Ngày đồng ý không ở tương lai'
-    if (signer === 'LEGAL_REPRESENTATIVE') {
-      if (!POSITIVE_INTEGER.test(signerId.trim())) next.signerId = 'Chọn người thân là người ký'
-      if (!court.number.trim()) next.number = 'Nhập số quyết định'
-      if (!court.date) next.courtDate = 'Chọn ngày quyết định'
-      else if (court.date > today()) next.courtDate = 'Ngày quyết định không ở tương lai'
-      if (!court.court.trim()) next.courtName = 'Nhập tên Tòa án'
-      if (!courtFile) next.courtFile = 'Chọn tệp quyết định của Tòa án'
-    }
-    return next
-  }
-
-  async function submit(event) {
-    event.preventDefault()
-    const next = validate()
-    setErrors(next)
-    if (Object.keys(next).length > 0) return
-    setFailure(null)
-    setBusy(true)
-    let step = 'evidence'
-    try {
-      const evidenceFileId = await upload(evidence)
-      let courtDecision
-      if (signer === 'LEGAL_REPRESENTATIVE') {
-        step = 'courtFile'
-        courtDecision = {
-          number: court.number.trim(),
-          date: court.date,
-          court: court.court.trim(),
-          fileId: await upload(courtFile),
-        }
-      }
-      step = 'save'
-      const { data } = await postResidentsByIdConsents({
-        path: { id: residentId },
-        headers: { 'Idempotency-Key': key },
-        body: {
-          consenterType: signer,
-          consenterFamilyMemberId: signer === 'LEGAL_REPRESENTATIVE' ? Number(signerId.trim()) : undefined,
-          courtDecision,
-          familyMemberIdsAllowedHealthView: ids,
-          photoConsent: photo,
-          notificationConsent: notification,
-          consentedAt: new Date(`${date}T00:00:00+07:00`).toISOString(),
-          evidenceFileId,
-        },
-      })
-      onDone(data)
-    } catch (error) {
-      const problem = problemOf(error)
-      const fileMessage = step === 'save' ? null : uploadProblem(problem)
-      if (fileMessage) setErrors({ [step]: fileMessage })
-      else if (error instanceof ApiError && problem.errorCode === 'INVALID_SIGNER') {
-        setErrors({ signerId: 'Người ký thay phải là người thân có quan hệ Hiệu lực với người cao tuổi' })
-      } else if (error instanceof ApiError && problem.errorCode === 'COURT_DECISION_REQUIRED') {
-        setErrors({ number: 'Cần đủ số, ngày, Tòa án và tệp quyết định của Tòa án' })
-      } else setFailure(problem)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  const rep = signer === 'LEGAL_REPRESENTATIVE'
-  return (
-    <form
-      onSubmit={submit}
-      noValidate
-      aria-label="Ghi nhận bản đồng ý"
-      className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
-    >
-      <h3 className="type-card-title">Ghi nhận bản đồng ý</h3>
-      <p className="type-body-sm text-muted-foreground">
-        Bản mới thay bản Hiệu lực hiện hành. Người thân không có trong danh sách dưới đây sẽ không xem được thông tin
-        sức khỏe.
-      </p>
-
-      <Field>
-        <span className="type-label" id="consent-signer-label">
-          Người đồng ý
-        </span>
-        <div role="radiogroup" aria-labelledby="consent-signer-label" className="flex flex-wrap gap-2">
-          {Object.entries(CONSENTER_LABELS).map(([value, label]) => (
-            <Button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={signer === value}
-              variant={signer === value ? 'default' : 'outline'}
-              className="h-10"
-              onClick={() => setSigner(value)}
-            >
-              {label}
-            </Button>
-          ))}
-        </div>
-        {rep && (
-          <FieldDescription>
-            Chỉ người đại diện theo pháp luật mới ký thay, kèm quyết định của Tòa án. Người chỉ có vai trò “người đại
-            diện” ở hồ sơ người thân thì chưa được ký thay.
-          </FieldDescription>
-        )}
-      </Field>
-
-      {rep && (
-        <>
-          <Field data-invalid={!!errors.signerId || undefined}>
-            <FieldLabel htmlFor="consent-signer-id">Người thân là người ký</FieldLabel>
-            <select
-              id="consent-signer-id"
-              className="h-11 w-full rounded-md border border-input bg-transparent px-3"
-              value={signerId}
-              onChange={(e) => setSignerId(e.target.value)}
-              aria-invalid={!!errors.signerId || undefined}
-            >
-              <option value="">Chọn người thân</option>
-              {members.map((m) => (
-                <option key={m.id} value={String(m.id)}>
-                  {m.fullName}
-                </option>
-              ))}
-            </select>
-            {errors.signerId ? (
-              <FieldError>{errors.signerId}</FieldError>
-            ) : (
-              <FieldDescription>Người thân có quan hệ Hiệu lực với người cao tuổi.</FieldDescription>
-            )}
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field data-invalid={!!errors.number || undefined}>
-              <FieldLabel htmlFor="consent-court-number">Số quyết định</FieldLabel>
-              <Input
-                id="consent-court-number"
-                value={court.number}
-                onChange={(e) => setCourt({ ...court, number: e.target.value })}
-                aria-invalid={!!errors.number || undefined}
-              />
-              {errors.number && <FieldError>{errors.number}</FieldError>}
-            </Field>
-            <Field data-invalid={!!errors.courtDate || undefined}>
-              <FieldLabel htmlFor="consent-court-date">Ngày quyết định</FieldLabel>
-              <Input
-                id="consent-court-date"
-                type="date"
-                max={today()}
-                value={court.date}
-                onChange={(e) => setCourt({ ...court, date: e.target.value })}
-                aria-invalid={!!errors.courtDate || undefined}
-              />
-              {errors.courtDate && <FieldError>{errors.courtDate}</FieldError>}
-            </Field>
-            <Field data-invalid={!!errors.courtName || undefined}>
-              <FieldLabel htmlFor="consent-court-name">Tòa án</FieldLabel>
-              <Input
-                id="consent-court-name"
-                value={court.court}
-                onChange={(e) => setCourt({ ...court, court: e.target.value })}
-                aria-invalid={!!errors.courtName || undefined}
-              />
-              {errors.courtName && <FieldError>{errors.courtName}</FieldError>}
-            </Field>
-          </div>
-          <FileField
-            id="consent-court-file"
-            label="Bản scan quyết định của Tòa án"
-            error={errors.courtFile}
-            onPick={setCourtFile}
-          />
-        </>
-      )}
-
-      <FileField id="consent-evidence" label="Bản ký đã scan" error={errors.evidence} onPick={setEvidence} />
-
-      <Field data-invalid={!!errors.date || undefined}>
-        <FieldLabel htmlFor="consent-date">Ngày đồng ý</FieldLabel>
-        <Input
-          id="consent-date"
-          type="date"
-          max={today()}
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          aria-invalid={!!errors.date || undefined}
-        />
-        {errors.date && <FieldError>{errors.date}</FieldError>}
-      </Field>
-
-      <fieldset className="flex flex-col gap-2">
-        <legend className="type-label">Người thân được xem sức khỏe</legend>
-        {members.length === 0 ? (
-          <p className="type-body-sm text-muted-foreground">Hồ sơ chưa có người thân có quan hệ Hiệu lực.</p>
-        ) : (
-          members.map((m) => (
-            <label key={m.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3">
-              <Checkbox
-                checked={ids.includes(m.id)}
-                onCheckedChange={(on) =>
-                  setIds((current) => (on ? [...current, m.id] : current.filter((x) => x !== m.id)))
-                }
-                aria-label={`${m.fullName} được xem sức khỏe`}
-              />
-              <span className="type-body-sm">{m.fullName}</span>
-            </label>
-          ))
-        )}
-        <FieldDescription>Không chọn ai thì không người thân nào xem được thông tin sức khỏe.</FieldDescription>
-      </fieldset>
-
-      <div className="flex flex-col gap-2">
-        <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3">
-          <Checkbox checked={photo} onCheckedChange={setPhoto} aria-label="Đồng ý dùng hình ảnh" />
-          <span className="type-body-sm">Đồng ý dùng hình ảnh</span>
-        </label>
-        <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3">
-          <Checkbox
-            checked={notification}
-            onCheckedChange={setNotification}
-            aria-label="Đồng ý nhận thông báo không khẩn về người cao tuổi"
-          />
-          <span className="type-body-sm">Đồng ý nhận thông báo không khẩn về người cao tuổi</span>
-        </label>
-      </div>
-
-      <ProblemAlert problem={failure} />
-
-      <div className="flex flex-wrap gap-3">
-        <Button type="submit" className="h-11" disabled={busy}>
-          Lưu bản đồng ý
-        </Button>
-        <Button type="button" variant="outline" className="h-11" onClick={onCancel}>
-          Thôi
-        </Button>
-      </div>
-    </form>
-  )
-}
-
 function WithdrawForm({ consent, onCancel, onDone }) {
   const [reason, setReason] = useState('')
   const [file, setFile] = useState(null)
@@ -500,7 +230,7 @@ function WithdrawForm({ consent, onCancel, onDone }) {
   )
 }
 
-export function ConsentTab({ residentId, status, allowedCommands = [], onChanged }) {
+export function ConsentTab({ residentId, residentName = '', status, allowedCommands = [], onChanged }) {
   const [state, setState] = useState('loading')
   const [consents, setConsents] = useState([])
   const [failure, setFailure] = useState(null)
@@ -638,10 +368,10 @@ export function ConsentTab({ residentId, status, allowedCommands = [], onChanged
       )}
 
       {form === 'record' && canRecord && (
-        <RecordForm
+        <ConsentRecordSheet
           residentId={residentId}
-          members={members}
-          onCancel={() => setForm(null)}
+          residentName={residentName}
+          onClose={() => setForm(null)}
           onDone={() => finished('Đã ghi nhận bản đồng ý.')}
         />
       )}

@@ -140,6 +140,7 @@ function PartContent({ part, residentId, profile, onChanged }) {
     return (
       <ConsentTab
         residentId={residentId}
+        residentName={profile.personalInfo?.fullName}
         status={profile.status}
         allowedCommands={allowedCommands}
         onChanged={onChanged}
