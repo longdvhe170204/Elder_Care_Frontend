@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import { getResultValues } from '@/api'
 import { Button } from '@/components/ui/button'
 import { FieldError } from '@/components/ui/field'
@@ -20,6 +20,9 @@ const NUMERIC = {
 
 // FR-038: chọn form bằng snapshot của công việc; danh mục hiện hành chỉ cung cấp lựa chọn mã.
 export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
+  const completionId = useId()
+  const [completionTime, setCompletionTime] = useState('now')
+  const [timeError, setTimeError] = useState(null)
   const [numeric, setNumeric] = useState('')
   const [code, setCode] = useState('')
   const [occurred, setOccurred] = useState('')
@@ -58,8 +61,14 @@ export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
     return <p>Loại công việc này không ghi kết quả tại checklist.</p>
   const needsCode =
     Boolean(CODES[type]) || ['SLEEP', 'MOOD'].includes(type) || (type === 'BEHAVIOR' && occurred === 'yes')
+  const simple = type === 'PERFORMED'
   function submit(event) {
     event.preventDefault()
+    if (busy) return
+    if (simple && completionTime === 'earlier' && !performedAt) {
+      setTimeError('Nhập thời điểm thực tế đã thực hiện.')
+      return
+    }
     if (
       (NUMERIC[type] && (numeric === '' || !Number.isFinite(Number(numeric)))) ||
       (needsCode && !code) ||
@@ -74,7 +83,7 @@ export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
       ...(type === 'BEHAVIOR' && {
         jsonValue: { occurred: occurred === 'yes', ...(occurred === 'yes' && { behaviorCode: code, description }) },
       }),
-      ...(performedAt && { performedAt: `${performedAt}:00+07:00` }),
+      ...(performedAt && (!simple || completionTime === 'earlier') && { performedAt: `${performedAt}:00+07:00` }),
       ...(note && { note }),
       ...(reason && { reason }),
       ...(confirmed && { upperLimitConfirmed: true }),
@@ -131,14 +140,51 @@ export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
           disabled={busy}
         />
       )}
-      <CareField
-        label="Thời điểm thực hiện"
-        type="datetime-local"
-        value={performedAt}
-        onChange={setPerformedAt}
-        disabled={busy}
-      />
-      <p className="type-body-sm text-muted-foreground">Giờ Việt Nam. Để trống để dùng thời điểm gửi ghi nhận.</p>
+      {simple && (
+        <fieldset disabled={busy} className="flex flex-col gap-2">
+          <legend className="type-label">Thời điểm hoàn thành</legend>
+          {[
+            ['now', 'Vừa hoàn thành'],
+            ['earlier', 'Đã hoàn thành trước đó'],
+          ].map(([value, label]) => (
+            <label key={value} className="flex min-h-11 items-center gap-3">
+              <input
+                type="radio"
+                name={completionId}
+                value={value}
+                checked={completionTime === value}
+                onChange={() => {
+                  setCompletionTime(value)
+                  setTimeError(null)
+                }}
+                className="size-5 accent-primary"
+              />
+              {label}
+            </label>
+          ))}
+        </fieldset>
+      )}
+      {(!simple || completionTime === 'earlier') && (
+        <CareField
+          label="Thời điểm thực hiện"
+          type="datetime-local"
+          value={performedAt}
+          required={simple}
+          error={timeError}
+          onChange={(value) => {
+            setPerformedAt(value)
+            setTimeError(null)
+          }}
+          disabled={busy}
+        />
+      )}
+      <p className="type-body-sm text-muted-foreground">
+        {simple
+          ? completionTime === 'now'
+            ? 'Dùng giờ hệ thống khi bạn xác nhận hoàn thành.'
+            : 'Nhập giờ Việt Nam đã thực hiện, không nhập thời điểm tương lai. Hệ thống lưu riêng thời điểm ghi nhận.'
+          : 'Giờ Việt Nam. Để trống để dùng thời điểm gửi ghi nhận.'}
+      </p>
       <CareField
         label="Ghi chú kết quả"
         type="textarea"
@@ -167,7 +213,7 @@ export function CareResultForm({ type, busy, failure, importance, onSubmit }) {
       )}
       {missing && <FieldError>Nhập đầy đủ kết quả trước khi lưu.</FieldError>}
       <Button type="submit" disabled={busy || Boolean(catalogError)}>
-        Lưu kết quả
+        {simple ? 'Xác nhận hoàn thành' : 'Lưu kết quả'}
       </Button>
     </form>
   )
