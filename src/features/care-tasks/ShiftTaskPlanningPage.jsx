@@ -172,6 +172,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
   const [historyLoading, setHistoryLoading] = useState(true)
   const [success, setSuccess] = useState('')
   const first = useRef(true)
+  const openedBatch = useRef(false)
   const view = can('SHIFT_TASK_PLANNING', 'VIEW')
   const create = can('SHIFT_TASK_PLANNING', 'CREATE')
   const manager = can('SHIFT_SCHEDULE', 'CREATE')
@@ -317,11 +318,15 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     }
   }, [source, known, residentsReady])
 
-  // Gửi lô xong: về trang đầu, bỏ lọc để thấy ngay các việc vừa lập (lịch sử xếp việc lập gần nhất trước)
-  async function saved(created, count) {
+  function closeBatch() {
     setRows([])
     setActiveKey(null)
     setDialog(null)
+  }
+
+  // Gửi lô xong: về trang đầu, bỏ lọc để thấy ngay các việc vừa lập (lịch sử xếp việc lập gần nhất trước)
+  async function saved(created, count) {
+    closeBatch()
     setSuccess(`Đã lập ${count} công việc của ca.`)
     setFresh(created.map((t) => t.id))
     setFilter(NO_FILTER)
@@ -378,18 +383,11 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
     setFresh([])
   }
   const openBatch = (residentId) => {
+    const row = residentId ? { ...newPlanningRow(), residentId: String(residentId) } : null
+    openedBatch.current = true
     setSuccess('')
-    if (residentId) {
-      const id = String(residentId)
-      const existing = rows.find((r) => r.residentId === id)
-      if (existing) setActiveKey(existing.key)
-      else {
-        const blank = rows.find((r) => !r.residentId && !r.taskTypeId && !r.time && !r.content)
-        const row = { ...(blank ?? newPlanningRow()), residentId: id }
-        setRows((old) => (blank ? old.map((r) => (r.key === row.key ? row : r)) : [...old, row]))
-        setActiveKey(row.key)
-      }
-    }
+    setRows(row ? [row] : [])
+    setActiveKey(row?.key ?? null)
     setDialog('batch')
   }
 
@@ -519,7 +517,7 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
             <Button
               className="h-11 px-6"
               disabled={!readyForShift}
-              onClick={() => openBatch(focusInShift ? focusResidentId : undefined)}
+              onClick={() => openBatch(!openedBatch.current && focusInShift ? focusResidentId : undefined)}
             >
               Lập công việc
             </Button>
@@ -624,10 +622,10 @@ export function ShiftTaskPlanningPage({ shiftId: initialShiftId, residentId: foc
           focusResidentId={focusInShift ? focusResidentId : undefined}
         />
       )}
-      {create && source && (
+      {create && source && dialog !== null && (
         <ShiftTaskBatchDialog
           open={dialog === 'batch'}
-          onOpenChange={(open) => !open && setDialog(null)}
+          onClose={closeBatch}
           subtitle={subtitle}
           shiftId={shiftId}
           source={source}

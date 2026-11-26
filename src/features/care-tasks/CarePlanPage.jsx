@@ -158,13 +158,13 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   const draftLine = !open
     ? ''
     : !current
-      ? `${open.createdBy ?? 'Điều dưỡng'} ${draftOpen ? 'đang soạn' : 'đã gửi'} kế hoạch đầu tiên`
-      : `${open.createdBy ?? 'Điều dưỡng'} ${draftOpen ? 'đang soạn' : 'đã gửi'}${
+      ? `${open.createdBy ?? 'Người lập'} ${draftOpen ? 'đang soạn' : 'đã gửi'} kế hoạch đầu tiên`
+      : `${open.createdBy ?? 'Người lập'} ${draftOpen ? 'đang soạn' : 'đã gửi'}${
           changeCount == null ? '' : ` · ${changeCount} thay đổi so với kế hoạch đang áp dụng`
         }`
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
-      <PageHeader title="Kế hoạch chăm sóc" subtitle="Điều dưỡng lập, sửa kế hoạch rồi gửi Bác sĩ duyệt" />
+      <PageHeader title="Kế hoạch chăm sóc" subtitle="Bác sĩ lập và sửa kế hoạch chăm sóc" />
       <ResidentSearch key={searchKey} onChange={choose} />
       {failure?.status === 403 ? (
         <PermissionDeniedState label="kế hoạch chăm sóc" />
@@ -217,7 +217,7 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
                     <p className="type-body-sm text-muted-foreground">{draftLine}</p>
                   </div>
                   <Button variant="outline" onClick={() => setSelected(open.id)}>
-                    {draftOpen ? 'Xem / tiếp tục bản nháp' : 'Xem bản sửa'}
+                    {draftOpen ? 'Mở bản nháp' : 'Xem bản sửa'}
                   </Button>
                 </section>
               )}

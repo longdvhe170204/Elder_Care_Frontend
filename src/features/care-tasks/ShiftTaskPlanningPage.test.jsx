@@ -46,8 +46,12 @@ beforeEach(() => {
           assignments: [{ staffId: 22, fullName: '[Nhân viên kiểm thử]', role: 'CAREGIVER' }],
           planItems: [
             {
-              id: 90, taskTypeId: 9, content: 'Mục kế hoạch kiểm thử', times: ['08:00:00'],
-              importance: 'NORMAL', performerRole: 'CAREGIVER',
+              id: 90,
+              taskTypeId: 9,
+              content: 'Mục kế hoạch kiểm thử',
+              times: ['08:00:00'],
+              importance: 'NORMAL',
+              performerRole: 'CAREGIVER',
             },
           ],
           planOccurrences: [{ itemId: 90, plannedAt: '2026-11-01T01:00:00Z' }],
@@ -103,6 +107,41 @@ it('FR_017_moModalKhongTuDienDongCongViec', async () => {
   expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
 })
 
+it('FR_017_dongDongDienSan_roiLapViecMoiKhongMangTheoNguoiCu', async () => {
+  view()
+  fireEvent.click(await screen.findByRole('button', { name: 'Lập việc cho [Họ tên kiểm thử]' }))
+  const dialog = await screen.findByRole('dialog', { name: 'Lập công việc cho ca' })
+  expect(within(dialog).getByLabelText('Người cao tuổi')).toHaveValue('77')
+
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }))
+  await waitFor(() => expect(dialog).not.toBeInTheDocument())
+  const newDialog = await openBatch()
+  expect(within(newDialog).getByText('Chưa có dòng đang nhập')).toBeInTheDocument()
+  fireEvent.click(within(newDialog).getByRole('button', { name: 'Thêm dòng' }))
+  expect(within(newDialog).getByLabelText('Người cao tuổi')).toHaveValue('')
+  expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
+})
+
+it('FR_017_chiBoDongDaNhapSauKhiXacNhanDong', async () => {
+  view()
+  const dialog = await openBatch()
+  await enterRow(dialog)
+  const close = () => fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }))
+
+  close()
+  let confirm = await screen.findByRole('alertdialog', { name: 'Bỏ công việc chưa lưu?' })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Tiếp tục nhập' }))
+  await waitFor(() => expect(confirm).not.toBeInTheDocument())
+  expect(within(dialog).getByLabelText('Giờ dự kiến')).toHaveValue('08:00')
+
+  close()
+  confirm = await screen.findByRole('alertdialog', { name: 'Bỏ công việc chưa lưu?' })
+  fireEvent.click(within(confirm).getByRole('button', { name: 'Bỏ công việc' }))
+  await waitFor(() => expect(dialog).not.toBeInTheDocument())
+  expect(within(await openBatch()).getByText('Chưa có dòng đang nhập')).toBeInTheDocument()
+  expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
+})
+
 it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
   api.on('POST', '/shifts/5/care-tasks/plan', json(201, []))
   view()
@@ -130,7 +169,13 @@ it('BR_M04_01_guiMangTuNhapKemIdempotencyKeyVaMuiGioVietNam', async () => {
 
 it('FR_017_lichSuKhongTheoCa_phanTrangMayChu', async () => {
   api.on('GET', '/care-tasks', (url) =>
-    json(200, { items: url.searchParams.get('page') === '1' ? TASKS.slice(0, 2) : [...TASKS, ...TASKS.slice(0, 3)].map((t, i) => ({ ...t, id: 500 + i })), total: 12 }),
+    json(200, {
+      items:
+        url.searchParams.get('page') === '1'
+          ? TASKS.slice(0, 2)
+          : [...TASKS, ...TASKS.slice(0, 3)].map((t, i) => ({ ...t, id: 500 + i })),
+      total: 12,
+    }),
   )
   view()
   const table = await within(screen.getByRole('region', { name: 'Công việc đã lập' })).findByRole('table')
@@ -150,7 +195,11 @@ it('FR_017_phanTrangNhieuTrang_hienSoTrangKeVaDauCuoi', async () => {
   view()
   await within(screen.getByRole('region', { name: 'Công việc đã lập' })).findByRole('table')
   const pager = screen.getByRole('navigation', { name: 'Phân trang công việc đã lập' })
-  expect(within(pager).getAllByRole('button').map((b) => b.textContent)).toEqual(['Trước', '1', '2', '25', 'Sau'])
+  expect(
+    within(pager)
+      .getAllByRole('button')
+      .map((b) => b.textContent),
+  ).toEqual(['Trước', '1', '2', '25', 'Sau'])
   fireEvent.click(within(pager).getByRole('button', { name: 'Trang 25' }))
   await waitFor(() =>
     expect(new URL(api.calls('GET', '/care-tasks').at(-1)[0], 'http://localhost').searchParams.get('page')).toBe('24'),
@@ -165,7 +214,9 @@ it('FR_017_locTheoNguoiCaoTuoiCongViecNguoiLam_guiLenMayChu', async () => {
     target: { value: 'kiểm thử' },
   })
   await waitFor(() =>
-    expect(new URL(api.calls('GET', '/residents').at(-1)[0], 'http://localhost').searchParams.get('q')).toBe('kiểm thử'),
+    expect(new URL(api.calls('GET', '/residents').at(-1)[0], 'http://localhost').searchParams.get('q')).toBe(
+      'kiểm thử',
+    ),
   )
   fireEvent.change(screen.getByLabelText('Công việc'), { target: { value: '9' } })
   await screen.findByRole('option', { name: '[Nhân viên kiểm thử]' })
@@ -240,11 +291,15 @@ it('FR_017_caCungGioNhieuTang_ghiTenTang_tieuDeKhongLapCa', async () => {
 it('FR_017_doiChieuNguon_chiDeXem', async () => {
   view()
   const batch = await openBatch()
+  await enterRow(batch)
   fireEvent.click(within(batch).getByRole('button', { name: 'Đối chiếu nguồn' }))
   const dialog = await screen.findByRole('dialog', { name: 'Chi tiết công việc của ca' })
   expect(within(dialog).getByText('Chỉ xem')).toBeInTheDocument()
   expect(within(dialog).getByText('Mục kế hoạch kiểm thử · 08:00')).toBeInTheDocument()
   expect(within(dialog).getByText('Người này chưa có công việc đã lập trong ca.')).toBeInTheDocument()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }))
+  const resumed = await screen.findByRole('dialog', { name: 'Lập công việc cho ca' })
+  expect(within(resumed).getByLabelText('Giờ dự kiến')).toHaveValue('08:00')
 })
 
 it('FR_017_guiXong_viecMoiLapLenDauLichSu', async () => {
@@ -397,7 +452,9 @@ it('FR_023_canCuTuDoiChieuLoaiVaGio_khongCoOChon', async () => {
   expect(within(row).getByRole('group', { name: 'Căn cứ' })).toHaveTextContent(
     'Khớp mục kế hoạch · Mục kế hoạch kiểm thử · 08:00',
   )
-  expect(await within(row).findByRole('option', { name: '[Nhân viên kiểm thử] · Nhân viên chăm sóc' })).toHaveValue('22')
+  expect(await within(row).findByRole('option', { name: '[Nhân viên kiểm thử] · Nhân viên chăm sóc' })).toHaveValue(
+    '22',
+  )
 })
 
 it('Q452_chonDungMucCungGio_locNguoiTheoVaiTroVaChiLuuKhiBamNut', async () => {
@@ -406,24 +463,38 @@ it('Q452_chonDungMucCungGio_locNguoiTheoVaiTroVaChiLuuKhiBamNut', async () => {
     '/shifts/5/source-data',
     json(200, {
       shift: SHIFT,
-      residents: [{
-        residentId: 77,
-        assignments: [
-          { staffId: 22, fullName: '[Nhân viên kiểm thử]', role: 'CAREGIVER' },
-          { staffId: 33, fullName: '[Điều dưỡng kiểm thử]', role: 'NURSING_STAFF' },
-          { staffId: 45, fullName: '[Bác sĩ kiểm thử]', role: 'DOCTOR' },
-        ],
-        planItems: [
-          { id: 90, taskTypeId: 9, content: 'Mục chăm sóc', importance: 'NORMAL', performerRole: 'CAREGIVER' },
-          { id: 91, taskTypeId: 9, content: 'Mục điều dưỡng', importance: 'IMPORTANT', performerRole: 'NURSING_STAFF' },
-          { id: 92, taskTypeId: 9, content: 'Mục ngoài ngày hiệu lực', times: ['09:00:00'], performerRole: 'CAREGIVER' },
-        ],
-        planOccurrences: [
-          { itemId: 90, plannedAt: '2026-11-01T01:00:00Z' },
-          { itemId: 91, plannedAt: '2026-11-01T01:00:00Z' },
-        ],
-        otherSources: [],
-      }],
+      residents: [
+        {
+          residentId: 77,
+          assignments: [
+            { staffId: 22, fullName: '[Nhân viên kiểm thử]', role: 'CAREGIVER' },
+            { staffId: 33, fullName: '[Điều dưỡng kiểm thử]', role: 'NURSING_STAFF' },
+            { staffId: 45, fullName: '[Bác sĩ kiểm thử]', role: 'DOCTOR' },
+          ],
+          planItems: [
+            { id: 90, taskTypeId: 9, content: 'Mục chăm sóc', importance: 'NORMAL', performerRole: 'CAREGIVER' },
+            {
+              id: 91,
+              taskTypeId: 9,
+              content: 'Mục điều dưỡng',
+              importance: 'IMPORTANT',
+              performerRole: 'NURSING_STAFF',
+            },
+            {
+              id: 92,
+              taskTypeId: 9,
+              content: 'Mục ngoài ngày hiệu lực',
+              times: ['09:00:00'],
+              performerRole: 'CAREGIVER',
+            },
+          ],
+          planOccurrences: [
+            { itemId: 90, plannedAt: '2026-11-01T01:00:00Z' },
+            { itemId: 91, plannedAt: '2026-11-01T01:00:00Z' },
+          ],
+          otherSources: [],
+        },
+      ],
     }),
   )
   api.on('POST', '/shifts/5/care-tasks/plan', json(201, []))
@@ -459,15 +530,17 @@ it('Q452_chonDungMucCungGio_locNguoiTheoVaiTroVaChiLuuKhiBamNut', async () => {
 
   await waitFor(() => expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(1))
   const body = JSON.parse(api.calls('POST', '/shifts/5/care-tasks/plan')[0][1].body)
-  expect(body).toEqual([{
-    residentId: 77,
-    taskTypeId: 9,
-    basis: { type: 'CARE_PLAN_ITEM', id: 91 },
-    plannedAt: '2026-11-01T01:00:00Z',
-    importance: 'IMPORTANT',
-    performerId: 33,
-    shared: false,
-  }])
+  expect(body).toEqual([
+    {
+      residentId: 77,
+      taskTypeId: 9,
+      basis: { type: 'CARE_PLAN_ITEM', id: 91 },
+      plannedAt: '2026-11-01T01:00:00Z',
+      importance: 'IMPORTANT',
+      performerId: 33,
+      shared: false,
+    },
+  ])
 })
 
 it('FR_017_thieuTruong_baoTruocKhiGui_mucTheoMucKeHoachKhongCoOChon', async () => {
@@ -571,9 +644,15 @@ it('FR_020_moTuThongBao_chonCaChuaThoiDiem_vaBaoNguoiCaoTuoi', async () => {
   expect(query.get('from')).toBe('2030-01-10')
   expect(query.get('to')).toBe('2030-01-11')
   const batch = await openBatch()
+  expect(within(batch).getByLabelText('Người cao tuổi')).toHaveValue('77')
   fireEvent.click(within(batch).getByRole('button', { name: 'Đối chiếu nguồn' }))
   const dialog = await screen.findByRole('dialog', { name: 'Chi tiết công việc của ca' })
   expect(within(dialog).getByRole('button', { name: /\[Họ tên kiểm thử\]/ })).toHaveAttribute('aria-pressed', 'true')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Đóng' }))
+  const resumed = await screen.findByRole('dialog', { name: 'Lập công việc cho ca' })
+  fireEvent.click(within(resumed).getByRole('button', { name: 'Đóng' }))
+  await waitFor(() => expect(resumed).not.toBeInTheDocument())
+  expect(within(await openBatch()).getByText('Chưa có dòng đang nhập')).toBeInTheDocument()
   expect(api.calls('POST', '/shifts/5/care-tasks/plan')).toHaveLength(0)
 })
 
@@ -581,5 +660,7 @@ it('FR_020_moTuThongBao_chonCaChuaThoiDiem_vaBaoNguoiCaoTuoi', async () => {
 it('FR_020_moTuThongBao_nguoiChuaCoOTrangHoSoDau_taiRiengDeHienTen', async () => {
   api.on('GET', '/residents/88', json(200, { id: 88, personalInfo: { fullName: '[Người mới vào tầng]' } }))
   view({ shiftId: 5, residentId: 88 })
-  expect(await screen.findByText(/\[Người mới vào tầng\] không có trong ca .*, chọn ca khác khi lập/)).toBeInTheDocument()
+  expect(
+    await screen.findByText(/\[Người mới vào tầng\] không có trong ca .*, chọn ca khác khi lập/),
+  ).toBeInTheDocument()
 })

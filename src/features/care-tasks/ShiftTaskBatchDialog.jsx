@@ -106,7 +106,7 @@ function checkRow(row, resident, shift, typeById, assignments) {
 // Chọn mốc từ kế hoạch hoặc nhập từng dòng. Chỉ lập công việc khi người lập bấm Lưu.
 export function ShiftTaskBatchDialog({
   open,
-  onOpenChange,
+  onClose,
   subtitle,
   shiftPicker,
   shiftId,
@@ -126,6 +126,7 @@ export function ShiftTaskBatchDialog({
   const [checked, setChecked] = useState(false)
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [askClose, setAskClose] = useState(false)
   const [staffNames, setStaffNames] = useState({})
   const attempt = useRef(null)
   const summary = useRef(null)
@@ -210,7 +211,7 @@ export function ShiftTaskBatchDialog({
     setRows((old) =>
       old.map((row) => {
         if (row.key !== key) return row
-        const next = { ...row, ...fields }
+        const next = { ...row, ...fields, edited: true }
         if ('residentId' in fields) {
           next.basis = ''
           next.source = ''
@@ -241,6 +242,12 @@ export function ShiftTaskBatchDialog({
   function removeRow(key) {
     setRows((old) => old.filter((r) => r.key !== key))
     setRowErrors([])
+  }
+
+  function requestClose() {
+    if (busy) return
+    if (rows.some((row) => row.edited)) setAskClose(true)
+    else onClose()
   }
 
   async function submit() {
@@ -310,7 +317,7 @@ export function ShiftTaskBatchDialog({
   const failedCount = new Set([...failing.map((e) => e.row), ...rowErrors.map((e) => e.row)]).size
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => !next && requestClose()}>
       <DialogContent
         showCloseButton={false}
         className="flex max-h-[90vh] flex-col gap-0 overflow-hidden bg-background p-0 sm:max-w-5xl"
@@ -325,10 +332,10 @@ export function ShiftTaskBatchDialog({
             )}
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={onCompare}>
+            <Button variant="outline" disabled={busy} onClick={onCompare}>
               Đối chiếu nguồn
             </Button>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="outline" disabled={busy} onClick={requestClose}>
               Đóng
             </Button>
           </div>
@@ -571,6 +578,20 @@ export function ShiftTaskBatchDialog({
           </Button>
         </div>
       </DialogContent>
+      <Dialog open={askClose} onOpenChange={setAskClose}>
+        <DialogContent role="alertdialog" showCloseButton={false} className="sm:max-w-md">
+          <DialogTitle className="type-title">Bỏ công việc chưa lưu?</DialogTitle>
+          <DialogDescription>Đóng biểu mẫu sẽ bỏ các dòng đang nhập.</DialogDescription>
+          <div className="flex flex-wrap justify-end gap-3">
+            <Button variant="outline" onClick={() => setAskClose(false)}>
+              Tiếp tục nhập
+            </Button>
+            <Button variant="destructive" onClick={onClose}>
+              Bỏ công việc
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   )
 }

@@ -70,6 +70,15 @@ it('Q447_coKeHoachHienHanh_hienMucVaNutSuaKeHoach', async () => {
   expect(screen.queryByLabelText('So sánh từ phiên bản')).not.toBeInTheDocument()
 })
 
+it('chỉ hiện nút lập hoặc sửa kế hoạch khi tài khoản có quyền lập', async () => {
+  api.on('GET', '/me/permissions', json(200, [{ function: 'CARE_PLAN', operation: 'VIEW' }]))
+  renderPage()
+
+  expect(await screen.findByText('Xoay trở người kiểm thử')).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Lập kế hoạch' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Sửa kế hoạch' })).not.toBeInTheDocument()
+})
+
 it('Q447_dangCoBanApDungNgayMai_hienNhanVaNutSuaChepBanDo', async () => {
   api.on(
     'GET',
@@ -181,7 +190,7 @@ it('Q447_banNhap_tachKhoiRieng_ghiNguoiLapVaSoThayDoi', async () => {
   expect(
     await screen.findByText('Hoàng Thị Dung đang soạn · 2 thay đổi so với kế hoạch đang áp dụng'),
   ).toBeInTheDocument()
-  expect(screen.getByRole('button', { name: 'Xem / tiếp tục bản nháp' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Mở bản nháp' })).toBeInTheDocument()
   const [url] = api.calls('GET', '/care-plans/compare')[0]
   expect(new URL(url, 'http://localhost').searchParams.get('to')).toBe('16')
 })
@@ -210,7 +219,7 @@ it('Q447_dongKhiChuaLuu_hoiTruocKhiDong', async () => {
     ),
   )
   renderPage()
-  fireEvent.click(await screen.findByRole('button', { name: 'Xem / tiếp tục bản nháp' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Mở bản nháp' }))
   // Q-450: không còn ô "Lý do sửa"; thêm một mục để có thay đổi chưa lưu
   fireEvent.click(await screen.findByRole('button', { name: /Thêm mục công việc/ }))
   fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
