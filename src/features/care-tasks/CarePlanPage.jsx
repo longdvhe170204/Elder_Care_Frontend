@@ -173,6 +173,16 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
           <ProblemAlert problem={failure} />
           {residentId ? (
             <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={busy || plans === null}>
+              <Button
+                variant="outline"
+                className="self-start border-2"
+                onClick={() => {
+                  choose(null)
+                  setSearchKey((value) => value + 1)
+                }}
+              >
+                Về danh sách cần lập
+              </Button>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-col gap-1">
                   <h2 className="type-title">Kế hoạch đang áp dụng</h2>
@@ -183,15 +193,6 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button
-                    variant="ghost"
-                    onClick={() => {
-                      choose(null)
-                      setSearchKey((value) => value + 1)
-                    }}
-                  >
-                    Về danh sách cần lập
-                  </Button>
                   {scheduled && <StatusBadge status={planLabel(scheduled, true)} />}
                   {canCreate && plans !== null && (
                     <Button disabled={busy} onClick={create}>

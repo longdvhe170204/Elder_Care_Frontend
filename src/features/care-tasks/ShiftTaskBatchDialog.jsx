@@ -8,10 +8,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { IMPORTANCE, CARE_ROLES } from './carePlanLabels'
-import { BASIS, ERRORS, matchBasis, needsOf, pad, plannedAtOf, timeOf } from './shiftPlanning'
+import { BASIS, ERRORS, matchBasis, needsOf, newPlanningRow, pad, plannedAtOf, timeOf } from './shiftPlanning'
 
 const SHIFT_LEVEL = ['SHIFT_START_CHECK', 'SUPERVISION', 'AD_HOC']
-const newRow = () => ({ key: crypto.randomUUID(), content: '' })
 
 // Một trường của dòng: nhãn bao điều khiển, lỗi hiện ngay dưới trường (DESIGN.md 7.4)
 function RowField({ label, error, children, className }) {
@@ -53,12 +52,12 @@ function Select({ options, value, onChange, ...props }) {
 
 const sourceText = (s) => `${BASIS[s.type] || 'Nguồn khác'} · ${s.description} · ${timeOf(s.at)}`
 
-// Căn cứ của dòng người cao tuổi: không phải ô chọn mà là kết quả đối chiếu loại, giờ người lập đã nhập với nguồn
-// (FR-017, FR-023, Q-307). Khớp mục kế hoạch hoặc một nguồn thì ghi căn cứ đó; trùng giờ nhiều nguồn thì người lập chọn
-// một; không khớp thì người lập phải xác nhận lập là việc phát sinh.
+// Dùng đúng mục được chọn, hoặc đối chiếu loại và giờ nhập tay với nguồn (FR-017, FR-023, Q-452).
 function resolve(row, resident, shift) {
-  const match = matchBasis(resident, shift, row.taskTypeId, row.time)
+  const planBasis = row.source?.startsWith('CARE_PLAN_ITEM:') ? row.source : undefined
+  const match = matchBasis(resident, shift, row.taskTypeId, row.time, planBasis, row.planAt)
   if (match.plan) return { ...match, basis: `CARE_PLAN_ITEM:${match.plan.id}` }
+  if (planBasis) return { ...match, basis: '' }
   if (match.sources.length === 1) return { ...match, basis: `${match.sources[0].type}:${match.sources[0].id}` }
   if (match.sources.length > 1)
     return { ...match, basis: match.sources.some((s) => `${s.type}:${s.id}` === row.source) ? row.source : '' }
@@ -78,7 +77,7 @@ function importanceOf(row, resident, shift, typeById) {
 }
 
 // Lỗi kiểm ở máy trước khi gửi: thiếu trường thì backend không đọc được lô (400), lệch mục kế hoạch thì bị từ chối
-function checkRow(row, resident, shift, typeById) {
+function checkRow(row, resident, shift, typeById, assignments) {
   const errors = {}
   const floor = row.residentId === 'FLOOR'
   if (!row.residentId) errors.resident = 'Chọn người cao tuổi hoặc Cả tầng.'
@@ -87,20 +86,24 @@ function checkRow(row, resident, shift, typeById) {
   const level = importanceOf(row, resident, shift, typeById)
   if (level.choose && !level.value) errors.importance = 'Chọn mức quan trọng của việc này.'
   if (!row.performer) errors.performer = 'Chọn người thực hiện hoặc Việc chung của tầng.'
+  else if (row.performer !== 'SHARED' && !assignments.some((a) => String(a.staffId) === row.performer))
+    errors.performer = 'Chọn người có vai trò phù hợp với công việc.'
   if (floor) {
     if (!row.basis) errors.basis = 'Chọn căn cứ của việc cấp ca.'
     return errors
   }
   if (!row.residentId || !row.taskTypeId || !row.time) return errors
   const found = resolve(row, resident, shift)
-  if (!found.basis)
+  if (!found.basis && row.source?.startsWith('CARE_PLAN_ITEM:'))
+    errors.basis = 'Mốc giờ của mục đã chọn không còn phù hợp. Chọn lại mốc từ kế hoạch.'
+  else if (!found.basis)
     errors.basis = found.sources.length
       ? 'Chọn nguồn của công việc.'
       : 'Giờ này không khớp nguồn nào: sửa giờ theo mục kế hoạch hoặc xác nhận lập là việc phát sinh.'
   return errors
 }
 
-// "Lập công việc cho ca": nhập các dòng rồi gửi cả lô; không tự thêm dòng, không điền thay theo nguồn (Q-306, Q-307)
+// Chọn mốc từ kế hoạch hoặc nhập từng dòng. Chỉ lập công việc khi người lập bấm Lưu.
 export function ShiftTaskBatchDialog({
   open,
   onOpenChange,
@@ -114,10 +117,11 @@ export function ShiftTaskBatchDialog({
   types,
   rows,
   setRows,
+  activeKey,
+  setActiveKey,
   onSaved,
   onCompare,
 }) {
-  const [activeKey, setActiveKey] = useState(null)
   const [rowErrors, setRowErrors] = useState([])
   const [checked, setChecked] = useState(false)
   const [failure, setFailure] = useState(null)
@@ -153,7 +157,20 @@ export function ShiftTaskBatchDialog({
     }
   }, [open, staffKey])
 
-  const localErrors = (r) => (checked ? checkRow(r, residentsById[r.residentId], shift, typeById) : {})
+  function candidateAssignments(row) {
+    if (row.residentId === 'FLOOR') return shiftMembers
+    const resident = residentsById[row.residentId]
+    if (!resident || !row.taskTypeId || !row.time) return []
+    const role = resolve(row, resident, shift).plan?.performerRole ?? typeById[row.taskTypeId]?.defaultRole
+    const assignments = resident.assignments ?? []
+    // Q-214: Điều dưỡng có thể làm việc của Nhân viên chăm sóc.
+    return role
+      ? assignments.filter((a) => a.role === role || (role === 'CAREGIVER' && a.role === 'NURSING_STAFF'))
+      : assignments
+  }
+
+  const errorsFor = (r) => checkRow(r, residentsById[r.residentId], shift, typeById, candidateAssignments(r))
+  const localErrors = (r) => (checked ? errorsFor(r) : {})
   const failing = rows
     .map((r, index) => ({ row: index + 1, local: localErrors(r) }))
     .filter((e) => Object.keys(e.local).length)
@@ -189,25 +206,34 @@ export function ShiftTaskBatchDialog({
   const typeOptions = types.map((t) => [String(t.id), t.name])
   const typeName = Object.fromEntries(types.map((t) => [String(t.id), t.name]))
 
-  function update(key, field, value) {
+  function update(key, fields) {
     setRows((old) =>
       old.map((row) => {
         if (row.key !== key) return row
-        const next = { ...row, [field]: value }
-        if (field === 'residentId') {
+        const next = { ...row, ...fields }
+        if ('residentId' in fields) {
           next.basis = ''
           next.source = ''
+          next.planAt = undefined
           next.adHoc = false
           next.performer = ''
         }
-        if (field === 'taskTypeId' || field === 'time') next.source = ''
+        if ('taskTypeId' in fields || 'time' in fields) {
+          next.source = fields.source ?? ''
+          next.planAt = fields.planAt
+          if (
+            next.performer && next.performer !== 'SHARED' &&
+            !candidateAssignments(next).some((a) => String(a.staffId) === next.performer)
+          )
+            next.performer = ''
+        }
         return next
       }),
     )
     setRowErrors([])
   }
   function addRow() {
-    const row = newRow()
+    const row = newPlanningRow()
     setRows((old) => [...old, row])
     setActiveKey(row.key)
     setRowErrors([])
@@ -220,7 +246,7 @@ export function ShiftTaskBatchDialog({
   async function submit() {
     if (!rows.length || busy) return
     setChecked(true)
-    const invalid = rows.findIndex((r) => Object.keys(checkRow(r, residentsById[r.residentId], shift, typeById)).length)
+    const invalid = rows.findIndex((r) => Object.keys(errorsFor(r)).length)
     if (invalid >= 0) {
       setActiveKey(rows[invalid].key)
       setRowErrors([])
@@ -230,7 +256,8 @@ export function ShiftTaskBatchDialog({
     }
     const body = rows.map((r) => {
       const floor = r.residentId === 'FLOOR'
-      const basis = floor ? r.basis : resolve(r, residentsById[r.residentId], shift).basis
+      const match = floor ? null : resolve(r, residentsById[r.residentId], shift)
+      const basis = floor ? r.basis : match.basis
       const [type, id] = basis.split(':')
       const shared = r.performer === 'SHARED'
       return {
@@ -238,8 +265,8 @@ export function ShiftTaskBatchDialog({
         location: floor ? { type: 'FLOOR', id: shift.floorAreaId } : undefined,
         taskTypeId: Number(r.taskTypeId),
         basis: id ? { type, id: Number(id) } : { type },
-        content: r.content || undefined,
-        plannedAt: plannedAtOf(shift, r.time),
+        content: match?.plan ? undefined : r.content || undefined,
+        plannedAt: r.planAt ?? plannedAtOf(shift, r.time),
         importance: importanceOf(r, residentsById[r.residentId], shift, typeById).value,
         performerId: shared ? undefined : Number(r.performer),
         shared,
@@ -294,7 +321,7 @@ export function ShiftTaskBatchDialog({
             <DialogDescription className="type-body-sm text-muted-foreground">{subtitle}</DialogDescription>
             {shiftPicker && <div className="pt-2">{shiftPicker}</div>}
             {shiftPicker && rows.length > 0 && (
-              <p className="type-body-sm text-muted-foreground">Gửi hoặc bỏ các dòng trước khi đổi ngày, ca.</p>
+              <p className="type-body-sm text-muted-foreground">Lưu hoặc bỏ các dòng trước khi đổi ngày, ca.</p>
             )}
           </div>
           <div className="flex gap-2">
@@ -370,13 +397,26 @@ export function ShiftTaskBatchDialog({
                     <span className="type-label text-accent-foreground">Đã nhập</span>
                   </button>
                 )
-              const assignments = floor ? shiftMembers : current?.assignments || []
+              const assignments = candidateAssignments(r)
               const performerOptions = [
                 ...assignments.map((a) => [String(a.staffId), staffName(a)]),
                 ['SHARED', 'Việc chung của tầng'],
               ]
-              const set = (field) => (value) => update(r.key, field, value)
+              const set = (field) => (value) => update(r.key, { [field]: value })
+              const match = current && r.taskTypeId ? resolve(r, current, shift) : null
               const level = importanceOf(r, current, shift, typeById)
+              const selectOccurrence = (entry) => {
+                update(r.key, {
+                  taskTypeId: String(entry.taskTypeId),
+                  time: entry.time,
+                  planAt: entry.plannedAt,
+                  source: entry.basis,
+                  adHoc: false,
+                })
+                requestAnimationFrame(() =>
+                  document.getElementById(`planning-row-${number}`)?.querySelector('select[name="performer"]')?.focus(),
+                )
+              }
               return (
                 <fieldset
                   key={r.key}
@@ -415,6 +455,7 @@ export function ShiftTaskBatchDialog({
                         shiftText={`${timeOf(shift.startsAt)}–${timeOf(shift.endsAt)}`}
                         need={needs[r.residentId]}
                         typeName={typeName}
+                        onChoose={selectOccurrence}
                       />
                     )}
                     <RowField label="Loại công việc" error={errors.type}>
@@ -470,7 +511,9 @@ export function ShiftTaskBatchDialog({
                       {(p) => (
                         <Select
                           {...p}
+                          name="performer"
                           required
+                          disabled={!floor && !(current && r.taskTypeId && r.time)}
                           options={performerOptions}
                           value={r.performer}
                           onChange={set('performer')}
@@ -492,18 +535,22 @@ export function ShiftTaskBatchDialog({
                     ) : (
                       <BasisCheck
                         row={r}
-                        found={current && r.taskTypeId ? resolve(r, current, shift) : null}
+                        found={match}
                         error={errors.basis}
                         onSource={set('source')}
                         onAdHoc={set('adHoc')}
                       />
                     )}
-                    <RowField label="Nội dung (không bắt buộc)" className="md:col-span-3">
+                    <RowField
+                      label={match?.plan ? 'Nội dung theo kế hoạch' : 'Nội dung (không bắt buộc)'}
+                      className="md:col-span-3"
+                    >
                       {(p) => (
                         <Textarea
                           id={p.id}
                           maxLength={1000}
-                          value={r.content}
+                          value={match?.plan?.content ?? r.content}
+                          readOnly={!!match?.plan}
                           onChange={(e) => set('content')(e.target.value)}
                         />
                       )}
@@ -516,11 +563,11 @@ export function ShiftTaskBatchDialog({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t bg-card p-5">
           <div>
-            <p className="type-label">{rows.length ? `${rows.length} dòng chờ gửi` : 'Chưa có dòng chờ gửi'}</p>
-            <p className="type-body-sm text-muted-foreground">Một dòng sai thì cả lô chưa được lưu.</p>
+            <p className="type-label">{rows.length ? `${rows.length} dòng chờ lưu` : 'Chưa có dòng chờ lưu'}</p>
+            <p className="type-body-sm text-muted-foreground">Tất cả các dòng phải hợp lệ mới lưu được.</p>
           </div>
           <Button disabled={busy || !rows.length} onClick={submit}>
-            {busy ? 'Đang kiểm tra và lưu…' : rows.length ? `Gửi lô ${rows.length} dòng` : 'Gửi lô'}
+            {busy ? 'Đang lưu…' : 'Lưu'}
           </Button>
         </div>
       </DialogContent>
@@ -626,9 +673,8 @@ const STATES = {
   DONE: ['Đã lập', 'text-success-foreground'],
 }
 
-// "Việc cần lập trong ca" của người đang chọn: dữ liệu nguồn chỉ để xem (kế hoạch chăm sóc đã duyệt, bữa ăn, lần đo,
-// hoạt động, theo dõi), người lập tự nhập dòng theo đó (Q-307). Chưa có kế hoạch hiệu lực thì báo (BF-01 "Điểm đã làm rõ").
-function NeedList({ name, shiftText, need, typeName }) {
+// Người lập chọn được mốc của mục kế hoạch. Các nguồn còn lại tiếp tục được dùng để đối chiếu.
+function NeedList({ name, shiftText, need, typeName, onChoose }) {
   const id = useId()
   return (
     <section aria-labelledby={id} className="flex flex-col gap-2 rounded-lg border bg-muted p-3 md:col-span-3">
@@ -669,7 +715,21 @@ function NeedList({ name, shiftText, need, typeName }) {
                 <td className="py-1.5 pr-3 tabular-nums">{e.time ?? 'Trong ca'}</td>
                 <td className="py-1.5 pr-3">{IMPORTANCE[e.importance] || '—'}</td>
                 <td className="py-1.5 pr-3">{CARE_ROLES[e.role] || '—'}</td>
-                <td className={`py-1.5 type-label ${STATES[e.state][1]}`}>{STATES[e.state][0]}</td>
+                <td className="py-1.5">
+                  <div className={`type-label ${STATES[e.state][1]}`}>{STATES[e.state][0]}</div>
+                  {e.planItemId && e.plannedAt && typeName[e.taskTypeId] && e.state === 'TODO' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-1"
+                      aria-label={`Chọn mốc ${e.time} cho ${e.text}`}
+                      onClick={() => onChoose(e)}
+                    >
+                      Chọn mốc
+                    </Button>
+                  )}
+                </td>
               </tr>
             ))}
           </tbody>

@@ -59,6 +59,7 @@ export function plannedAtOf(shift, time) {
 }
 
 export const pad = (n) => String(n).padStart(2, '0')
+export const newPlanningRow = () => ({ key: crypto.randomUUID(), content: '' })
 
 // Giờ (HH:MM) có nằm trong ca không, tính cả ca qua đêm
 export function inShift(shift, time) {
@@ -84,18 +85,34 @@ export function itemTimes(item) {
 // Mục kế hoạch của người cao tuổi (bỏ trùng khi ca qua đêm lấy kế hoạch của hai ngày) kèm giờ rơi vào ca; null là
 // làm lúc nào trong ca cũng được
 function planItemsInShift(resident, shift) {
+  if (resident?.planOccurrences) {
+    const timesByItem = new Map()
+    for (const { itemId, plannedAt } of resident.planOccurrences) {
+      const times = timesByItem.get(itemId) ?? []
+      times.push(plannedAt)
+      timesByItem.set(itemId, times)
+    }
+    return (resident.planItems ?? []).map((item) => {
+      const occurrences = timesByItem.get(item.id) ?? []
+      return { item, times: occurrences.map(timeOf), occurrences }
+    })
+  }
   const seen = new Set()
   return (resident?.planItems ?? [])
     .filter((item) => !seen.has(item.id) && seen.add(item.id))
     .map((item) => ({ item, times: anyTimeItem(item) ? null : itemTimes(item).filter((t) => inShift(shift, t)) }))
 }
 
-// Đối chiếu loại công việc và giờ người lập đã nhập với nguồn của người cao tuổi (FR-017, FR-023). Không điền thay
-// người lập (Q-307): chỉ trả mục kế hoạch cùng loại có đúng giờ đó, các nguồn khác có đúng giờ đó, và các mục kế hoạch
-// cùng loại kèm giờ của mục nằm trong ca để báo khi chưa khớp.
-export function matchBasis(resident, shift, taskTypeId, time) {
+// Đối chiếu loại và giờ với nguồn. Khi người lập chọn một mục cụ thể, giữ đúng mục đó dù có mục khác cùng loại và giờ.
+export function matchBasis(resident, shift, taskTypeId, time, planBasis, planAt) {
   const items = planItemsInShift(resident, shift).filter(({ item }) => String(item.taskTypeId) === String(taskTypeId))
-  const plan = time ? items.find((i) => i.times === null || i.times.includes(time))?.item : undefined
+  const plan = time
+    ? items.find(({ item, times, occurrences }) =>
+        (times === null || times.includes(time)) &&
+        (!planBasis || planBasis === `CARE_PLAN_ITEM:${item.id}`) &&
+        (!planAt || occurrences?.includes(planAt)),
+      )?.item
+    : undefined
   const sources = time && !plan ? (resident?.otherSources ?? []).filter((s) => timeOf(s.at) === time) : []
   return { items, plan, sources }
 }
@@ -103,20 +120,22 @@ export function matchBasis(resident, shift, taskTypeId, time) {
 const sameBasis = (task, basis, time) =>
   task.basis && `${task.basis.type}:${task.basis.id}` === basis && (time === null || timeOf(task.plannedAt) === time)
 
-// Việc cần lập của một người cao tuổi trong ca (hiển thị để đối chiếu, không tự lập, Q-307): mỗi giờ của mục kế hoạch
+// Việc cần lập của một người cao tuổi trong ca: mỗi giờ của mục kế hoạch
 // rơi vào ca và mỗi nguồn khác trong ca là một việc; Đã lập khi ca đã có công việc chưa hủy cùng căn cứ, giờ; Đang
 // nhập khi một dòng của lô đang nhập đã khớp.
 export function needsOf(resident, shift, tasks, drafts) {
   const id = resident.residentId
   const own = tasks.filter((t) => t.residentId === id && t.status !== 'CANCELLED')
   const entries = [
-    ...planItemsInShift(resident, shift).flatMap(({ item, times }) =>
-      (times ?? [null]).map((time) => ({
+    ...planItemsInShift(resident, shift).flatMap(({ item, times, occurrences }) =>
+      (times ?? [null]).map((time, index) => ({
         basis: `CARE_PLAN_ITEM:${item.id}`,
         kind: BASIS.CARE_PLAN_ITEM,
+        planItemId: item.id,
         text: item.content,
         taskTypeId: item.taskTypeId,
         time,
+        plannedAt: occurrences?.[index],
         importance: item.importance,
         role: item.performerRole,
       })),

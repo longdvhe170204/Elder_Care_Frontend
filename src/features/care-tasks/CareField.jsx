@@ -18,6 +18,7 @@ export function CareField({
   name,
   placeholder,
   hint,
+  compactTextarea,
 }) {
   const props = {
     value: value ?? '',
@@ -44,7 +45,12 @@ export function CareField({
           ))}
         </select>
       ) : type === 'textarea' ? (
-        <Textarea {...props} maxLength={maxLength} />
+        <Textarea
+          {...props}
+          maxLength={maxLength}
+          rows={compactTextarea ? 1 : undefined}
+          className={compactTextarea ? 'min-h-11' : undefined}
+        />
       ) : (
         <Input {...props} className="h-11" type={type} maxLength={maxLength} min={min} />
       )}

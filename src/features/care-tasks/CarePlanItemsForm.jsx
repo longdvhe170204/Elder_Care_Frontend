@@ -315,6 +315,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
                 value={row.content}
                 onChange={(value) => set(index, 'content', value)}
                 type="textarea"
+                compactTextarea
                 maxLength={1000}
                 hint={`${(row.content ?? '').length}/1000`}
                 error={errorOf(index, 'content')}
