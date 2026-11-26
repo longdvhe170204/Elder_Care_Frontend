@@ -79,3 +79,29 @@ export function planLabel(plan, hasPlan) {
   }
   return PLAN_STATUS[plan.status] ?? plan.status
 }
+
+// Tần suất và giờ hiển thị hai dòng (thiết kế Figma, cột "Tần suất và giờ"): dòng chính và dòng giờ
+const hhmm = (value) => (value ? String(value).slice(0, 5) : '')
+const WEEKDAY = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' }
+export function frequencyText(item) {
+  const times = (item.times ?? []).map(hhmm).join(', ')
+  switch (item.frequencyType) {
+    case 'EVERY_N_HOURS':
+      return { main: `Mỗi ${item.intervalHours ?? '?'} giờ`, sub: item.startsAt ? `Bắt đầu ${hhmm(item.startsAt)}` : '' }
+    case 'TIMES_PER_DAY':
+      return { main: `${item.timesPerDay ?? '?'} lần/ngày`, sub: times }
+    case 'DAYS_OF_WEEK':
+      return {
+        main: (item.weekdays ?? []).map((day) => WEEKDAY[day]).join(', ') || 'Theo ngày trong tuần',
+        sub: times || hhmm(item.startsAt) || 'Trong ca',
+      }
+    case 'ONCE_PER_SHIFT':
+      return { main: 'Một lần mỗi ca', sub: times || hhmm(item.startsAt) }
+    default:
+      return { main: '', sub: '' }
+  }
+}
+
+// "Họ tên · Mã hồ sơ" của người cao tuổi (ô tìm, đầu panel kế hoạch)
+export const residentLabel = (resident) =>
+  [resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`, resident.profileCode].filter(Boolean).join(' · ')

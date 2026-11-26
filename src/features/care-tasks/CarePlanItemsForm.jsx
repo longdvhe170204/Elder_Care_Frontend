@@ -1,7 +1,15 @@
 import { useState } from 'react'
+import { ChevronDown, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { StatusBadge } from '@/common/StatusBadge'
+import { cn } from '@/lib/utils'
 import { CareField, CareCheck } from './CareField'
-import { CARE_ROLES, FREQUENCIES, IMPORTANCE, RESULT_TYPES } from './carePlanLabels'
+import { CARE_ROLES, FREQUENCIES, IMPORTANCE, RESULT_TYPES, frequencyText } from './carePlanLabels'
+
+// Q-447, thiết kế Figma "Kế hoạch chăm sóc · Mục công việc": mỗi mục là một thẻ, chỉ mở mục đang sửa; tần suất và
+// mức quan trọng chọn bằng nút liền nhau; mốc giờ nhập dạng chip; mục tiêu nước chỉ với loại Hỗ trợ uống nước.
+const PLAN_ROLES = Object.fromEntries(['CAREGIVER', 'NURSING_STAFF', 'DOCTOR'].map((code) => [code, CARE_ROLES[code]]))
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
 // Ô bắt buộc kiểm trước khi gửi, báo bằng chữ tại ô thay cho bong bóng của trình duyệt (DESIGN.md 7.4, D14)
 const blank = (value) => value == null || String(value).trim() === ''
@@ -21,17 +29,127 @@ function rowErrors(row) {
   if (blank(row.importance)) errors.importance = 'Chọn mức quan trọng.'
   return errors
 }
+const hasErrors = (e) => Object.values(e ?? {}).some(Boolean)
 
-export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForApproval }) {
-  const [rows, setRows] = useState(() => items.map((row) => ({ ...row, timesText: (row.times ?? []).join(', ') })))
+function Segmented({ label, options, value, onChange, error }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <span className="type-label">{label}</span>
+      <div
+        role="radiogroup"
+        aria-label={label.replace(' *', '')}
+        aria-invalid={error ? true : undefined}
+        className="grid auto-cols-fr grid-flow-col gap-1 rounded-lg border bg-muted p-1"
+      >
+        {Object.entries(options).map(([code, text]) => (
+          <button
+            key={code}
+            type="button"
+            role="radio"
+            aria-checked={value === code}
+            onClick={() => onChange(code)}
+            className={cn(
+              'min-h-9 rounded-md px-2 type-body-sm font-semibold text-muted-foreground',
+              value === code && 'bg-card text-foreground shadow-sm',
+            )}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+      {error && <p className="type-body-sm text-destructive">{error}</p>}
+    </div>
+  )
+}
+
+function TimeChips({ index, times, onChange }) {
+  const [draft, setDraft] = useState('')
+  const add = () => {
+    const at = draft.trim()
+    if (!TIME.test(at) || times.includes(at)) return
+    onChange([...times, at].sort())
+    setDraft('')
+  }
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <span className="type-label">Các mốc giờ</span>
+      <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-lg border border-input bg-background px-2 py-1">
+        {times.map((at) => (
+          <span key={at} className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 type-body-sm tabular-nums">
+            {at}
+            <button
+              type="button"
+              className="rounded p-0.5 text-muted-foreground hover:text-foreground"
+              aria-label={`Bỏ mốc ${at} mục ${index + 1}`}
+              onClick={() => onChange(times.filter((t) => t !== at))}
+            >
+              <X className="size-3.5" aria-hidden="true" />
+            </button>
+          </span>
+        ))}
+        <input
+          aria-label={`Các mốc giờ mục ${index + 1}`}
+          placeholder="HH:mm"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              add()
+            }
+          }}
+          className="h-9 min-w-20 flex-1 bg-transparent px-1 outline-none"
+        />
+        <button
+          type="button"
+          className="rounded p-1 text-muted-foreground hover:text-foreground"
+          aria-label={`Thêm mốc giờ mục ${index + 1}`}
+          onClick={add}
+        >
+          <Plus className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+      <span className="type-caption text-muted-foreground">Để trống là làm trong ca. Mỗi giờ chỉ thêm một lần.</span>
+    </div>
+  )
+}
+
+function ItemSummary({ index, row, typeName, onOpen }) {
+  const { main } = frequencyText(row)
+  return (
+    <button
+      type="button"
+      aria-expanded="false"
+      onClick={onOpen}
+      className="flex w-full items-center gap-3 rounded-xl border bg-card px-4 py-3 text-left"
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block type-card-title">
+          Mục {index + 1} · {typeName ?? 'Chưa chọn loại'}
+        </span>
+        <span className="block truncate type-body-sm text-muted-foreground">
+          {[row.content, main].filter(Boolean).join(' · ')}
+        </span>
+      </span>
+      {row.importance && <StatusBadge status={IMPORTANCE[row.importance]} />}
+      <ChevronDown className="size-4 text-muted-foreground" aria-hidden="true" />
+    </button>
+  )
+}
+
+// leading: lệnh đặt đầu thanh dưới cố định (vd. "Bỏ bản sửa" của panel, thiết kế Figma)
+export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForApproval, leading }) {
+  const [rows, setRows] = useState(() => items.map((row) => ({ ...row, times: row.times ?? [] })))
   const [errors, setErrors] = useState([])
+  const [open, setOpen] = useState(0)
+  const typeById = Object.fromEntries(taskTypes.map((type) => [String(type.id), type]))
   const errorOf = (index, key) => errors[index]?.[key]
   const set = (index, key, value) => {
     setRows((all) => all.map((row, i) => (i === index ? { ...row, [key]: value } : row)))
     setErrors((all) => all.map((e, i) => (i === index && e ? { ...e, [key]: undefined } : e)))
   }
   function selectType(index, value) {
-    const type = taskTypes.find((row) => String(row.id) === value)
+    const type = typeById[value]
     setRows((all) =>
       all.map((row, i) =>
         i === index
@@ -42,25 +160,28 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
               resultType: type?.resultType ?? '',
               importance: type?.defaultImportance ?? '',
               billable: type?.billable ?? false,
+              waterTargetMl: type?.group === 'DRINKING_ASSISTANCE' ? row.waterTargetMl : null,
             }
           : row,
       ),
     )
+    setErrors((all) => all.map((e, i) => (i === index ? {} : e)))
   }
   // Gửi qua nút: "Lưu nháp" là submit của form, "Gửi Bác sĩ duyệt" lưu rồi gửi (Q-447)
   function submit(event, send = onSave) {
     event.preventDefault()
     const found = rows.map(rowErrors)
     setErrors(found)
-    if (found.some((e) => Object.keys(e).length > 0)) return
+    const first = found.findIndex(hasErrors)
+    if (first >= 0) {
+      setOpen(first)
+      return
+    }
     send(
-      rows.map(({ timesText, ...row }) => ({
+      rows.map((row) => ({
         ...row,
         taskTypeId: Number(row.taskTypeId),
-        times: timesText
-          .split(',')
-          .map((at) => at.trim())
-          .filter(Boolean),
+        times: row.times ?? [],
         weekdays: row.weekdays ?? [],
         ...Object.fromEntries(
           ['intervalHours', 'timesPerDay', 'windowBeforeMinutes', 'windowAfterMinutes', 'waterTargetMl'].map((key) => [
@@ -72,188 +193,209 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
       })),
     )
   }
+  function addRow() {
+    setRows((all) => [
+      ...all,
+      {
+        taskTypeId: '',
+        content: '',
+        frequencyType: '',
+        performerRole: '',
+        resultType: '',
+        importance: '',
+        times: [],
+        weekdays: [],
+        billable: false,
+      },
+    ])
+    setOpen(rows.length)
+  }
+  function removeRow(index) {
+    setRows((all) => all.filter((_, i) => i !== index))
+    setErrors((all) => all.filter((_, i) => i !== index))
+    setOpen(0)
+  }
+  const typeOptions = Object.fromEntries(
+    taskTypes
+      .filter((type) => type.status === 'ACTIVE' && type.group !== 'MEDICATION')
+      .map((type) => [type.id, type.name]),
+  )
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <h3 className="type-title">Mục công việc</h3>
-      {rows.map((row, index) => (
-        <fieldset
-          className="flex min-w-0 flex-col gap-4 rounded-lg border p-4"
-          key={row.id ?? `new-${index}`}
-          disabled={busy}
-        >
-          <legend className="type-label px-1">Mục {index + 1}</legend>
-          <CareField
-            label={`Loại công việc ${index + 1}`}
-            value={row.taskTypeId}
-            onChange={(value) => {
-              selectType(index, value)
-              setErrors((all) => all.map((e, i) => (i === index ? {} : e)))
-            }}
-            error={errorOf(index, 'taskTypeId')}
-            options={Object.fromEntries(
-              taskTypes
-                .filter((type) => type.status === 'ACTIVE' && type.group !== 'MEDICATION')
-                .map((type) => [type.id, type.name]),
-            )}
-            required
-          />
-          <CareField
-            label={`Nội dung mục ${index + 1}`}
-            value={row.content}
-            onChange={(value) => set(index, 'content', value)}
-            type="textarea"
-            maxLength={1000}
-            required
-            error={errorOf(index, 'content')}
-          />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <CareField
-              label={`Tần suất mục ${index + 1}`}
-              value={row.frequencyType}
-              onChange={(value) => set(index, 'frequencyType', value)}
+      <div className="flex items-baseline justify-between gap-3">
+        <h3 className="type-title">Mục công việc</h3>
+        <span className="type-body-sm text-muted-foreground">{rows.length} mục</span>
+      </div>
+      {rows.map((row, index) => {
+        const key = row.id ?? `new-${index}`
+        const typeName = typeById[String(row.taskTypeId)]?.name
+        if (index !== open && !hasErrors(errors[index])) {
+          return <ItemSummary key={key} index={index} row={row} typeName={typeName} onOpen={() => setOpen(index)} />
+        }
+        const drinking = typeById[String(row.taskTypeId)]?.group === 'DRINKING_ASSISTANCE'
+        const kind = row.frequencyType
+        return (
+          <fieldset key={key} disabled={busy} className="flex min-w-0 flex-col gap-4 rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between gap-3">
+              <legend className="type-card-title">Mục {index + 1}</legend>
+              <Button type="button" variant="destructive" onClick={() => removeRow(index)}>
+                Bỏ mục
+              </Button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <CareField
+                label="Loại công việc *"
+                name={`Loại công việc mục ${index + 1}`}
+                value={row.taskTypeId}
+                onChange={(value) => selectType(index, value)}
+                error={errorOf(index, 'taskTypeId')}
+                options={typeOptions}
+              />
+              <CareField
+                label="Nội dung *"
+                name={`Nội dung mục ${index + 1}`}
+                value={row.content}
+                onChange={(value) => set(index, 'content', value)}
+                type="textarea"
+                maxLength={1000}
+                hint={`${(row.content ?? '').length}/1000`}
+                error={errorOf(index, 'content')}
+              />
+            </div>
+            <Segmented
+              label="Tần suất *"
               options={FREQUENCIES}
-              required
+              value={kind}
+              onChange={(value) => set(index, 'frequencyType', value)}
               error={errorOf(index, 'frequencyType')}
             />
-            {row.frequencyType === 'EVERY_N_HOURS' && (
+            {kind && kind !== 'ONCE_PER_SHIFT' && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {kind === 'EVERY_N_HOURS' && (
+                  <>
+                    <CareField
+                      label="Mỗi N giờ *"
+                      name={`Mỗi N giờ mục ${index + 1}`}
+                      value={row.intervalHours}
+                      onChange={(value) => set(index, 'intervalHours', value)}
+                      type="number"
+                      min={1}
+                      error={errorOf(index, 'intervalHours')}
+                    />
+                    <CareField
+                      label="Giờ bắt đầu *"
+                      name={`Giờ bắt đầu mục ${index + 1}`}
+                      value={row.startsAt}
+                      onChange={(value) => set(index, 'startsAt', value)}
+                      type="time"
+                      error={errorOf(index, 'startsAt')}
+                    />
+                  </>
+                )}
+                {kind === 'TIMES_PER_DAY' && (
+                  <CareField
+                    label="Số lần trong ngày *"
+                    name={`Số lần trong ngày mục ${index + 1}`}
+                    value={row.timesPerDay}
+                    onChange={(value) => set(index, 'timesPerDay', value)}
+                    type="number"
+                    min={1}
+                    error={errorOf(index, 'timesPerDay')}
+                  />
+                )}
+                {kind !== 'EVERY_N_HOURS' && (
+                  <TimeChips index={index} times={row.times ?? []} onChange={(value) => set(index, 'times', value)} />
+                )}
+              </div>
+            )}
+            {kind === 'DAYS_OF_WEEK' && (
+              <fieldset className="flex flex-wrap gap-x-4">
+                <legend className="type-label">Ngày trong tuần mục {index + 1}</legend>
+                {[1, 2, 3, 4, 5, 6, 7].map((day) => (
+                  <CareCheck
+                    key={day}
+                    label={day === 7 ? 'Chủ nhật' : `Thứ ${day + 1}`}
+                    checked={(row.weekdays ?? []).includes(day)}
+                    onChange={(checked) =>
+                      set(
+                        index,
+                        'weekdays',
+                        checked ? [...(row.weekdays ?? []), day] : row.weekdays.filter((d) => d !== day),
+                      )
+                    }
+                  />
+                ))}
+              </fieldset>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2">
               <CareField
-                label={`Mỗi N giờ mục ${index + 1}`}
-                value={row.intervalHours}
-                onChange={(value) => set(index, 'intervalHours', value)}
+                label="Khung trước (phút)"
+                name={`Khung trước mục ${index + 1} (phút)`}
+                value={row.windowBeforeMinutes}
+                onChange={(value) => set(index, 'windowBeforeMinutes', value)}
+                type="number"
+                min={0}
+                placeholder="Theo cấu hình"
+              />
+              <CareField
+                label="Khung sau (phút)"
+                name={`Khung sau mục ${index + 1} (phút)`}
+                value={row.windowAfterMinutes}
+                onChange={(value) => set(index, 'windowAfterMinutes', value)}
+                type="number"
+                min={0}
+                placeholder="Theo cấu hình"
+              />
+              <CareField
+                label="Vai trò thực hiện *"
+                name={`Vai trò thực hiện mục ${index + 1}`}
+                value={row.performerRole}
+                onChange={(value) => set(index, 'performerRole', value)}
+                options={PLAN_ROLES}
+                error={errorOf(index, 'performerRole')}
+              />
+              <CareField
+                label="Kết quả cần ghi *"
+                name={`Kết quả cần ghi mục ${index + 1}`}
+                value={row.resultType}
+                onChange={(value) => set(index, 'resultType', value)}
+                options={RESULT_TYPES}
+                error={errorOf(index, 'resultType')}
+              />
+            </div>
+            <div className="grid items-end gap-4 sm:grid-cols-2">
+              <Segmented
+                label="Mức quan trọng *"
+                options={IMPORTANCE}
+                value={row.importance}
+                onChange={(value) => set(index, 'importance', value)}
+                error={errorOf(index, 'importance')}
+              />
+              <CareCheck
+                label="Có tính phí"
+                checked={row.billable ?? false}
+                onChange={(value) => set(index, 'billable', value)}
+              />
+            </div>
+            {drinking && (
+              <CareField
+                label="Mục tiêu nước (ml/ngày)"
+                name={`Mục tiêu nước mục ${index + 1} (ml/ngày)`}
+                value={row.waterTargetMl}
+                onChange={(value) => set(index, 'waterTargetMl', value)}
                 type="number"
                 min={1}
-                required
-                error={errorOf(index, 'intervalHours')}
+                hint="Mỗi kế hoạch chỉ đặt một mục tiêu nước."
               />
             )}
-            {row.frequencyType === 'TIMES_PER_DAY' && (
-              <CareField
-                label={`Số lần trong ngày mục ${index + 1}`}
-                value={row.timesPerDay}
-                onChange={(value) => set(index, 'timesPerDay', value)}
-                type="number"
-                min={1}
-                required
-                error={errorOf(index, 'timesPerDay')}
-              />
-            )}
-            <CareField
-              label={`Giờ bắt đầu mục ${index + 1}`}
-              value={row.startsAt}
-              onChange={(value) => set(index, 'startsAt', value)}
-              type="time"
-              required={row.frequencyType === 'EVERY_N_HOURS'}
-              error={errorOf(index, 'startsAt')}
-            />
-            <CareField
-              label={`Các mốc giờ mục ${index + 1} (cách nhau bằng dấu phẩy)`}
-              value={row.timesText}
-              onChange={(value) => set(index, 'timesText', value)}
-            />
-            <CareField
-              label={`Khung trước mục ${index + 1} (phút)`}
-              value={row.windowBeforeMinutes}
-              onChange={(value) => set(index, 'windowBeforeMinutes', value)}
-              type="number"
-              min={0}
-            />
-            <CareField
-              label={`Khung sau mục ${index + 1} (phút)`}
-              value={row.windowAfterMinutes}
-              onChange={(value) => set(index, 'windowAfterMinutes', value)}
-              type="number"
-              min={0}
-            />
-            <CareField
-              label={`Vai trò thực hiện mục ${index + 1}`}
-              value={row.performerRole}
-              onChange={(value) => set(index, 'performerRole', value)}
-              options={CARE_ROLES}
-              required
-              error={errorOf(index, 'performerRole')}
-            />
-            <CareField
-              label={`Kết quả cần ghi mục ${index + 1}`}
-              value={row.resultType}
-              onChange={(value) => set(index, 'resultType', value)}
-              options={RESULT_TYPES}
-              required
-              error={errorOf(index, 'resultType')}
-            />
-            <CareField
-              label={`Mức quan trọng mục ${index + 1}`}
-              value={row.importance}
-              onChange={(value) => set(index, 'importance', value)}
-              options={IMPORTANCE}
-              required
-              error={errorOf(index, 'importance')}
-            />
-            <CareField
-              label={`Mục tiêu nước mục ${index + 1} (ml/ngày)`}
-              value={row.waterTargetMl}
-              onChange={(value) => set(index, 'waterTargetMl', value)}
-              type="number"
-              min={1}
-            />
-          </div>
-          {row.frequencyType === 'DAYS_OF_WEEK' && (
-            <fieldset className="flex flex-wrap gap-x-4">
-              <legend className="type-label">Ngày trong tuần mục {index + 1}</legend>
-              {[1, 2, 3, 4, 5, 6, 7].map((day) => (
-                <CareCheck
-                  key={day}
-                  label={day === 7 ? 'Chủ nhật' : `Thứ ${day + 1}`}
-                  checked={(row.weekdays ?? []).includes(day)}
-                  onChange={(checked) =>
-                    set(
-                      index,
-                      'weekdays',
-                      checked ? [...(row.weekdays ?? []), day] : row.weekdays.filter((d) => d !== day),
-                    )
-                  }
-                />
-              ))}
-            </fieldset>
-          )}
-          <p className="type-body-sm text-muted-foreground">
-            Để trống giờ là trong ca. Để trống khung để dùng cấu hình khi gửi duyệt. Mỗi phiên bản chỉ đặt một mục tiêu
-            nước.
-          </p>
-          <CareCheck
-            label={`Có tính phí mục ${index + 1}`}
-            checked={row.billable ?? false}
-            onChange={(value) => set(index, 'billable', value)}
-          />
-          <Button type="button" variant="outline" onClick={() => setRows((all) => all.filter((_, i) => i !== index))}>
-            Bỏ mục {index + 1}
-          </Button>
-        </fieldset>
-      ))}
-      <div className="flex flex-wrap gap-3">
-        <Button
-          type="button"
-          variant="outline"
-          disabled={busy}
-          onClick={() =>
-            setRows((all) => [
-              ...all,
-              {
-                taskTypeId: '',
-                content: '',
-                frequencyType: '',
-                performerRole: '',
-                resultType: '',
-                importance: '',
-                times: [],
-                timesText: '',
-                weekdays: [],
-                billable: false,
-              },
-            ])
-          }
-        >
-          Thêm mục công việc
-        </Button>
+          </fieldset>
+        )
+      })}
+      <Button type="button" variant="outline" className="self-start" disabled={busy} onClick={addRow}>
+        Thêm mục công việc
+      </Button>
+      <div className="sticky bottom-0 -mx-6 -mb-5 flex flex-wrap items-center gap-3 border-t bg-card px-6 py-4">
+        <div className="mr-auto">{leading}</div>
         <Button type="submit" variant={onSubmitForApproval ? 'outline' : 'default'} disabled={busy}>
           Lưu nháp
         </Button>

@@ -1,106 +1,74 @@
 import { useEffect, useState } from 'react'
-import { getResidents, getResidentsByResidentIdCarePlans, postResidentsByResidentIdCarePlans } from '@/api'
+import { getResidentsByResidentIdCarePlans, getTaskTypes, postResidentsByResidentIdCarePlans } from '@/api'
 import { Button } from '@/components/ui/button'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/common/PageHeader'
-import { DetailLayout } from '@/common/DetailLayout'
 import { StatusBadge } from '@/common/StatusBadge'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { PermissionDeniedState } from '@/common/PageState'
 import { usePermissions } from '@/common/permissions/permissions'
 import { formatDate } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
-import { CareField } from './CareField'
 import { CarePlanDetail } from './CarePlanDetail'
-import { FREQUENCIES, planLabel, planState } from './carePlanLabels'
+import { ResidentSearch } from './ResidentSearch'
+import { CARE_ROLES, IMPORTANCE, frequencyText, planLabel, planState, residentLabel } from './carePlanLabels'
 
-function ResidentChoice({ value, onChange }) {
-  const [text, setText] = useState('')
-  const [query, setQuery] = useState('')
-  const [residents, setResidents] = useState([])
-  const [cursor, setCursor] = useState(null)
-  const [failure, setFailure] = useState(null)
-  useEffect(() => {
-    let cancelled = false
-    getResidents({ query: { q: query || undefined } })
-      .then(({ data }) => {
-        if (!cancelled) {
-          setResidents(data.items)
-          setCursor(data.nextCursor)
-          setFailure(null)
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) setFailure(problemOf(error))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [query])
-  async function more() {
-    try {
-      const { data } = await getResidents({ query: { q: query || undefined, cursor } })
-      setResidents((old) => [...old, ...data.items])
-      setCursor(data.nextCursor)
-    } catch (error) {
-      setFailure(problemOf(error))
-    }
-  }
-  const options = Object.fromEntries(residents.map((resident) => [resident.id, resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`]))
-  if (value && !options[value]) options[value] = 'Người cao tuổi đã chọn'
+// Kế hoạch hiện hành dạng bảng (Figma "Kế hoạch chăm sóc · Kế hoạch hiện hành")
+function CurrentItems({ plan, typeName }) {
   return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-card p-5">
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          setQuery(text.trim())
-        }}
-      >
-        <div className="min-w-0 flex-1">
-          <CareField label="Tìm người cao tuổi" value={text} onChange={setText} />
-        </div>
-        <Button type="submit" variant="outline">
-          Tìm hồ sơ
-        </Button>
-      </form>
-      <ProblemAlert problem={failure} />
-      <CareField label="Người cao tuổi" value={value || ''} onChange={(id) => onChange(Number(id))} options={options} />
-      {cursor && (
-        <Button variant="outline" onClick={more}>
-          Xem thêm hồ sơ
-        </Button>
-      )}
-    </section>
+    <Table aria-label="Mục của kế hoạch hiện hành">
+      <TableHeader>
+        <TableRow className="bg-muted hover:bg-muted">
+          <TableHead>Loại công việc</TableHead>
+          <TableHead>Nội dung</TableHead>
+          <TableHead>Tần suất và giờ</TableHead>
+          <TableHead>Vai trò thực hiện</TableHead>
+          <TableHead>Mức quan trọng</TableHead>
+          <TableHead>Mục tiêu nước</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {(plan.items ?? []).map((item) => {
+          const { main, sub } = frequencyText(item)
+          return (
+            <TableRow key={item.id} className="align-top">
+              <TableCell className="font-semibold whitespace-normal">{typeName(item.taskTypeId)}</TableCell>
+              <TableCell className="max-w-72 whitespace-normal text-muted-foreground">{item.content}</TableCell>
+              <TableCell className="whitespace-normal">
+                <span className="block font-semibold">{main}</span>
+                {sub && <span className="block type-body-sm text-muted-foreground">{sub}</span>}
+              </TableCell>
+              <TableCell className="whitespace-normal">{CARE_ROLES[item.performerRole] ?? '—'}</TableCell>
+              <TableCell>{item.importance ? <StatusBadge status={IMPORTANCE[item.importance]} /> : '—'}</TableCell>
+              <TableCell className="font-semibold text-primary">
+                {item.waterTargetMl != null ? `${Number(item.waterTargetMl).toLocaleString('vi-VN')} ml/ngày` : '—'}
+              </TableCell>
+            </TableRow>
+          )
+        })}
+      </TableBody>
+    </Table>
   )
 }
 
-function CurrentItems({ plan }) {
-  return (
-    <ul className="divide-y">
-      {(plan.items ?? []).map((item) => (
-        <li key={item.id} className="flex flex-col gap-1 py-3">
-          <p>{item.content}</p>
-          <p className="type-body-sm text-muted-foreground">
-            {FREQUENCIES[item.frequencyType]}
-            {item.intervalHours ? ` · ${item.intervalHours} giờ` : ''}
-            {item.startsAt ? ` · ${item.startsAt}` : ' · Trong ca'}
-          </p>
-          {item.waterTargetMl != null && <p className="type-body-sm">Mục tiêu nước: {item.waterTargetMl} ml/ngày</p>}
-        </li>
-      ))}
-    </ul>
-  )
-}
-
-// Q-447: một kế hoạch trên màn (hiện hành + bản sửa đang xử lý), không hiện phiên bản, không so sánh tự chọn
+// Q-447: một kế hoạch trên màn (hiện hành + bản sửa đang xử lý), không hiện phiên bản. Bản sửa mở đè từ phải, rộng theo
+// thiết kế Figma "Panel soạn kế hoạch" (bố cục riêng của màn, DESIGN.md mục 0).
 export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   const { can } = usePermissions()
-  const [residentId, setResidentId] = useState(initialResidentId)
+  const [resident, setResident] = useState(initialResidentId ? { id: initialResidentId } : null)
+  const residentId = resident?.id ?? 0
   const [plans, setPlans] = useState(null)
+  const [taskTypes, setTaskTypes] = useState([])
   const [failure, setFailure] = useState(null)
   const [selected, setSelected] = useState(null)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    getTaskTypes()
+      .then(({ data }) => setTaskTypes(data))
+      .catch(() => setTaskTypes([]))
+  }, [])
   useEffect(() => {
     if (!residentId) return undefined
     let cancelled = false
@@ -135,84 +103,78 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
       setBusy(false)
     }
   }
-  function choose(id) {
-    setResidentId(id)
+  function choose(next) {
+    setResident(next)
     setPlans(null)
     setSelected(null)
     setFailure(null)
   }
+  const names = Object.fromEntries(taskTypes.map((type) => [String(type.id), type.name]))
+  const typeName = (id) => names[String(id)] ?? `Loại công việc mã ${id}`
   const { current, scheduled, open } = planState(plans)
-  const shown = scheduled ?? current
-  const hasPlan = Boolean(shown)
+  const hasPlan = Boolean(scheduled ?? current)
+  const canCreate = can('CARE_PLAN', 'CREATE') && !open
   return (
-    <div className="flex flex-col gap-6">
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
       <PageHeader title="Kế hoạch chăm sóc" subtitle="Điều dưỡng lập, sửa kế hoạch rồi gửi Bác sĩ duyệt" />
-      <DetailLayout
-        open={selected !== null}
-        detailKey={selected}
-        onClose={() => setSelected(null)}
-        label="Chi tiết kế hoạch chăm sóc"
-        renderDetail={({ Title, Description }) => (
-          <CarePlanDetail
-            key={selected}
-            planId={selected}
-            currentPlanId={current?.id}
-            Title={Title}
-            Description={Description}
-            onChanged={() => setReload((value) => value + 1)}
-          />
-        )}
-      >
-        <ResidentChoice value={residentId} onChange={choose} />
-        {failure?.status === 403 ? (
-          <PermissionDeniedState label="kế hoạch chăm sóc" />
-        ) : (
-          <>
-            <ProblemAlert problem={failure} />
-            {residentId ? (
-              <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={busy || plans === null}>
-                <h2 className="type-title">Kế hoạch hiện hành</h2>
-                {plans === null ? (
-                  <p role="status">Đang tải kế hoạch…</p>
-                ) : (
-                  <>
-                    {(open || scheduled) && (
-                      <div className="flex flex-wrap items-center gap-3">
-                        {scheduled && <StatusBadge status={planLabel(scheduled, true)} />}
-                        {open && <StatusBadge status={planLabel(open, hasPlan)} />}
-                        {open && (
-                          <Button variant="outline" onClick={() => setSelected(open.id)}>
-                            {hasPlan ? 'Mở bản sửa' : 'Mở kế hoạch đang soạn'}
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                    {current ? (
-                      <>
-                        <p className="type-body-sm text-muted-foreground">
-                          Hiệu lực từ {formatDate(current.effectiveFrom)}
-                        </p>
-                        <CurrentItems plan={current} />
-                      </>
-                    ) : (
-                      <p>Chưa có kế hoạch chăm sóc đang hiệu lực.</p>
-                    )}
-                    {can('CARE_PLAN', 'CREATE') && !open && (
-                      <div className="border-t pt-4">
-                        <Button disabled={busy} onClick={create}>
-                          {hasPlan ? 'Sửa kế hoạch' : 'Lập kế hoạch'}
-                        </Button>
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-            ) : (
-              <p>Chọn người cao tuổi để xem kế hoạch.</p>
-            )}
-          </>
-        )}
-      </DetailLayout>
+      <ResidentSearch onChange={choose} />
+      {failure?.status === 403 ? (
+        <PermissionDeniedState label="kế hoạch chăm sóc" />
+      ) : (
+        <>
+          <ProblemAlert problem={failure} />
+          {residentId ? (
+            <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={busy || plans === null}>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <h2 className="type-title">Kế hoạch hiện hành</h2>
+                  {current && (
+                    <p className="type-body-sm text-muted-foreground">Hiệu lực từ {formatDate(current.effectiveFrom)}</p>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {scheduled && <StatusBadge status={planLabel(scheduled, true)} />}
+                  {open && <StatusBadge status={planLabel(open, hasPlan)} />}
+                  {open && (
+                    <Button variant="outline" onClick={() => setSelected(open.id)}>
+                      {hasPlan ? 'Mở bản sửa' : 'Mở kế hoạch đang soạn'}
+                    </Button>
+                  )}
+                  {canCreate && plans !== null && (
+                    <Button disabled={busy} onClick={create}>
+                      {hasPlan ? 'Sửa kế hoạch' : 'Lập kế hoạch'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {plans === null ? (
+                <p role="status">Đang tải kế hoạch…</p>
+              ) : current ? (
+                <CurrentItems plan={current} typeName={typeName} />
+              ) : (
+                <p>Chưa có kế hoạch chăm sóc đang hiệu lực.</p>
+              )}
+            </section>
+          ) : (
+            <p>Chọn người cao tuổi để xem kế hoạch.</p>
+          )}
+        </>
+      )}
+      <Sheet open={selected !== null} onOpenChange={(next) => !next && setSelected(null)}>
+        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-[860px]">
+          {selected !== null && (
+            <CarePlanDetail
+              key={selected}
+              planId={selected}
+              currentPlanId={current?.id}
+              resident={resident?.personalInfo ? residentLabel(resident) : null}
+              Title={SheetTitle}
+              Description={SheetDescription}
+              onChanged={() => setReload((value) => value + 1)}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   )
 }

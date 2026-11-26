@@ -18,7 +18,7 @@ const plan = {
 beforeEach(() => {
   api = mockRoutes()
   api.on('GET', '/care-plans/17', json(200, plan, { ETag: '"4"' }))
-  api.on('GET', '/task-types', json(200, []))
+  api.on('GET', '/task-types', json(200, [{ id: 5, name: 'Loại kiểm thử', status: 'ACTIVE', group: 'OTHER' }]))
 })
 afterEach(() => vi.unstubAllGlobals())
 
@@ -76,10 +76,15 @@ it('Q447_choDuyet_bacSiThayThayDoiSoVoiHienHanh', async () => {
   api.on(
     'GET',
     '/care-plans/compare',
-    json(200, { added: [{ id: 9, content: 'Mục thêm kiểm thử' }], removed: [], changed: [] }),
+    json(200, { added: [{ id: 9, taskTypeId: 5, content: 'Mục thêm kiểm thử' }], removed: [], changed: [] }),
   )
-  render(<CarePlanDetail planId={17} currentPlanId={11} onChanged={vi.fn()} />)
-  expect(await screen.findByText('Mục thêm kiểm thử')).toBeInTheDocument()
+  render(<CarePlanDetail planId={17} currentPlanId={11} resident="[Họ tên kiểm thử] · NCT-077" onChanged={vi.fn()} />)
+  expect(await screen.findByRole('article', { name: 'Loại kiểm thử' })).toBeInTheDocument()
+  expect(screen.getByText('[Họ tên kiểm thử] · NCT-077')).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Thay đổi so với hiện hành' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByRole('tab', { name: 'Mục công việc' })).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Thỏa thuận có rủi ro' })).toBeInTheDocument()
+  expect(screen.getByText('Duyệt xong, bản sửa áp dụng từ ngày mai.')).toBeInTheDocument()
   const [url] = api.calls('GET', '/care-plans/compare')[0]
   expect(new URL(url, 'http://localhost').searchParams.get('from')).toBe('11')
   expect(new URL(url, 'http://localhost').searchParams.get('to')).toBe('17')
@@ -116,4 +121,15 @@ it('FR_003_boBanSuaBatBuocLyDoTaiO', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Bỏ bản sửa' }))
   expect(await screen.findByText('Nhập lý do trước khi thực hiện.')).toBeInTheDocument()
   expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(0)
+})
+
+it('Figma_banSuaDangSoan_tieuDeVaTheThongTin_nutCoDinhCuoiPanel', async () => {
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  expect(await screen.findByRole('heading', { name: 'Bản sửa kế hoạch' })).toBeInTheDocument()
+  expect(screen.getByText('Người lập')).toBeInTheDocument()
+  expect(screen.getByText('[Người lập kiểm thử]')).toBeInTheDocument()
+  expect(screen.getByText('Chưa duyệt')).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Mục công việc' })).toHaveAttribute('aria-selected', 'true')
+  fireEvent.click(screen.getByRole('tab', { name: 'Thỏa thuận có rủi ro' }))
+  expect(screen.getByRole('heading', { name: 'Thỏa thuận lựa chọn có rủi ro' })).toBeInTheDocument()
 })

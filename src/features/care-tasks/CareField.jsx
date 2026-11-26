@@ -14,6 +14,10 @@ export function CareField({
   min,
   disabled,
   error,
+  // Tên ô cho trình đọc màn hình khi nhãn hiện ngắn hơn (vd. nhãn "Loại công việc *", tên "Loại công việc mục 2")
+  name,
+  placeholder,
+  hint,
 }) {
   const props = {
     value: value ?? '',
@@ -21,6 +25,8 @@ export function CareField({
     required,
     disabled,
     'aria-invalid': error ? true : undefined,
+    'aria-label': name,
+    placeholder,
   }
   const field = (
     <label className="flex min-w-0 flex-col gap-2">
@@ -42,6 +48,7 @@ export function CareField({
       ) : (
         <Input {...props} className="h-11" type={type} maxLength={maxLength} min={min} />
       )}
+      {hint && <span className="type-caption text-muted-foreground">{hint}</span>}
     </label>
   )
   // Lời báo đặt ngoài nhãn để không nối vào tên ô
