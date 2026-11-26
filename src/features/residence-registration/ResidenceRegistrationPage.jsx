@@ -15,7 +15,7 @@ import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { formatDate } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { RegistrationDetail } from './RegistrationDetail'
-import { TASK_LABELS, TASK_TONES, compareTasks } from './registrationLabels'
+import { TASK_LABELS, TASK_TONES, compareTasks, currentTask, taskKey } from './registrationLabels'
 
 // Màn Khai báo cư trú (018 T008, T012, T014; Phụ lục 27 dòng "Khai báo tạm trú, lưu trú": Hành chính thao tác, Quản lý
 // viện xem; DESIGN.md bố cục K1 → K7). Bảng người cần khai báo (GET /residence-registrations/to-do), ô tìm người cao tuổi
@@ -102,7 +102,7 @@ function TaskTable({ tasks, opened, onOpen }) {
       </TableHeader>
       <TableBody>
         {tasks.map((task) => {
-          const rowKey = `${task.residentId}:${task.taskType}:${task.registrationId ?? ''}`
+          const rowKey = taskKey(task)
           return (
             <TableRow
               key={rowKey}
@@ -179,7 +179,7 @@ export function ResidenceRegistrationPage() {
           key={opened.residentId}
           residentId={opened.residentId}
           fullName={opened.fullName}
-          task={opened.task}
+          task={state.status === 'ready' ? currentTask(state.tasks, opened) : opened.task}
           Title={Title}
           Description={Description}
           onChanged={load}

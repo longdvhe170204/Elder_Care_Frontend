@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { DetailHost } from '@/test/DetailHost'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { NotificationInbox } from './NotificationInbox'
+import { ResidentCallReminders } from './ResidentCallReminders'
 
 // 009 (bổ sung 2026-11-01): lượt nhắc gọi trên web (FR-027 → FR-031, Q-307): khối "Cần gọi điện" đứng trên bộ lọc, khung
 // chi tiết, ghi kết quả gọi; cùng chữ với app nhân viên (009 T022).
@@ -215,6 +216,22 @@ describe('Lượt nhắc gọi', () => {
     })
     expect(body.calledAt).toMatch(/Z$/)
     expect(headers['Idempotency-Key']).toBeTruthy()
+  })
+
+  // BF-06: gọi được người nhà thì báo ra ngoài để sự cố tự ghi đã báo; không liên lạc được thì không
+  it('BF_06_daLienLacNguoiNha_baoRaNgoaiDeGhiDaBaoNguoiNha', async () => {
+    api.on('GET', '/me/call-reminders', json(200, [reminder()]))
+    const onFamilyReached = vi.fn()
+    render(<ResidentCallReminders residentId={12} residentName="Trần Thị Mai" onFamilyReached={onFamilyReached} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi kết quả gọi' }))
+    const sheet = await screen.findByRole('dialog')
+    fireEvent.click(await within(sheet).findByRole('button', { name: 'Đã liên lạc được' }))
+    fireEvent.change(within(sheet).getByLabelText('Ghi chú'), { target: { value: 'Đã báo tin' } })
+    api.on('GET', '/call-reminders/8', () => json(200, reminder({ status: 'RESULT_RECORDED', canRecordResult: false })))
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Lưu kết quả' }))
+
+    expect(await within(sheet).findByText('Đã có kết quả')).toBeInTheDocument()
+    expect(onFamilyReached).toHaveBeenCalledTimes(1)
   })
 
   it('FR_030_khongLienLac_baLyDoCuaSpec_batBuocChon', async () => {

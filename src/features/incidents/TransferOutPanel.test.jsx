@@ -62,7 +62,9 @@ describe('TransferOutPanel', () => {
       requiredContactReached: false,
       notAskedFirstReason: 'Không gọi được',
     })
-    expect(await screen.findByRole('heading', { name: 'Đã chuyển viện · Xem trước phiếu' })).toBeTruthy()
+    // Xem trước chỉ hiện tờ giấy: không tiêu đề, không dòng hướng dẫn, trình xem PDF ẩn thanh công cụ (BF-06)
+    expect(await screen.findByRole('button', { name: 'In phiếu' })).toBeTruthy()
+    expect(screen.queryByRole('heading', { name: /Xem trước phiếu/ })).toBeNull()
   })
 
   it('FR_050h_nguyenVongKhongGuiMacDinh_tichThiGuiIncludeWishes', async () => {

@@ -117,7 +117,7 @@ export const getServicesByIdMismatchedPriceContracts = (params) => request('GET'
 /** Danh sách yêu cầu thay đổi lưu trú (FR-038) */
 export const getResidencyChangeRequests = (params) => request('GET', '/residency-change-requests', params)
 
-/** Lập yêu cầu thay đổi lưu trú ở Nháp (FR-037, FR-038, FR-039, FR-040, FR-043, FR-043k, BR-M01-03, BR-M02-16) */
+/** Lập yêu cầu thay đổi lưu trú ở Nháp (FR-037, FR-038, FR-039, FR-040, FR-043, FR-043k, FR-043l, BR-M01-03, BR-M02-16) */
 export const postResidencyChangeRequests = (params) => request('POST', '/residency-change-requests', params)
 
 /** Xem yêu cầu thay đổi lưu trú (FR-038) */

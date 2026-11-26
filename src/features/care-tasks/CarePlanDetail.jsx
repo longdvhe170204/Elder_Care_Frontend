@@ -179,7 +179,11 @@ export function CarePlanDetail({ planId, onChanged, Title = 'h2', Description = 
               <p className="type-body-sm text-muted-foreground">
                 {FREQUENCIES[item.frequencyType]}
                 {item.intervalHours ? ` · ${item.intervalHours} giờ` : ''}
-                {item.startsAt ? ` · ${item.startsAt}` : ' · Trong ca'}
+                {item.times?.length
+                  ? ` · ${item.times.map((t) => t.slice(0, 5)).join(', ')}`
+                  : item.startsAt
+                    ? ` · ${item.startsAt}`
+                    : ' · Trong ca'}
               </p>
               {item.waterTargetMl != null && <p>Mục tiêu nước: {item.waterTargetMl} ml/ngày</p>}
             </article>

@@ -45,6 +45,7 @@ import {
   FocusHeading,
 } from './CasePage'
 import { EmergencyCardPanel } from './EmergencyCardPanel'
+import { FamilyNoticePanel } from './FamilyNoticePanel'
 import { HandoverStaffField } from './HandoverStaffField'
 import { FollowUpBlock, FollowUpForm } from './IncidentFollowUps'
 import { IncidentTypeIcon } from './IncidentTypePicker'
@@ -57,6 +58,7 @@ import {
   loadIncidentBoard,
   loadLinkedAlerts,
   loadResidentStatus,
+  recordFamilyNotice,
   runIncidentCommand,
 } from './incidents'
 import {
@@ -504,6 +506,12 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const [residentStatus, setResidentStatus] = useState(null)
   const [problem, setProblem] = useState(null)
   const [mode, setMode] = useState(null)
+  // Đang xem trước phiếu chuyển viện: hộp chỉ hiện tờ giấy, không khung (BF-06)
+  const [paper, setPaper] = useState(false)
+  // true khi mở lại phiếu tóm tắt đã lập, không lập phiếu mới (BF-06)
+  const [reopenSummary, setReopenSummary] = useState(false)
+  // Tăng khi vừa tự ghi đã báo người nhà từ kết quả gọi, để khung Báo người nhà đọc lại
+  const [familyTick, setFamilyTick] = useState(0)
   const [busy, setBusy] = useState(false)
 
   // Trạng thái người cao tuổi, tải lại mỗi khi sự cố được tải lại (sau chuyển viện thì khóa nút Chuyển viện)
@@ -554,6 +562,12 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       onChanged(message)
       return true
     } catch (error) {
+      if (command === 'receive' && [409, 422].includes(error?.status)) {
+        // Người khác nhận trước vài giây: báo rõ và làm mới, nút Tiếp nhận biến mất (BF-06)
+        setState(await loadIncident(incident.id).catch(() => state))
+        onChanged('Đã có người nhận sự cố này, màn đã cập nhật')
+        return false
+      }
       setProblem(problemOf(error))
       return false
     } finally {
@@ -574,9 +588,21 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
   const transferOffered =
     ['NEW', 'IN_PROGRESS'].includes(incident.status) &&
     incident.content?.residentId != null &&
+    !atHospital &&
     commands.includes('transfer-out')
   const statusBlocksTransfer = residentStatus != null && !TRANSFERABLE_STATUS.includes(residentStatus)
   const canTransfer = transferOffered && !statusBlocksTransfer
+
+  // Gọi được người nhà ở "Cần gọi điện" thì tự ghi đã báo người nhà (gọi điện) cho sự cố, không bắt ghi hai lần (BF-06)
+  async function onFamilyReached() {
+    if (!commands.includes('family-notice')) return
+    try {
+      await recordFamilyNotice(incident.id, { method: 'PHONE', note: 'Ghi theo kết quả gọi người nhà' })
+    } catch {
+      // đã ghi trước đó hoặc không đủ điều kiện: giữ nguyên trạng thái hiện có
+    }
+    setFamilyTick((t) => t + 1)
+  }
 
   // Ghi diễn biến mở ngay trong khối Diễn biến để vẫn thấy các lần ghi trước; lệnh khác mở hộp
   const inDialog = mode != null && !['progressions', 'follow-up'].includes(mode)
@@ -586,6 +612,8 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
     if (mode === 'transfer-out') loadIncident(incident.id).then(setState, () => {})
     if (mode === 'progressions') requestAnimationFrame(() => document.getElementById('write-progression')?.focus())
     setMode(null)
+    setPaper(false)
+    setReopenSummary(false)
     setProblem(null)
   }
 
@@ -721,16 +749,31 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
         }
         note={
           // Chi tiết chuyển viện, về viện nằm trong Diễn biến; đầu trang chỉ còn việc cần làm tiếp (đề xuất 2026-11-24)
-          returnedNote && isOpen(incident) ? (
-            <p className="rounded-lg bg-warning px-3 py-2 type-label text-warning-foreground">
-              Tiếp: đối chiếu thuốc trong 4 giờ, Bác sĩ đánh giá lại trong 48 giờ (về lúc{' '}
-              {formatDateTime(returnedNote.occurredAt)}).
-            </p>
-          ) : (
-            atHospital && (
-              <p className="type-body-sm">Khi về: Ghi nhận trở về ở hồ sơ người cao tuổi, sự cố tự ghi lúc về.</p>
-            )
-          )
+          <>
+            {returnedNote && isOpen(incident) ? (
+              <p className="rounded-lg bg-warning px-3 py-2 type-label text-warning-foreground">
+                Tiếp: đối chiếu thuốc trong 4 giờ, Bác sĩ đánh giá lại trong 48 giờ (về lúc{' '}
+                {formatDateTime(returnedNote.occurredAt)}).
+              </p>
+            ) : (
+              atHospital && (
+                <p className="type-body-sm">Khi về: Ghi nhận trở về ở hồ sơ người cao tuổi, sự cố tự ghi lúc về.</p>
+              )
+            )}
+            {/* Đóng màn in rồi vẫn xem, in lại được phiếu đã lập (BF-06) */}
+            {transferredNote && (
+              <Button
+                variant="outline"
+                className="mt-2 h-11 self-start"
+                onClick={() => {
+                  setReopenSummary(true)
+                  setMode('transfer-out')
+                }}
+              >
+                Xem phiếu tóm tắt chuyển viện
+              </Button>
+            )}
+          </>
         }
       />
       <CaseActionBar
@@ -748,6 +791,18 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
       />
       {problem && !inDialog && <ProblemAlert problem={problem} />}
       {content.residentId != null && isOpen(incident) && <CriticalNotice residentId={content.residentId} />}
+      {content.residentId != null && (
+        <FamilyNoticePanel key={familyTick} incidentId={incident.id} canRecord={commands.includes('family-notice')}>
+          {isOpen(incident) && (
+            <ResidentCallReminders
+              who="family"
+              residentId={content.residentId}
+              residentName={name}
+              onFamilyReached={onFamilyReached}
+            />
+          )}
+        </FamilyNoticePanel>
+      )}
       {/* Trái: cần biết để xử lý (thẻ khẩn cấp, gọi điện, ghi nhận); phải: Diễn biến (đề xuất 2026-11-24) */}
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]">
         <div className="flex min-w-0 flex-col gap-5">
@@ -757,14 +812,14 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
             call115
           )}
           {content.residentId != null && isOpen(incident) && (
-            <ResidentCallReminders residentId={content.residentId} residentName={name} />
+            <ResidentCallReminders who="staff" residentId={content.residentId} residentName={name} />
           )}
           <CaseBlock title="Ghi nhận">
             <CaseFacts
               rows={[
                 ['Mô tả', content.description ?? '', true],
                 ['Nơi xảy ra', content.location ?? ''],
-                ['Người xử lý', incident.assignee ?? 'Chưa ai nhận'],
+                ['Người xử lý', incident.assignee ?? (incident.closedBy ? `${incident.closedBy} (người đóng)` : 'Chưa ai nhận')],
                 ['Cùng xử lý', (incident.handlers ?? []).join(', ') || undefined],
                 ['Kết quả', incident.resolution ?? undefined, true],
               ]}
@@ -884,6 +939,7 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
           description={DIALOG_HINT[mode]}
           problem={problem}
           wide={mode === 'transfer-out'}
+          paper={mode === 'transfer-out' && paper}
           onClose={closeMode}
         >
           {mode === 'transfer-out' ? (
@@ -891,8 +947,12 @@ function IncidentDetail({ id, name, types, onChanged, onNavigate }) {
               incidentId={incident.id}
               residentId={content.residentId ?? null}
               onCancel={closeMode}
+              onPreview={setPaper}
+              reopen={reopenSummary}
               onDone={async () => {
                 setMode(null)
+                setPaper(false)
+                setReopenSummary(false)
                 setState(await loadIncident(incident.id))
                 onChanged('Đã chuyển viện')
               }}
@@ -957,7 +1017,8 @@ function IncidentRow({ incident, name, typeName, typeCode, inHospital, onOpen })
           {name}
         </button>
         <span className="type-body-sm text-muted-foreground">
-          {typeName} · {LEVEL_LABEL[incident.level]}
+          SC-{incident.id} · {typeName} · {LEVEL_LABEL[incident.level]}
+          {incident.content?.discoveredAt && ` · ${formatDateTime(incident.content.discoveredAt)}`}
           {!open && ` · ${STATUS_LABEL[incident.status] ?? incident.status}`}
         </span>
       </div>
@@ -1032,6 +1093,7 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
     return (
       <ReportForm
         onClose={() => setRecording(false)}
+        onOpenAlert={onNavigate && ((alertId) => onNavigate('alerts', { alertId }))}
         onOpenIncident={(id) => {
           setRecording(false)
           setOpenId(id)
@@ -1095,7 +1157,7 @@ export function IncidentsPage({ incidentId = null, onNavigate } = {}) {
               }}
             >
               <Plus aria-hidden="true" />
-              Báo sự việc
+              Ghi sự cố
             </Button>
           </div>
         }

@@ -3,6 +3,7 @@ import {
   getMedicationReconciliationWorklist,
   getMedicationReconciliationsById,
   getResidentsByResidentIdMedicationReconciliations,
+  postMedicationReconciliationsByIdCancel,
   postMedicationReconciliationsByIdConfirm,
   postMedicationReconciliationsByIdProposeCorrection,
   postMedicationReconciliationsByIdReturn,
@@ -38,6 +39,10 @@ export const confirmReconciliation = (id, key) =>
 
 export const returnReconciliation = (id, reason, key) =>
   postMedicationReconciliationsByIdReturn({ path: { id }, headers: keyed(key), body: { reason } })
+
+// Hủy phiếu Mở, Chờ xác nhận kèm lý do (Q-447)
+export const cancelReconciliation = (id, reason, key) =>
+  postMedicationReconciliationsByIdCancel({ path: { id }, headers: keyed(key), body: { reason } })
 
 export const proposeCorrection = (id, body, key) =>
   postMedicationReconciliationsByIdProposeCorrection({ path: { id }, headers: keyed(key), body })

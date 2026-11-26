@@ -199,7 +199,7 @@ export function ResidentSearch({ picked, onPick, id = 'assist-resident-search' }
         id={id}
         autoFocus
         className="h-11"
-        placeholder="Gõ tên hoặc mã, ít nhất 2 chữ"
+        placeholder="Gõ tên, mã hoặc số phòng, ít nhất 2 chữ"
         aria-label="Tìm người cao tuổi theo tên hoặc mã"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
