@@ -89,6 +89,50 @@ const view = () =>
       <CareChecklistPage shiftId={9} />
     </PermissionsProvider>,
   )
+
+function quickTaskChecklist(item) {
+  api.on('GET', '/checklist', json(200, {
+    shiftId: 9,
+    loadedAt: '2026-11-01T03:30:00Z',
+    tasks: [item, { ...work[1], resultType: 'MEASURED_VALUE', allowedCommands: ['record'] }],
+  }))
+}
+
+it('FR_034_hoanThanhTuChecklistChiGuiMotLanVaDocLaiTrangThai', async () => {
+  const simple = { ...work[0], resultType: 'PERFORMED', allowedCommands: ['record'] }
+  quickTaskChecklist(simple)
+  api.on('GET', '/care-tasks/5', json(200, simple))
+  api.on('POST', '/care-tasks/5/record', json(200, {}))
+  view()
+  const quick = await screen.findByRole('button', { name: 'Đánh dấu hoàn thành: Công việc 5' })
+  expect(screen.getAllByRole('button', { name: /Đánh dấu hoàn thành/ })).toHaveLength(1)
+  fireEvent.click(quick)
+  expect(api.calls('POST', '/care-tasks/5/record')).toHaveLength(0)
+  const submit = await screen.findByRole('button', { name: 'Xác nhận hoàn thành' })
+  expect(api.calls('GET', '/care-tasks/5')).toHaveLength(1)
+  quickTaskChecklist({ ...simple, status: 'COMPLETED', allowedCommands: [] })
+  act(() => {
+    fireEvent.submit(submit.closest('form'))
+    fireEvent.submit(submit.closest('form'))
+  })
+  await screen.findByText('Đã lưu kết quả.')
+  fireEvent.click(await screen.findByRole('button', { name: /1 việc đã xong/ }))
+  await screen.findByText('Hoàn thành')
+  expect(screen.queryByRole('button', { name: /Đánh dấu hoàn thành/ })).not.toBeInTheDocument()
+  expect(api.calls('POST', '/care-tasks/5/record')).toHaveLength(1)
+})
+
+it('FR_033_hoanThanhNhanhChanLenhKhiChiTietKhongConQuyen', async () => {
+  const simple = { ...work[0], resultType: 'PERFORMED', allowedCommands: ['record'] }
+  quickTaskChecklist(simple)
+  api.on('GET', '/care-tasks/5', problem(403, 'FORBIDDEN', { detail: 'Không thể xem công việc này.' }))
+  view()
+  fireEvent.click(await screen.findByRole('button', { name: 'Đánh dấu hoàn thành: Công việc 5' }))
+  expect(screen.queryByRole('button', { name: 'Xác nhận hoàn thành' })).not.toBeInTheDocument()
+  await screen.findByText('Không thể xem công việc này.')
+  expect(screen.queryByRole('button', { name: 'Xác nhận hoàn thành' })).not.toBeInTheDocument()
+  expect(api.calls('POST', '/care-tasks/5/record')).toHaveLength(0)
+})
 it('FR_030_hienViecQuaHanTruocVaLuaChonTrenThe', async () => {
   view()
   await screen.findByText('Công việc 5')

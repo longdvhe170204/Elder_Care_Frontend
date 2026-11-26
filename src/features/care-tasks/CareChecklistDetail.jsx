@@ -19,10 +19,12 @@ export function CareChecklistDetail({ task, reasons, Title, Description, onSaved
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const retry = useRef(null)
+  const inFlight = useRef(false)
   async function command(operation, body) {
-    if (busy) return
+    if (readOnly || inFlight.current) return
     const signature = JSON.stringify([operation, body])
     if (retry.current?.signature !== signature) retry.current = { signature, key: crypto.randomUUID() }
+    inFlight.current = true
     setBusy(true)
     onBusy(true)
     setFailure(null)
@@ -43,6 +45,7 @@ export function CareChecklistDetail({ task, reasons, Title, Description, onSaved
     } catch (error) {
       setFailure(problemOf(error))
     } finally {
+      inFlight.current = false
       setBusy(false)
       onBusy(false)
     }

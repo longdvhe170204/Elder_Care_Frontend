@@ -58,6 +58,8 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
   const [stale, setStale] = useState(false)
   const [filter, setFilter] = useState('all')
   const [selectedId, setSelectedId] = useState(taskId)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailFailure, setDetailFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const [announcement, setAnnouncement] = useState('')
   const [openHours, setOpenHours] = useState([])
@@ -143,6 +145,8 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
     if (busy) return
     const token = ++selection.current
     setSelectedId(task.id)
+    setDetailLoading(true)
+    setDetailFailure(null)
     try {
       const { data: latest } = await getCareTasksById({ path: { id: task.id } })
       if (selection.current === token)
@@ -164,8 +168,37 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
           ),
         }))
     } catch (error) {
-      if (selection.current === token) setFailure(problemOf(error))
+      if (selection.current === token) setDetailFailure(problemOf(error))
+    } finally {
+      if (selection.current === token) setDetailLoading(false)
     }
+  }
+  function taskBlock(task, hideStatus = false) {
+    const block = (
+      <TaskBlock
+        key={task.id}
+        task={task}
+        selected={task.id === selectedId}
+        onSelect={select}
+        hideStatus={hideStatus}
+        following={following[task.nctId]}
+      />
+    )
+    if (task.raw.resultType !== 'PERFORMED' || !task.commands.includes('record')) return block
+    return (
+      <div key={task.id} className="flex flex-col gap-2">
+        {block}
+        <Button
+          variant="outline"
+          className="min-h-11 self-start"
+          disabled={busy || stale || loading}
+          aria-label={`Đánh dấu hoàn thành: ${task.title}`}
+          onClick={() => select(task)}
+        >
+          Đánh dấu hoàn thành
+        </Button>
+      </div>
+    )
   }
   async function saved(message) {
     setAnnouncement(message)
@@ -194,13 +227,15 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
       renderDetail={({ Title, Description }) =>
         selected && (
           <>
+            {detailLoading && <p role="status">Đang tải chi tiết công việc…</p>}
+            <ProblemAlert problem={detailFailure} />
             <CareChecklistDetail
               key={selected.id}
               task={selected}
               reasons={view.reasons}
               Title={Title}
               Description={Description}
-              readOnly={stale}
+              readOnly={stale || detailLoading || Boolean(detailFailure)}
               onSaved={saved}
               onBusy={setBusy}
             />
@@ -284,11 +319,7 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
                 <h2 className="type-label text-destructive">Quá hạn ({overdue.length})</h2>
                 <div className="flex gap-4">
                   <HourColumn />
-                  <Blocks>
-                    {overdue.map((t) => (
-                      <TaskBlock key={t.id} task={t} selected={t.id === selectedId} onSelect={select} hideStatus following={following[t.nctId]} />
-                    ))}
-                  </Blocks>
+                  <Blocks>{overdue.map((t) => taskBlock(t, true))}</Blocks>
                 </div>
               </section>
             )}
@@ -296,13 +327,7 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
               <section aria-label="Dòng thời gian ca">
                 {groups.map((hour) => {
                   const inHour = timeline.filter((t) => t.plannedAt.startsWith(hour))
-                  const blocks = (
-                    <Blocks>
-                      {inHour.map((t) => (
-                        <TaskBlock key={t.id} task={t} selected={t.id === selectedId} onSelect={select} following={following[t.nctId]} />
-                      ))}
-                    </Blocks>
-                  )
+                  const blocks = <Blocks>{inHour.map((t) => taskBlock(t))}</Blocks>
                   // DESIGN.md 11: thu gọn những gì đã xong; giờ chỉ còn việc đã đóng mở lại được
                   if (!inHour.every((t) => DONE.includes(t.status)))
                     return (
