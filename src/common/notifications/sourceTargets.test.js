@@ -14,6 +14,11 @@ describe('sourceNavigation', () => {
       { residentId: 9004, focus: 'resident' },
     ])
     expect(sourceNavigation({ type: 'M02.CONTRACT_EXPIRING', id: '9004' })).toEqual(['contracts', { contractId: 9004 }])
+    expect(sourceNavigation({ type: 'M11.COST_STATEMENT', id: '31' })).toEqual(['charges', { statementId: 31 }])
+    expect(sourceNavigation({ type: 'M02.RESIDENCY_ENDING', id: '14' })).toEqual([
+      'residency-endings',
+      { endingId: 14 },
+    ])
     expect(sourceNavigation({ type: 'M09.DEPARTMENT', id: '3' })).toBeNull()
     expect(sourceNavigation(null)).toBeNull()
   })

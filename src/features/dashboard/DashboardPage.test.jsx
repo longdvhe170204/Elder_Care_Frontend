@@ -388,7 +388,8 @@ describe('DashboardPage: việc gửi tới bạn', () => {
     const rows = within(card).getAllByRole('button', { name: /Xử lý/ })
     fireEvent.click(rows[0])
     expect(onNavigate).toHaveBeenLastCalledWith('contracts', { contractId: 33 })
+    // Demo 2026-11-26: thông báo bảng chi phí mở thẳng bảng ở màn Chi phí
     fireEvent.click(rows[1])
-    expect(onNavigate).toHaveBeenLastCalledWith('notifications', { notificationId: 42 })
+    expect(onNavigate).toHaveBeenLastCalledWith('charges', { statementId: 9 })
   })
 })

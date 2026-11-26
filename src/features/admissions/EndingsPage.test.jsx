@@ -86,6 +86,17 @@ beforeEach(() => {
 })
 
 describe('EndingsPage', () => {
+  // Demo 2026-11-26: mở từ thông báo kết thúc lưu trú (Xử lý) thì hiện ngay hồ sơ đó
+  it('moTuThongBao_hienNgayHoSoKetThuc', async () => {
+    render(
+      <PermissionsProvider>
+        <EndingsPage role="OFFICE_STAFF" onNavigate={vi.fn()} endingId={14} />
+      </PermissionsProvider>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Nguyễn Thị Lan' })).toBeInTheDocument()
+    expect(await screen.findByText('Chi phí kỳ cuối đã chốt')).toBeInTheDocument()
+  })
+
   it('FR_063_moTheoMa_hienDieuKien_vaHaiYCuaMucH', async () => {
     renderPage()
     await openEnding()

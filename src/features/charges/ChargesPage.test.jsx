@@ -90,6 +90,16 @@ beforeEach(() => {
   )
 })
 
+// Demo 2026-11-26: mở từ thông báo bảng đã chốt (Xử lý) thì hiện ngay bảng đó
+it('moTuThongBao_hienNgayBangChiPhi', async () => {
+  render(
+    <PermissionsProvider>
+      <ChargesPage statementId={31} />
+    </PermissionsProvider>,
+  )
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Bảng #31' })).toBeInTheDocument())
+})
+
 async function openStatement() {
   render(
     <PermissionsProvider>
