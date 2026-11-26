@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCostsPeriods, getCostsStatements } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -26,7 +26,9 @@ import { controlClass, money, periodLabel, STATEMENT_STATUS } from './chargeLabe
 import { residentLabel, residentMatches, useResidentDirectory } from './useResidentDirectory'
 
 // 010 T019: chỉ đọc dữ liệu thật qua client sinh; không lập sẵn bảng, không tự chọn khoản.
-export function ChargesPage({ role }) {
+// residentId, workspace, until (demo 2026-11-26): mở từ điều kiện (a) của Kết thúc lưu trú, vào thẳng Gom chi phí của người
+// đó với khoảng ngày tự tính (BillingSources preset)
+export function ChargesPage({ role, residentId = null, workspace: initialWorkspace = 'statements', until = null }) {
   const { status, can } = usePermissions()
   const canView = can('COST_ADJUSTMENT', 'VIEW')
   const [periods, setPeriods] = useState(null)
@@ -41,7 +43,8 @@ export function ChargesPage({ role }) {
   const [revision, setRevision] = useState(0)
   const [periodRevision, setPeriodRevision] = useState(0)
   const [announcement, setAnnouncement] = useState('')
-  const [workspace, setWorkspace] = useState('statements')
+  const [workspace, setWorkspace] = useState(initialWorkspace)
+  const preset = useMemo(() => (residentId && until ? { residentId, until } : null), [residentId, until])
   const deny = useCallback(() => {
     setDenied(true)
     setPeriods(null)
@@ -130,7 +133,7 @@ export function ChargesPage({ role }) {
           Về bảng chi phí
         </Button>
         {workspace === 'sources' ? (
-          <BillingSources onChanged={changed} />
+          <BillingSources onChanged={changed} preset={preset} />
         ) : workspace === 'manual' ? (
           <ManualCostForm onCreated={() => changed('Đã lập khoản nhập tay nháp.')} />
         ) : (

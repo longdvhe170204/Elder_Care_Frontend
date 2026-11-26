@@ -36,7 +36,12 @@ const HOUSE_LABEL = 'Điều kiện (h): số dư và tiền cọc đã quyết 
 // Màn xử lý cho từng điều kiện chưa đạt (demo 2026-11-25): bấm Xử lý mở thẳng màn của feature sở hữu, đã chọn sẵn người
 // cao tuổi khi màn đó nhận tham số. (e) bàn giao ghi ngay trong Xác nhận kết thúc; (f), (g) tự động nên không có nút.
 const HANDLERS = {
-  END_A_COSTS: { page: 'charges', label: 'Chi phí', withResident: false },
+  // Demo 2026-11-26: (a) mở thẳng Gom chi phí của người đó, khoảng ngày tự tính tới ngày kết thúc dự kiến
+  END_A_COSTS: {
+    page: 'charges',
+    label: 'Chi phí',
+    params: (ending) => ({ residentId: ending.residentId, workspace: 'sources', until: ending.expectedEndDate }),
+  },
   END_B_BELONGINGS: { page: 'belongings', label: 'Đồ gửi', withResident: true },
   END_C_STORED_MEDICATION: { page: 'medication', label: 'Thuốc', withResident: true },
   END_D_ALERTS_INCIDENTS: { page: 'alerts', label: 'Cảnh báo', withResident: false },
@@ -46,7 +51,8 @@ const HANDLERS = {
 
 // Trạng thái có màu (Đạt xanh, Chưa đạt đỏ; DESIGN.md mục 3.5). Lý do chỉ hiện khi Chưa đạt: dòng Đạt, Tự động backend
 // trả căn cứ là mã spec (FR-063 …), không phải chữ cho người dùng
-function ConditionRow({ line, residentId, onNavigate }) {
+function ConditionRow({ line, ending, onNavigate }) {
+  const residentId = ending.residentId
   const handler = line.status === 'NOT_MET' ? HANDLERS[line.code] : null
   return (
     <TableRow>
@@ -67,7 +73,11 @@ function ConditionRow({ line, residentId, onNavigate }) {
             onClick={() =>
               onNavigate(
                 handler.page,
-                handler.withResident ? { residentId, ...(handler.focus && { focus: handler.focus }) } : {},
+                handler.params
+                  ? handler.params(ending)
+                  : handler.withResident
+                    ? { residentId, ...(handler.focus && { focus: handler.focus }) }
+                    : {},
               )
             }
           >
@@ -83,12 +93,12 @@ function ConditionRow({ line, residentId, onNavigate }) {
 // ghi ngay trong Xác nhận kết thúc, sau khi các điều kiện khác đã đạt
 const AUTOMATIC = ['END_F_CONTRACT', 'END_G_BED']
 
-function Conditions({ conditions, residentId, onNavigate }) {
+function Conditions({ conditions, ending, onNavigate }) {
   const shown = conditions.filter((c) => !AUTOMATIC.includes(c.code))
   const settlement = shown.filter((c) => SETTLEMENT.includes(c.code))
   const handover = shown.filter((c) => c.code === HANDOVER)
   const rest = shown.filter((c) => !SETTLEMENT.includes(c.code) && c.code !== HANDOVER)
-  const row = (c) => <ConditionRow key={c.code} line={c} residentId={residentId} onNavigate={onNavigate} />
+  const row = (c) => <ConditionRow key={c.code} line={c} ending={ending} onNavigate={onNavigate} />
   return (
     <section className="flex flex-col gap-2">
       <h3 id="ending-conditions-title" className="type-card-title">
@@ -380,7 +390,7 @@ export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
         )}
       </div>
       <ProblemAlert problem={failure} />
-      {conditions && <Conditions conditions={conditions} residentId={ending.residentId} onNavigate={onNavigate} />}
+      {conditions && <Conditions conditions={conditions} ending={ending} onNavigate={onNavigate} />}
 
       {preparing && canUpdate && mode === null && (
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
