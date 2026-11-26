@@ -212,8 +212,9 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
   return (
     <div className="flex flex-col gap-5 type-body-sm">
       <div className="flex flex-col gap-1">
-        <Title className="type-title tabular-nums">{request.displayCode}</Title>
-        <Description className="type-body-sm text-muted-foreground">{typeLabel(request.type)}</Description>
+        {/* Demo 2026-11-26 (E): tiêu đề là tên chức năng, mã yêu cầu ở dòng mô tả */}
+        <Title className="type-title">{typeLabel(request.type, request.content)}</Title>
+        <Description className="type-body-sm tabular-nums text-muted-foreground">{request.displayCode}</Description>
       </div>
       <div className="flex flex-col gap-2">
         <StatusBadge status={statusLabel(request.status)} className="self-start" />
@@ -330,7 +331,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
           <DialogHeader>
             <DialogTitle>{CONFIRM_TITLES[confirming] ?? ''}</DialogTitle>
             <DialogDescription>
-              {[typeLabel(request.type), subject?.residentName, request.displayCode].filter(Boolean).join(' · ')}
+              {[typeLabel(request.type, request.content), subject?.residentName, request.displayCode].filter(Boolean).join(' · ')}
               {comment.trim() ? `. Ý kiến: ${comment.trim()}` : ''}
             </DialogDescription>
           </DialogHeader>
