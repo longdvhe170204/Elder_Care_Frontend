@@ -133,6 +133,33 @@ it('FR_033_hoanThanhNhanhChanLenhKhiChiTietKhongConQuyen', async () => {
   expect(screen.queryByRole('button', { name: 'Xác nhận hoàn thành' })).not.toBeInTheDocument()
   expect(api.calls('POST', '/care-tasks/5/record')).toHaveLength(0)
 })
+
+it('FR_035_ghiTruocDoDoiChieuGioServerKhiDongHoMayLech', async () => {
+  const simple = { ...work[0], resultType: 'PERFORMED', allowedCommands: ['record'] }
+  quickTaskChecklist(simple)
+  api.on('GET', '/care-tasks/5', json(200, simple))
+  api.on('POST', '/care-tasks/5/record', json(200, {}))
+  const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-01T02:30:00Z'))
+  try {
+    view()
+    fireEvent.click(await screen.findByRole('button', { name: 'Đánh dấu hoàn thành: Công việc 5' }))
+    fireEvent.click(await screen.findByRole('radio', { name: 'Đã hoàn thành trước đó' }))
+    const field = screen.getByLabelText('Thời điểm thực hiện')
+    const confirm = screen.getByRole('button', { name: 'Xác nhận hoàn thành' })
+    fireEvent.change(field, { target: { value: '2026-11-01T10:31' } })
+    fireEvent.click(confirm)
+    expect(field).toHaveAccessibleDescription('Thời điểm thực hiện không được ở tương lai.')
+    expect(api.calls('POST', '/care-tasks/5/record')).toHaveLength(0)
+    fireEvent.change(field, { target: { value: '2026-11-01T10:15' } })
+    fireEvent.click(confirm)
+    await waitFor(() => expect(api.calls('POST', '/care-tasks/5/record')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/care-tasks/5/record')[0][1].body)).toEqual({
+      performedAt: '2026-11-01T10:15:00+07:00',
+    })
+  } finally {
+    clock.mockRestore()
+  }
+})
 it('FR_030_hienViecQuaHanTruocVaLuaChonTrenThe', async () => {
   view()
   await screen.findByText('Công việc 5')

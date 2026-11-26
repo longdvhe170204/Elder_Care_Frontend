@@ -29,6 +29,7 @@ const FILTERS = [
   ['NOT_YET_DUE', 'Chưa đến hạn', (t) => t.raw.status === 'NOT_YET_DUE'],
   ['done', 'Đã xong', (t) => DONE.includes(t.status)],
 ]
+const withClock = (checklist) => ({ ...checklist, receivedAt: performance.now() })
 function Blocks({ children }) {
   return (
     <div className="grid min-w-0 flex-1 grid-cols-[repeat(auto-fill,minmax(260px,1fr))] items-start gap-2 *:max-w-[360px]">
@@ -88,7 +89,7 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
         getShiftsById({ path: { id } }),
       ])
       if (generation.current !== token) return
-      setData(checklist)
+      setData(withClock(checklist))
       setFailure(null)
       setStale(false)
     } catch (error) {
@@ -108,7 +109,7 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
     Promise.all([getChecklist({ query: { shiftId } }), getShiftsById({ path: { id: shiftId } })])
       .then(([checklist]) => {
         if (current && requests.current === token) {
-          setData(checklist.data)
+          setData(withClock(checklist.data))
           setFailure(null)
           setStale(false)
         }
@@ -232,6 +233,7 @@ export function CareChecklistPage({ shiftId: initialShiftId, taskId = null, role
             <CareChecklistDetail
               key={selected.id}
               task={selected}
+              serverClock={data}
               reasons={view.reasons}
               Title={Title}
               Description={Description}

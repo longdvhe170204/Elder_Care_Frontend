@@ -19,7 +19,7 @@ const NUMERIC = {
 }
 
 // FR-038: chọn form bằng snapshot của công việc; danh mục hiện hành chỉ cung cấp lựa chọn mã.
-export function CareResultForm({ type, busy, failure, importance, windowFrom, onSubmit }) {
+export function CareResultForm({ type, busy, failure, importance, windowFrom, serverClock, onSubmit }) {
   const completionId = useId()
   const [completionTime, setCompletionTime] = useState('now')
   const [timeError, setTimeError] = useState(null)
@@ -80,7 +80,10 @@ export function CareResultForm({ type, busy, failure, importance, windowFrom, on
         setTimeError('Nhập giờ từ đầu khung thực hiện.')
         return
       }
-      if (actual > Date.now()) {
+      // Mốc checklist do server trả, cộng thời gian trôi qua trên trình duyệt.
+      const serverAt = Date.parse(serverClock?.loadedAt)
+      const now = Number.isFinite(serverAt) ? serverAt + (performance.now() - serverClock.receivedAt) : Date.now()
+      if (actual > now) {
         setTimeError('Thời điểm thực hiện không được ở tương lai.')
         return
       }

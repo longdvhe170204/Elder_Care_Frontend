@@ -11,7 +11,7 @@ import { WhoLine } from './TaskCard'
 import { sourceText, timeText } from './taskText'
 import { CareResultForm } from './CareResultForm'
 
-export function CareChecklistDetail({ task, reasons, Title, Description, onSaved, onBusy, readOnly }) {
+export function CareChecklistDetail({ task, reasons, Title, Description, onSaved, onBusy, readOnly, serverClock }) {
   const [notPerformed, setNotPerformed] = useState(false)
   const [reasonId, setReasonId] = useState('')
   const [note, setNote] = useState('')
@@ -72,6 +72,7 @@ export function CareChecklistDetail({ task, reasons, Title, Description, onSaved
           type={task.raw.resultType}
           importance={task.raw.importance}
           windowFrom={task.raw.windowFrom}
+          serverClock={serverClock}
           busy={busy}
           failure={failure}
           onSubmit={(body) => command('record', body)}
