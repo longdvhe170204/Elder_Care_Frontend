@@ -93,6 +93,78 @@ it('Q450_banChoDuyet_hienNhomRieng_khongTinhVaoHangCho', async () => {
   expect(onChoose).toHaveBeenCalledWith({ id: 9, profileCode: 'NCT-009', personalInfo: { fullName: 'Ngô Quang Hiếu' } })
 })
 
+const approvedRow = {
+  residentId: 9,
+  fullName: 'Ngô Quang Hiếu',
+  profileCode: 'NCT-009',
+  planId: 50,
+  status: 'PENDING_EFFECT',
+  approvedBy: 'Hoàng Thị Dung',
+  approvedAt: '2026-11-26T10:36:00Z',
+  effectiveFrom: '2026-11-27',
+  selfApproved: true,
+}
+
+it('Q451_tabDaDuyet_hienNguoiDuyetNgayApDungVaMoKeHoach', async () => {
+  api.on('GET', '/care-plan-reviews/queue', json(200, []))
+  api.on(
+    'GET',
+    '/care-plan-reviews/approved',
+    json(200, [
+      approvedRow,
+      { ...approvedRow, planId: 49, status: 'EFFECTIVE', selfApproved: false, effectiveFrom: '2026-11-26' },
+      { ...approvedRow, planId: 48, status: 'CANCELLED', selfApproved: false },
+    ]),
+  )
+  const onChoose = vi.fn()
+  render(<CarePlanQueue onChoose={onChoose} />)
+
+  fireEvent.click(await screen.findByRole('tab', { name: 'Đã duyệt (3)' }))
+  const table = screen.getByRole('table', { name: 'Kế hoạch đã duyệt' })
+  expect(within(table).getAllByRole('columnheader').slice(0, 4).map((heading) => heading.textContent))
+    .toEqual(['Người cao tuổi', 'Người duyệt', 'Duyệt lúc', 'Áp dụng từ'])
+  const [pending, effective, superseded] = within(table).getAllByRole('row', { name: /Ngô Quang Hiếu/ })
+  expect(within(pending).getByText('NCT-009')).toBeInTheDocument()
+  expect(within(pending).getByText('Hoàng Thị Dung')).toBeInTheDocument()
+  expect(within(pending).getByText('Tự duyệt')).toBeInTheDocument()
+  expect(within(pending).getByText('26/11/2026 17:36')).toBeInTheDocument()
+  expect(within(pending).getByText('27/11/2026')).toBeInTheDocument()
+  expect(within(pending).getByText('Từ ngày mai')).toBeInTheDocument()
+  expect(within(effective).getByText('Đang áp dụng')).toBeInTheDocument()
+  expect(within(superseded).queryByText(/Đang áp dụng|Từ ngày mai/)).not.toBeInTheDocument()
+  fireEvent.click(within(pending).getByRole('button', { name: 'Xem kế hoạch của Ngô Quang Hiếu' }))
+  expect(onChoose).toHaveBeenCalledWith({ id: 9, profileCode: 'NCT-009', personalInfo: { fullName: 'Ngô Quang Hiếu' } })
+})
+
+it('Q451_tabDaDuyet_phanTrangVaTroVeTrangDauKhiDoiTab', async () => {
+  api.on('GET', '/care-plan-reviews/queue', json(200, []))
+  api.on('GET', '/care-plan-reviews/approved', json(200, Array.from({ length: 12 }, (_, i) => ({
+    ...approvedRow,
+    planId: 100 - i,
+    fullName: `Người kiểm thử ${i + 1}`,
+  }))))
+  render(<CarePlanQueue onChoose={() => {}} />)
+  const approved = await screen.findByRole('tab', { name: 'Đã duyệt (12)' })
+  fireEvent.click(approved)
+  const table = screen.getByRole('table', { name: 'Kế hoạch đã duyệt' })
+  expect(within(table).getAllByRole('row')).toHaveLength(11)
+  expect(screen.getByText('Trang 1/2')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Trang sau' }))
+  expect(within(table).getAllByRole('row')).toHaveLength(3)
+  expect(screen.getByText('Người kiểm thử 12')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('tab', { name: 'Đang chờ duyệt (0)' }))
+  fireEvent.click(approved)
+  expect(screen.getByText('Trang 1/2')).toBeInTheDocument()
+})
+
+it('Q451_tabDaDuyetRong_hienThongBaoBayNgay', async () => {
+  api.on('GET', '/care-plan-reviews/queue', json(200, []))
+  api.on('GET', '/care-plan-reviews/approved', json(200, []))
+  render(<CarePlanQueue onChoose={() => {}} />)
+  fireEvent.click(await screen.findByRole('tab', { name: 'Đã duyệt (0)' }))
+  expect(screen.getByText('Chưa có kế hoạch nào được duyệt trong 7 ngày qua')).toBeInTheDocument()
+})
+
 it('PhanTrang_10DongMoiTrang_doiTabVeTrangDau', async () => {
   const many = Array.from({ length: 12 }, (_, i) => ({
     ...rows[0],

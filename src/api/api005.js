@@ -36,6 +36,9 @@ export const postCarePlansByIdCancel = (params) => request('POST', '/care-plans/
 /** Hàng chờ cần lập hoặc sửa kế hoạch theo phạm vi xem, chờ lâu nhất trước (Q-448) (FR-009, FR-059) */
 export const getCarePlanReviewsQueue = (params) => request('GET', '/care-plan-reviews/queue', params)
 
+/** Kế hoạch được duyệt trong 7 ngày qua theo phạm vi xem, mới nhất trước (Q-451) (FR-059) */
+export const getCarePlanReviewsApproved = (params) => request('GET', '/care-plan-reviews/approved', params)
+
 /** Yêu cầu xem xét kế hoạch Đang mở của một người cao tuổi (Q-448) (FR-058, FR-059) */
 export const getResidentsByResidentIdCarePlanReviews = (params) => request('GET', '/residents/{residentId}/care-plan-reviews', params)
 
