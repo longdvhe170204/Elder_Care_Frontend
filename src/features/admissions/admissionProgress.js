@@ -139,9 +139,9 @@ export const PHASES = [
         key: 'deposit',
         label: 'Đặt cọc',
         condition: 'ADM_C_DEPOSIT',
-        // Kế toán ghi thu ở Số dư, thu chi; mở với người cao tuổi này đã chọn sẵn (audit 2026-11-18)
-        page: ['balance', 'Xem tiền cọc', 'resident'],
-        minePage: 'Ghi thu tiền cọc',
+        // Kế toán ghi thu trong popup tại chỗ, chỉ sổ cọc (audit 2026-11-27, thay việc mở màn Số dư của audit 2026-11-18)
+        action: 'deposit',
+        doLabel: 'Ghi thu tiền cọc',
         mine: (ctx) => ctx.can('BALANCE_LEDGER', 'CREATE'),
         who: 'Kế toán',
       },
@@ -189,6 +189,8 @@ export function admissionProgress({
   canComplete,
   closed,
   healthDraft = false,
+  // Mã điều kiện web biết đã đạt dù backend chưa tính (ADM_C_DEPOSIT khi hợp đồng còn Chờ ký mà đã thu đủ cọc)
+  metConditions = [],
 }) {
   const lines = conditions?.conditions ?? []
   const conditionOf = conditionFinder(lines)
@@ -200,7 +202,8 @@ export function admissionProgress({
       if (closed) return 'closed'
       const line = conditionOf(step.condition)
       const extra = step.extra && conditionOf(step.extra)
-      const done = line && DONE_CONDITION.includes(line.status) && (!extra || DONE_CONDITION.includes(extra.status))
+      const met = (code, l) => metConditions.includes(code) || (l && DONE_CONDITION.includes(l.status))
+      const done = met(step.condition, line) && (!step.extra || met(step.extra, extra))
       return done ? 'done' : 'todo'
     }
     if (step.done(ctx)) return 'done'

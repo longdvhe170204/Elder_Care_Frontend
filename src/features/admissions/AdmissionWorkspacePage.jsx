@@ -29,6 +29,7 @@ import {
   OPINION_SOURCES,
   RESIDENCE_TYPES,
   labelOf,
+  money,
 } from './admissionLabels'
 import { ApplicationSheet, OpinionSheet } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
@@ -37,6 +38,8 @@ import { InitialHealthSheet } from '../residents/InitialHealthSheet'
 import { WishDraftSheet } from '../wishes/WishDraftSheet'
 import { admissionProgress } from './admissionProgress'
 import { bedText, roomTypeMismatch, useAllocatedBed } from './useAllocatedBed'
+import { useContractDepositStatus, useDepositCollected } from './useDepositCollected'
+import { DepositReceiptSheet } from '../balance/DepositReceiptSheet'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.3): một màn cho một lượt tiếp nhận, đi theo các
 // bước BF-01. Trạng thái từng bước lấy từ điều kiện tiếp nhận của 004 (FR-004; mã ADM_A → ADM_F);
@@ -143,6 +146,8 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   const [collapsed, setCollapsed] = useState([])
   // Giường đã phân bổ hiện ở bước Giường, lệch loại phòng với hợp đồng thì báo ở bước Giường và Hợp đồng (hướng 1, 2026-11-27)
   const allocated = useAllocatedBed(state.resident?.id, state.conditions)
+  const depositCollected = useDepositCollected(state.resident?.id, state.conditions)
+  const depositStatus = useContractDepositStatus(state.contract, state.conditions)
 
   if (state.loading) {
     return (
@@ -158,6 +163,16 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   const { application, conditions, resident, contract, contractsFailed } = state
   const mismatch = roomTypeMismatch(allocated, contract?.roomTypeId)
   const allocatedType = allocated.bed && allocated.roomTypeName(allocated.bed.roomTypeId)
+  // Dòng phụ bước Đặt cọc theo hợp đồng và sổ cọc (audit 2026-11-27)
+  const depositNote = !contract
+    ? null
+    : contract.noDepositRequired
+      ? 'Không yêu cầu đặt cọc'
+      : contract.depositAmount != null
+        ? `Cần ${money(contract.depositAmount)}${depositCollected != null ? ` · đã thu ${money(depositCollected)}` : ''}`
+        : null
+  // Sổ cọc mở khi hợp đồng Chờ ký (Q-225): trước đó chưa ghi thu được
+  const depositOpen = ['PENDING_SIGNATURE', 'ACTIVE'].includes(contract?.status)
   const info = resident.personalInfo ?? {}
   const name = info.fullName ?? `Người cao tuổi mã ${resident.id}`
   // Lượt đã đóng: ý kiến hiện hành lấy từ lượt đăng ký (api-004 AdmissionApplication.admissionOpinion, hiện hành trước)
@@ -169,6 +184,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
     opinion,
     residentCommands: resident.allowedCommands ?? [],
     healthDraft: state.healthDraft,
+    metConditions: ['SATISFIED', 'NOT_REQUIRED'].includes(depositStatus) ? ['ADM_C_DEPOSIT'] : [],
     hasContract: !!contract,
     can,
     canComplete,
@@ -230,6 +246,10 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
     // Chỉ khi điều kiện giường Chưa đạt: đã có phân bổ (Đạt) hoặc bán trú (Không áp dụng) thì không có nút
     if (step.action === 'bed' && conditionOf(step.condition)?.status === 'NOT_MET')
       return button(step.doLabel, () => setSheet({ kind: 'bed' }))
+    if (step.action === 'deposit') {
+      if (!depositOpen) return <span className="type-body-sm text-muted-foreground">Chờ gửi ký hợp đồng</span>
+      return button(step.doLabel, () => setSheet({ kind: 'deposit' }))
+    }
     if (step.action === 'contract') {
       if (contractsFailed) return <span className="type-caption text-destructive">Không tải được hợp đồng</span>
       if (contract) return button('Mở hợp đồng', openerOf(step))
@@ -442,6 +462,9 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                                 {bedText(allocated.bed.location) + (allocatedType ? ` (${allocatedType})` : '')}
                               </span>
                             )}
+                            {step.key === 'deposit' && depositNote && (
+                              <span className="type-caption text-muted-foreground">{depositNote}</span>
+                            )}
                             {(step.key === 'bed' || step.key === 'contract') && mismatch && (
                               <span className="type-caption text-warning-foreground">{mismatch}</span>
                             )}
@@ -491,6 +514,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           !!sheet &&
           ![
             'bed',
+            'deposit',
             'new-contract',
             'edit-contract',
             'edit-application',
@@ -567,6 +591,15 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           onClose={() => changed()}
           onSaved={() => changed('Đã phân bổ giường')}
           onOpenWaitingList={() => onNavigate('waiting-list')}
+        />
+      )}
+      {sheet?.kind === 'deposit' && (
+        <DepositReceiptSheet
+          residentId={resident.id}
+          residentName={name}
+          required={contract?.noDepositRequired ? 0 : contract?.depositAmount}
+          onClose={() => changed()}
+          onDone={(message) => changed(message)}
         />
       )}
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}
