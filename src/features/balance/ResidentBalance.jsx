@@ -218,6 +218,7 @@ export function ResidentBalance({ residentId, fullName }) {
               residentId={residentId}
               transactions={state.transactions ?? []}
               representative={state.balance?.representative ?? null}
+              balance={state.balance ?? null}
               onDone={done}
             />
           )}

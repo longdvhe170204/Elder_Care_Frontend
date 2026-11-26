@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { PermissionsProvider } from '@/common/permissions/permissions'
 import { ResidentDetail } from './ResidentDetail'
 
 // 001 T022: chi tiết hồ sơ và cập nhật thông tin cá nhân (US1 #6 → #9; FR-006, FR-007).
@@ -51,6 +52,58 @@ function routes({ view = profile(), linked = [] } = {}) {
 }
 
 describe('ResidentDetail', () => {
+  it('FR_050a_hoSo_baSiGhiDauNguyKichKhiChuaCoSuCo', async () => {
+    routes({ view: profile({ status: 'IN_RESIDENCE' }) })
+    api.on('GET', '/me/permissions', json(200, [{ function: 'CRITICAL_SIGN', operation: 'CREATE' }]))
+    api.on('GET', '/alerts', json(200, []))
+    render(
+      <PermissionsProvider>
+        <Sheet open>
+          <SheetContent>
+            <ResidentDetail residentId={7} onChanged={() => {}} Title={SheetTitle} Description={SheetDescription} />
+          </SheetContent>
+        </Sheet>
+      </PermissionsProvider>,
+    )
+    expect(await screen.findByRole('button', { name: 'Ghi dấu nguy kịch' })).toBeTruthy()
+  })
+
+  it('FR_050a_hoSo_nutGhiDauNguyKichNamDuoiCacPhanCuaHoSo_tongDoNhe', async () => {
+    routes({ view: profile({ status: 'IN_RESIDENCE' }) })
+    api.on('GET', '/me/permissions', json(200, [{ function: 'CRITICAL_SIGN', operation: 'CREATE' }]))
+    api.on('GET', '/alerts', json(200, []))
+    render(
+      <PermissionsProvider>
+        <Sheet open>
+          <SheetContent>
+            <ResidentDetail residentId={7} onChanged={() => {}} Title={SheetTitle} Description={SheetDescription} />
+          </SheetContent>
+        </Sheet>
+      </PermissionsProvider>,
+    )
+    const flag = await screen.findByRole('button', { name: 'Ghi dấu nguy kịch' })
+    const parts = screen.getByRole('heading', { name: 'Các phần của hồ sơ' })
+    expect(parts.compareDocumentPosition(flag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(flag.className).toMatch(/text-destructive/)
+  })
+
+  it('FR_050a_hoSoDaKetThuc_khongHienNutGhiDauNguyKich', async () => {
+    routes({ view: profile({ status: 'RESIDENCY_ENDED' }) })
+    api.on('GET', '/me/permissions', json(200, [{ function: 'CRITICAL_SIGN', operation: 'CREATE' }]))
+    api.on('GET', '/alerts', json(200, []))
+    render(
+      <PermissionsProvider>
+        <Sheet open>
+          <SheetContent>
+            <ResidentDetail residentId={7} onChanged={() => {}} Title={SheetTitle} Description={SheetDescription} />
+          </SheetContent>
+        </Sheet>
+      </PermissionsProvider>,
+    )
+    await screen.findByText('Nguyễn Văn An')
+    expect(screen.queryByRole('button', { name: 'Ghi dấu nguy kịch' })).toBeNull()
+  })
+
   it('hiện thông tin hồ sơ và chuỗi hồ sơ trước', async () => {
     routes({ linked: [{ id: 3, profileCode: 'NCT-2025-000003', status: 'RESIDENCY_ENDED', viewable: true }] })
 
@@ -173,7 +226,11 @@ describe('ResidentDetail', () => {
 
   it('001 T033: nút Sức khỏe mở khung riêng chồng lên hồ sơ, nạp hồ sơ ban đầu và mục sức khỏe (DESIGN.md 5)', async () => {
     routes()
-    api.on('GET', '/residents/7/initial-health-record', json(200, { id: 5, confirmed: false, corrected: false }, { ETag: '"1"' }))
+    api.on(
+      'GET',
+      '/residents/7/initial-health-record',
+      json(200, { id: 5, confirmed: false, corrected: false }, { ETag: '"1"' }),
+    )
     api.on('GET', '/residents/7/health-items', json(200, []))
 
     open()

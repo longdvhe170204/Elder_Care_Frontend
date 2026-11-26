@@ -187,3 +187,32 @@ it('FR_026a_nghiTheoNgayChonTangTuDanhSach_vaLapThayChonNguoi', async () => {
     reason: '[Việc gia đình]',
   })
 })
+
+// Demo 2026-11-25: duyệt đổi ca cần chọn người phụ trách mới thì chọn theo tên thay cho ô nhập mã
+it('FR_021_chonNguoiPhuTrachMoiTheoTen', async () => {
+  api.on(
+    'GET',
+    '/staff',
+    json(200, [{ id: 5, fullName: 'Lê Thị Phụ Trách', position: 'Điều dưỡng', status: 'WORKING' }]),
+  )
+  api.on(
+    'GET',
+    '/shift-swaps',
+    json(200, [{ ...SWAP, status: 'PENDING_APPROVAL', allowedCommands: ['approve', 'reject'] }]),
+  )
+  api.on(
+    'GET',
+    '/shift-swaps/7/checks',
+    json(200, { ...CHECKS, leadAfterSwap: { shiftX: { before: 1, after: null, requiresChoice: true } } }),
+  )
+  api.on('POST', '/shift-swaps/7/approve', json(200, { notTransferredAssignments: [] }))
+  render(<ShiftSwapsPage />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Duyệt' }))
+  const form = await screen.findByRole('form', { name: 'Duyệt yêu cầu #7' })
+  await within(form).findByRole('option', { name: 'Lê Thị Phụ Trách (Điều dưỡng)' })
+  expect(within(form).queryByLabelText('Mã người phụ trách mới của ca X')).toBeNull()
+  fireEvent.change(within(form).getByLabelText('Người phụ trách mới của ca X'), { target: { value: '5' } })
+  fireEvent.click(within(form).getByRole('button', { name: 'Duyệt' }))
+  await waitFor(() => expect(api.calls('POST', '/shift-swaps/7/approve')).toHaveLength(1))
+  expect(JSON.parse(api.calls('POST', '/shift-swaps/7/approve')[0][1].body).newLeadXId).toBe(5)
+})

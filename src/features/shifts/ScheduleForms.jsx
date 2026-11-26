@@ -7,9 +7,11 @@ import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { Choice, WarningConfirmation } from './ShiftForm'
+import { PlaceField } from './PlaceField'
 import { SCOPES, versionHeader } from './shiftLabels'
 
-export function ScheduleForm({ month, onDone }) {
+// places: tên tầng, khu từ ShiftsPage để chọn phạm vi theo tên (demo 2026-11-25)
+export function ScheduleForm({ month, places = {}, onDone }) {
   const [scope, setScope] = useState('FLOOR')
   const [id, setId] = useState('')
   const [failure, setFailure] = useState(null)
@@ -33,7 +35,15 @@ export function ScheduleForm({ month, onDone }) {
   return (
     <form className="flex flex-col gap-4" onSubmit={submit}>
       <ProblemAlert problem={failure} />
-      <Choice id="schedule-scope" label="Phạm vi lịch" value={scope} onChange={(e) => setScope(e.target.value)}>
+      <Choice
+        id="schedule-scope"
+        label="Phạm vi lịch"
+        value={scope}
+        onChange={(e) => {
+          setScope(e.target.value)
+          setId('')
+        }}
+      >
         {Object.entries(SCOPES).map(([value, label]) => (
           <option key={value} value={value}>
             {label}
@@ -41,17 +51,15 @@ export function ScheduleForm({ month, onDone }) {
         ))}
       </Choice>
       {scope !== 'FACILITY' && (
-        <Field>
-          <FieldLabel htmlFor="schedule-scope-id">Mã tầng / khu vực</FieldLabel>
-          <Input
-            id="schedule-scope-id"
-            type="number"
-            min="1"
-            required
-            value={id}
-            onChange={(e) => setId(e.target.value)}
-          />
-        </Field>
+        <PlaceField
+          key={scope}
+          id="schedule-scope-id"
+          label={SCOPES[scope]}
+          fallbackLabel="Mã tầng / khu vực"
+          groups={[{ label: SCOPES[scope], items: places[scope] ?? {} }]}
+          value={id}
+          onChange={setId}
+        />
       )}
       <Button type="submit" disabled={busy}>
         {busy ? 'Đang lập…' : 'Lập lịch nháp'}

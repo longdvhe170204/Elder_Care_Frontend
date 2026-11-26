@@ -27,12 +27,13 @@ const FILTERS = [
   ['DONE', 'Đã xong', ['ENDED', 'TERMINATED', 'CANCELLED']],
 ]
 
-export function ContractsPage() {
+// contractId: mở từ thông báo nhắc hợp đồng sắp hết hạn, quá hạn (demo 2026-11-25), chọn sẵn bộ lọc và mở chi tiết
+export function ContractsPage({ contractId = null } = {}) {
   const { can } = usePermissions()
   const [filter, setFilter] = useState('DRAFT')
   const [contracts, setContracts] = useState(null)
   const [failure, setFailure] = useState(null)
-  const [opened, setOpened] = useState(null)
+  const [opened, setOpened] = useState(contractId)
   const [sheet, setSheet] = useState(null)
   const [announcement, setAnnouncement] = useState('')
   const [names, setNames] = useState({})
@@ -54,13 +55,15 @@ export function ContractsPage() {
         .then(({ data }) => {
           setContracts(data)
           setFailure(null)
+          const target = contractId && data.find((c) => c.id === contractId)
+          if (target) setFilter(FILTERS.find(([, , statuses]) => statuses.includes(target.status))[0])
           loadNames(data)
         })
         .catch((e) => {
           setContracts([])
           setFailure(problemOf(e))
         }),
-    [loadNames],
+    [loadNames, contractId],
   )
 
   useEffect(() => {

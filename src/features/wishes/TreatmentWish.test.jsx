@@ -23,9 +23,15 @@ const ACTIVE = {
     { name: 'Bệnh viện X', address: '12 Lê Lợi' },
     { name: 'Bệnh viện Y', address: '5 Hai Bà Trưng' },
   ],
-  healthInsurance: { initialRegistrationPlace: 'Trạm y tế P1', cardNumber: 'GD4797912345678', cardExpiry: '2027-06-30' },
+  healthInsurance: {
+    initialRegistrationPlace: 'Trạm y tế P1',
+    cardNumber: 'GD4797912345678',
+    cardExpiry: '2027-06-30',
+  },
   askFamilyFirst: true,
-  notifyFamilyMembers: [{ familyMemberId: 31, fullName: 'Nguyễn Thị Con', relationship: 'CHILD', phoneNumber: '0912345678' }],
+  notifyFamilyMembers: [
+    { familyMemberId: 31, fullName: 'Nguyễn Thị Con', relationship: 'CHILD', phoneNumber: '0912345678' },
+  ],
   accompaniedBy: 'FACILITY_STAFF',
   note: 'Dị ứng penicillin',
   respondent: { type: 'RESIDENT', familyMemberId: null },
@@ -58,6 +64,31 @@ function routes({ active = ACTIVE, history = [ACTIVE, OLD], forbidden = false } 
     '/residents/5/treatment-wishes',
     forbidden ? problem(403, 'PERMISSION_DENIED') : json(200, { active, history, hiddenFields: [] }),
   )
+  // Demo 2026-11-25: Bác sĩ, người thân chọn theo tên thay cho ô nhập mã
+  api.on('GET', '/staff', json(200, [{ id: 2, accountId: 8, fullName: 'Phạm Văn Bác', position: 'Bác sĩ' }]))
+  api.on(
+    'GET',
+    '/residents/5/family-contacts',
+    json(200, [
+      { familyMemberId: 31, fullName: 'Trần Văn Minh' },
+      { familyMemberId: 32, fullName: 'Đỗ Thị Lan' },
+      { familyMemberId: 41, fullName: 'Lê Thị Hoa' },
+      { familyMemberId: 99, fullName: 'Ngô Văn Khác' },
+    ]),
+  )
+}
+
+// Chọn người thân theo mã khi danh sách đã tải (ô chọn theo tên)
+async function pickMember(label, id) {
+  const select = screen.getByLabelText(label)
+  await waitFor(() =>
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.value),
+    ).toContain(String(id)),
+  )
+  fireEvent.change(select, { target: { value: String(id) } })
 }
 
 function open(props = {}) {
@@ -199,12 +230,9 @@ describe('TreatmentWish', () => {
     fireEvent.change(screen.getByLabelText('Số thẻ'), { target: { value: 'GD4797912345678' } })
     fireEvent.change(screen.getByLabelText('Hạn thẻ'), { target: { value: '2027-06-30' } })
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hỏi gia đình trước khi chuyển viện không khẩn cấp' }))
-    fireEvent.change(screen.getByLabelText('Mã người thân cần báo'), { target: { value: 'abc' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
-    expect(await screen.findByText('Mã người thân là số nguyên dương')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Mã người thân cần báo'), { target: { value: '31' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
-    fireEvent.change(screen.getByLabelText('Mã người thân nêu ý kiến'), { target: { value: '32' } })
+    expect(screen.queryByLabelText('Mã người thân cần báo')).not.toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Báo Trần Văn Minh' }))
+    await pickMember('Người thân nêu ý kiến', 32)
     fireEvent.change(screen.getByLabelText('Nội dung ý kiến'), { target: { value: 'Muốn bệnh viện Z' } })
     fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
@@ -244,8 +272,7 @@ describe('TreatmentWish', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
     fillMinimum()
-    fireEvent.change(screen.getByLabelText('Mã người thân cần báo'), { target: { value: '99' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm mã' }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'Báo Ngô Văn Khác' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
     expect(await screen.findByText(/Người cần báo phải là người thân có quan hệ Hiệu lực/)).toBeInTheDocument()

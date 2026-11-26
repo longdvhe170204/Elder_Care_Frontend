@@ -6,12 +6,9 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { AllergyNote } from '@/common/CareNotes'
-import { ProblemAlert } from '@/common/ProblemAlert'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
-import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
-import { claimDose, releaseDose } from './doseRound'
-import { hhmm, POSTPONE } from './doseRoundView'
+import { POSTPONE } from './doseRoundView'
 import { DoseTags } from './DoseTags'
 import { isNumber, measurementLabel, measurementUnit } from './measurements'
 import { minutes, windowOf } from './medicationTime'
@@ -20,9 +17,78 @@ import { minutes, windowOf } from './medicationTime'
 // Mỗi liều chọn kết quả riêng và lưu thành bản ghi riêng; mỗi liều chỉ xác nhận một lần (BR-M07-12).
 // Bản mẫu: kiểm tra trên màn chỉ để hiện lỗi tại ô; kiểm tra thật (giấy phép, phân công, trực tuyến) do backend.
 
-const RESULTS = ['Đã dùng', POSTPONE, 'Từ chối', 'Không thực hiện']
+const RESULTS = ['Đã dùng', POSTPONE, 'Tạm giữ 1 liều', 'Từ chối', 'Không thực hiện']
 const OPEN = ['Đến giờ', 'Trễ']
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+
+const CLINICAL_RANGES = {
+  BLOOD_PRESSURE: { min: 90, max: 160, unit: 'mmHg', name: 'Huyết áp tâm thu' },
+  PULSE: { min: 55, max: 105, unit: 'nhịp/phút', name: 'Nhịp tim' },
+  BLOOD_SUGAR: { min: 4.0, max: 11.1, unit: 'mmol/L', name: 'Đường huyết' },
+  SPO2: { min: 92, max: 100, unit: '%', name: 'SpO2' },
+  TEMPERATURE: { min: 36.0, max: 37.8, unit: '°C', name: 'Thân nhiệt' },
+}
+
+const REASON_PRESETS = {
+  'Tạm giữ 1 liều': [
+    'Chỉ số sinh tồn bất thường trước dùng thuốc',
+    'Người cao tuổi nôn trớ sau ăn',
+    'Người cao tuổi lơ mơ, khó nuốt',
+  ],
+  'Từ chối': [
+    'Người cao tuổi mệt không muốn uống',
+    'Người cao tuổi sợ thuốc / kêu đắng',
+    'Gia đình yêu cầu tạm dừng chờ hỏi bác sĩ',
+  ],
+  [POSTPONE]: [
+    'Người cao tuổi đang ngủ say',
+    'Đang đi khám ngoại viện',
+    'Chờ hoàn thành thủ thuật y tế',
+  ],
+  'Không thực hiện': [
+    'Hết thuốc chưa kịp nhận',
+    'Người cao tuổi đã xuất viện',
+    'Người cao tuổi chuyển viện cấp cứu',
+  ],
+}
+
+function checkMeasurementWarnings(dose, measure = {}) {
+  const warnings = []
+  const conditions = dose.measurementConditions ?? []
+  for (const code of dose.measurements ?? []) {
+    const rawVal = measure[code]
+    if (rawVal == null || rawVal === '' || !isNumber(rawVal)) continue
+    const val = Number(rawVal)
+    const custom = conditions.find((c) => c.metric === code)
+    if (custom) {
+      if ((custom.minValue != null && val < custom.minValue) || (custom.maxValue != null && val > custom.maxValue)) {
+        warnings.push({
+          code,
+          name: measurementLabel(code),
+          val,
+          unit: measurementUnit(code),
+          min: custom.minValue,
+          max: custom.maxValue,
+          instruction: custom.holdInstruction || 'Chỉ số bất thường so với đơn chỉ định.',
+        })
+      }
+    } else {
+      const std = CLINICAL_RANGES[code]
+      if (std && (val < std.min || val > std.max)) {
+        warnings.push({
+          code,
+          name: std.name || measurementLabel(code),
+          val,
+          unit: std.unit || measurementUnit(code),
+          min: std.min,
+          max: std.max,
+          instruction: 'Chỉ số sinh tồn ngoài khoảng an toàn lâm sàng thông thường.',
+        })
+      }
+    }
+  }
+  return warnings
+}
 
 function errorsOf(dose, entry, now) {
   if (!entry.result) return {}
@@ -38,53 +104,11 @@ function errorsOf(dose, entry, now) {
         ? 'Nhập lý do người cao tuổi từ chối'
         : entry.result === POSTPONE
           ? 'Nhập lý do hoãn có chủ đích'
-          : 'Nhập lý do không thực hiện'
+          : entry.result === 'Tạm giữ 1 liều'
+            ? 'Nhập lý do tạm giữ liều (chỉ số bất thường)'
+            : 'Nhập lý do không thực hiện'
   }
   return e
-}
-
-// Nhận liều (BR-M07-26): người nhận giữ liều tới khi hết hạn (15 phút) hoặc bỏ nhận; người khác chưa xác nhận được.
-function ClaimBar({ dose }) {
-  const [claimUntil, setClaimUntil] = useState(null)
-  const [problem, setProblem] = useState(null)
-  const [busy, setBusy] = useState(false)
-  async function run(action) {
-    setBusy(true)
-    setProblem(null)
-    try {
-      const { data } = await action(dose.id)
-      setClaimUntil(data?.claimExpiresAt ? hhmm(data.claimExpiresAt) : null)
-    } catch (error) {
-      setProblem(problemOf(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-  const others = !claimUntil && dose.claimedBy && dose.claimExpiresAt
-  return (
-    <div className="flex flex-col gap-1.5">
-      <ProblemAlert problem={problem} />
-      <div className="flex flex-wrap items-center gap-2">
-        {claimUntil ? (
-          <>
-            <span className="type-caption text-muted-foreground tabular-nums">Bạn đã nhận liều đến {claimUntil}</span>
-            <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => run(releaseDose)}>
-              Bỏ nhận
-            </Button>
-          </>
-        ) : (
-          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => run(claimDose)}>
-            Nhận liều
-          </Button>
-        )}
-        {others && (
-          <span className="type-caption text-muted-foreground tabular-nums">
-            Tài khoản mã {dose.claimedBy} đang nhận liều đến {hhmm(dose.claimExpiresAt)}
-          </span>
-        )}
-      </div>
-    </div>
-  )
 }
 
 function DoseForm({ dose, entry, onChange, errors }) {
@@ -92,30 +116,30 @@ function DoseForm({ dose, entry, onChange, errors }) {
     entry.result === 'Đã dùng' &&
     HHMM.test(entry.time) &&
     minutes(entry.time) > minutes(dose.to ?? windowOf(dose.time).to)
+  const warnings = checkMeasurementWarnings(dose, entry.measure)
   return (
-    <fieldset className="flex flex-col gap-3 rounded-xl border p-4">
+    <fieldset className="flex flex-col gap-3.5 rounded-2xl border border-slate-200/90 bg-white p-4 shadow-xs dark:border-slate-800 dark:bg-slate-900">
       <legend className="sr-only">
         {dose.drug}, {dose.dose}
       </legend>
-      <div className="flex flex-col gap-1.5">
-        <span className="type-card-title">
-          {dose.drug}, {dose.dose}, {dose.route}
+      <div className="flex flex-col gap-1.5 rounded-xl border border-slate-200/80 bg-slate-50/80 p-3 dark:border-slate-800 dark:bg-slate-800/40">
+        <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+          {dose.drug} — <span className="text-[#24496f] dark:text-sky-300">{dose.dose}</span> ({dose.route})
         </span>
         <DoseTags dose={dose} />
         {dose.postponed && (
-          <span className="type-caption text-muted-foreground">Đã hoãn: {dose.postponedReason}. Hoãn không đổi mốc Bỏ lỡ.</span>
+          <span className="type-caption text-amber-700 font-medium">Đã hoãn: {dose.postponedReason}. Hoãn không đổi mốc Bỏ lỡ.</span>
         )}
       </div>
-      <ClaimBar dose={dose} />
       <ToggleGroup
         variant="outline"
         value={entry.result ? [entry.result] : []}
         onValueChange={(n) => onChange({ result: n[0] ?? '' })}
-        className="grid w-full grid-cols-2 sm:grid-cols-4"
+        className="grid w-full grid-cols-2"
         aria-label={`Kết quả liều ${dose.drug}`}
       >
         {RESULTS.map((r) => (
-          <ToggleGroupItem key={r} value={r} className="h-11 px-2">
+          <ToggleGroupItem key={r} value={r} className="h-auto min-h-11 whitespace-normal px-2 py-1.5 text-center leading-tight">
             {r}
           </ToggleGroupItem>
         ))}
@@ -164,10 +188,10 @@ function DoseForm({ dose, entry, onChange, errors }) {
           {(dose.measurements ?? []).length > 0 && (
             <Field data-invalid={(errors.measure && true) || undefined}>
               <FieldLabel>Chỉ số đo trước khi dùng</FieldLabel>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <div className="flex flex-col gap-2">
                 {dose.measurements.map((code) => (
-                  <div key={code} className="flex items-center gap-2">
-                    <label htmlFor={`measure-${dose.id}-${code}`} className="w-36 shrink-0 type-body-sm">
+                  <div key={code} className="flex flex-wrap items-center gap-2">
+                    <label htmlFor={`measure-${dose.id}-${code}`} className="min-w-36 type-body-sm">
                       {measurementLabel(code)}
                     </label>
                     <Input
@@ -176,7 +200,7 @@ function DoseForm({ dose, entry, onChange, errors }) {
                       value={entry.measure?.[code] ?? ''}
                       onChange={(e) => onChange({ measure: { ...entry.measure, [code]: e.target.value } })}
                       aria-invalid={(errors.measure && true) || undefined}
-                      className="h-11 w-24 tabular-nums"
+                      className="h-11 w-28 shrink-0 tabular-nums"
                     />
                     <span className="type-caption text-muted-foreground">{measurementUnit(code)}</span>
                   </div>
@@ -191,13 +215,72 @@ function DoseForm({ dose, entry, onChange, errors }) {
               )}
             </Field>
           )}
+          {warnings.length > 0 && (
+            <div className="flex flex-col gap-2">
+              {warnings.map((w) => (
+                <div
+                  key={w.code}
+                  className="flex flex-col gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="text-sm">⚠️</span>
+                    <div className="flex flex-col gap-0.5">
+                      <span className="font-bold">
+                        Cảnh báo an toàn: {w.name} ({w.val} {w.unit}) bất thường
+                      </span>
+                      <span className="text-[11px] leading-relaxed">
+                        Khoảng an toàn: {w.min != null ? w.min : '—'} - {w.max != null ? w.max : '—'} {w.unit}. {w.instruction}
+                      </span>
+                    </div>
+                  </div>
+                  {entry.result !== 'Tạm giữ 1 liều' && (
+                    <div className="flex justify-end pt-1">
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold shadow-xs"
+                        onClick={() =>
+                          onChange({
+                            result: 'Tạm giữ 1 liều',
+                            reason: `Chỉ số ${w.name} bất thường: ${w.val} ${w.unit} (ngưỡng an toàn ${w.min ?? ''}-${w.max ?? ''} ${w.unit})`,
+                          })
+                        }
+                      >
+                        Chọn "Tạm giữ 1 liều" ngay
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
           <Field>
-            <FieldLabel htmlFor={`reaction-${dose.id}`}>Phản ứng sau dùng</FieldLabel>
+            <FieldLabel htmlFor={`incident-${dose.id}`}>Phân loại sự cố / phản ứng (nếu có)</FieldLabel>
+            <select
+              id={`incident-${dose.id}`}
+              value={entry.incidentType ?? ''}
+              onChange={(e) => onChange({ incidentType: e.target.value })}
+              className="h-10 rounded-md border bg-background px-3 text-sm"
+            >
+              <option value="">Không có sự cố</option>
+              <option value="Phản ứng bất lợi">Phản ứng bất lợi</option>
+              <option value="Nhầm thuốc">Nhầm thuốc</option>
+              <option value="Nhầm liều">Nhầm liều</option>
+              <option value="Nhầm thời điểm">Nhầm thời điểm</option>
+              <option value="Khác">Sự cố khác</option>
+            </select>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor={`reaction-${dose.id}`}>Phản ứng sau dùng / Chi tiết sự cố</FieldLabel>
             <Textarea
               id={`reaction-${dose.id}`}
               rows={2}
               value={entry.reaction}
-              onChange={(e) => onChange({ reaction: e.target.value })}
+              onChange={(e) =>
+                onChange({
+                  reaction: entry.incidentType && !e.target.value.startsWith('[') ? e.target.value : e.target.value,
+                })
+              }
             />
             <FieldDescription>
               Không bắt buộc. Có ghi phản ứng thì hệ thống tạo cảnh báo cho người phụ trách.
@@ -206,24 +289,42 @@ function DoseForm({ dose, entry, onChange, errors }) {
         </>
       )}
 
-      {(entry.result === 'Từ chối' || entry.result === 'Không thực hiện' || entry.result === POSTPONE) && (
-        <Field data-invalid={(errors.reason && true) || undefined}>
-          <FieldLabel htmlFor={`reason-${dose.id}`}>Lý do</FieldLabel>
-          <Textarea
-            id={`reason-${dose.id}`}
-            rows={2}
-            value={entry.reason}
-            onChange={(e) => onChange({ reason: e.target.value })}
-            aria-invalid={(errors.reason && true) || undefined}
-          />
-          {errors.reason && <FieldError>{errors.reason}</FieldError>}
-          {entry.result === 'Từ chối' && dose.refusedBefore && (
-            <FieldDescription>
-              Lần trước người cao tuổi cũng từ chối thuốc này; ghi lần này thì hệ thống tạo cảnh báo.
-            </FieldDescription>
-          )}
-        </Field>
-      )}
+      {(entry.result === 'Từ chối' ||
+        entry.result === 'Không thực hiện' ||
+        entry.result === POSTPONE ||
+        entry.result === 'Tạm giữ 1 liều') && (
+          <Field data-invalid={(errors.reason && true) || undefined}>
+            <FieldLabel htmlFor={`reason-${dose.id}`}>Lý do</FieldLabel>
+            {REASON_PRESETS[entry.result] && (
+              <div className="flex flex-wrap items-center gap-1.5 pb-1">
+                <span className="text-[11px] text-muted-foreground font-medium">Gợi ý nhanh:</span>
+                {REASON_PRESETS[entry.result].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => onChange({ reason: preset })}
+                    className="rounded-full border border-slate-200 bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-700 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            )}
+            <Textarea
+              id={`reason-${dose.id}`}
+              rows={2}
+              value={entry.reason}
+              onChange={(e) => onChange({ reason: e.target.value })}
+              aria-invalid={(errors.reason && true) || undefined}
+            />
+            {errors.reason && <FieldError>{errors.reason}</FieldError>}
+            {entry.result === 'Từ chối' && dose.refusedBefore && (
+              <FieldDescription>
+                Lần trước người cao tuổi cũng từ chối thuốc này; ghi lần này thì hệ thống tạo cảnh báo.
+              </FieldDescription>
+            )}
+          </Field>
+        )}
     </fieldset>
   )
 }
@@ -260,7 +361,7 @@ function SheetBody({ group, now, onSave }) {
           <div className="flex flex-col gap-0.5">
             <SheetTitle className="type-title">{r.name}</SheetTitle>
             <SheetDescription className="tabular-nums">
-              Phòng {r.room}, giờ {group.time}, cửa sổ {group.doses[0].from ?? windowOf(group.time).from} →{' '}
+              {r.room === '—' ? 'Chưa có phòng' : /^phòng\b/i.test(r.room) ? r.room : `Phòng ${r.room}`}, giờ {group.time}, cửa sổ {group.doses[0].from ?? windowOf(group.time).from} →{' '}
               {group.doses[0].to ?? windowOf(group.time).to}
             </SheetDescription>
           </div>

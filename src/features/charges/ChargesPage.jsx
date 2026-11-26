@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getCostsPeriods, getCostsStatements } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -23,9 +23,19 @@ import { PurchaseRequests } from './PurchaseRequests'
 import { ManualCostForm } from './ManualCostForm'
 import { AccountingExport } from './AccountingExport'
 import { controlClass, money, periodLabel, STATEMENT_STATUS } from './chargeLabels'
+import { residentLabel, residentMatches, useResidentDirectory } from './useResidentDirectory'
 
 // 010 T019: chỉ đọc dữ liệu thật qua client sinh; không lập sẵn bảng, không tự chọn khoản.
-export function ChargesPage({ role }) {
+// residentId, workspace, until (demo 2026-11-26): mở từ điều kiện (a) của Kết thúc lưu trú, vào thẳng Gom chi phí của người
+// đó với khoảng ngày tự tính (BillingSources preset)
+// statementId (demo 2026-11-26): mở từ nút Xử lý của thông báo bảng chi phí, hiện ngay bảng đó
+export function ChargesPage({
+  role,
+  residentId = null,
+  workspace: initialWorkspace = 'statements',
+  until = null,
+  statementId = null,
+}) {
   const { status, can } = usePermissions()
   const canView = can('COST_ADJUSTMENT', 'VIEW')
   const [periods, setPeriods] = useState(null)
@@ -33,13 +43,15 @@ export function ChargesPage({ role }) {
   const [rows, setRows] = useState(null)
   const [filter, setFilter] = useState('ALL')
   const [search, setSearch] = useState('')
-  const [opened, setOpened] = useState(null)
+  const residents = useResidentDirectory()
+  const [opened, setOpened] = useState(statementId)
   const [failure, setFailure] = useState(null)
   const [denied, setDenied] = useState(false)
   const [revision, setRevision] = useState(0)
   const [periodRevision, setPeriodRevision] = useState(0)
   const [announcement, setAnnouncement] = useState('')
-  const [workspace, setWorkspace] = useState('statements')
+  const [workspace, setWorkspace] = useState(initialWorkspace)
+  const preset = useMemo(() => (residentId && until ? { residentId, until } : null), [residentId, until])
   const deny = useCallback(() => {
     setDenied(true)
     setPeriods(null)
@@ -94,8 +106,7 @@ export function ChargesPage({ role }) {
 
   if (denied || (status === 'ready' && !canView) || status === 'error') return <PermissionDeniedState label="Chi phí" />
   const visible = (rows ?? []).filter(
-    (row) =>
-      (filter === 'ALL' || row.status === filter) && (!search.trim() || String(row.residentId).includes(search.trim())),
+    (row) => (filter === 'ALL' || row.status === filter) && residentMatches(residents, row.residentId, search),
   )
   function changed(message) {
     setAnnouncement(message)
@@ -119,7 +130,7 @@ export function ChargesPage({ role }) {
         <PageHeader
           title={
             workspace === 'sources'
-              ? 'Lập khoản từ nguồn'
+              ? 'Gom chi phí phát sinh'
               : workspace === 'manual'
                 ? 'Lập khoản nhập tay'
                 : 'Biến động sau chốt'
@@ -129,7 +140,7 @@ export function ChargesPage({ role }) {
           Về bảng chi phí
         </Button>
         {workspace === 'sources' ? (
-          <BillingSources onChanged={changed} />
+          <BillingSources onChanged={changed} preset={preset} />
         ) : workspace === 'manual' ? (
           <ManualCostForm onCreated={() => changed('Đã lập khoản nhập tay nháp.')} />
         ) : (
@@ -158,7 +169,7 @@ export function ChargesPage({ role }) {
       )}
       {can('COST_ADJUSTMENT', 'CREATE') && (
         <div className="flex gap-3">
-          <Button onClick={() => setWorkspace('sources')}>Lập khoản từ nguồn</Button>
+          <Button onClick={() => setWorkspace('sources')}>Gom chi phí phát sinh</Button>
           <Button variant="outline" onClick={() => setWorkspace('manual')}>
             Lập khoản nhập tay
           </Button>
@@ -191,7 +202,7 @@ export function ChargesPage({ role }) {
             </select>
           </Field>
           <Field>
-            <FieldLabel htmlFor="charge-resident">Tìm theo mã người cao tuổi</FieldLabel>
+            <FieldLabel htmlFor="charge-resident">Tìm theo tên, mã hồ sơ</FieldLabel>
             <Input
               id="charge-resident"
               inputMode="numeric"
@@ -269,7 +280,9 @@ export function ChargesPage({ role }) {
                           >
                             Bảng #{row.id}
                           </Button>
-                          <p className="type-body-sm text-muted-foreground">Người cao tuổi mã {row.residentId}</p>
+                          <p className="type-body-sm text-muted-foreground">
+                            {residentLabel(residents, row.residentId)}
+                          </p>
                         </TableCell>
                         <TableCell>
                           {row.statementType === 'REGULAR' ? 'Bảng thường' : 'Bảng bổ sung'}

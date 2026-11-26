@@ -25,6 +25,7 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import {
   ASSIGNEE_ROLES,
+  CLOSE_METHODS,
   FEEDBACK_STATUS,
   ITEM_LABELS,
   PRIORITY,
@@ -246,6 +247,18 @@ function FeedbackDetail({ id, residentName, onChanged, Title, Description }) {
         <dd className={f.overdue ? 'text-destructive tabular-nums' : 'tabular-nums'}>{formatDateTime(f.dueAt)}</dd>
         <dt className="text-muted-foreground">Người phụ trách</dt>
         <dd>{f.assignee}</dd>
+        {f.status === 'CLOSED' && f.closedAt && (
+          <>
+            <dt className="text-muted-foreground">Đóng lúc</dt>
+            <dd className="tabular-nums">{formatDateTime(f.closedAt)}</dd>
+          </>
+        )}
+        {f.status === 'CLOSED' && f.closeMethod && (
+          <>
+            <dt className="text-muted-foreground">Cách đóng</dt>
+            <dd>{CLOSE_METHODS[f.closeMethod] ?? f.closeMethod}</dd>
+          </>
+        )}
       </dl>
       <ol aria-label="Nội dung và trả lời" className="flex flex-col gap-3">
         {f.items.map((item) => (

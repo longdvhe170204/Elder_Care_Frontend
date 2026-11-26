@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { FieldError } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,6 +21,7 @@ export function CareField({
   hint,
   compactTextarea,
 }) {
+  const errorId = useId()
   const props = {
     value: value ?? '',
     onChange: (e) => onChange(e.target.value),
@@ -28,6 +30,7 @@ export function CareField({
     'aria-invalid': error ? true : undefined,
     'aria-label': name,
     placeholder,
+    'aria-describedby': error ? errorId : undefined,
   }
   const field = (
     <label className="flex min-w-0 flex-col gap-2">
@@ -58,11 +61,10 @@ export function CareField({
     </label>
   )
   // Lời báo đặt ngoài nhãn để không nối vào tên ô
-  if (!error) return field
   return (
     <div className="flex min-w-0 flex-col gap-2">
       {field}
-      <FieldError>{error}</FieldError>
+      {error && <FieldError id={errorId}>{error}</FieldError>}
     </div>
   )
 }

@@ -39,6 +39,19 @@ describe('HeldBelongings (013 T015, FR-014a)', () => {
     expect(screen.getByText('Đang giữ')).toBeInTheDocument()
   })
 
+  // Hoàn thiện BF-14 (2026-11-23): mở từ nhắc hết ca thì tải ngay đồ của nhân viên đó
+  it('FR_014a_moTuThongBao_taiNgayTheoMaNhanVien', async () => {
+    const api = mockRoutes()
+    api.on(
+      'GET',
+      '/staff/41/held-belongings',
+      json(200, [{ id: 90, typeId: 1, description: 'Điện thoại Nokia', quantity: 1, status: 'HELD', version: 1 }]),
+    )
+    render(<HeldBelongings catalogs={catalogs} initialStaffId={41} />)
+    expect(await screen.findByText('Điện thoại Nokia')).toBeInTheDocument()
+    expect(screen.getByLabelText('Mã nhân viên')).toHaveValue('41')
+  })
+
   it('FR_029_403_baoKhongCoQuyen', async () => {
     const api = mockRoutes()
     api.on(
@@ -50,5 +63,21 @@ describe('HeldBelongings (013 T015, FR-014a)', () => {
     fireEvent.change(screen.getByLabelText('Mã nhân viên'), { target: { value: '16' } })
     fireEvent.click(screen.getByRole('button', { name: 'Xem đồ đang giữ' }))
     expect(await screen.findByText('Không có quyền xem đồ người khác đang giữ.')).toBeInTheDocument()
+  })
+
+  // Demo 2026-11-25: xem được danh sách nhân viên thì chọn theo tên, không nhập mã
+  it('chonNhanVienTheoTen_khongNhapMa', async () => {
+    const api = mockRoutes()
+    api.on('GET', '/staff', json(200, [{ id: 15, fullName: 'Lê Văn Giữ', position: 'Điều dưỡng' }]))
+    api.on(
+      'GET',
+      '/staff/15/held-belongings',
+      json(200, [{ id: 90, typeId: 2, description: 'Điện thoại Nokia', quantity: 1, status: 'HELD', version: 1 }]),
+    )
+    render(<HeldBelongings catalogs={catalogs} />)
+    fireEvent.change(await screen.findByLabelText('Nhân viên'), { target: { value: '15' } })
+    expect(screen.queryByLabelText('Mã nhân viên')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Xem đồ đang giữ' }))
+    expect(await screen.findByText('Điện thoại Nokia')).toBeInTheDocument()
   })
 })

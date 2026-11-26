@@ -29,7 +29,8 @@ function summaryOf(row) {
     return `Làm ${[...row.weekdays].sort().map((day) => DAY_NAMES[day]).join(', ')} lúc ${times}.`
   return null
 }
-const PLAN_ROLES = Object.fromEntries(['CAREGIVER', 'NURSING_STAFF', 'DOCTOR'].map((code) => [code, CARE_ROLES[code]]))
+// Q-449, FR-002: chỉ dùng vai trò thực hiện có trong phân công chăm sóc.
+const PLAN_ROLES = { CAREGIVER: CARE_ROLES.CAREGIVER, NURSING_STAFF: CARE_ROLES.NURSING_STAFF }
 const TIME = /^([01]\d|2[0-3]):[0-5]\d$/
 
 // Ô bắt buộc kiểm trước khi gửi, báo bằng chữ tại ô thay cho bong bóng của trình duyệt (DESIGN.md 7.4, D14)
@@ -47,7 +48,7 @@ function rowErrors(row) {
   if (['TIMES_PER_DAY', 'DAYS_OF_WEEK'].includes(row.frequencyType) && (row.times ?? []).length === 0)
     errors.times = 'Thêm ít nhất một mốc giờ.'
   if (row.frequencyType === 'DAYS_OF_WEEK' && (row.weekdays ?? []).length === 0) errors.weekdays = 'Chọn ngày trong tuần.'
-  if (blank(row.performerRole)) errors.performerRole = 'Chọn vai trò thực hiện.'
+  if (!Object.hasOwn(PLAN_ROLES, row.performerRole)) errors.performerRole = 'Chọn vai trò thực hiện.'
   if (blank(row.resultType)) errors.resultType = 'Chọn kết quả cần ghi.'
   return errors
 }
@@ -199,7 +200,7 @@ export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForA
           ? {
               ...row,
               taskTypeId: Number(value),
-              performerRole: type?.defaultRole ?? '',
+              performerRole: PLAN_ROLES[type?.defaultRole] ? type.defaultRole : '',
               resultType: type?.resultType ?? '',
               importance: type?.defaultImportance ?? '',
               billable: type?.billable ?? false,

@@ -13,6 +13,15 @@ import { formatDateTime } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { money, controlClass } from './chargeLabels'
 import { FileInput } from '@/common/FileInput'
+import { FamilyMemberSelect } from '@/common/FamilyMemberSelect'
+import { StaffSelectField } from '@/common/StaffSelectField'
+import { useFamilyMembers } from '@/common/useFamilyMembers'
+import { ResidentField } from './ResidentField'
+import { useResidentDirectory } from './useResidentDirectory'
+import { MoneyInput } from '@/common/MoneyInput'
+
+// Demo 2026-11-25: mua gấp chỉ do Bác sĩ, Điều dưỡng đang làm việc yêu cầu (backend vẫn kiểm), chọn theo tên
+const CLINICAL = ['Bác sĩ', 'Điều dưỡng']
 
 const states = {
   DRAFT: 'Nháp',
@@ -293,17 +302,13 @@ function PurchaseDetail({ row, familyMode, onChanged, onDenied }) {
           </p>
           {['additional', 'purchased'].includes(command) && (
             <label>
-              Số tiền (đồng, bắt buộc)
-              <Input
-                type="number"
-                min="0"
-                max="999999999999999"
-                step="1"
+              Số tiền (bắt buộc)
+              <MoneyInput
                 required
                 disabled={pending}
                 value={amount}
-                onChange={(e) => {
-                  setAmount(e.target.value)
+                onChange={(value) => {
+                  setAmount(value)
                   nonce.current = null
                 }}
               />
@@ -352,21 +357,16 @@ function PurchaseDetail({ row, familyMode, onChanged, onDenied }) {
                     Mua gấp thuốc, vật tư y tế
                   </label>
                   {urgent && (
-                    <label>
-                      Mã hồ sơ Bác sĩ hoặc Điều dưỡng yêu cầu (bắt buộc)
-                      <Input
-                        type="number"
-                        min="1"
-                        step="1"
-                        required
-                        disabled={pending}
-                        value={requester}
-                        onChange={(e) => {
-                          setRequester(e.target.value)
-                          nonce.current = null
-                        }}
-                      />
-                    </label>
+                    <StaffSelectField
+                      id="purchase-urgent-requester"
+                      label="Bác sĩ hoặc Điều dưỡng yêu cầu (bắt buộc)"
+                      positions={CLINICAL}
+                      value={requester}
+                      onChange={(value) => {
+                        setRequester(value)
+                        nonce.current = null
+                      }}
+                    />
                   )}
                 </>
               )}
@@ -425,6 +425,10 @@ function PurchaseCreate({ residentId, onChanged, onDenied }) {
   const [failure, setFailure] = useState(null)
   const busy = useRef(false)
   const nonce = useRef(null)
+  const residents = useResidentDirectory()
+  const members = useFamilyMembers(values.residentId)
+  const services = useCatalogItems()
+  const [missing, setMissing] = useState(false)
   function update(key, value) {
     setValues((v) => ({ ...v, [key]: value }))
     nonce.current = null
@@ -432,6 +436,8 @@ function PurchaseCreate({ residentId, onChanged, onDenied }) {
   async function submit(event) {
     event.preventDefault()
     if (busy.current) return
+    setMissing(!values.residentId || !values.requesterId)
+    if (!values.residentId || !values.requesterId) return
     busy.current = true
     setPending(true)
     nonce.current ??= crypto.randomUUID()
@@ -460,19 +466,28 @@ function PurchaseCreate({ residentId, onChanged, onDenied }) {
   return (
     <form onSubmit={submit} className="flex max-w-xl flex-col gap-3 type-body-sm">
       <h2 className="type-title">Lập đề nghị mua hộ</h2>
+      <ResidentField
+        label="Người cao tuổi (bắt buộc)"
+        fallbackLabel="Mã người cao tuổi (bắt buộc)"
+        residents={residents}
+        required
+        disabled={pending}
+        value={String(values.residentId)}
+        onChange={(value) => {
+          update('residentId', value)
+          if (values.requesterType === 'FAMILY_MEMBER') update('requesterId', '')
+        }}
+      />
       {[
-        ['residentId', 'Mã người cao tuổi', 'number'],
         ['description', 'Mô tả mục cần mua', 'text'],
         ['quantity', 'Số lượng', 'number'],
-        ['estimatedAmount', 'Số tiền dự kiến (đồng)', 'number'],
-        ['requesterId', 'Mã hồ sơ người yêu cầu', 'number'],
       ].map(([key, label, type]) => (
         <label key={key}>
           {label} (bắt buộc)
           <Input
             type={type}
             required
-            min={type === 'number' ? (key === 'estimatedAmount' ? 0 : key === 'quantity' ? 0.001 : 1) : undefined}
+            min={type === 'number' ? 0.001 : undefined}
             step={key === 'quantity' ? '0.001' : undefined}
             value={values[key]}
             onChange={(e) => update(key, e.target.value)}
@@ -481,27 +496,61 @@ function PurchaseCreate({ residentId, onChanged, onDenied }) {
         </label>
       ))}
       <label>
-        Mã vật phẩm trong danh mục (nếu có)
-        <Input
-          type="number"
-          min="1"
-          step="1"
+        Số tiền dự kiến (bắt buộc)
+        {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ */}
+        <MoneyInput
+          required
+          value={values.estimatedAmount}
+          onChange={(value) => update('estimatedAmount', value)}
+          disabled={pending}
+        />
+      </label>
+      <label>
+        Vật phẩm trong danh mục (nếu có)
+        <select
+          className={controlClass}
           value={values.catalogItemId}
           onChange={(e) => update('catalogItemId', e.target.value)}
           disabled={pending}
-        />
+        >
+          <option value="">Không thuộc danh mục</option>
+          {services.map((item) => (
+            <option key={item.id} value={String(item.id)}>
+              {item.name}
+            </option>
+          ))}
+        </select>
       </label>
       <label>
         Người yêu cầu
         <select
           className={controlClass}
           value={values.requesterType}
-          onChange={(e) => update('requesterType', e.target.value)}
+          onChange={(e) => {
+            update('requesterType', e.target.value)
+            update('requesterId', '')
+          }}
         >
           <option value="STAFF">Nhân viên</option>
           <option value="FAMILY_MEMBER">Người thân</option>
         </select>
       </label>
+      {values.requesterType === 'STAFF' ? (
+        <StaffSelectField
+          id="purchase-requester-staff"
+          label="Nhân viên yêu cầu (bắt buộc)"
+          value={values.requesterId}
+          onChange={(value) => update('requesterId', value)}
+        />
+      ) : (
+        <FamilyMemberSelect
+          id="purchase-requester-family"
+          label="Người thân yêu cầu (bắt buộc)"
+          members={members}
+          value={values.requesterId}
+          onChange={(value) => update('requesterId', value)}
+        />
+      )}
       <label>
         Lý do (bắt buộc)
         <Textarea
@@ -512,10 +561,29 @@ function PurchaseCreate({ residentId, onChanged, onDenied }) {
           disabled={pending}
         />
       </label>
+      {missing && <p className="text-destructive">Chọn người cao tuổi và người yêu cầu.</p>}
       <ProblemAlert problem={failure} />
+
       <Button type="submit" disabled={pending}>
         Lưu đề nghị nháp
       </Button>
     </form>
   )
+}
+
+// Mục còn hiệu lực trong danh mục dịch vụ, vật phẩm của viện (api-004 GET /services) để chọn theo tên; không đọc được thì
+// danh sách rỗng, đề nghị lập như mục ngoài danh mục
+function useCatalogItems() {
+  const [items, setItems] = useState([])
+  useEffect(() => {
+    let live = true
+    api
+      .getServices({ query: {} })
+      .then(({ data }) => live && setItems((data ?? []).filter((item) => item.status !== 'INACTIVE')))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  return items
 }

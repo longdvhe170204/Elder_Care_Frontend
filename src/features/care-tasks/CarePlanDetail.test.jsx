@@ -238,3 +238,23 @@ it('FR_003_bacSiBamTraLai_goiLenhTraLaiKemLyDo_khongGoiDuyet', async () => {
   expect(api.calls('POST', '/care-plans/17/approve')).toHaveLength(0)
   expect(JSON.parse(api.calls('POST', '/care-plans/17/return')[0][1].body)).toEqual({ reason: 'làm lại đê' })
 })
+
+it('BF_01_buoc16_tomTatMuc_hienCacMocGio', async () => {
+  api.on(
+    'GET',
+    '/care-plans/17',
+    json(
+      200,
+      {
+        ...plan,
+        status: 'PENDING_APPROVAL',
+        allowedCommands: [],
+        items: [{ id: 1, content: 'Dìu đi bộ', frequencyType: 'TIMES_PER_DAY', timesPerDay: 2, times: ['08:00:00', '15:00:00'] }],
+      },
+      { ETag: '"5"' },
+    ),
+  )
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  expect(await screen.findByText(/08:00, 15:00/)).toBeInTheDocument()
+  expect(screen.queryByText(/Trong ca/)).not.toBeInTheDocument()
+})

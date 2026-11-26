@@ -88,7 +88,9 @@ describe('ServicesPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiên bản đơn giá' }))
     expect(await screen.findByText('Nhập đơn giá')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Đơn giá (đồng)'), { target: { value: '6000000' } })
+    fireEvent.change(screen.getByLabelText('Đơn giá'), { target: { value: '6000000' } })
+    // Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ
+    expect(screen.getByLabelText('Đơn giá')).toHaveValue('6.000.000')
     fireEvent.change(screen.getByLabelText('Hiệu lực từ'), { target: { value: '2026-12-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiên bản đơn giá' }))
 
@@ -109,7 +111,7 @@ describe('ServicesPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Chăm sóc thường xuyên' }))
     await screen.findByText(/đang mở/)
     fireEvent.click(screen.getByRole('button', { name: 'Thêm phiên bản đơn giá' }))
-    fireEvent.change(screen.getByLabelText('Đơn giá (đồng)'), { target: { value: '6000000' } })
+    fireEvent.change(screen.getByLabelText('Đơn giá'), { target: { value: '6000000' } })
     fireEvent.change(screen.getByLabelText('Hiệu lực từ'), { target: { value: '2026-03-01' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiên bản đơn giá' }))
 

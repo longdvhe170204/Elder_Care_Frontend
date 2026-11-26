@@ -352,3 +352,44 @@ describe('DashboardPage', () => {
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument()
   })
 })
+
+// Demo 2026-11-25 (góp ý nhóm): việc người khác gửi tới mình (thông báo chưa xem) hiện ở Cần chú ý, mỗi dòng có nút Xử lý
+describe('DashboardPage: việc gửi tới bạn', () => {
+  it('thongBaoChuaXem_hienOCanChuY_nutXuLyMoThangMan', async () => {
+    api.on('GET', '/dashboard', dashboard([]))
+    api.on(
+      'GET',
+      '/me/notifications',
+      json(200, {
+        unreadCount: 2,
+        items: [
+          {
+            id: 41,
+            title: 'Nhắc việc tiếp nhận và lưu trú',
+            content: [{ informationType: 'GENERAL', content: 'Hợp đồng của Nguyễn Văn A hết hạn ngày 20/12/2026.' }],
+            status: 'SENT',
+            sourceRecord: { type: 'M02.CONTRACT_EXPIRING', id: '33', canOpen: true },
+          },
+          {
+            id: 42,
+            title: 'Bảng chi phí kỳ cuối đã chốt',
+            content: [],
+            status: 'SENT',
+            sourceRecord: { type: 'M11.COST_STATEMENT', id: '9', canOpen: true },
+          },
+        ],
+      }),
+    )
+    const onNavigate = vi.fn()
+    render(<DashboardPage role="OFFICE_STAFF" onNavigate={onNavigate} />)
+    const card = await screen.findByRole('region', { name: /Cần chú ý/ })
+    expect(await within(card).findByText('Việc gửi tới bạn (2)')).toBeInTheDocument()
+    expect(within(card).getByText('Hợp đồng của Nguyễn Văn A hết hạn ngày 20/12/2026.')).toBeInTheDocument()
+    const rows = within(card).getAllByRole('button', { name: /Xử lý/ })
+    fireEvent.click(rows[0])
+    expect(onNavigate).toHaveBeenLastCalledWith('contracts', { contractId: 33 })
+    // Demo 2026-11-26: thông báo bảng chi phí mở thẳng bảng ở màn Chi phí
+    fireEvent.click(rows[1])
+    expect(onNavigate).toHaveBeenLastCalledWith('charges', { statementId: 9 })
+  })
+})

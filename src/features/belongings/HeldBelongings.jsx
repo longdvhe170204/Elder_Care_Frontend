@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { getStaffByStaffIdHeldBelongings } from '@/api'
+import { useCallback, useEffect, useState } from 'react'
+import { getStaff, getStaffByStaffIdHeldBelongings } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -12,36 +12,76 @@ import { amountText, statusLabel } from './belongingLabels'
 // Đồ có giá trị một nhân viên đang giữ (013 T015; FR-014a; api-013 GET /staff/{staffId}/held-belongings), dùng khi lập
 // bàn giao ca. GET /me của 002 không trả mã hồ sơ nhân viên nên nhập mã; backend cho xem đồ của chính mình hoặc khi có
 // quyền "Đồ gửi".
-export function HeldBelongings({ catalogs }) {
-  const [staffId, setStaffId] = useState('')
+// initialStaffId: mở từ nhắc còn giữ đồ khi hết ca (hoàn thiện BF-14, 2026-11-23), tải ngay
+export function HeldBelongings({ catalogs, initialStaffId = null }) {
+  const [staffId, setStaffId] = useState(initialStaffId ? String(initialStaffId) : '')
   const [state, setState] = useState({ status: 'idle', items: [] })
+  // Demo 2026-11-25: chọn nhân viên theo tên; null là đang tải, rỗng là không xem được danh sách thì nhập mã như trước
+  const [staff, setStaff] = useState(null)
+  useEffect(() => {
+    let live = true
+    getStaff({ query: { status: 'WORKING' } })
+      .then(({ data }) => live && setStaff(data ?? []))
+      .catch(() => live && setStaff([]))
+    return () => {
+      live = false
+    }
+  }, [])
 
-  async function load(event) {
-    event.preventDefault()
-    if (!/^[1-9]\d*$/.test(staffId)) return
+  const fetchHeld = useCallback(async (id) => {
     setState({ status: 'loading', items: [] })
     try {
-      const { data } = await getStaffByStaffIdHeldBelongings({ path: { staffId } })
+      const { data } = await getStaffByStaffIdHeldBelongings({ path: { staffId: id } })
       setState({ status: 'ready', items: data })
     } catch (error) {
       setState({ status: 'error', items: [], problem: problemOf(error) })
     }
+  }, [])
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- tải ngay khi mở từ thông báo
+    if (initialStaffId) fetchHeld(String(initialStaffId))
+  }, [initialStaffId, fetchHeld])
+
+  function load(event) {
+    event.preventDefault()
+    if (!/^[1-9]\d*$/.test(staffId)) return
+    fetchHeld(staffId)
   }
 
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
         <form className="flex flex-wrap items-end gap-2" onSubmit={load}>
-          <label className="flex flex-col gap-1">
-            <span className="type-caption text-muted-foreground">Mã nhân viên</span>
-            <Input
-              aria-label="Mã nhân viên"
-              inputMode="numeric"
-              className="h-11 w-full sm:w-40"
-              value={staffId}
-              onChange={(e) => setStaffId(e.target.value)}
-            />
-          </label>
+          {staff?.length > 0 ? (
+            <label className="flex flex-col gap-1">
+              <span className="type-caption text-muted-foreground">Nhân viên</span>
+              <select
+                aria-label="Nhân viên"
+                className="h-11 w-full rounded-md border border-input bg-transparent px-3 sm:w-64"
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+              >
+                <option value="">Chọn nhân viên</option>
+                {staff.map((s) => (
+                  <option key={s.id} value={String(s.id)}>
+                    {s.position ? `${s.fullName} (${s.position})` : s.fullName}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="flex flex-col gap-1">
+              <span className="type-caption text-muted-foreground">Mã nhân viên</span>
+              <Input
+                aria-label="Mã nhân viên"
+                inputMode="numeric"
+                className="h-11 w-full sm:w-40"
+                value={staffId}
+                onChange={(e) => setStaffId(e.target.value)}
+              />
+            </label>
+          )}
           <Button type="submit" variant="outline" className="h-11">
             Xem đồ đang giữ
           </Button>

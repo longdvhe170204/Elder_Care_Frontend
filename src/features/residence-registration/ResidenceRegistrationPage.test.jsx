@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { ResidenceRegistrationPage } from './ResidenceRegistrationPage'
+import { currentTask } from './registrationLabels'
 
 // Màn Khai báo cư trú: việc cần làm (018 T008; bố cục K1, K2, K6, K7).
 
@@ -69,6 +70,14 @@ describe('ResidenceRegistrationPage (018)', () => {
     await waitFor(() => expect(rowNames()).toEqual(['Phạm Văn Xóa']))
     fireEvent.click(screen.getByRole('button', { name: 'Tất cả 3' }))
     await waitFor(() => expect(rowNames()).toHaveLength(3))
+  })
+
+  it('BF_01_buoc15a_danhSachTaiLai_khungChiTietLayViecMoi_hetViecThiKhongConDauViec', () => {
+    const opened = { residentId: 1, task: TASKS[0], key: '1:TO_CREATE:' }
+    const declared = { residentId: 1, fullName: 'Lê Văn Cần', taskType: 'TO_DECLARE', dueAt: '2026-11-21T16:59:59Z', registrationId: 9 }
+    expect(currentTask([declared, TASKS[1]], opened)).toBe(declared)
+    expect(currentTask([TASKS[1]], opened)).toBeNull()
+    expect(currentTask(TASKS, opened)).toBe(TASKS[0])
   })
 
   it('K2_bamMo_moKhungChiTietCuaNguoiCaoTuoi', async () => {

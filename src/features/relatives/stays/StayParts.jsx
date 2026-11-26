@@ -6,12 +6,13 @@ import {
   postFamilyStaysByIdByCommand,
 } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
@@ -47,6 +48,12 @@ function Choices({ label, options, value, onChange, error }) {
   )
 }
 
+// "Võ Thị Hòa: Đồng ý. Không phiền" (người được hỏi, kết quả, ghi chú)
+function roommateOpinionText({ askedPerson, result, note }) {
+  const label = ROOMMATE_RESULTS.find(([value]) => value === result)?.[1] ?? result
+  return `${askedPerson}: ${label}${note ? `. ${note}` : ''}`
+}
+
 function Info({ label, children }) {
   return (
     <div className="flex flex-col">
@@ -76,6 +83,7 @@ export function StayDetail({ stay, role, memberName, residentName, onChanged, Ti
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
   const [newEnd, setNewEnd] = useState('')
+  const [endAt, setEndAt] = useState('')
   const [askedPerson, setAskedPerson] = useState('')
   const [result, setResult] = useState('')
   const [note, setNote] = useState('')
@@ -156,6 +164,10 @@ export function StayDetail({ stay, role, memberName, residentName, onChanged, Ti
         )}
         <Info label="Lý do">{stay.reason}</Info>
         <Info label="Đăng ký ăn">{stay.mealRegistered ? 'Có' : 'Không'}</Info>
+        {stay.roommateOpinion && (
+          // Góp ý test BF-12 (2026-11-25): ý kiến ghi lúc xác nhận; backend chỉ trả cho nhân viên
+          <Info label="Ý kiến người cùng phòng">{roommateOpinionText(stay.roommateOpinion)}</Info>
+        )}
       </div>
       <ProblemAlert problem={failure} />
 
@@ -251,6 +263,35 @@ export function StayDetail({ stay, role, memberName, residentName, onChanged, Ti
         </div>
       )}
 
+      {/* Kết thúc (FR-045; test BF-12 2026-11-24): để trống là lúc bấm; ghi sớm hơn khi người thân đã về trước lúc ghi */}
+      {mode === 'end' && (
+        <div className="flex flex-col gap-3 border-t pt-4">
+          <Field>
+            <FieldLabel htmlFor="stay-end-at">Thời điểm kết thúc thực tế</FieldLabel>
+            <Input
+              id="stay-end-at"
+              type="datetime-local"
+              className="h-11"
+              value={endAt}
+              onChange={(e) => setEndAt(e.target.value)}
+            />
+            <FieldDescription>Để trống thì ghi theo lúc bấm; không sớm hơn lúc bắt đầu.</FieldDescription>
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" className="h-11" onClick={() => open(null)}>
+              Quay lại
+            </Button>
+            <Button
+              className="h-11"
+              disabled={busy}
+              onClick={() => run('end', endAt ? { at: vietnamIso(endAt) } : {}, 'Đã ghi kết thúc ở lại')}
+            >
+              Xác nhận kết thúc
+            </Button>
+          </div>
+        </div>
+      )}
+
       {mode === null && (
         <div className="flex flex-wrap justify-end gap-2">
           {office && ['PENDING_CONFIRMATION', 'CONFIRMED'].includes(status) && (
@@ -269,7 +310,7 @@ export function StayDetail({ stay, role, memberName, residentName, onChanged, Ti
             </Button>
           )}
           {STARTERS.includes(role) && status === 'STAYING' && (
-            <Button className="h-11" disabled={busy} onClick={() => run('end', {}, 'Đã ghi kết thúc ở lại')}>
+            <Button className="h-11" onClick={() => open('end')}>
               Kết thúc ở lại
             </Button>
           )}
@@ -365,24 +406,18 @@ export function RegisterStaySheet({ onClose, onDone }) {
         </SheetDescription>
         <form onSubmit={submit} noValidate className="mt-4 flex flex-col gap-4">
           <FieldGroup>
-            <Field data-invalid={!!show('resident') || undefined}>
-              <FieldLabel htmlFor="stay-resident">Người cao tuổi</FieldLabel>
-              <select
-                id="stay-resident"
-                value={residentId}
-                onChange={(e) => pickResident(e.target.value)}
-                aria-invalid={!!show('resident') || undefined}
-                className={SELECT}
-              >
-                <option value="">{residents === null ? 'Đang tải…' : 'Chọn người'}</option>
-                {(residents ?? []).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {`${r.personalInfo.fullName}, ${r.profileCode}`}
-                  </option>
-                ))}
-              </select>
-              {show('resident') && <FieldError>{errors.resident}</FieldError>}
-            </Field>
+            {/* Demo 2026-11-26 (E): ô tìm theo tên hoặc mã hồ sơ thay dropdown */}
+            <ResidentCombobox
+              id="stay-resident"
+              options={(residents ?? []).map((r) => ({
+                value: String(r.id),
+                label: `${r.personalInfo.fullName} (${r.profileCode})`,
+              }))}
+              value={residentId}
+              onChange={pickResident}
+              loading={residents === null}
+              error={show('resident') && errors.resident}
+            />
             <Field data-invalid={!!show('member') || undefined}>
               <FieldLabel htmlFor="stay-member">Người thân ở lại</FieldLabel>
               <select

@@ -12,8 +12,15 @@ import {
 } from '@/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import {
+  Field,
+  FieldDescription,
+  FieldError,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
@@ -22,6 +29,8 @@ import { RESIDENT_COMMANDS, RESIDENT_LOCK_BASIS_LABELS } from './accountLabels'
 import { ResidentConsentFields } from './ResidentConsentFields'
 import { EMPTY_CONSENT, consentBody, consentErrors } from './residentConsent'
 import { TemporaryPasswordNotice } from './TemporaryPasswordNotice'
+import { FamilyMemberField } from '@/common/FamilyMemberField'
+import { useFamilyMembers } from '@/common/useFamilyMembers'
 
 // Phần tài khoản người cao tuổi trong khung chi tiết (002 T095; US8; FR-069 → FR-073, A-16; bố cục duyệt 2026-10-24):
 // thiết bị đang gắn, mã QR đăng nhập dùng một lần kèm thời gian còn lại, lệnh theo allowedCommands mở form ngay dưới,
@@ -145,6 +154,7 @@ function ResidentCommandForm({ command, account, etag, initialConsent, onCode, o
   const [basis, setBasis] = useState('')
   const [consent, setConsent] = useState(initialConsent)
   const [familyMemberId, setFamilyMemberId] = useState('')
+  const members = useFamilyMembers(command === FAMILY_REQUEST ? account.residentId : null)
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -156,8 +166,7 @@ function ResidentCommandForm({ command, account, etag, initialConsent, onCode, o
   const needsReason = command !== 'unlock-resident' && command !== QR
   const titles = { [FAMILY_REQUEST]: 'Đề nghị khóa theo lời người thân', [QR]: 'Tạo mã QR đăng nhập' }
   const title = titles[command] ?? RESIDENT_COMMANDS[command].label
-  const submitLabel =
-    command === FAMILY_REQUEST ? 'Gửi Quản lý viện duyệt' : RESIDENT_COMMANDS[command].submit
+  const submitLabel = command === FAMILY_REQUEST ? 'Gửi Quản lý viện duyệt' : RESIDENT_COMMANDS[command].submit
 
   function send() {
     const path = { id: account.id }
@@ -200,7 +209,7 @@ function ResidentCommandForm({ command, account, etag, initialConsent, onCode, o
     const next = needsConsent ? consentErrors(consent) : {}
     if (command === 'lock-resident' && !basis) next.basis = 'Chọn căn cứ khóa'
     if (command === FAMILY_REQUEST && !/^\d+$/.test(familyMemberId.trim())) {
-      next.familyMemberId = 'Nhập mã hồ sơ người thân'
+      next.familyMemberId = 'Chọn người thân đề nghị'
     }
     if (needsReason && !reason.trim()) next.reason = 'Nhập lý do'
     setErrors(next)
@@ -289,22 +298,16 @@ function ResidentCommandForm({ command, account, etag, initialConsent, onCode, o
         )}
 
         {command === FAMILY_REQUEST && (
-          <Field data-invalid={!!errors.familyMemberId || undefined}>
-            <FieldLabel htmlFor="resident-family-request-member">Mã hồ sơ người thân đề nghị</FieldLabel>
-            <Input
-              id="resident-family-request-member"
-              inputMode="numeric"
-              value={familyMemberId}
-              onChange={(e) => setFamilyMemberId(e.target.value)}
-              aria-invalid={!!errors.familyMemberId || undefined}
-              className="h-10 max-w-48 tabular-nums"
-            />
-            {errors.familyMemberId ? (
-              <FieldError>{errors.familyMemberId}</FieldError>
-            ) : (
-              <FieldDescription>Người thân không tự khóa được; Quản lý viện duyệt.</FieldDescription>
-            )}
-          </Field>
+          <FamilyMemberField
+            id="resident-family-request-member"
+            label="Người thân đề nghị"
+            fallbackLabel="Mã hồ sơ người thân đề nghị"
+            members={members}
+            value={familyMemberId}
+            onChange={setFamilyMemberId}
+            error={errors.familyMemberId}
+            hint="Người thân không tự khóa được; Quản lý viện duyệt."
+          />
         )}
 
         {needsReason && (

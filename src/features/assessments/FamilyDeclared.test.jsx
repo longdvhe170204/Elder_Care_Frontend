@@ -120,3 +120,38 @@ describe('Gia đình khai', () => {
     expect(within(list).getByText('Tự khai, chưa được Bác sĩ kiểm chứng')).toBeInTheDocument()
   })
 })
+
+// Demo 2026-11-25: đọc được danh sách người thân thì chọn theo tên thay cho ô nhập mã
+describe('Gia đình khai: chọn người thân theo tên', () => {
+  it('chonNguoiThanTheoTen_guiDungMa', async () => {
+    api.on('GET', '/residents/5/initial-assessment/family-declared', problem(404, 'NO_DRAFT'))
+    api.on(
+      'GET',
+      '/residents/5/family-contacts',
+      json(200, [{ familyMemberId: 31, fullName: 'Trần Văn Minh' }]),
+    )
+    api.on(
+      'PUT',
+      '/residents/5/initial-assessment/family-declared',
+      json(201, { assessmentId: 9, status: 'DRAFT', entries: [ENTRY] }),
+    )
+    render(
+      <AssessmentTab
+        residentId={5}
+        residentStatus="ADMISSION_IN_PROGRESS"
+        allowedCommands={['RECORD_FAMILY_DECLARED']}
+      />,
+    )
+    const section = await screen.findByRole('region', { name: 'Gia đình khai' })
+    const risks = within(section).getByRole('group', { name: 'Nguy cơ đã biết' })
+    typeChoice('Nguy cơ đã biết', 'Từng ngã hai lần năm nay', risks)
+    fireEvent.click(within(risks).getByRole('radio', { name: 'Người thân' }))
+    await within(risks).findByRole('option', { name: 'Trần Văn Minh' })
+    expect(within(risks).queryByLabelText('Mã người thân')).toBeNull()
+    fireEvent.change(within(risks).getByLabelText('Người thân'), { target: { value: '31' } })
+    fireEvent.click(within(section).getByRole('button', { name: 'Lưu Gia đình khai' }))
+    await waitFor(() => expect(api.calls('PUT', '/residents/5/initial-assessment/family-declared')).toHaveLength(1))
+    const body = JSON.parse(api.calls('PUT', '/residents/5/initial-assessment/family-declared')[0][1].body)
+    expect(body.entries[0].source).toEqual({ type: 'FAMILY_MEMBER', familyMemberId: 31 })
+  })
+})

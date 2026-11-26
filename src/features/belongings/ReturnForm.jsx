@@ -3,7 +3,6 @@ import { getBelongingsById, postBelongingsReturns } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { uploadFile } from '@/common/files'
@@ -15,11 +14,12 @@ import { ReturnConfirmation } from './ReturnConfirmation'
 import { useOpenConfirmations } from './useOpenConfirmations'
 
 // Lệnh Trả một hoặc nhiều đồ cho cùng người nhận (013 T019, US3; FR-016 → FR-020, BR-M12-04; api-013 ReturnCommand).
-// Mỗi đồ chọn mức tình trạng lúc trả; số trả nhỏ hơn hiện có thì phần trả tách thành đồ mới (FR-012). Người nhận khác
+// Mỗi đồ chọn mức tình trạng lúc trả, trả toàn bộ số đang giữ (demo 2026-11-25 bỏ ô số trả). Người nhận khác
 // người có quyền nhận, và chính người cao tuổi nhận đồ loại cần đồng ý (FR-018, Q-253), phải có xác nhận người nhận khác
 // Hiệu lực: Hành chính chọn trong danh sách hoặc lập ngay tại đây (ReturnConfirmation); Điều dưỡng không trả theo xác
 // nhận (FR-016a). Bản ký của người nhận bắt buộc, trừ người cao tuổi không ký thì ghi lý do (FR-019). Lệnh bị chặn vì
-// người nhận thì backend vẫn ghi lần chặn (FR-016): màn báo lý do, tải lại danh sách và giữ form để sửa.
+// người nhận thì backend vẫn ghi lần chặn (FR-016): màn báo lý do, tải lại danh sách và giữ form để sửa. Demo 2026-11-25 (chủ dự án chốt): bỏ ô họ tên, loại và
+// số giấy tờ; người thân chọn trong danh sách (họ tên lấy theo hồ sơ), người nhận khác lấy họ tên, giấy tờ từ xác nhận đã chọn.
 
 const RECIPIENTS = [
   { value: 'FAMILY_MEMBER', label: 'Người thân' },
@@ -39,14 +39,12 @@ export function ReturnForm({
   locationName,
   onConfirmationCreated,
   onDone,
+  allowOtherRecipient = false,
 }) {
   const [chosen, setChosen] = useState({})
   const [v, setV] = useState({
     type: '',
     familyMemberId: '',
-    fullName: '',
-    documentType: '',
-    documentNumber: '',
     noSignatureReason: '',
     opinion: '',
   })
@@ -62,11 +60,7 @@ export function ReturnForm({
   const set = (name) => (value) => setV((s) => ({ ...s, [name]: value }))
   const setItem = (id, patch) => setChosen((c) => ({ ...c, [id]: { ...c[id], ...patch } }))
   const contacts = useFamilyContacts(residentId)
-  // Chọn người thân thì điền sẵn họ tên theo hồ sơ (vẫn sửa được nếu giấy tờ ghi khác)
-  function chooseFamily(familyMemberId) {
-    const member = contacts.members.find((m) => String(m.id) === familyMemberId)
-    setV((s) => ({ ...s, familyMemberId, ...(member && !s.fullName && { fullName: member.fullName }) }))
-  }
+  const familyMember = contacts.members.find((m) => String(m.id) === v.familyMemberId)
   // FR-020: tình trạng lúc tiếp nhận để so với lúc trả; không đọc được thì bỏ qua, lệnh trả vẫn làm được
   function toggle(id, on) {
     setItem(id, { on })
@@ -86,34 +80,28 @@ export function ReturnForm({
   const consentItems = v.type === 'RESIDENT' && selected.some(requiresConsent)
   const needsConfirmation = office && (v.type === 'OTHER_PERSON' || consentItems)
   const openConfirmations = useOpenConfirmations(residentId, needsConfirmation)
-  const fitQuery = {
+  // Không còn ô họ tên, giấy tờ: mỗi xác nhận khớp người theo chính họ tên, giấy tờ ghi trong nó
+  const fitQuery = (c) => ({
     type: v.type,
-    fullName: v.fullName,
-    documentType: v.documentType,
-    documentNumber: v.documentNumber,
+    fullName: c.recipientName,
+    documentType: '',
+    documentNumber: c.recipientIdDocument,
     belongingIds: selected.map((b) => b.id),
     now,
-  }
-  const fits = openConfirmations.items.map((c) => ({ confirmation: c, ...confirmationFit(c, fitQuery) }))
+  })
+  const fits = openConfirmations.items.map((c) => ({ confirmation: c, ...confirmationFit(c, fitQuery(c)) }))
   const matches = fits.filter((f) => f.fits)
-  // Xác nhận đã chọn chỉ còn giá trị khi vẫn khớp người nhận, giấy tờ và đồ đang chọn (đổi thì tự bỏ chọn)
+  // Xác nhận đã chọn chỉ còn giá trị khi vẫn khớp loại người nhận và đồ đang chọn (đổi thì tự bỏ chọn)
   const confirmation = needsConfirmation ? matches.find((m) => m.confirmation.id === confirmationId) : undefined
   const itemLabel = (id) => {
     const b = belongings.find((x) => x.id === id)
     return b ? pickLabel(b, locationName) : `mã ${id}`
   }
-  // Xác nhận lưu giấy tờ một chuỗi (api-013): ghép "loại số" từ hai ô của form trả, khớp luật so của backend
-  const idDocument = [v.documentType.trim(), v.documentNumber.trim()].filter(Boolean).join(' ')
   const createInitial =
     v.type === 'RESIDENT'
       ? { name: residentName, document: '', isResident: true, belongingIds: selected.map((b) => b.id) }
-      : { name: v.fullName.trim(), document: idDocument, isResident: false, belongingIds: selected.map((b) => b.id) }
-  const createHint =
-    selected.length === 0
-      ? 'Chọn đồ trả trước khi lập xác nhận.'
-      : v.type === 'OTHER_PERSON' && (!v.fullName.trim() || !v.documentNumber.trim())
-        ? 'Nhập họ tên và số giấy tờ người nhận để lập xác nhận.'
-        : null
+      : { name: '', document: '', isResident: false, belongingIds: selected.map((b) => b.id) }
+  const createHint = selected.length === 0 ? 'Chọn đồ trả trước khi lập xác nhận.' : null
 
   async function confirmationCreated(id) {
     setCreating(false)
@@ -133,7 +121,8 @@ export function ReturnForm({
     }
     if (!v.type) e.type = 'Chọn người nhận.'
     if (v.type === 'FAMILY_MEMBER' && !/^[1-9]\d*$/.test(v.familyMemberId)) e.familyMemberId = 'Chọn người thân nhận.'
-    if (['FAMILY_MEMBER', 'OTHER_PERSON'].includes(v.type) && !v.fullName.trim()) e.fullName = 'Nhập họ tên người nhận.'
+    if (v.type === 'OTHER_PERSON' && office && !creating && !confirmation)
+      e.confirmation = 'Chọn xác nhận người nhận khác.'
     if (v.type === 'RESIDENT') {
       if (signature.length === 0 && !v.noSignatureReason.trim())
         e.signature = 'Chọn bản ký hoặc ghi lý do người cao tuổi không ký.'
@@ -157,17 +146,20 @@ export function ReturnForm({
         for (const file of chosen[b.id].photos ?? []) photoIds[b.id].push(await uploadFile(file))
       }
       const recipient = { type: v.type }
-      if (v.type === 'FAMILY_MEMBER') recipient.familyMemberId = Number(v.familyMemberId)
-      if (v.type !== 'RESIDENT' && v.fullName.trim()) recipient.fullName = v.fullName.trim()
-      if (v.type !== 'RESIDENT' && v.documentNumber.trim())
-        recipient.presentedIdDocument = { type: v.documentType.trim(), number: v.documentNumber.trim() }
+      if (v.type === 'FAMILY_MEMBER') {
+        recipient.familyMemberId = Number(v.familyMemberId)
+        if (familyMember) recipient.fullName = familyMember.fullName
+      }
+      if (v.type === 'OTHER_PERSON' && confirmation) {
+        recipient.fullName = confirmation.confirmation.recipientName
+        recipient.presentedIdDocument = { number: confirmation.confirmation.recipientIdDocument }
+      }
       await postBelongingsReturns({
         headers: { 'Idempotency-Key': key.current },
         body: {
           items: selected.map((b) => ({
             belongingId: b.id,
             version: b.version,
-            ...(chosen[b.id].quantity && { quantity: Number(chosen[b.id].quantity) }),
             condition: { levelId: Number(chosen[b.id].levelId) },
             ...(photoIds[b.id].length > 0 && { photoFileIds: photoIds[b.id] }),
           })),
@@ -214,19 +206,6 @@ export function ReturnForm({
               )}
               {chosen[b.id]?.on && (
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Field>
-                    <FieldLabel htmlFor={`return-qty-${b.id}`}>
-                      Số trả của {b.description} (trống là toàn bộ)
-                    </FieldLabel>
-                    <Input
-                      id={`return-qty-${b.id}`}
-                      type="number"
-                      min="0"
-                      className="h-11 tabular-nums"
-                      value={chosen[b.id].quantity ?? ''}
-                      onChange={(e) => setItem(b.id, { quantity: e.target.value })}
-                    />
-                  </Field>
                   <SelectField
                     id={`return-level-${b.id}`}
                     label={`Mức tình trạng lúc trả của ${b.description}`}
@@ -258,7 +237,7 @@ export function ReturnForm({
           label="Người nhận"
           value={v.type}
           onChange={set('type')}
-          options={office ? RECIPIENTS : RECIPIENTS.filter((r) => r.value !== 'OTHER_PERSON')}
+          options={office && allowOtherRecipient ? RECIPIENTS : RECIPIENTS.filter((r) => r.value !== 'OTHER_PERSON')}
           error={errors.type}
         />
         {!office && consentItems && (
@@ -275,45 +254,9 @@ export function ReturnForm({
             contacts={contacts}
             filter={(m) => m.representative || m.pickupAllowed}
             value={v.familyMemberId}
-            onChange={chooseFamily}
+            onChange={set('familyMemberId')}
             error={errors.familyMemberId}
           />
-        )}
-        {['FAMILY_MEMBER', 'OTHER_PERSON'].includes(v.type) && (
-          <>
-            <Field data-invalid={!!errors.fullName || undefined}>
-              <FieldLabel htmlFor="return-name">Họ tên người nhận</FieldLabel>
-              <Input
-                id="return-name"
-                autoComplete="off"
-                className="h-11"
-                value={v.fullName}
-                onChange={(e) => set('fullName')(e.target.value)}
-                aria-invalid={!!errors.fullName || undefined}
-              />
-              {errors.fullName && <FieldError>{errors.fullName}</FieldError>}
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field>
-                <FieldLabel htmlFor="return-doc-type">Loại giấy tờ</FieldLabel>
-                <Input
-                  id="return-doc-type"
-                  className="h-11"
-                  value={v.documentType}
-                  onChange={(e) => set('documentType')(e.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="return-doc-number">Số giấy tờ</FieldLabel>
-                <Input
-                  id="return-doc-number"
-                  className="h-11"
-                  value={v.documentNumber}
-                  onChange={(e) => set('documentNumber')(e.target.value)}
-                />
-              </Field>
-            </div>
-          </>
         )}
         {needsConfirmation && (
           <ReturnConfirmation

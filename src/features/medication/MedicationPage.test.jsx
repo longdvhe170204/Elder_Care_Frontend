@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { MedicationPage } from './MedicationPage'
+import { PermissionsProvider } from '@/common/permissions/permissions'
 
 // 006 Phát thuốc theo api-006 (rounds, administer), api-001 (hồ sơ), api-003 (vị trí), api-008 (ca): dải "Cần làm
 // ngay" cho liều Trễ (DESIGN.md 6.7), thẻ không viền đỏ, xác nhận liều gửi Idempotency-Key và đúng thân lệnh.
@@ -107,6 +108,30 @@ describe('MedicationPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Đối chiếu thuốc' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
     expect(await screen.findByText('Trần Thị Mai chưa có phiếu đối chiếu thuốc.')).toBeTruthy()
+  })
+
+  it('BF_01_buoc12_nguoiDangTiepNhan_lyDoMacDinhLaTiepNhan', async () => {
+    api.on(
+      'GET',
+      '/residents',
+      json(200, {
+        items: [
+          { id: 9, profileCode: 'HS-0009', status: 'ADMISSION_IN_PROGRESS', personalInfo: { fullName: 'Trần Thị Mai' } },
+        ],
+      }),
+    )
+    api.on('GET', '/residents/9/initial-health-record', json(200, {}))
+    api.on('GET', '/residents/9/medication-reconciliations', json(200, []))
+    api.on('GET', '/me/permissions', json(200, [{ function: 'MEDICATION_RECONCILIATION', operation: 'CREATE' }]))
+    render(
+      <PermissionsProvider>
+        <MedicationPage role="DOCTOR" />
+      </PermissionsProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Đối chiếu thuốc' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Trần Thị Mai, HS-0009' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Bác sĩ trực tiếp lập phiếu đối chiếu' }))
+    expect(screen.getByLabelText('Loại đối chiếu')).toHaveValue('ADMISSION')
   })
 
   it('006_T074_donChoDoiChieu_nutMoChuyenSangDoiChieuDungNguoi', async () => {

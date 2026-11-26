@@ -8,8 +8,11 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { problemOf } from '@/common/problem'
 import { formatDate } from '@/common/dateTime'
 import { Choice } from './ShiftForm'
+import { PlaceField } from './PlaceField'
 
-export function FloorManagerPanel({ staff = [], canCreate = false, canUpdate = false }) {
+// places: tên tầng, khu từ ShiftsPage ({ FLOOR: { id: tên }, AREA: {...} }) để chọn theo tên và hiện tên trên dòng giao
+export function FloorManagerPanel({ staff = [], places = {}, canCreate = false, canUpdate = false }) {
+  const placeName = (id) => places.FLOOR?.[id] ?? places.AREA?.[id] ?? `Tầng/khu vực #${id}`
   const [rows, setRows] = useState([]),
     [revision, setRevision] = useState(0)
   const [person, setPerson] = useState(String(staff[0]?.id ?? '')),
@@ -96,8 +99,8 @@ export function FloorManagerPanel({ staff = [], canCreate = false, canUpdate = f
         <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border p-3">
           <div>
             <p className="font-medium">
-              {staff.find((s) => s.id === row.staffId)?.fullName ?? `Nhân viên #${row.staffId}`} · Tầng/khu vực #
-              {row.floorAreaId}
+              {staff.find((s) => s.id === row.staffId)?.fullName ?? `Nhân viên #${row.staffId}`} ·{' '}
+              {placeName(row.floorAreaId)}
             </p>
             <p>
               {formatDate(row.from)} → {row.to ? formatDate(row.to) : 'Chưa có ngày kết thúc'}
@@ -163,17 +166,17 @@ export function FloorManagerPanel({ staff = [], canCreate = false, canUpdate = f
               </option>
             ))}
           </Choice>
-          <Field>
-            <FieldLabel htmlFor="floor-manager-area">Mã tầng / khu vực được giao</FieldLabel>
-            <Input
-              id="floor-manager-area"
-              type="number"
-              min="1"
-              required
-              value={floor}
-              onChange={(e) => setFloor(e.target.value)}
-            />
-          </Field>
+          <PlaceField
+            id="floor-manager-area"
+            label="Tầng / khu vực được giao"
+            fallbackLabel="Mã tầng / khu vực được giao"
+            groups={[
+              { label: 'Tầng', items: places.FLOOR ?? {} },
+              { label: 'Khu vực', items: places.AREA ?? {} },
+            ]}
+            value={floor}
+            onChange={setFloor}
+          />
           <div className="grid gap-3 sm:grid-cols-2">
             <Field>
               <FieldLabel htmlFor="floor-from">Ngày bắt đầu giao</FieldLabel>

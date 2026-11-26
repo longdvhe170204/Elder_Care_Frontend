@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { postRelationshipsByIdByCommand } from '@/api'
+import { useEffect, useState } from 'react'
+import { getFamilyMembersById, postRelationshipsByIdByCommand, putFamilyMembersById } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -136,6 +136,97 @@ function CommandForm({ relationship, command, onDone, onCancel }) {
   )
 }
 
+// Sửa thông tin liên hệ (FR-001; test BF-12 C-1 2026-11-24): đọc hồ sơ lấy ETag và địa chỉ, PUT đủ trường kèm If-Match.
+// Bỏ giấy tờ của người đang được phép đón bị chặn 409 ID_DOCUMENT_REQUIRED (FR-007).
+const CONTACT_FIELDS = [
+  { name: 'fullName', label: 'Họ tên', required: 'Nhập họ tên' },
+  { name: 'phoneNumber', label: 'Số điện thoại', required: 'Nhập số điện thoại', inputMode: 'tel' },
+  { name: 'idDocumentType', label: 'Loại giấy tờ' },
+  { name: 'idDocumentNumber', label: 'Số giấy tờ' },
+  { name: 'address', label: 'Địa chỉ' },
+]
+
+function ContactForm({ familyMemberId, onDone, onCancel }) {
+  const [key] = useState(() => crypto.randomUUID())
+  const [values, setValues] = useState(null)
+  const [etag, setEtag] = useState(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [failure, setFailure] = useState(null)
+
+  useEffect(() => {
+    let active = true
+    getFamilyMembersById({ path: { id: familyMemberId } })
+      .then(({ data, etag: current }) => {
+        if (!active) return
+        setEtag(current)
+        setValues(Object.fromEntries(CONTACT_FIELDS.map((f) => [f.name, data.familyMember[f.name] ?? ''])))
+      })
+      .catch((error) => active && setFailure(problemOf(error)))
+    return () => {
+      active = false
+    }
+  }, [familyMemberId])
+
+  const missing = (field) => field.required && !values?.[field.name].trim()
+
+  async function submit(event) {
+    event.preventDefault()
+    setSubmitted(true)
+    if (CONTACT_FIELDS.some(missing)) return
+    setBusy(true)
+    try {
+      const body = Object.fromEntries(CONTACT_FIELDS.map((f) => [f.name, values[f.name].trim() || null]))
+      await putFamilyMembersById({
+        path: { id: familyMemberId },
+        headers: { 'If-Match': etag, 'Idempotency-Key': key },
+        body,
+      })
+      onDone('Đã sửa thông tin liên hệ')
+    } catch (error) {
+      setFailure(problemOf(error))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} noValidate className="flex flex-col gap-4 rounded-lg border p-4">
+      <h3 className="type-card-title">Sửa thông tin liên hệ</h3>
+      {values
+        ? CONTACT_FIELDS.map((field) => {
+            const invalid = (submitted && missing(field)) || undefined
+            return (
+              <Field key={field.name} data-invalid={invalid}>
+                <FieldLabel htmlFor={`contact-${field.name}`}>{field.label}</FieldLabel>
+                <Input
+                  id={`contact-${field.name}`}
+                  className="h-11"
+                  inputMode={field.inputMode}
+                  maxLength={255}
+                  value={values[field.name]}
+                  onChange={(e) => setValues((v) => ({ ...v, [field.name]: e.target.value }))}
+                  aria-invalid={invalid}
+                />
+                {invalid && <FieldError>{field.required}</FieldError>}
+              </Field>
+            )
+          })
+        : !failure && <p className="type-body-sm text-muted-foreground">Đang tải hồ sơ…</p>}
+      {/* Nội dung 409 ID_DOCUMENT_REQUIRED của backend đã đủ rõ, không thêm gợi ý để khỏi lặp */}
+      <ProblemAlert problem={failure} />
+      <div className="flex flex-wrap gap-3">
+        <Button type="submit" className="h-11" disabled={busy || !values}>
+          Lưu thông tin liên hệ
+        </Button>
+        <Button type="button" variant="outline" className="h-11" onClick={onCancel}>
+          Hủy
+        </Button>
+      </div>
+    </form>
+  )
+}
+
 export function RelationshipDetail({ relationship, hasRepresentative, canUpdate, onChanged, Title, Description }) {
   const [command, setCommand] = useState(null)
   const member = relationship.familyMember
@@ -146,6 +237,7 @@ export function RelationshipDetail({ relationship, hasRepresentative, canUpdate,
     !active || !canUpdate
       ? []
       : [
+          'edit-contact',
           !relationship.primaryContact && 'change-primary-contact',
           !hasRepresentative && 'set-first-representative',
           'change-contact-order',
@@ -194,7 +286,16 @@ export function RelationshipDetail({ relationship, hasRepresentative, canUpdate,
         </p>
       </section>
 
-      {command ? (
+      {command === 'edit-contact' ? (
+        <ContactForm
+          familyMemberId={member.id}
+          onCancel={() => setCommand(null)}
+          onDone={(message) => {
+            setCommand(null)
+            onChanged(message)
+          }}
+        />
+      ) : command ? (
         <CommandForm
           key={command}
           relationship={relationship}
@@ -215,7 +316,7 @@ export function RelationshipDetail({ relationship, hasRepresentative, canUpdate,
                 className="h-11"
                 onClick={() => setCommand(c)}
               >
-                {COMMANDS[c].label}
+                {c === 'edit-contact' ? 'Sửa thông tin liên hệ' : COMMANDS[c].label}
               </Button>
             ))}
           </div>

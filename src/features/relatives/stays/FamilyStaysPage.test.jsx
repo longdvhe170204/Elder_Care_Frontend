@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { pickResident } from '@/test/pickResident'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { FamilyStaysPage } from './FamilyStaysPage'
 
@@ -106,6 +107,17 @@ describe('Người thân ở lại', () => {
     expect(within(staying).getByText('2')).toBeInTheDocument()
   })
 
+  // Test BF-12 (2026-11-24): Trưởng tầng không đọc được quan hệ người thân vẫn thấy họ tên người ở lại do backend trả
+  it('FR_040_truongTang_thayHoTenNguoiThan_khongPhaiMa', async () => {
+    permissions([['FAMILY_STAY', 'VIEW']])
+    api.on('GET', '/residents/5/relationships', problem(403, 'PERMISSION_DENIED'))
+    api.on('GET', '/family-stays', json(200, [{ ...PENDING, familyMemberName: 'Trần Văn Minh' }]))
+    const table = await renderPage('FLOOR_MANAGER')
+
+    expect(await within(table).findByRole('row', { name: /Trần Văn Minh/ })).toBeInTheDocument()
+    expect(within(table).queryByText(/Người thân mã/)).not.toBeInTheDocument()
+  })
+
   it('FR_040_truongTangXacNhan_kemYKienNguoiCungPhong', async () => {
     permissions([
       ['FAMILY_STAY', 'VIEW'],
@@ -139,6 +151,29 @@ describe('Người thân ở lại', () => {
     expect(await screen.findByText('Đã xác nhận lượt ở lại')).toBeInTheDocument()
   })
 
+  // Góp ý test BF-12 (2026-11-25): lượt đã xác nhận hiện lại ý kiến người cùng phòng đã ghi (backend chỉ trả cho nhân viên)
+  it('FR_040_daXacNhan_hienYKienNguoiCungPhong', async () => {
+    permissions([['FAMILY_STAY', 'VIEW']])
+    api.on(
+      'GET',
+      '/family-stays',
+      json(200, [
+        {
+          ...PENDING,
+          status: 'CONFIRMED',
+          roommateOpinion: { askedPerson: 'Võ Thị Hòa', result: 'AGREED', note: 'Không phiền' },
+        },
+      ]),
+    )
+    renderPage('FLOOR_MANAGER')
+    fireEvent.click(await screen.findByRole('button', { name: 'Đã xác nhận 1' }))
+    fireEvent.click(await screen.findByRole('button', { name: /Trần Văn Minh/ }))
+    const detail = await screen.findByRole('dialog', { name: 'Trần Văn Minh ở lại với Nguyễn Thị Lan' })
+
+    expect(within(detail).getByText('Ý kiến người cùng phòng')).toBeInTheDocument()
+    expect(within(detail).getByText('Võ Thị Hòa: Đồng ý. Không phiền')).toBeInTheDocument()
+  })
+
   it('FR_045_tuChoi_batBuocLyDo', async () => {
     permissions([['FAMILY_STAY', 'VIEW']])
     const table = await renderPage('NURSING_HOME_MANAGER')
@@ -170,7 +205,7 @@ describe('Người thân ở lại', () => {
     expect(await within(sheet).findByText('Chọn người cao tuổi')).toBeInTheDocument()
     expect(api.calls('POST', '/family-stays')).toHaveLength(0)
 
-    fireEvent.change(within(sheet).getByLabelText('Người cao tuổi'), { target: { value: '5' } })
+    await pickResident('Nguyễn Thị Lan', { container: sheet })
     await within(sheet).findByRole('option', { name: 'Trần Văn Minh' })
     fireEvent.change(within(sheet).getByLabelText('Người thân ở lại'), { target: { value: '31' } })
     fireEvent.change(within(sheet).getByLabelText('Bắt đầu dự kiến'), { target: { value: '2026-11-01T18:00' } })
@@ -219,9 +254,17 @@ describe('Người thân ở lại', () => {
       reason: 'Chưa xuất viện',
     })
 
+    // Test BF-12 (2026-11-24): kết thúc ghi được thời điểm thực tế (FR-045, hợp đồng `at`), không ghi ngay khi bấm
     fireEvent.click(within(detail).getByRole('button', { name: 'Kết thúc ở lại' }))
+    expect(api.calls('POST', '/family-stays/72/end')).toHaveLength(0)
+    fireEvent.change(within(detail).getByLabelText('Thời điểm kết thúc thực tế'), {
+      target: { value: '2026-11-03T07:30' },
+    })
+    fireEvent.click(within(detail).getByRole('button', { name: 'Xác nhận kết thúc' }))
     await waitFor(() => expect(api.calls('POST', '/family-stays/72/end')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/family-stays/72/end')[0][1].body)).toEqual({})
+    expect(JSON.parse(api.calls('POST', '/family-stays/72/end')[0][1].body)).toEqual({
+      at: '2026-11-03T07:30:00+07:00',
+    })
   })
 
   it('khongCoQuyenXem_hienKhongCoQuyen', async () => {

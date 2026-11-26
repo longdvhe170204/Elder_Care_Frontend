@@ -9,6 +9,7 @@ import {
   postPrescriptionsByIdResumeTemporarily,
   postPrescriptionsByIdSuspend,
   postResidentsByResidentIdPrescriptions,
+  postResidentsByResidentIdPrescriptionsBatch,
   postResidentsByResidentIdPrescriptionsCheck,
 } from '@/api/api006'
 import { residentView } from './doseRoundView'
@@ -41,6 +42,13 @@ export async function checkPrescription(residentId, body) {
 
 export const createPrescription = (residentId, body, key) =>
   postResidentsByResidentIdPrescriptions({ path: { residentId }, headers: { 'Idempotency-Key': key }, body })
+
+export const createPrescriptionBatch = (residentId, items, key) =>
+  postResidentsByResidentIdPrescriptionsBatch({
+    path: { residentId },
+    headers: { 'Idempotency-Key': key },
+    body: { items },
+  })
 
 export const changeDosage = (id, body, key) =>
   postPrescriptionsByIdChangeDosage({ path: { id }, headers: { 'Idempotency-Key': key }, body })

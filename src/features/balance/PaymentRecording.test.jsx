@@ -118,6 +118,7 @@ describe('PaymentRecording', () => {
     expect(api.calls('POST', '/residents/41/cash-payments')).toHaveLength(0)
 
     type('Số tiền', '5000000')
+    expect(screen.getByLabelText('Số tiền')).toHaveValue('5.000.000')
     type('Ghi chú', 'PT 0123')
     fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận tiền mặt' }))
     await waitFor(() => expect(api.calls('POST', '/residents/41/cash-payments')).toHaveLength(1))

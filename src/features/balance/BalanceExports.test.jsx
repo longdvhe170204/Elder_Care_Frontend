@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { pickResident as pickFromList } from '@/test/pickResident'
 import { BalanceExports } from './BalanceExports'
 
 // Xuất sao kê và báo cáo thu chi (017 T039; FR-025, FR-027, Q-381, Q-386; quickstart Q29 → Q31).
@@ -32,9 +33,7 @@ async function ready() {
 const fill = (label, value) => fireEvent.change(screen.getByLabelText(label), { target: { value } })
 
 async function pickResident() {
-  fireEvent.change(screen.getByLabelText('Tìm người cao tuổi'), { target: { value: 'Ánh' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Tìm' }))
-  fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Ánh, HS-0007' }))
+  await pickFromList('Nguyễn Thị Ánh', { label: 'Tìm người cao tuổi' })
 }
 
 describe('BalanceExports (017)', () => {

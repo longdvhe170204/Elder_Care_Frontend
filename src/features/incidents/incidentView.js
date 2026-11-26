@@ -11,6 +11,8 @@ export const STATUS_LABEL = {
   VOIDED: 'Đã hủy',
 }
 export const OPEN_STATUSES = ['NEW', 'IN_PROGRESS', 'MONITORING']
+// Trạng thái công việc chưa đóng của việc tiếp theo (api-007 IncidentFollowUpTask)
+export const FOLLOW_UP_OPEN = ['NOT_YET_DUE', 'DUE', 'OVERDUE']
 
 export function isOpen(incident) {
   return OPEN_STATUSES.includes(incident.status)
@@ -58,7 +60,19 @@ export function vietnamIso(local) {
   return `${local}:00+07:00`
 }
 
+// Mức điền sẵn theo loại (FR-042); loại "khác" phải tự xác nhận mức (nghiep-vu 9.3, mã KHAC) nên không điền
+export function presetLevel(type) {
+  return type?.code === 'OTHER_HEALTH_CARE' ? '' : (type?.defaultLevel ?? '')
+}
+
 // Mức thấp hơn mặc định của loại cần lý do (FR-042)
 export function needsLowerReason(level, type) {
   return !!type && LEVEL_ORDER.indexOf(level) > LEVEL_ORDER.indexOf(type.defaultLevel)
 }
+
+// Cách báo người nhà được ghi nhận (BF-06)
+export const FAMILY_METHODS = [
+  ['PHONE', 'Gọi điện'],
+  ['IN_PERSON', 'Gặp trực tiếp'],
+  ['MESSAGE', 'Nhắn tin'],
+]

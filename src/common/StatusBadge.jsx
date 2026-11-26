@@ -73,6 +73,10 @@ const STATUS_TONE = {
   'Chờ Bác sĩ duyệt': 'attention',
   'Quan trọng': 'attention',
   'Bắt buộc': 'attention',
+  // Điều kiện kết thúc lưu trú (004 BF-10; DESIGN.md 6.26.1, yêu cầu 2026-11-24): Đạt xanh, Chưa đạt đỏ; Tự động giữ neutral
+  'Đạt': 'settled',
+  'Đạt (ngoại lệ)': 'settled',
+  'Chưa đạt': 'urgent',
 }
 
 function statusTone(status) {

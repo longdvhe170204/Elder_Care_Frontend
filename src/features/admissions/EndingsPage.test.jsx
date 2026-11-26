@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { pickResident } from '@/test/pickResident'
 import { json, mockRoutes } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { EndingsPage } from './EndingsPage'
@@ -34,10 +35,18 @@ const CONDITIONS = {
   warnings: [],
 }
 
-function renderPage(role = 'OFFICE_STAFF') {
+// Mọi điều kiện khác đã đạt, chỉ còn (e) bàn giao: nút Xác nhận kết thúc mở
+const READY = {
+  conditions: CONDITIONS.conditions.map((c) =>
+    c.code === 'END_E_HANDOVER' || c.status !== 'NOT_MET' ? c : { ...c, status: 'MET' },
+  ),
+  warnings: [],
+}
+
+function renderPage(role = 'OFFICE_STAFF', onNavigate = vi.fn()) {
   return render(
     <PermissionsProvider>
-      <EndingsPage role={role} />
+      <EndingsPage role={role} onNavigate={onNavigate} />
     </PermissionsProvider>,
   )
 }
@@ -77,6 +86,17 @@ beforeEach(() => {
 })
 
 describe('EndingsPage', () => {
+  // Demo 2026-11-26: mở từ thông báo kết thúc lưu trú (Xử lý) thì hiện ngay hồ sơ đó
+  it('moTuThongBao_hienNgayHoSoKetThuc', async () => {
+    render(
+      <PermissionsProvider>
+        <EndingsPage role="OFFICE_STAFF" onNavigate={vi.fn()} endingId={14} />
+      </PermissionsProvider>,
+    )
+    expect(await screen.findByRole('heading', { name: 'Nguyễn Thị Lan' })).toBeInTheDocument()
+    expect(await screen.findByText('Chi phí kỳ cuối đã chốt')).toBeInTheDocument()
+  })
+
   it('FR_063_moTheoMa_hienDieuKien_vaHaiYCuaMucH', async () => {
     renderPage()
     await openEnding()
@@ -85,71 +105,186 @@ describe('EndingsPage', () => {
     expect(screen.getByText('Số dư và tiền cọc đã quyết toán')).toBeInTheDocument()
     expect(screen.getByText('Kế toán đã xác nhận quyết toán')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: 'Điều kiện (h): số dư và tiền cọc đã quyết toán' })).toBeInTheDocument()
-    expect(screen.getByText(/Tự động/)).toBeInTheDocument()
+    // Demo 2026-11-26: (f) hợp đồng, (g) giường tự động nên không hiện
+    expect(screen.queryByText(/Tự động/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Hợp đồng được xử lý')).not.toBeInTheDocument()
   })
 
-  it('FR_064_xinNgoaiLe_khongCoChoDieuKienBanGiao_vaXacNhanQuyetToan', async () => {
+  // Demo 2026-11-26: hồ sơ hiện người đại diện kèm số điện thoại, phòng và giường đang ở
+  it('hoSo_hienNguoiDaiDien_soDienThoai_phongGiuong', async () => {
+    api.on(
+      'GET',
+      '/residents/5/relationships',
+      json(200, [
+        { id: 1, status: 'ACTIVE', representative: false, familyMember: { id: 40, fullName: 'Lê Văn Khác' } },
+        {
+          id: 2,
+          status: 'ACTIVE',
+          representative: true,
+          familyMember: { id: 41, fullName: 'Trần Văn Minh', phoneNumber: '0911000004' },
+        },
+      ]),
+    )
+    api.on('GET', '/residents/5/location', json(200, { location: { room: 'P102', bed: 'G2' } }))
     renderPage()
     await openEnding()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Xin ngoại lệ…' }))
-    const options = within(screen.getByLabelText('Điều kiện xin ngoại lệ'))
-      .getAllByRole('option')
-      .map((o) => o.textContent)
-    expect(options).toContain('Chi phí kỳ cuối đã chốt')
-    expect(options).toContain('Số dư và tiền cọc đã quyết toán')
-    expect(options).not.toContain('Đã bàn giao người cao tuổi')
-    expect(options).not.toContain('Kế toán đã xác nhận quyết toán')
+    expect(await screen.findByText('Trần Văn Minh · 0911000004')).toBeInTheDocument()
+    expect(screen.getByText('Phòng P102, giường G2')).toBeInTheDocument()
   })
 
-  it('FR_064_xinNgoaiLe_guiMaDieuKienVaLyDo', async () => {
-    api.on('POST', '/residency-endings/14/request-exception', json(201, { approvalRequestId: 90 }))
+  // Demo 2026-11-26: điều kiện bàn giao ở dòng cuối, sau quyết toán
+  it('dieuKien_banGiaoODongCuoi', async () => {
     renderPage()
     await openEnding()
-    fireEvent.click(screen.getByRole('button', { name: 'Xin ngoại lệ…' }))
-    fireEvent.change(screen.getByLabelText('Điều kiện xin ngoại lệ'), { target: { value: 'END_A_COSTS' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu ngoại lệ' }))
-    expect(await screen.findByText('Nhập lý do')).toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Chi phí chờ chứng từ' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Gửi yêu cầu ngoại lệ' }))
-    await waitFor(() => expect(api.calls('POST', '/residency-endings/14/request-exception')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/residency-endings/14/request-exception')[0][1].body)).toEqual({
-      conditionCode: 'END_A_COSTS',
-      reason: 'Chi phí chờ chứng từ',
-    })
+    const table = screen.getByRole('table', { name: 'Điều kiện kết thúc' })
+    const names = within(table)
+      .getAllByRole('row')
+      .slice(1)
+      .map((r) => r.querySelector('td')?.querySelector('span')?.textContent)
+    expect(names).toEqual([
+      'Chi phí kỳ cuối đã chốt',
+      'Số dư và tiền cọc đã quyết toán',
+      'Kế toán đã xác nhận quyết toán',
+      'Đã bàn giao người cao tuổi',
+    ])
   })
 
-  it('FR_063_banGiaoChoNguoiThan_kemBanGhiDon', async () => {
+  // Demo 2026-11-25: điều kiện dạng bảng; dòng chưa đạt có nút Xử lý mở thẳng màn xử lý của người cao tuổi đó
+  it('dieuKienChuaDat_coNutXuLy_moManXuLy', async () => {
+    const onNavigate = vi.fn()
+    renderPage('OFFICE_STAFF', onNavigate)
+    await openEnding()
+    const table = screen.getByRole('table', { name: 'Điều kiện kết thúc' })
+    const row = (name) => within(table).getByText(name).closest('tr')
+    fireEvent.click(within(row('Chi phí kỳ cuối đã chốt')).getByRole('button', { name: /Xử lý/ }))
+    expect(onNavigate).toHaveBeenLastCalledWith('charges', { residentId: 5, workspace: 'sources', until: '2026-11-20' })
+    fireEvent.click(within(row('Số dư và tiền cọc đã quyết toán')).getByRole('button', { name: /Xử lý/ }))
+    expect(onNavigate).toHaveBeenLastCalledWith('balance', { residentId: 5, focus: 'resident' })
+    expect(within(row('Đã bàn giao người cao tuổi')).queryByRole('button', { name: /Xử lý/ })).toBeNull()
+  })
+
+  it('FR_063_dieuKien_datMauXanh_chuaDatMauDo_khongHienMaSpec', async () => {
+    api.on(
+      'GET',
+      '/residency-endings/14/conditions',
+      json(200, {
+        conditions: [
+          { code: 'END_B_BELONGINGS', name: 'Không còn đồ gửi cần nhận', status: 'MET', basis: 'FR-063 (b)' },
+          {
+            code: 'END_E_HANDOVER',
+            name: 'Đã ghi nhận bàn giao người cao tuổi',
+            status: 'NOT_MET',
+            basis: 'Chưa ghi nhận bàn giao người cao tuổi',
+          },
+          { code: 'END_G_BED', name: 'Giường được giải phóng', status: 'AUTOMATIC', basis: 'FR-063 (g), FR-065' },
+        ],
+        warnings: [],
+      }),
+    )
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
+    await screen.findByText('Không còn đồ gửi cần nhận')
+
+    expect(screen.getByText('Đạt')).toHaveClass('text-success-foreground')
+    expect(screen.getByText('Chưa đạt')).toHaveClass('text-destructive')
+    expect(screen.getByText('Chưa ghi nhận bàn giao người cao tuổi')).toBeInTheDocument()
+    expect(screen.queryByText(/FR-063/)).not.toBeInTheDocument()
+  })
+
+  // Demo 2026-11-25 (chủ dự án chốt): bỏ xin ngoại lệ; nút Xác nhận kết thúc khóa khi còn điều kiện khác (e) chưa đạt
+  it('xacNhanKetThuc_khoaKhiConDieuKienKhacChuaDat_khongCoXinNgoaiLe', async () => {
+    renderPage()
+    await openEnding()
+    expect(screen.queryByRole('button', { name: /Xin ngoại lệ/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Ghi nhận bàn giao/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Xác nhận kết thúc' })).toBeDisabled()
+    expect(screen.getByText(/Còn 3 điều kiện chưa đạt/)).toBeInTheDocument()
+  })
+
+  it('xacNhanKetThuc_ghiBanGiaoChoNguoiThan_roiGuiLenhKetThuc', async () => {
+    api.on('GET', '/residency-endings/14/conditions', json(200, READY))
     api.on('POST', '/residency-endings/14/handover', json(201, {}))
+    api.on('POST', '/residents/5/end-residency', json(200, {}))
     renderPage()
     await openEnding()
-    fireEvent.click(screen.getByRole('button', { name: 'Ghi nhận bàn giao…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
-    expect(await screen.findByText('Chọn người nhận')).toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Người thân' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết thúc' }))
+    expect(screen.queryByRole('button', { name: 'Cơ sở tiếp nhận' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Mã bản ghi đón')).not.toBeInTheDocument()
     fireEvent.change(await screen.findByLabelText('Người thân nhận'), { target: { value: '41' } })
-    fireEvent.change(screen.getByLabelText('Thời điểm bàn giao'), { target: { value: '2026-11-20T09:00' } })
+    fireEvent.change(screen.getByLabelText('Thời điểm bàn giao, kết thúc'), { target: { value: '2026-11-20T09:00' } })
     fireEvent.change(await screen.findByLabelText('Nhân viên bàn giao'), { target: { value: '9' } })
-    fireEvent.change(screen.getByLabelText('Mã bản ghi đón'), { target: { value: '7001' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu bàn giao' }))
+    fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Xuất viện theo hợp đồng' } })
+    fireEvent.click(
+      within(screen.getByRole('heading', { name: 'Xác nhận kết thúc lưu trú' }).parentElement).getByRole('button', {
+        name: 'Xác nhận kết thúc',
+      }),
+    )
 
-    await waitFor(() => expect(api.calls('POST', '/residency-endings/14/handover')).toHaveLength(1))
+    await waitFor(() => expect(api.calls('POST', '/residents/5/end-residency')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/residency-endings/14/handover')[0][1].body)).toEqual({
       recipientType: 'FAMILY_MEMBER',
       familyMemberId: 41,
       handoverAt: '2026-11-20T09:00:00+07:00',
       handoverStaffId: 9,
-      pickupRecordId: 7001,
+    })
+    expect(JSON.parse(api.calls('POST', '/residents/5/end-residency')[0][1].body)).toEqual({
+      reason: 'Xuất viện theo hợp đồng',
+      details: { residencyEndingId: 14, effectiveAt: '2026-11-20T09:00:00+07:00' },
     })
   })
 
-  it('FR_062_lapHoSo_chuyenCoSoThieuNoiChuyenDen_baoTaiO', async () => {
+  it('xacNhanKetThuc_hanhChinhKhongXemDuocNhanVien_hienTenNguoiGhi', async () => {
+    api.on('GET', '/residency-endings/14/conditions', json(200, READY))
+    api.on('GET', '/staff', json(200, []))
+    api.on(
+      'GET',
+      '/me',
+      json(200, { accountId: 3, type: 'STAFF', fullName: 'Nguyễn Thị Hạnh', roles: ['OFFICE_STAFF'] }),
+    )
+    renderPage()
+    await openEnding()
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết thúc' }))
+    expect(await screen.findByText('Nguyễn Thị Hạnh')).toBeInTheDocument()
+    expect(screen.queryByText(/Chính bạn/)).not.toBeInTheDocument()
+  })
+
+  // Demo 2026-11-25: người đề nghị gõ tên để tìm, gợi ý người cao tuổi, người thân và nhân viên
+  it('FR_062_nguoiDeNghi_goiYTheoTen', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
     const dialog = screen.getByRole('dialog')
-    await within(dialog).findByRole('option', { name: 'Nguyễn Thị Lan (NCT-0005)' })
-    fireEvent.change(within(dialog).getByLabelText('Người cao tuổi'), { target: { value: '5' } })
+    await pickResident('Nguyễn Thị Lan', { container: dialog })
+    const input = within(dialog).getByLabelText('Người đề nghị')
+    fireEvent.focus(input)
+    await waitFor(() =>
+      expect(
+        within(within(dialog).getByRole('listbox'))
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Nguyễn Thị Lan (người cao tuổi)', 'Trần Văn Minh (người thân)', 'Hoàng Thu Hà (nhân viên)']),
+    )
+  })
+
+  // Demo 2026-11-26 (E): Hành chính chỉ lập hết hạn, chấm dứt hợp đồng; xuất viện, chuyển cơ sở (kèm nơi chuyển đến, lý do
+  // y tế) còn ở form của Bác sĩ
+  it('lapHoSo_hanhChinh_chiHetHanVaChamDut_khongCoNoiChuyenDenVaLyDoYTe', async () => {
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
+    const dialog = screen.getByRole('dialog')
+    const group = within(dialog).getByRole('group', { name: 'Trường hợp kết thúc' })
+    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Hết hạn hợp đồng',
+      'Chấm dứt hợp đồng',
+    ])
+    expect(within(dialog).queryByLabelText('Nơi chuyển đến')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText('Vì lý do y tế')).not.toBeInTheDocument()
+  })
+
+  it('FR_062_lapHoSo_chuyenCoSoThieuNoiChuyenDen_baoTaiO', async () => {
+    renderPage('DOCTOR')
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
+    const dialog = screen.getByRole('dialog')
+    await pickResident('Nguyễn Thị Lan', { container: dialog })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Chuyển cơ sở' }))
     fireEvent.change(within(dialog).getByLabelText('Ngày kết thúc dự kiến'), { target: { value: '2026-11-30' } })
     fireEvent.change(within(dialog).getByLabelText('Người đề nghị'), { target: { value: 'Con gái' } })

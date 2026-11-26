@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { PermissionsProvider } from '@/common/permissions/permissions'
+import { pickResident } from '@/test/pickResident'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { BelongingsPage } from './BelongingsPage'
 
@@ -23,7 +24,11 @@ const PHONE = {
 
 const LAN = { id: 7, profileCode: 'NCT-0007', personalInfo: { fullName: 'Nguyễn Thị Lan' } }
 
-function setup(permissions = ['BELONGINGS:VIEW', 'BELONGINGS:CREATE', 'BELONGINGS:UPDATE'], residents = [LAN]) {
+function setup(
+  permissions = ['BELONGINGS:VIEW', 'BELONGINGS:CREATE', 'BELONGINGS:UPDATE'],
+  residents = [LAN],
+  props = {},
+) {
   const api = mockRoutes()
   api.on(
     'GET',
@@ -74,16 +79,14 @@ function setup(permissions = ['BELONGINGS:VIEW', 'BELONGINGS:CREATE', 'BELONGING
   )
   render(
     <PermissionsProvider>
-      <BelongingsPage role="OFFICE_STAFF" />
+      <BelongingsPage role="OFFICE_STAFF" {...props} />
     </PermissionsProvider>,
   )
   return api
 }
 
 async function openResident() {
-  fireEvent.change(screen.getByLabelText('Tìm người cao tuổi'), { target: { value: 'Lan' } })
-  fireEvent.click(screen.getByRole('button', { name: 'Tìm' }))
-  fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+  await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
 }
 
 describe('BelongingsPage (013 T011, US1)', () => {
@@ -115,24 +118,17 @@ describe('BelongingsPage (013 T011, US1)', () => {
     const minh = { id: 8, profileCode: 'NCT-0008', personalInfo: { fullName: 'Lê Văn Minh' } }
     const api = setup(undefined, [LAN, minh])
     api.on('GET', '/residents/8/belongings', json(200, []))
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
     fireEvent.click(await screen.findByRole('button', { name: 'Chi tiết Điện thoại Nokia' }))
     expect(await screen.findByText('Trần Thu Hà', { exact: false })).toBeInTheDocument()
 
-    expect(screen.getByRole('button', { name: 'Lê Văn Minh, NCT-0008', hidden: true })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007', hidden: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Lê Văn Minh, NCT-0008', hidden: true }))
+    expect(screen.getByLabelText('Tìm người cao tuổi')).toHaveValue('Nguyễn Thị Lan (NCT-0007)')
+    await pickResident('Lê Văn Minh', { label: 'Tìm người cao tuổi', hidden: true })
 
     expect(await screen.findByRole('heading', { name: 'Đồ gửi của Lê Văn Minh' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Chi tiết Điện thoại Nokia' })).not.toBeInTheDocument()
     expect(screen.queryByText('Trần Thu Hà', { exact: false })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Lê Văn Minh, NCT-0008', hidden: true })).toHaveAttribute(
-      'aria-pressed',
-      'true',
-    )
+    expect(screen.getByLabelText('Tìm người cao tuổi')).toHaveValue('Lê Văn Minh (NCT-0008)')
   })
 
   it('FR_011_danhSachDoGui_loaiTrangThaiNguoiGiuViTri', async () => {
@@ -319,7 +315,7 @@ describe('BelongingsPage (013 T011, US1)', () => {
 
   it('FR_011_moManHienNgayDanhSachNguoiCaoTuoi_khongCanTim', async () => {
     setup()
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
     expect(await screen.findByText('Điện thoại Nokia')).toBeInTheDocument()
   })
 })
@@ -353,8 +349,13 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
   })
   const outerCalls = (api) => api.calls('GET', '/recipient-confirmations').filter(([url]) => !url.includes('status='))
 
-  function setupReturn(returnResponse, initial = [confirmation(7, 'EFFECTIVE')]) {
-    const api = setup()
+  // Luồng người nhận khác (FR-017) đang ẩn ở màn (demo 2026-11-26); các ca dưới bật lại để vẫn kiểm luồng
+  function setupReturn(
+    returnResponse,
+    initial = [confirmation(7, 'EFFECTIVE')],
+    props = { allowOtherRecipient: true },
+  ) {
+    const api = setup(undefined, undefined, props)
     const state = { items: initial, returned: false }
     api.on('GET', '/residents/7/belongings', () =>
       json(200, [state.returned ? { ...SWEATER, status: 'RETURNED', version: 2 } : SWEATER]),
@@ -375,16 +376,23 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
     return { api, state }
   }
 
+  // Demo 2026-11-26 (E): mặc định không có người nhận "Người khác" và mục "Xác nhận người nhận khác"
+  it('macDinh_khongCoNguoiNhanKhac_khongCoMucXacNhan', async () => {
+    setupReturn(json(201, { handovers: [], belongings: [] }), undefined, {})
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
+    fireEvent.click(await screen.findByRole('button', { name: 'Trả đồ' }))
+    const recipient = await screen.findByLabelText('Người nhận')
+    expect([...recipient.querySelectorAll('option')].map((o) => o.value)).not.toContain('OTHER_PERSON')
+    expect(screen.queryByRole('region', { name: 'Xác nhận người nhận khác' })).not.toBeInTheDocument()
+  })
+
   async function openReturn() {
-    fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan, NCT-0007' }))
+    await pickResident('Nguyễn Thị Lan', { label: 'Tìm người cao tuổi' })
     const section = await screen.findByRole('region', { name: 'Xác nhận người nhận khác' })
     fireEvent.click(screen.getByRole('button', { name: 'Trả đồ' }))
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Trả Áo len A, mã 18' }))
     fireEvent.change(screen.getByLabelText('Mức tình trạng lúc trả của Áo len A'), { target: { value: '11' } })
     fireEvent.change(screen.getByLabelText('Người nhận'), { target: { value: 'OTHER_PERSON' } })
-    fireEvent.change(screen.getByLabelText('Họ tên người nhận'), { target: { value: 'Lê Văn Nam' } })
-    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'CCCD' } })
-    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: '079000000102' } })
     return section
   }
 
@@ -431,6 +439,8 @@ describe('BelongingsPage: trả đồ bằng xác nhận người nhận khác (
     })
     const section = await openReturn()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập xác nhận ngay' }))
+    fireEvent.change(screen.getByLabelText('Họ tên người nhận khác'), { target: { value: 'Lê Văn Nam' } })
+    fireEvent.change(screen.getByLabelText('Giấy tờ của người nhận'), { target: { value: 'CCCD 079000000102' } })
     fireEvent.change(screen.getByLabelText('Bản ký của người đại diện (không bắt buộc)'), {
       target: { files: [new File(['k'], 'dong-y.pdf', { type: 'application/pdf' })] },
     })

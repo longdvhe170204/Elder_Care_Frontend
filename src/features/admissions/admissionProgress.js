@@ -146,6 +146,13 @@ export const PHASES = [
 // mã cố định; nên bước tìm theo mã, không thấy thì theo module của dòng (AdmissionConditionService, FR-004).
 const CONDITION_MODULE = { ADM_A_ASSESSMENT: 'M01', ADM_D_BED: 'M03', ADM_F_CONTACTS: 'M10' }
 
+// Có bản Nháp nguyện vọng cuối đời chờ kiểm chứng thì không hiện thêm cảnh báo "chưa có nguyện vọng cuối đời" (hai câu
+// cùng nói phiếu chưa có hiệu lực, đọc như mâu thuẫn)
+export function visibleWarnings(warnings = []) {
+  const hasDraft = warnings.some((w) => w.code === 'UNVERIFIED_END_OF_LIFE_WISH_DRAFT')
+  return hasDraft ? warnings.filter((w) => w.code !== 'MISSING_END_OF_LIFE_WISH') : warnings
+}
+
 export function conditionFinder(lines) {
   return (code) =>
     lines.find((c) => c.code === code) ??
@@ -190,7 +197,8 @@ export function admissionProgress({
       short: phase.short,
       steps: rows,
       done: rows.filter((r) => r.state === 'done').length,
-      total: rows.length,
+      // Bước "Không còn kiểm" của lượt đã đóng không tính vào tổng
+      total: rows.filter((r) => r.state !== 'closed').length,
     }
   })
 

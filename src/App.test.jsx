@@ -152,7 +152,7 @@ describe('App', () => {
     window.history.replaceState(null, '', '/#incidents?incidentId=12')
     render(<App />)
 
-    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByRole('region', { name: 'Chi tiết sự cố' })).toBeInTheDocument()
     window.history.replaceState(null, '', '/')
   })
 

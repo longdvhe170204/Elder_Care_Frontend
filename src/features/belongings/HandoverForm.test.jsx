@@ -186,3 +186,10 @@ describe('HandoverForm (013 T015, US2)', () => {
     expect(await screen.findByText('Đồ đã thay đổi, tải lại.')).toBeInTheDocument()
   })
 })
+
+// Demo 2026-11-25: bàn giao tiền mặt, ô số tiền dạng xxx.xxx.xxx đ
+it('banGiaoTienMat_oSoTienDinhDang', () => {
+  renderForm({ id: 92, description: 'Tiền mặt', cashAmount: 2000000, status: 'HELD', holder: 'STAFF', version: 1 })
+  fireEvent.change(screen.getByLabelText('Số tiền bàn giao (trống là toàn bộ)'), { target: { value: '500000' } })
+  expect(screen.getByLabelText('Số tiền bàn giao (trống là toàn bộ)')).toHaveValue('500.000')
+})

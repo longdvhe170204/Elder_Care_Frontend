@@ -159,10 +159,14 @@ describe('ContractSheet', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Dịch vụ, đặt cọc' }))
     await within(dialog).findByText('Chăm sóc thường xuyên, theo mức chăm sóc')
     await vi.waitFor(() => expect(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' })).not.toBeDisabled())
+    // Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ
+    fireEvent.change(within(dialog).getByLabelText('Khoản đặt cọc'), { target: { value: '5000000' } })
+    expect(within(dialog).getByLabelText('Khoản đặt cọc')).toHaveValue('5.000.000')
 
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
     await vi.waitFor(() => expect(api.calls('PUT', '/contracts/7')).toHaveLength(1))
     const body = JSON.parse(api.calls('PUT', '/contracts/7')[0][1].body)
+    expect(body.depositAmount).toBe(5000000)
     expect(body.services).toEqual(
       expect.arrayContaining([
         { serviceId: 32, inPackage: false },

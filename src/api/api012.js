@@ -15,6 +15,9 @@ export const getFamilyMembersById = (params) => request('GET', '/family-members/
 /** Sửa thông tin liên hệ (nhật ký trước/sau); bỏ giấy tờ bị chặn khi đang có quyền được phép đón (FR-001, FR-007) */
 export const putFamilyMembersById = (params) => request('PUT', '/family-members/{id}', params)
 
+/** Danh sách liên hệ người thân (chỉ quan hệ Hiệu lực; không có quyền, giấy tờ, địa chỉ; bổ sung 2026-11-26, Q-448) (FR-077) */
+export const getResidentsByResidentIdFamilyContacts = (params) => request('GET', '/residents/{residentId}/family-contacts', params)
+
 /** Quan hệ của người cao tuổi, vai trò, quyền đang bật và quyền có tác dụng (FR-002, FR-007, FR-011, DBR-02, DBR-03) */
 export const getResidentsByResidentIdRelationships = (params) => request('GET', '/residents/{residentId}/relationships', params)
 
@@ -48,6 +51,9 @@ export const getResidentsByResidentIdPickupRecords = (params) => request('GET', 
 /** Lập yêu cầu ngoại lệ đón cho người ngoài danh sách (FR-024, FR-025, BR-M10-03) */
 export const postResidentsByResidentIdPickupExceptions = (params) => request('POST', '/residents/{residentId}/pickup-exceptions', params)
 
+/** Yêu cầu ngoại lệ đón (lọc người cao tuổi, trạng thái); người đại diện thấy ngoại lệ của người cao tuổi mình đại diện (FR-024, FR-050) */
+export const getPickupExceptions = (params) => request('GET', '/pickup-exceptions', params)
+
 /** Xác nhận (người đại diện qua cổng), duyệt (Quản lý viện), từ chối, hủy (lý do) (FR-024) */
 export const postPickupExceptionsByIdByCommand = (params) => request('POST', '/pickup-exceptions/{id}/{command}', params)
 
@@ -74,6 +80,9 @@ export const postFamilyStaysByIdByCommand = (params) => request('POST', '/family
 
 /** Người cao tuổi mà người thân đang đăng nhập có quan hệ Hiệu lực, kèm quyền có tác dụng (FR-046, BR-M10-01) */
 export const getFamilyPortalResidents = (params) => request('GET', '/family-portal/residents', params)
+
+/** Người thân Hiệu lực của người cao tuổi để lập yêu cầu đổi quyền trên cổng (thêm 2026-11-24, test BF-12): người đại diện thấy mọi người, người thân khác chỉ thấy chính mình; mỗi dòng relationshipId, fullName, relationship, representative, primaryContact, self, rights (mỗi quyền enabled, effective như Relationship.rights); không có số điện thoại, giấy tờ (FR-013, FR-014, FR-050) */
+export const getFamilyPortalResidentsByResidentIdFamilyMembers = (params) => request('GET', '/family-portal/residents/{residentId}/family-members', params)
 
 /** Thông tin chung: họ tên, ảnh, phòng, trạng thái, lượt vắng, lịch đến/về, lượt thăm và phản hồi của mình, thực đơn chung (bản tin bỏ theo Q-396) (FR-046, FR-047) */
 export const getFamilyPortalResidentsByResidentIdGeneral = (params) => request('GET', '/family-portal/residents/{residentId}/general', params)

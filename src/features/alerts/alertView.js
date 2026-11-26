@@ -33,13 +33,25 @@ const TYPE_LABEL = {
   DIET_ALLERGY_CONFLICT: 'Xung đột dị ứng với chế độ ăn',
   CRITICAL_CONDITION: 'Tình trạng nguy kịch',
   RESIDENT_HELP_REQUEST: 'Người cao tuổi bấm nút SOS',
-  STAFF_ASSIST_REQUEST: 'Nhân viên bấm nút hỗ trợ khẩn cấp',
+  STAFF_ASSIST_REQUEST: 'Nhân viên cần hỗ trợ',
 }
 
-const ORIGIN_LABEL = { SYSTEM: 'Hệ thống', MANUAL: 'Nhân viên tạo', SOS: 'Nút SOS', ASSIST_BUTTON: 'Nút hỗ trợ' }
+const ORIGIN_LABEL = {
+  SYSTEM: 'Hệ thống',
+  MANUAL: 'Nhân viên tạo',
+  SOS: 'Người cao tuổi bấm SOS',
+  ASSIST_BUTTON: 'Nhân viên gọi hỗ trợ',
+}
+
+// Cảnh báo thủ công mang mã loại sự cố: tên lấy từ danh mục loại sự cố (api-007), nạp khi tải danh sách hoặc chi tiết
+let incidentTypeNames = {}
+
+export function setIncidentTypeNames(types) {
+  incidentTypeNames = Object.fromEntries((types ?? []).map((t) => [t.code, t.name]))
+}
 
 export function typeLabel(type) {
-  return TYPE_LABEL[type] ?? 'Cảnh báo'
+  return TYPE_LABEL[type] ?? incidentTypeNames[type] ?? 'Cảnh báo'
 }
 
 export function originLabel(origin) {
@@ -65,8 +77,52 @@ export function statusTone(alert) {
   return 'neutral'
 }
 
+// Ai lo cảnh báo, nói rõ đã nhận hay chưa: "Phụ trách" cũ bị hiểu là đã có người nhận (góp ý test demo 2026-11-23)
+export function handlerText(alert) {
+  if (alert.status === 'CONVERTED_TO_INCIDENT' && alert.incidentId != null) return `Đã thành sự cố SC-${alert.incidentId}`
+  if (['NEW', 'ESCALATED'].includes(alert.status)) {
+    if (alert.pressedByMe) return 'Bạn gửi, đang chờ người khác nhận'
+    return alert.assignee ? `Chờ ${alert.assignee} nhận` : 'Chưa giao ai, người đang trực nhận được'
+  }
+  if (alert.status === 'RECEIVED') return `${alert.assignee ?? 'Có người'} đã tiếp nhận, chưa bắt đầu xử lý`
+  if (isOpen(alert)) return `Đang xử lý: ${alert.assignee ?? 'chưa rõ người'}`
+  return alert.assignee ? `Người xử lý: ${alert.assignee}` : 'Không có người xử lý'
+}
+
+const SHORT_TIME = new Intl.DateTimeFormat('vi-VN', {
+  hour: '2-digit',
+  minute: '2-digit',
+  day: '2-digit',
+  month: '2-digit',
+  hour12: false,
+  timeZone: 'Asia/Ho_Chi_Minh',
+})
+
+// Một nhãn ngắn ở dòng cảnh báo thay cho "Hạn tiếp nhận …", "Chờ … nhận" (đề xuất 2026-11-24): việc cần biết ngay. Không
+// tính "còn bao nhiêu phút" theo đồng hồ máy vì bản demo chạy đồng hồ giả lập ở backend; dựa vào trạng thái backend trả.
+// tone: urgent | attention | neutral
+export function timeChip(alert) {
+  if (!isOpen(alert)) return { text: statusLabel(alert), tone: 'neutral' }
+  if (['NEW', 'ESCALATED'].includes(alert.status)) {
+    if (alert.maxEscalationReached) return { text: 'Quá hạn, đã báo Quản lý viện', tone: 'urgent' }
+    if (alert.status === 'ESCALATED') return { text: `Quá hạn, đã lên cấp ${alert.escalationLevel}`, tone: 'attention' }
+    if (alert.level === 'CRITICAL') return { text: 'Cần nhận ngay', tone: 'urgent' }
+    if (alert.level === 'LOW') return { text: 'Nhận trong ca', tone: 'neutral' }
+    if (alert.acknowledgementDeadline) {
+      return { text: `Nhận trước ${SHORT_TIME.format(new Date(alert.acknowledgementDeadline))}`, tone: 'neutral' }
+    }
+    return { text: 'Chờ nhận', tone: 'neutral' }
+  }
+  return { text: alert.assignee ? `${alert.assignee} đang xử lý` : 'Đang xử lý', tone: 'neutral' }
+}
+
 export function isUrgent(alert) {
   return isOpen(alert) && (alert.level === 'CRITICAL' || alert.maxEscalationReached)
+}
+
+// Việc gấp còn chờ người nhận: lên dải "Cần làm ngay"; đã có người tiếp nhận thì nằm ở nhóm Đang được xử lý
+export function needsReceiver(alert) {
+  return isUrgent(alert) && ['NEW', 'ESCALATED'].includes(alert.status)
 }
 
 // Khẩn cấp trước, rồi leo thang tối đa, rồi mới nhất trước (DESIGN.md 7.2 alert-card)
@@ -81,4 +137,16 @@ export function sortAlerts(alerts) {
 
 export function residentName(profile) {
   return profile?.personalInfo?.fullName ?? 'Người cao tuổi'
+}
+
+// Vì sao cảnh báo ở mức này (BF-06): mức do hệ thống đặt theo loại việc, người xem không phải đoán
+const LEVEL_WHY = {
+  OVERDUE_CARE_TASK: 'Việc chăm sóc bắt buộc đã quá hạn',
+  LOW_WATER_INTAKE: 'Uống nước chưa đủ so với mức cần',
+  PROLONGED_POOR_EATING: 'Ăn kém nhiều bữa liên tiếp',
+  PROLONGED_NEGATIVE_MOOD: 'Tâm trạng xấu nhiều ngày liên tiếp',
+}
+
+export function levelWhy(alert) {
+  return LEVEL_WHY[alert.type]
 }

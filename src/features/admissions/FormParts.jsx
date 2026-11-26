@@ -4,7 +4,7 @@ import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChoiceTray } from '@/common/ChoiceTray'
-import { SELECT } from './admissionLabels'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 
 // Thành phần form dùng chung trong features/admissions (004): chọn một trong vài giá trị, dòng thông tin, ô lý do,
 // chọn người cao tuổi. Không dùng chung với feature khác (frontend/README mục 4 điều 1).
@@ -86,24 +86,19 @@ export function ResidentSelect({ id, label = 'Người cao tuổi', statuses, va
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Demo 2026-11-26: ô tìm theo tên hoặc mã hồ sơ (ResidentCombobox) thay dropdown dài
   return (
-    <Field data-invalid={!!error || undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <select
-        id={id}
-        className={SELECT}
-        value={value}
-        aria-invalid={!!error || undefined}
-        onChange={(e) => onChange(e.target.value)}
-      >
-        <option value="">{residents === null ? 'Đang tải…' : 'Chọn người cao tuổi'}</option>
-        {(residents ?? []).map((r) => (
-          <option key={r.id} value={r.id}>
-            {`${r.personalInfo?.fullName ?? r.fullName ?? `Mã ${r.id}`}${r.profileCode ? ` (${r.profileCode})` : ''}`}
-          </option>
-        ))}
-      </select>
-      {error && <FieldError>{error}</FieldError>}
-    </Field>
+    <ResidentCombobox
+      id={id}
+      label={label}
+      options={(residents ?? []).map((r) => ({
+        value: String(r.id),
+        label: `${r.personalInfo?.fullName ?? r.fullName ?? `Mã ${r.id}`}${r.profileCode ? ` (${r.profileCode})` : ''}`,
+      }))}
+      value={value}
+      onChange={onChange}
+      error={error}
+      loading={residents === null}
+    />
   )
 }

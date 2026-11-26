@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { getCostsBillingSources, postCostsItemsFromEvents } from '@/api'
+import { useEffect, useRef, useState } from 'react'
+import { getContracts, getCostsBillingSources, postCostsItemsFromEvents } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -7,6 +7,8 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDate } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { controlClass } from './chargeLabels'
+import { ResidentField } from './ResidentField'
+import { useResidentDirectory } from './useResidentDirectory'
 
 const types = {
   RESIDENCY_DAY: 'Ngày lưu trú',
@@ -21,8 +23,69 @@ const types = {
 }
 const keyOf = (row) => JSON.stringify([row.sourceId, row.billingUnit])
 
-export function BillingSources({ onChanged = () => {} }) {
-  const [filter, setFilter] = useState({ residentId: '', type: 'RESIDENCY_DAY', from: '', to: '' })
+// Gom toàn bộ (demo 2026-11-25, E; lệch Q-307 "không đưa danh sách chưa lập", chờ chủ dự án duyệt khi review PR):
+// Hành chính bấm một lần, màn tra mọi loại nguồn trong khoảng ngày, lấy nguồn chưa có khoản và lập hàng loạt theo từng
+// loại bằng API sẵn có (backend vẫn kiểm FR-006, FR-007, FR-011 và bỏ qua nguồn không đạt kèm lý do). Mỗi loại một
+// Idempotency-Key cố định cho tới khi đổi bộ lọc, để bấm lại sau lỗi không lập trùng.
+async function collectAll({ residentId, from, to }, keys) {
+  const perType = []
+  for (const type of Object.keys(types)) {
+    const { data } = await getCostsBillingSources({ query: { residentId, type, from, to } })
+    const sourceUnits = (data ?? [])
+      .filter((row) => !row.existingItemId)
+      .map(({ sourceId, billingUnit }) => ({ sourceId, billingUnit }))
+    if (!sourceUnits.length) continue
+    if (!keys.has(type)) keys.set(type, crypto.randomUUID())
+    const { data: result } = await postCostsItemsFromEvents({
+      headers: { 'Idempotency-Key': keys.get(type) },
+      body: { residentId, sourceType: type, sourceUnits },
+    })
+    perType.push({ type, created: result.succeededIds.length, skipped: result.skipped })
+  }
+  return perType
+}
+
+// Nguồn bị bỏ qua: ngày lưu trú (mã nguồn "người:yyyy-mm-dd") nêu ngày, gộp theo lý do; nguồn khác chỉ nêu lý do
+function skippedText(skipped) {
+  const byReason = new Map()
+  for (const x of skipped) {
+    const day = /:(\d{4}-\d{2}-\d{2})$/.exec(x.source ?? '')?.[1]
+    if (!byReason.has(x.reason)) byReason.set(x.reason, [])
+    if (day) byReason.get(x.reason).push(formatDate(day))
+  }
+  return [...byReason].map(([reason, days]) => (days.length ? `${days.join(', ')}: ${reason}` : reason)).join('; ')
+}
+
+// Hợp đồng tính phí: hợp đồng Hiệu lực, không có thì hợp đồng bắt đầu gần nhất
+function billingContract(contracts) {
+  const sorted = [...(contracts ?? [])].sort((a, b) => (a.startDate < b.startDate ? 1 : -1))
+  return sorted.find((c) => c.status === 'ACTIVE') ?? sorted[0] ?? null
+}
+
+// preset (demo 2026-11-26, E): mở từ điều kiện (a) của Kết thúc lưu trú { residentId, until }: chọn sẵn người cao tuổi,
+// khoảng ngày tự tính từ ngày bắt đầu hợp đồng tới ngày kết thúc dự kiến, không có ô chọn ngày; backend vẫn bỏ qua ngày
+// ngoài thời gian tính phí và nguồn đã có khoản nên gom lại không lập trùng
+export function BillingSources({ onChanged = () => {}, preset = null }) {
+  const [filter, setFilter] = useState({
+    residentId: preset ? String(preset.residentId) : '',
+    type: 'RESIDENCY_DAY',
+    from: '',
+    to: preset?.until ?? '',
+  })
+  useEffect(() => {
+    if (!preset) return
+    let live = true
+    getContracts({ query: { residentId: preset.residentId } })
+      .then(({ data }) => {
+        const contract = billingContract(data)
+        if (live && contract) setFilter((current) => ({ ...current, from: contract.startDate }))
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [preset])
+  const residents = useResidentDirectory()
   const [loaded, setLoaded] = useState(null)
   const [rows, setRows] = useState(null)
   const [selected, setSelected] = useState([])
@@ -31,7 +94,13 @@ export function BillingSources({ onChanged = () => {} }) {
   const [pending, setPending] = useState(false)
   const busy = useRef(false)
   const nonce = useRef(null)
+  const collectKeys = useRef(new Map())
+  const [collected, setCollected] = useState(null)
+  const [collectHint, setCollectHint] = useState(null)
   function change(name, value) {
+    collectKeys.current = new Map()
+    setCollected(null)
+    setCollectHint(null)
     setFilter((current) => ({ ...current, [name]: value }))
     setRows(null)
     setLoaded(null)
@@ -54,6 +123,29 @@ export function BillingSources({ onChanged = () => {} }) {
       const { data } = await getCostsBillingSources({ query })
       setRows(data)
       setLoaded(query)
+    } catch (error) {
+      setFailure(problemOf(error))
+    } finally {
+      busy.current = false
+      setPending(false)
+    }
+  }
+  async function gather() {
+    if (busy.current) return
+    if (!filter.residentId || !filter.from || !filter.to) {
+      setCollectHint('Chọn người cao tuổi, từ ngày và đến ngày trước khi gom.')
+      return
+    }
+    busy.current = true
+    setPending(true)
+    setFailure(null)
+    setCollectHint(null)
+    setCollected(null)
+    try {
+      const perType = await collectAll({ ...filter, residentId: Number(filter.residentId) }, collectKeys.current)
+      setCollected(perType)
+      const created = perType.reduce((sum, t) => sum + t.created, 0)
+      if (perType.length) onChanged(`Đã gom và lập ${created} khoản.`)
     } catch (error) {
       setFailure(problemOf(error))
     } finally {
@@ -91,17 +183,15 @@ export function BillingSources({ onChanged = () => {} }) {
   return (
     <Card className="space-y-4 p-4">
       <form onSubmit={search} className="grid gap-3 sm:grid-cols-2">
-        <label className="type-body-sm">
-          Mã người cao tuổi
-          <Input
-            type="number"
-            min="1"
-            required
-            value={filter.residentId}
-            disabled={pending}
-            onChange={(e) => change('residentId', e.target.value)}
-          />
-        </label>
+        <ResidentField
+          label="Người cao tuổi"
+          fallbackLabel="Mã người cao tuổi"
+          residents={residents}
+          required
+          value={filter.residentId}
+          disabled={pending}
+          onChange={(value) => change('residentId', value)}
+        />
         <label className="type-body-sm">
           Loại nguồn
           <select
@@ -117,31 +207,79 @@ export function BillingSources({ onChanged = () => {} }) {
             ))}
           </select>
         </label>
-        <label className="type-body-sm">
-          Từ ngày
-          <Input
-            type="date"
-            required
-            value={filter.from}
-            disabled={pending}
-            onChange={(e) => change('from', e.target.value)}
-          />
-        </label>
-        <label className="type-body-sm">
-          Đến ngày
-          <Input
-            type="date"
-            required
-            min={filter.from}
-            value={filter.to}
-            disabled={pending}
-            onChange={(e) => change('to', e.target.value)}
-          />
-        </label>
-        <Button type="submit" disabled={pending}>
-          Tra cứu nguồn
-        </Button>
+        {preset ? (
+          <p className="type-body-sm sm:col-span-2">
+            {filter.from
+              ? `Khoảng ngày: ${formatDate(filter.from)} (bắt đầu hợp đồng) đến ${formatDate(filter.to)} (kết thúc dự kiến).`
+              : 'Đang tính khoảng ngày từ hợp đồng…'}
+          </p>
+        ) : (
+          <>
+            <label className="type-body-sm">
+              Từ ngày
+              <Input
+                type="date"
+                required
+                value={filter.from}
+                disabled={pending}
+                onChange={(e) => change('from', e.target.value)}
+              />
+            </label>
+            <label className="type-body-sm">
+              Đến ngày
+              <Input
+                type="date"
+                required
+                min={filter.from}
+                value={filter.to}
+                disabled={pending}
+                onChange={(e) => change('to', e.target.value)}
+              />
+            </label>
+          </>
+        )}
+        <div className="flex flex-wrap gap-2 sm:col-span-2">
+          <Button type="button" disabled={pending} onClick={gather}>
+            Gom toàn bộ chi phí chưa lập
+          </Button>
+          <Button type="submit" variant="outline" disabled={pending}>
+            Tra cứu nguồn
+          </Button>
+        </div>
+        <p className="type-caption text-muted-foreground sm:col-span-2">
+          Gom toàn bộ: tra mọi loại nguồn trong khoảng ngày và lập khoản Nháp cho các nguồn chưa có khoản. Tra cứu
+          nguồn: xem và chọn từng nguồn của một loại.
+        </p>
       </form>
+      {collectHint && <p className="type-body-sm text-destructive">{collectHint}</p>}
+      {collected && (
+        <div role="status" className="space-y-1 rounded-lg border p-3 type-body-sm">
+          {collected.length === 0 ? (
+            <p>Mọi nguồn trong khoảng ngày đã có khoản, không còn gì để gom.</p>
+          ) : (
+            <>
+              <p className="font-medium">
+                Đã gom: lập {collected.reduce((sum, t) => sum + t.created, 0)} khoản, bỏ qua{' '}
+                {collected.reduce((sum, t) => sum + t.skipped.length, 0)} nguồn.
+              </p>
+              <ul className="space-y-1">
+                {collected.map((t) => (
+                  <li key={t.type}>
+                    {types[t.type]}: lập {t.created}, bỏ qua {t.skipped.length}
+                    {t.skipped.length > 0 && ` (${skippedText(t.skipped)})`}
+                  </li>
+                ))}
+              </ul>
+              {collected.some((t) => t.skipped.some((x) => /ngoài thời gian tính phí/.test(x.reason))) && (
+                <p className="type-caption text-muted-foreground">
+                  Ngày ngoài thời gian tính phí là ngày sau ngày kết thúc lưu trú, trước ngày bắt đầu hợp đồng hoặc sau
+                  khi đã giải phóng giường; hệ thống không lập khoản cho những ngày này.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      )}
       <ProblemAlert problem={failure} />
       {rows?.length === 0 && <p className="type-body-sm">Không có nguồn trong khoảng đã chọn.</p>}
       {rows?.map((row) => (

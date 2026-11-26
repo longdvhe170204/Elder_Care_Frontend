@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { pickResident } from '@/test/pickResident'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { FeedbackPage } from './FeedbackPage'
 
@@ -189,9 +190,7 @@ describe('Phản hồi của người cao tuổi trên màn nhân viên', () => 
     expect(await within(form).findByText('Chọn người cao tuổi')).toBeInTheDocument()
     expect(api.calls('POST', '/feedback')).toHaveLength(0)
 
-    const resident = within(form).getByLabelText('Người cao tuổi')
-    await within(resident).findByRole('option', { name: /Nguyễn Thị Lan/ })
-    fireEvent.change(resident, { target: { value: '5' } })
+    await pickResident('Nguyễn Thị Lan', { container: form })
     fireEvent.click(within(form).getByRole('button', { name: 'Mong muốn' }))
     fireEvent.click(within(form).getByRole('button', { name: 'Người đến thăm, người đón' }))
     fireEvent.change(within(form).getByLabelText('Nội dung'), { target: { value: 'Không muốn gặp ông X' } })

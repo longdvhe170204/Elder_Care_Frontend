@@ -141,3 +141,46 @@ it('Q447_mucCuCoMucKhacLoai_dongBoTheoMucCuaLoaiCongViec', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
   expect(save).toHaveBeenCalledWith([expect.objectContaining({ taskTypeId: 10, importance: 'MANDATORY' })])
 })
+
+it('BF_01_buoc16_mocGioTuMayChuDangGiay_hienGioPhut', () => {
+  render(
+    <CarePlanItemsForm
+      items={[
+        {
+          id: 1,
+          taskTypeId: 8,
+          content: 'Nội dung kiểm thử',
+          frequencyType: 'TIMES_PER_DAY',
+          timesPerDay: 2,
+          times: ['08:00:00', '15:00:00'],
+          weekdays: [],
+          performerRole: 'CAREGIVER',
+          resultType: 'PERFORMED',
+          importance: 'NORMAL',
+          billable: false,
+        },
+      ]}
+      taskTypes={[{ id: 8, name: 'Loại kiểm thử', status: 'ACTIVE', group: 'OTHER' }]}
+      busy={false}
+      onSave={vi.fn()}
+    />,
+  )
+  expect(screen.getByRole('button', { name: 'Bỏ mốc 08:00 mục 1' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Bỏ mốc 15:00 mục 1' })).toBeInTheDocument()
+})
+
+it('Q_449_vaiTroThucHien_chiNhanVienChamSocVaDieuDuong', () => {
+  render(
+    <CarePlanItemsForm
+      items={[]}
+      taskTypes={[{ id: 8, name: 'Loại kiểm thử', status: 'ACTIVE', group: 'OTHER', defaultRole: 'DOCTOR' }]}
+      busy={false}
+      onSave={vi.fn()}
+    />,
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm mục công việc' }))
+  fireEvent.change(screen.getByLabelText('Loại công việc mục 1'), { target: { value: '8' } })
+  const role = screen.getByLabelText('Vai trò thực hiện mục 1')
+  expect([...role.querySelectorAll('option')].map((o) => o.value).filter(Boolean)).toEqual(['CAREGIVER', 'NURSING_STAFF'])
+  expect(role).toHaveValue('')
+})

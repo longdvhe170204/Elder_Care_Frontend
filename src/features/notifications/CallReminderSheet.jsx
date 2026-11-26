@@ -33,7 +33,7 @@ function nowLocal() {
 
 const timeOf = (iso) => formatDateTime(iso).slice(-5)
 
-export function CallReminderSheet({ id, startRecording, onChanged }) {
+export function CallReminderSheet({ id, startRecording, onChanged, onReached }) {
   const [state, setState] = useState({ status: 'loading' })
   const [recording, setRecording] = useState(startRecording)
   const [failure, setFailure] = useState(null)
@@ -79,6 +79,7 @@ export function CallReminderSheet({ id, startRecording, onChanged }) {
     return (
       <CallResultForm
         reminder={state.reminder}
+        onReached={onReached}
         onSaved={() => {
           setFailure(null)
           return backToDetail()
@@ -190,7 +191,7 @@ function ResultLines({ result }) {
   )
 }
 
-function CallResultForm({ reminder, onSaved, onEnded, onBack }) {
+function CallResultForm({ reminder, onSaved, onEnded, onBack, onReached }) {
   const [result, setResult] = useState(null)
   const [reason, setReason] = useState(null)
   const [calledAt, setCalledAt] = useState(nowLocal)
@@ -229,6 +230,8 @@ function CallResultForm({ reminder, onSaved, onEnded, onBack }) {
           ...(note.trim() && { note: note.trim() }),
         },
       })
+      // Gọi được người nhà thì nơi khác (sự cố) tự ghi đã báo, người dùng khỏi ghi hai lần (BF-06)
+      if (result === 'REACHED') onReached?.(reminder)
       await onSaved()
     } catch (error) {
       const p = problemOf(error)
