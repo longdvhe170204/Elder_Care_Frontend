@@ -19,6 +19,7 @@ describe('sourceNavigation', () => {
       'residency-endings',
       { endingId: 14 },
     ])
+    expect(sourceNavigation({ type: 'M02.ENDING_REQUEST', id: '7' })).toEqual(['residency-endings', { requestId: 7 }])
     expect(sourceNavigation({ type: 'M09.DEPARTMENT', id: '3' })).toBeNull()
     expect(sourceNavigation(null)).toBeNull()
   })
