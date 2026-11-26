@@ -1,143 +1,87 @@
 import { useEffect, useState } from 'react'
+import { X } from 'lucide-react'
 import {
-  getResidents,
-  getResidentsByResidentIdCarePlans,
-  postResidentsByResidentIdCarePlans,
   getCarePlansCompare,
+  getResidentsByResidentIdCarePlans,
+  getTaskTypes,
+  postResidentsByResidentIdCarePlans,
 } from '@/api'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/common/PageHeader'
-import { DetailLayout } from '@/common/DetailLayout'
 import { StatusBadge } from '@/common/StatusBadge'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { PermissionDeniedState } from '@/common/PageState'
 import { usePermissions } from '@/common/permissions/permissions'
 import { formatDate } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
-import { CareField, CareCheck } from './CareField'
 import { CarePlanDetail } from './CarePlanDetail'
-import { PLAN_STATUS } from './carePlanLabels'
+import { CarePlanQueue } from './CarePlanQueue'
+import { CarePlanReviewNotice } from './CarePlanReviewNotice'
+import { ResidentSearch } from './ResidentSearch'
+import { CARE_ROLES, IMPORTANCE, frequencyText, planLabel, planState, residentLabel } from './carePlanLabels'
 
-function ResidentChoice({ value, onChange }) {
-  const [text, setText] = useState('')
-  const [query, setQuery] = useState('')
-  const [residents, setResidents] = useState([])
-  const [cursor, setCursor] = useState(null)
-  const [failure, setFailure] = useState(null)
-  useEffect(() => {
-    let cancelled = false
-    getResidents({ query: { q: query || undefined } })
-      .then(({ data }) => {
-        if (!cancelled) {
-          setResidents(data.items)
-          setCursor(data.nextCursor)
-          setFailure(null)
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) setFailure(problemOf(error))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [query])
-  async function more() {
-    try {
-      const { data } = await getResidents({ query: { q: query || undefined, cursor } })
-      setResidents((old) => [...old, ...data.items])
-      setCursor(data.nextCursor)
-    } catch (error) {
-      setFailure(problemOf(error))
-    }
-  }
-  const options = Object.fromEntries(residents.map((resident) => [resident.id, resident.personalInfo?.fullName ?? `Người cao tuổi mã ${resident.id}`]))
-  if (value && !options[value]) options[value] = 'Người cao tuổi đã chọn'
+// Kế hoạch hiện hành dạng bảng (Figma "Kế hoạch chăm sóc · Kế hoạch hiện hành")
+function CurrentItems({ plan, typeName }) {
   return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-card p-5">
-      <form
-        className="flex flex-wrap items-end gap-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          setQuery(text.trim())
-        }}
-      >
-        <div className="min-w-0 flex-1">
-          <CareField label="Tìm người cao tuổi" value={text} onChange={setText} />
-        </div>
-        <Button type="submit" variant="outline">
-          Tìm hồ sơ
-        </Button>
-      </form>
-      <ProblemAlert problem={failure} />
-      <CareField label="Người cao tuổi" value={value || ''} onChange={(id) => onChange(Number(id))} options={options} />
-      {cursor && (
-        <Button variant="outline" onClick={more}>
-          Xem thêm hồ sơ
-        </Button>
-      )}
-    </section>
+    <Table aria-label="Mục của kế hoạch đang áp dụng">
+      <TableHeader>
+        <TableRow className="bg-muted hover:bg-muted">
+          <TableHead>Loại công việc</TableHead>
+          <TableHead>Nội dung</TableHead>
+          <TableHead>Tần suất và giờ</TableHead>
+          <TableHead>Vai trò thực hiện</TableHead>
+          <TableHead>Mức quan trọng</TableHead>
+          <TableHead>Mục tiêu nước</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {(plan.items ?? []).map((item) => {
+          const { main, sub } = frequencyText(item)
+          return (
+            <TableRow key={item.id} className="align-top">
+              <TableCell className="font-semibold whitespace-normal">{typeName(item.taskTypeId)}</TableCell>
+              <TableCell className="max-w-72 whitespace-normal text-muted-foreground">{item.content}</TableCell>
+              <TableCell className="whitespace-normal">
+                <span className="block font-semibold">{main}</span>
+                {sub && <span className="block type-body-sm text-muted-foreground">{sub}</span>}
+              </TableCell>
+              <TableCell className="whitespace-normal">{CARE_ROLES[item.performerRole] ?? '—'}</TableCell>
+              <TableCell>{item.importance ? <StatusBadge status={IMPORTANCE[item.importance]} /> : '—'}</TableCell>
+              <TableCell className="font-semibold text-primary">
+                {item.waterTargetMl != null ? `${Number(item.waterTargetMl).toLocaleString('vi-VN')} ml/ngày` : '—'}
+              </TableCell>
+            </TableRow>
+          )
+        })}
+      </TableBody>
+    </Table>
   )
 }
 
-function Comparison({ value }) {
-  const labels = {
-    taskTypeId: 'Loại công việc',
-    content: 'Nội dung',
-    frequencyType: 'Tần suất',
-    intervalHours: 'Khoảng giờ',
-    timesPerDay: 'Số lần trong ngày',
-    startsAt: 'Giờ bắt đầu',
-    times: 'Các mốc giờ',
-    weekdays: 'Ngày trong tuần',
-    windowBeforeMinutes: 'Khung trước',
-    windowAfterMinutes: 'Khung sau',
-    performerRole: 'Vai trò thực hiện',
-    resultType: 'Kết quả',
-    importance: 'Mức quan trọng',
-    billable: 'Tính phí',
-    waterTargetMl: 'Mục tiêu nước',
-  }
-  return (
-    <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-label="Kết quả so sánh">
-      <h2 className="type-title">Kết quả so sánh</h2>
-      <h3 className="type-label">Mục thêm ({value.added.length})</h3>
-      <ul>
-        {value.added.map((item) => (
-          <li key={item.id}>{item.content}</li>
-        ))}
-      </ul>
-      <h3 className="type-label">Mục bớt ({value.removed.length})</h3>
-      <ul>
-        {value.removed.map((item) => (
-          <li key={item.id}>{item.content}</li>
-        ))}
-      </ul>
-      <h3 className="type-label">Mục đổi ({value.changed.length})</h3>
-      {value.changed.map((item) => (
-        <article key={item.after.id} className="rounded-lg border p-3">
-          <p>Trước: {item.before.content}</p>
-          <p>Sau: {item.after.content}</p>
-          <p className="type-body-sm text-muted-foreground">
-            Trường thay đổi: {item.changedFields.map((field) => labels[field] ?? field).join(', ')}
-          </p>
-        </article>
-      ))}
-    </section>
-  )
-}
-
+// Q-447: một kế hoạch trên màn (hiện hành + bản sửa đang xử lý), không hiện phiên bản. Bản sửa mở trong hộp thoại giữa
+// màn (chủ dự án yêu cầu 2026-11-26, thay panel trượt phải của Figma; bố cục riêng của màn, DESIGN.md mục 0).
 export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   const { can } = usePermissions()
-  const [residentId, setResidentId] = useState(initialResidentId)
+  const [resident, setResident] = useState(initialResidentId ? { id: initialResidentId } : null)
+  const residentId = resident?.id ?? 0
   const [plans, setPlans] = useState(null)
+  const [taskTypes, setTaskTypes] = useState([])
   const [failure, setFailure] = useState(null)
   const [selected, setSelected] = useState(null)
   const [reload, setReload] = useState(0)
-  const [copyCurrent, setCopyCurrent] = useState(true)
+  // Đổi key để ô tìm xóa chữ khi quay về hàng chờ
+  const [searchKey, setSearchKey] = useState(0)
   const [busy, setBusy] = useState(false)
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
-  const [comparison, setComparison] = useState(null)
+  const [dirty, setDirty] = useState(false)
+  const [askClose, setAskClose] = useState(false)
+  const [changes, setChanges] = useState({ key: null, count: null })
+  useEffect(() => {
+    getTaskTypes()
+      .then(({ data }) => setTaskTypes(data))
+      .catch(() => setTaskTypes([]))
+  }, [])
   useEffect(() => {
     if (!residentId) return undefined
     let cancelled = false
@@ -161,7 +105,7 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
     try {
       const { data } = await postResidentsByResidentIdCarePlans({
         path: { residentId },
-        body: { copyCurrent },
+        body: {},
         headers: { 'Idempotency-Key': crypto.randomUUID() },
       })
       setSelected(data.id)
@@ -172,126 +116,167 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
       setBusy(false)
     }
   }
-  async function compare(event) {
-    event.preventDefault()
-    setBusy(true)
-    setFailure(null)
-    try {
-      const { data } = await getCarePlansCompare({ query: { from: Number(from), to: Number(to) } })
-      setComparison(data)
-    } catch (error) {
-      setFailure(problemOf(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-  function choose(id) {
-    setResidentId(id)
+  function choose(next) {
+    setResident(next)
     setPlans(null)
     setSelected(null)
     setFailure(null)
-    setComparison(null)
-    setFrom('')
-    setTo('')
   }
-  const options = Object.fromEntries((plans ?? []).map((plan) => [plan.id, `Phiên bản ${plan.revision}`]))
-  const open = (plans ?? []).some((plan) => ['DRAFT', 'PENDING_APPROVAL', 'PENDING_EFFECT'].includes(plan.status))
+  const names = Object.fromEntries(taskTypes.map((type) => [String(type.id), type.name]))
+  const typeName = (id) => names[String(id)] ?? `Loại công việc mã ${id}`
+  const { current, scheduled, open } = planState(plans)
+  const hasPlan = Boolean(scheduled ?? current)
+  const canCreate = can('CARE_PLAN', 'CREATE') && !open
+  // Số thay đổi của bản nháp so với kế hoạch đang áp dụng, để người mở sau biết bản nháp đã đổi gì
+  const compareKey = current?.id && open?.id ? `${current.id}:${open.id}:${reload}` : null
+  useEffect(() => {
+    if (!compareKey) return undefined
+    const [from, to] = compareKey.split(':').map(Number)
+    let cancelled = false
+    getCarePlansCompare({ query: { from, to } })
+      .then(({ data }) => {
+        if (!cancelled)
+          setChanges({ key: compareKey, count: data.added.length + data.removed.length + data.changed.length })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [compareKey])
+  const changeCount = changes.key === compareKey ? changes.count : null
+  function close() {
+    setAskClose(false)
+    setDirty(false)
+    setSelected(null)
+  }
+  // Đóng khi còn thay đổi chưa lưu thì hỏi trước (chủ dự án 2026-11-26)
+  function requestClose() {
+    if (dirty) setAskClose(true)
+    else close()
+  }
+  const draftOpen = open?.status === 'DRAFT'
+  const draftLine = !open
+    ? ''
+    : !current
+      ? `${open.createdBy ?? 'Người lập'} ${draftOpen ? 'đang soạn' : 'đã gửi'} kế hoạch đầu tiên`
+      : `${open.createdBy ?? 'Người lập'} ${draftOpen ? 'đang soạn' : 'đã gửi'}${
+          changeCount == null ? '' : ` · ${changeCount} thay đổi so với kế hoạch đang áp dụng`
+        }`
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader title="Kế hoạch chăm sóc" subtitle="Lập, duyệt và tra cứu lịch sử phiên bản" />
-      <DetailLayout
-        open={selected !== null}
-        detailKey={selected}
-        onClose={() => setSelected(null)}
-        label="Chi tiết kế hoạch chăm sóc"
-        renderDetail={({ Title, Description }) => (
-          <CarePlanDetail
-            key={selected}
-            planId={selected}
-            Title={Title}
-            Description={Description}
-            onChanged={() => setReload((value) => value + 1)}
-          />
-        )}
-      >
-        <ResidentChoice value={residentId} onChange={choose} />
-        {failure?.status === 403 ? (
-          <PermissionDeniedState label="kế hoạch chăm sóc" />
-        ) : (
-          <>
-            <ProblemAlert problem={failure} />
-            {residentId ? (
-              <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={busy || plans === null}>
-                <h2 className="type-title">Lịch sử phiên bản</h2>
-                {plans === null ? (
-                  <p role="status">Đang tải phiên bản…</p>
-                ) : plans.length === 0 ? (
-                  <p>Chưa có kế hoạch chăm sóc.</p>
-                ) : (
-                  <ul className="divide-y">
-                    {plans.map((plan) => (
-                      <li key={plan.id} className="flex flex-wrap items-center justify-between gap-3 py-4">
-                        <div>
-                          <Button variant="link" onClick={() => setSelected(plan.id)}>
-                            Phiên bản {plan.revision}
-                          </Button>
-                          <StatusBadge status={PLAN_STATUS[plan.status]} />
-                          {plan.effectiveFrom && (
-                            <p className="type-body-sm text-muted-foreground">
-                              Từ {formatDate(plan.effectiveFrom)}
-                              {plan.effectiveTo ? ` đến ${formatDate(plan.effectiveTo)}` : ''}
-                            </p>
-                          )}
-                        </div>
-                        <Button
-                          variant="outline"
-                          aria-label={`Xem phiên bản ${plan.revision}`}
-                          onClick={() => setSelected(plan.id)}
-                        >
-                          Xem
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {can('CARE_PLAN', 'CREATE') && (
-                  <div className="flex flex-col items-start gap-3 border-t pt-4">
-                    <CareCheck
-                      label="Sao chép phiên bản hiệu lực"
-                      checked={copyCurrent}
-                      onChange={setCopyCurrent}
-                      disabled={busy || open}
-                    />
-                    <Button disabled={busy || open || plans === null} onClick={create}>
-                      Lập phiên bản nháp
-                    </Button>
-                    {open && (
-                      <p className="type-body-sm text-muted-foreground">
-                        Đã có phiên bản đang mở. Hoàn tất phiên bản đó trước khi lập bản mới.
-                      </p>
-                    )}
-                  </div>
-                )}
-              </section>
-            ) : (
-              <p>Chọn người cao tuổi để xem kế hoạch.</p>
-            )}
-            {plans?.length >= 2 && (
-              <form className="flex flex-col gap-4 rounded-xl border bg-card p-5" onSubmit={compare}>
-                <h2 className="type-title">So sánh phiên bản</h2>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <CareField label="So sánh từ phiên bản" value={from} onChange={setFrom} options={options} required />
-                  <CareField label="Đến phiên bản" value={to} onChange={setTo} options={options} required />
+    <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
+      <PageHeader title="Kế hoạch chăm sóc" subtitle="Bác sĩ lập và sửa kế hoạch chăm sóc" />
+      <ResidentSearch key={searchKey} onChange={choose} />
+      {failure?.status === 403 ? (
+        <PermissionDeniedState label="kế hoạch chăm sóc" />
+      ) : (
+        <>
+          <ProblemAlert problem={failure} />
+          {residentId ? (
+            <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={busy || plans === null}>
+              <Button
+                variant="outline"
+                className="self-start border-2"
+                onClick={() => {
+                  choose(null)
+                  setSearchKey((value) => value + 1)
+                }}
+              >
+                Về danh sách cần lập
+              </Button>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex flex-col gap-1">
+                  <h2 className="type-title">Kế hoạch đang áp dụng</h2>
+                  {current && (
+                    <p className="type-body-sm text-muted-foreground">
+                      Hiệu lực từ {formatDate(current.effectiveFrom)}
+                    </p>
+                  )}
                 </div>
-                <Button type="submit" disabled={busy || !from || !to}>
-                  So sánh phiên bản
-                </Button>
-              </form>
-            )}
-            {comparison && <Comparison value={comparison} />}
-          </>
-        )}
-      </DetailLayout>
+                <div className="flex flex-wrap items-center gap-3">
+                  {scheduled && <StatusBadge status={planLabel(scheduled, true)} />}
+                  {canCreate && plans !== null && (
+                    <Button disabled={busy} onClick={create}>
+                      {hasPlan ? 'Sửa kế hoạch' : 'Lập kế hoạch'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <CarePlanReviewNotice
+                residentId={residentId}
+                reload={reload}
+                canDismiss={can('CARE_PLAN', 'CREATE') || can('CARE_PLAN', 'APPROVE')}
+                onDismissed={() => setReload((value) => value + 1)}
+              />
+              {/* Bản nháp đặt ngay dưới tiêu đề để người mở sau thấy trước bảng dài */}
+              {open && (
+                <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-(--warning-foreground)/40 bg-warning/40 p-4">
+                  <div className="flex flex-col gap-1">
+                    <h3 className="type-card-title">
+                      {draftOpen ? 'Bản nháp chưa áp dụng' : 'Bản sửa chờ Bác sĩ duyệt'}
+                    </h3>
+                    <p className="type-body-sm text-muted-foreground">{draftLine}</p>
+                  </div>
+                  <Button variant="outline" onClick={() => setSelected(open.id)}>
+                    {draftOpen ? 'Mở bản nháp' : 'Xem bản sửa'}
+                  </Button>
+                </section>
+              )}
+              {plans === null ? (
+                <p role="status">Đang tải kế hoạch…</p>
+              ) : current ? (
+                <CurrentItems plan={current} typeName={typeName} />
+              ) : (
+                <p>Chưa có kế hoạch chăm sóc đang hiệu lực.</p>
+              )}
+            </section>
+          ) : (
+            <CarePlanQueue onChoose={choose} />
+          )}
+        </>
+      )}
+      <Dialog open={selected !== null} onOpenChange={(next) => !next && requestClose()}>
+        <DialogContent
+          showCloseButton={false}
+          className="block max-h-[90vh] gap-0 overflow-y-auto p-0 sm:max-w-[960px]"
+        >
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="absolute top-3 right-3 z-10"
+            aria-label="Đóng"
+            onClick={requestClose}
+          >
+            <X aria-hidden="true" />
+          </Button>
+          {selected !== null && (
+            <CarePlanDetail
+              key={selected}
+              planId={selected}
+              currentPlanId={current?.id}
+              currentEffectiveFrom={current?.effectiveFrom}
+              resident={resident?.personalInfo ? residentLabel(resident) : null}
+              Title={DialogTitle}
+              Description={DialogDescription}
+              onDirtyChange={setDirty}
+              onChanged={() => setReload((value) => value + 1)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={askClose} onOpenChange={setAskClose}>
+        <DialogContent role="alertdialog" className="sm:max-w-md">
+          <DialogTitle className="type-title">Bạn có thay đổi chưa lưu</DialogTitle>
+          <DialogDescription>
+            Đóng bây giờ thì phần vừa sửa sẽ mất. Muốn giữ lại, ở lại rồi bấm Lưu nháp.
+          </DialogDescription>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={close}>
+              Đóng không lưu
+            </Button>
+            <Button onClick={() => setAskClose(false)}>Ở lại</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

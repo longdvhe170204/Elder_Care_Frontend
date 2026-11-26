@@ -68,6 +68,11 @@ const STATUS_TONE = {
   // Lịch xe (019 T022; DESIGN.md 6.13.0): Đã đặt, Đã hủy giữ neutral
   'Đang dùng': 'occupied',
   'Đã hoàn thành': 'settled',
+  // Kế hoạch chăm sóc (005 Q-447): Bản sửa đang soạn, Đang soạn, Thường giữ neutral; Bắt buộc dùng attention vì đỏ chỉ
+  // cho việc gấp (DESIGN.md mục 1 điều 4)
+  'Chờ Bác sĩ duyệt': 'attention',
+  'Quan trọng': 'attention',
+  'Bắt buộc': 'attention',
   // Điều kiện kết thúc lưu trú (004 BF-10; DESIGN.md 6.26.1, yêu cầu 2026-11-24): Đạt xanh, Chưa đạt đỏ; Tự động giữ neutral
   'Đạt': 'settled',
   'Đạt (ngoại lệ)': 'settled',

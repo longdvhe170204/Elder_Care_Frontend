@@ -25,6 +25,7 @@ it('T017_chiCongBoClientCacOperation005DaDichVaDuyet', () => {
     'postResidentsByResidentIdCarePlans',
     'getCarePlansById',
     'getCarePlansCompare',
+    'postCarePlansByIdRetract',
     'putCarePlansByIdRiskAgreements',
     'getTaskTypes',
     'putTaskTypesById',
@@ -34,4 +35,6 @@ it('T017_chiCongBoClientCacOperation005DaDichVaDuyet', () => {
     expect(client[name], name).toBeTypeOf('function')
   }
   expect(client.getThoiKhoaBieu).toBeUndefined()
+  // Q-447: bỏ Thu hồi duyệt
+  expect(client.postCarePlansByIdWithdrawApproval).toBeUndefined()
 })

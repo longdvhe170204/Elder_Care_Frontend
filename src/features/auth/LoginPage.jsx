@@ -1,26 +1,30 @@
 import { useEffect, useState } from 'react'
+import { Eye, EyeOff } from 'lucide-react'
 import { getAuthPasswordResetAvailability, postAuthLogin } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { LeafMark } from '@/common/layout/AppShell'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { deviceId, homeOf } from '@/common/session'
-import { PortalCard } from '@/features/family-portal/PortalParts'
+import { cn } from 'cn'
+import illustration from '@/assets/login-illustration.svg'
 import { ForgotPassword } from './ForgotPassword'
 
 // Đăng nhập web cho nhân viên và người thân (002 T045; UC-70; FR-006, FR-008, FR-014, FR-014a; chủ dự án chọn một màn
-// chung, 2026-10-20). Bố cục theo màn P1 đã duyệt. Thông báo lỗi lấy từ máy chủ, không nói tên có tồn tại hay không.
+// chung, 2026-10-20). Bố cục hai cột theo Figma "Đăng nhập · Web · Minh họa cắt giấy" của chủ dự án (2026-11-26):
+// trái nền xanh có hình minh họa, phải form. Thông báo lỗi lấy từ máy chủ, không nói tên có tồn tại hay không.
 // Tài khoản do viện cấp, không tự đăng ký (Q-341).
 
 const goTo = (url) => window.location.assign(url)
 
-// Form đăng nhập dùng chung cho màn đăng nhập và khung đăng nhập lại khi hết phiên (SessionGuard, 002 T047b)
-export function LoginForm({ onLoggedIn, submitLabel = 'Đăng nhập' }) {
+// Form đăng nhập dùng chung cho màn đăng nhập và khung đăng nhập lại khi hết phiên (SessionGuard, 002 T047b).
+// `large`: cỡ chữ, ô nhập của màn đăng nhập; `beforeSubmit`: nội dung đặt ngay trên nút (liên kết Quên mật khẩu).
+export function LoginForm({ onLoggedIn, submitLabel = 'Đăng nhập', large = false, beforeSubmit = null }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -49,39 +53,63 @@ export function LoginForm({ onLoggedIn, submitLabel = 'Đăng nhập' }) {
     }
   }
 
+  const labelClass = large ? 'text-sm font-semibold' : undefined
+  const inputClass = large ? 'h-11 rounded-lg px-3 text-sm md:text-sm' : 'h-11'
+
   return (
-    <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <FieldGroup>
+    <form onSubmit={submit} noValidate className={cn('flex flex-col', large ? 'gap-3.5' : 'gap-4')}>
+      <FieldGroup className={large ? 'gap-4' : undefined}>
         <Field data-invalid={!!errors.username || undefined}>
-          <FieldLabel htmlFor="login-user">Tên đăng nhập</FieldLabel>
+          <FieldLabel htmlFor="login-user" className={labelClass}>
+            Tên đăng nhập
+          </FieldLabel>
           <Input
             id="login-user"
             autoComplete="username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             aria-invalid={!!errors.username || undefined}
-            className="h-11"
+            className={inputClass}
           />
           {errors.username && <FieldError>{errors.username}</FieldError>}
         </Field>
         <Field data-invalid={!!errors.password || undefined}>
-          <FieldLabel htmlFor="login-password">Mật khẩu</FieldLabel>
-          <Input
-            id="login-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={!!errors.password || undefined}
-            className="h-11"
-          />
+          <FieldLabel htmlFor="login-password" className={labelClass}>
+            Mật khẩu
+          </FieldLabel>
+          <div className="relative">
+            <Input
+              id="login-password"
+              type={showPassword ? 'text' : 'password'}
+              autoComplete="current-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              aria-invalid={!!errors.password || undefined}
+              className={cn(inputClass, 'pr-12')}
+            />
+            {/* Nút ẩn hiện mật khẩu, vùng bấm 44 × 44 (DESIGN.md mục 9) */}
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'}
+              aria-pressed={showPassword}
+              className="absolute top-1/2 right-0.5 flex size-11 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+            >
+              {showPassword ? <EyeOff className="size-5" aria-hidden /> : <Eye className="size-5" aria-hidden />}
+            </button>
+          </div>
           {errors.password && <FieldError>{errors.password}</FieldError>}
         </Field>
       </FieldGroup>
+      {beforeSubmit}
       <ProblemAlert problem={failure} title={failure?.status === 401 ? 'Chưa đăng nhập được' : undefined}>
         {failure?.unlocksAt && <p className="tabular-nums">Mở lại lúc {formatDateTime(failure.unlocksAt)}.</p>}
       </ProblemAlert>
-      <Button type="submit" className="h-11" disabled={saving}>
+      <Button
+        type="submit"
+        className={large ? 'h-12 rounded-lg text-base font-semibold' : 'h-11'}
+        disabled={saving}
+      >
         {submitLabel}
       </Button>
     </form>
@@ -104,15 +132,50 @@ export function LoginPage({ onNavigate = goTo }) {
     }
   }, [])
 
+  // Liên kết chỉ hiện khi kênh tin nhắn đã cấu hình (Q-06); chưa cấu hình thì cách lấy lại mật khẩu ghi ở chân form
+  const forgotLink = resetAvailable ? (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        className="min-h-11 rounded-md px-1 text-sm font-semibold text-primary hover:underline focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+        onClick={() => {
+          setResetDone(false)
+          setMode('forgot')
+        }}
+      >
+        Quên mật khẩu?
+      </button>
+    </div>
+  ) : null
+
   return (
-    <div className="flex min-h-screen flex-col items-center gap-6 px-4 py-10">
-      <div className="flex items-center gap-2.5">
-        <LeafMark />
-        <span className="type-title">Elder_Care</span>
+    <div className="grid min-h-screen bg-card lg:grid-cols-[11fr_9fr]">
+      {/* Cột minh họa: nền xanh giữ nguyên ở chế độ tối để hình nét trắng luôn đủ tương phản */}
+      {/* Hình đặt giữa cột theo chiều dọc; mép dưới hình là nét cắt nên làm mờ dần cho khỏi thành đường thẳng */}
+      <div className="hidden items-center justify-center overflow-hidden bg-sidebar-primary px-12 py-10 lg:flex" aria-hidden>
+        <img
+          src={illustration}
+          alt=""
+          className="h-auto max-h-[78vh] w-full max-w-[640px] object-contain"
+          style={{
+            maskImage: 'linear-gradient(to bottom, #000 82%, transparent)',
+            WebkitMaskImage: 'linear-gradient(to bottom, #000 82%, transparent)',
+          }}
+        />
       </div>
-      <div className="flex w-full max-w-sm flex-col gap-4">
-        {mode === 'forgot' ? (
-          <PortalCard title="Quên mật khẩu">
+
+      <main className="flex items-center justify-center px-4 py-10 sm:px-10">
+        <div className="flex w-full max-w-[356px] flex-col gap-6">
+          <div className="flex flex-col items-center gap-3 text-center lg:gap-5">
+            <span className="text-2xl leading-tight font-semibold text-primary lg:text-[27px]">
+              Elder_Care
+            </span>
+            <h1 className="text-3xl leading-tight font-semibold text-foreground lg:text-[39px]">
+              {mode === 'forgot' ? 'Quên mật khẩu' : 'Đăng nhập'}
+            </h1>
+          </div>
+
+          {mode === 'forgot' ? (
             <ForgotPassword
               onDone={() => {
                 setResetDone(true)
@@ -120,47 +183,28 @@ export function LoginPage({ onNavigate = goTo }) {
               }}
               onCancel={() => setMode('login')}
             />
-          </PortalCard>
-        ) : (
-          <PortalCard title="Đăng nhập">
-            {resetDone && <p role="status">Đã đặt mật khẩu mới. Đăng nhập bằng mật khẩu mới.</p>}
-            <LoginForm
-              onLoggedIn={(data) => {
-                const home = homeOf({ ...data.user, mustChangePassword: data.mustChangePassword })
-                // Màn đích (#…) mang theo từ đường dẫn đã mở trước khi đăng nhập
-                onNavigate(home === '/' ? `/${window.location.hash}` : home)
-              }}
-            />
-            {resetAvailable && (
-              <Button
-                type="button"
-                variant="ghost"
-                className="h-11"
-                onClick={() => {
-                  setResetDone(false)
-                  setMode('forgot')
+          ) : (
+            <>
+              {resetDone && <p role="status">Đã đặt mật khẩu mới. Đăng nhập bằng mật khẩu mới.</p>}
+              <LoginForm
+                large
+                beforeSubmit={forgotLink}
+                onLoggedIn={(data) => {
+                  const home = homeOf({ ...data.user, mustChangePassword: data.mustChangePassword })
+                  // Màn đích (#…) mang theo từ đường dẫn đã mở trước khi đăng nhập
+                  onNavigate(home === '/' ? `/${window.location.hash}` : home)
                 }}
-              >
-                Quên mật khẩu
-              </Button>
-            )}
-          </PortalCard>
-        )}
-        <PortalCard>
-          <p>
-            <span className="type-label">Quên mật khẩu? </span>
-            {resetAvailable
-              ? 'Chọn "Quên mật khẩu" để nhận mã qua tin nhắn tới số điện thoại đã đăng ký trong hồ sơ. Hồ sơ chưa có số' +
-                ' thì nhân viên liên hệ Quản lý viện, người thân liên hệ Hành chính của viện.'
-              : 'Nhân viên liên hệ Quản lý viện. Người thân liên hệ Hành chính của viện; viện cấp lại sau khi xác minh' +
-                ' danh tính trực tiếp hoặc gọi lại số điện thoại đã đăng ký.'}
-          </p>
-          <p>
-            <span className="type-label">Chưa có tài khoản? </span>
-            Viện cấp tài khoản cho nhân viên và cho người thân sau khi gia đình làm thủ tục với viện.
-          </p>
-        </PortalCard>
-      </div>
+              />
+              {!resetAvailable && (
+                <p className="text-center text-xs text-muted-foreground">
+                  Quên mật khẩu? Nhân viên liên hệ Quản lý viện; người thân liên hệ Hành chính của viện để được cấp lại
+                  sau khi xác minh danh tính.
+                </p>
+              )}
+            </>
+          )}
+        </div>
+      </main>
     </div>
   )
 }

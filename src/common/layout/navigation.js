@@ -106,14 +106,16 @@ export const NAV_GROUPS = [
         roles: [QL, TT],
         byRole: true,
       },
-      // Dòng "Kế hoạch chăm sóc" và "Danh mục loại công việc chăm sóc" (005 T017, Phụ lục 27).
+      // Điều dưỡng theo dõi công việc trên Checklist ca và Thời khóa biểu.
       {
         key: 'care-plans',
         label: 'Kế hoạch chăm sóc',
         icon: 'ClipboardCheck',
         functions: ['CARE_PLAN'],
-        roles: [QL, TT, BS, DD, CS],
+        roles: [QL, TT, BS, CS],
+        byRole: true,
       },
+      // Dòng "Danh mục loại công việc chăm sóc" (005 T017, Phụ lục 27).
       {
         key: 'care-catalogs',
         label: 'Danh mục chăm sóc',
@@ -491,7 +493,7 @@ export const PRIMARY_BY_ROLE = {
   NURSING_HOME_MANAGER: ['dashboard', 'approval-requests', 'reports', 'alerts', 'shifts'],
   FLOOR_MANAGER: ['care-task-planning', 'overdue-care-tasks', 'handovers', 'alerts', 'beds'],
   DOCTOR: ['residents', 'alerts', 'incidents', 'care-plans', 'resident-diets'],
-  NURSING_STAFF: ['care-tasks', 'medication', 'alerts', 'care-plans', 'handovers'],
+  NURSING_STAFF: ['care-tasks', 'medication', 'alerts', 'handovers'],
   CAREGIVER: ['care-tasks', 'incidents', 'handovers', 'shifts'],
   KITCHEN_STAFF: ['meals', 'shifts', 'procurement'],
   OFFICE_STAFF: ['admission-applications', 'residents', 'contracts', 'waiting-list', 'beds', 'family-members'],

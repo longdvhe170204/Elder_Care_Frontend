@@ -14,9 +14,29 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  window.history.replaceState(null, '', '/')
 })
 
 describe('App', () => {
+  it('ẩn mục Kế hoạch chăm sóc và chuyển khỏi đường dẫn cũ của Điều dưỡng', async () => {
+    window.history.replaceState(null, '', '/#care-plans?residentId=77')
+    api.on('GET', '/me', json(200, { accountId: 5, type: 'STAFF', roles: ['AC-04'] }))
+    api.on(
+      'GET',
+      '/me/permissions',
+      json(200, [
+        { function: 'CARE_PLAN', operation: 'VIEW' },
+        { function: 'TASK_CHECKLIST', operation: 'VIEW' },
+      ]),
+    )
+    render(<App />)
+
+    await waitFor(() => expect(window.location.hash).toBe('#care-tasks'))
+    expect(screen.getByRole('button', { name: 'Checklist ca' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Kế hoạch chăm sóc' })).toBeNull()
+    expect(api.calls('GET', '/residents/77/care-plans')).toHaveLength(0)
+  })
+
   it('coPhien_vaiTroThat_khongCoODoiVaiTro_dangXuatGoiApi', async () => {
     api.on(
       'GET',
