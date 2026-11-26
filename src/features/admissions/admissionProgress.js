@@ -4,7 +4,10 @@
 //
 // state: done (Xong), todo (bước là điều kiện, Chưa xong), optional (không bắt buộc, Chưa làm), after (sau tiếp nhận),
 // closed (lượt đã đóng, không còn kiểm).
-// mine(ctx): vai trò đang đăng nhập làm được bước này; who: ai làm, ghi ở "Đang chờ người khác".
+// mine(ctx): vai trò đang đăng nhập làm được bước này; who: ai làm, ghi "Chờ <who>" ở dòng bước.
+// view (danh sách bước một cột, chủ dự án duyệt 2026-11-26, DESIGN.md 5.3): done, mine (bước chưa xong của vai trò đang
+// đăng nhập), wait (bước chưa xong của vai trò khác), after, closed. required: bước là điều kiện Hoàn tất tiếp nhận (dấu *).
+// doLabel: tên nút nói rõ việc của bước.
 
 const DONE_CONDITION = ['MET', 'MET_BY_EXCEPTION', 'AUTOMATIC', 'NOT_APPLICABLE']
 const hasCommand = (ctx, ...commands) => commands.some((c) => ctx.residentCommands.includes(c))
@@ -22,6 +25,7 @@ export const PHASES = [
         label: 'Ý kiến của người cao tuổi về việc vào ở',
         action: 'opinion',
         done: (ctx) => !!ctx.opinion,
+        doLabel: 'Ghi ý kiến',
         mine: (ctx) => ctx.can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE'),
         who: 'Hành chính',
       },
@@ -30,6 +34,7 @@ export const PHASES = [
         label: 'Người thân: liên hệ chính, người đại diện',
         condition: 'ADM_F_CONTACTS',
         page: ['family-members', 'Mở Người thân và quyền'],
+        doLabel: 'Ghi người thân',
         mine: (ctx) => ctx.can('FAMILY_MEMBER_PERMISSION', 'CREATE'),
         who: 'Hành chính',
       },
@@ -39,6 +44,7 @@ export const PHASES = [
         action: 'resident',
         part: 'consent',
         done: (ctx) => !hasWarning(ctx, 'MISSING_CONSENT'),
+        doLabel: 'Ghi bản đồng ý',
         mine: (ctx) => hasCommand(ctx, 'RECORD_CONSENT'),
         who: 'Hành chính',
       },
@@ -54,6 +60,7 @@ export const PHASES = [
         action: 'resident',
         part: 'health',
         done: (ctx) => !hasWarning(ctx, 'UNCONFIRMED_HEALTH_RECORD'),
+        doLabel: 'Ghi sức khỏe ban đầu',
         mine: (ctx) =>
           hasCommand(ctx, 'WRITE_INITIAL_HEALTH_RECORD', 'CONFIRM_INITIAL_HEALTH_RECORD', 'RECORD_HEALTH_ITEM'),
         who: 'Hành chính, Bác sĩ',
@@ -63,6 +70,7 @@ export const PHASES = [
         label: 'Nguyện vọng cuối đời, nguyện vọng khi điều trị',
         action: 'resident',
         part: 'wishes',
+        doLabel: 'Ghi nguyện vọng',
         done: (ctx) =>
           !hasWarning(
             ctx,
@@ -87,6 +95,7 @@ export const PHASES = [
         condition: 'ADM_A_ASSESSMENT',
         action: 'resident',
         part: 'assessment',
+        doLabel: 'Đánh giá đầu vào',
         mine: (ctx) => hasCommand(ctx, 'CREATE_ASSESSMENT', 'CONFIRM_ASSESSMENT'),
         who: 'Bác sĩ',
       },
@@ -101,6 +110,7 @@ export const PHASES = [
         label: 'Phân bổ giường',
         condition: 'ADM_D_BED',
         action: 'bed',
+        doLabel: 'Chọn giường',
         mine: (ctx) => ctx.can('BED_ALLOCATION', 'CREATE'),
         who: 'Hành chính, Trưởng tầng',
       },
@@ -110,6 +120,7 @@ export const PHASES = [
         condition: 'ADM_B_CONTRACT',
         extra: 'ADM_E_CONTRACT_LEVEL',
         action: 'contract',
+        note: 'Cần hợp đồng Hiệu lực, ghi đúng mức đã đánh giá',
         mine: (ctx) => ctx.can('ADMISSION_CONTRACT_DEPOSIT', ctx.hasContract ? 'UPDATE' : 'CREATE'),
         who: 'Hành chính',
       },
@@ -117,7 +128,6 @@ export const PHASES = [
         key: 'deposit',
         label: 'Đặt cọc',
         condition: 'ADM_C_DEPOSIT',
-        note: 'Kế toán ghi thu tiền cọc khi gia đình nộp',
         // Kế toán ghi thu ở Số dư, thu chi; mở với người cao tuổi này đã chọn sẵn (audit 2026-11-18)
         page: ['balance', 'Xem tiền cọc', 'resident'],
         minePage: 'Ghi thu tiền cọc',
@@ -188,7 +198,11 @@ export function admissionProgress({
   const steps = {}
   const phases = PHASES.map((phase) => {
     const rows = phase.steps.map((step) => {
-      const row = { ...step, state: stateOf(step), isMine: !!step.mine?.(ctx) }
+      const state = stateOf(step)
+      const isMine = !!step.mine?.(ctx)
+      const pending = state === 'todo' || state === 'optional'
+      const view = pending ? (isMine ? 'mine' : 'wait') : state
+      const row = { ...step, state, isMine, view, required: !!step.condition }
       steps[step.key] = row
       return row
     })
@@ -211,5 +225,14 @@ export function admissionProgress({
   }
   const waiting = closed ? [] : [...open('todo'), ...open('optional')].filter((s) => !s.isMine && s.who)
 
-  return { steps, phases, next, waiting, conditionOf }
+  // Số đếm của bộ lọc: Việc của bạn, Bắt buộc chưa xong (bước là điều kiện chưa xong), Chờ người khác, Tất cả
+  const counts = {
+    mine: ordered.filter((s) => s.view === 'mine').length,
+    required: open('todo').length,
+    wait: ordered.filter((s) => s.view === 'wait').length,
+    all: ordered.length,
+  }
+  const requiredSteps = ordered.filter((s) => s.required)
+
+  return { steps, phases, next, waiting, counts, requiredSteps, done: open('done').length, conditionOf }
 }

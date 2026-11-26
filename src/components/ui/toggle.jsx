@@ -13,6 +13,9 @@ const toggleVariants = cva(
         // chân, mục chọn chữ chính và gạch 2px xanh đêm
         filter:
           "shrink-0 rounded-full border border-border bg-card px-3.5 text-foreground aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground md:rounded-none md:border-0 md:border-b-2 md:border-transparent md:bg-transparent md:px-1 md:text-muted-foreground md:hover:bg-transparent md:hover:text-foreground md:aria-pressed:border-primary md:aria-pressed:bg-transparent md:aria-pressed:text-foreground md:data-[state=on]:border-primary md:data-[state=on]:bg-transparent md:data-[state=on]:text-foreground",
+        // chip ở mọi bề rộng (màn theo luồng, DESIGN.md 5.3): chip tách rời, chip chọn nền xanh đêm chữ trắng
+        chip:
+          "rounded-full border border-border bg-card px-3.5 text-muted-foreground hover:border-input hover:bg-card aria-pressed:border-primary aria-pressed:bg-primary aria-pressed:text-primary-foreground data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground",
       },
       size: {
         default:
