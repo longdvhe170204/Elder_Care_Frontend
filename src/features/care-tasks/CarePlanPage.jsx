@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getResidentsByResidentIdCarePlans, getTaskTypes, postResidentsByResidentIdCarePlans } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PageHeader } from '@/common/PageHeader'
 import { StatusBadge } from '@/common/StatusBadge'
@@ -52,8 +52,8 @@ function CurrentItems({ plan, typeName }) {
   )
 }
 
-// Q-447: một kế hoạch trên màn (hiện hành + bản sửa đang xử lý), không hiện phiên bản. Bản sửa mở đè từ phải, rộng theo
-// thiết kế Figma "Panel soạn kế hoạch" (bố cục riêng của màn, DESIGN.md mục 0).
+// Q-447: một kế hoạch trên màn (hiện hành + bản sửa đang xử lý), không hiện phiên bản. Bản sửa mở trong hộp thoại giữa
+// màn (chủ dự án yêu cầu 2026-11-26, thay panel trượt phải của Figma; bố cục riêng của màn, DESIGN.md mục 0).
 export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   const { can } = usePermissions()
   const [resident, setResident] = useState(initialResidentId ? { id: initialResidentId } : null)
@@ -160,21 +160,21 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
           )}
         </>
       )}
-      <Sheet open={selected !== null} onOpenChange={(next) => !next && setSelected(null)}>
-        <SheetContent className="w-full gap-0 overflow-y-auto p-0 sm:max-w-[860px]">
+      <Dialog open={selected !== null} onOpenChange={(next) => !next && setSelected(null)}>
+        <DialogContent className="block max-h-[90vh] gap-0 overflow-y-auto p-0 sm:max-w-[960px]">
           {selected !== null && (
             <CarePlanDetail
               key={selected}
               planId={selected}
               currentPlanId={current?.id}
               resident={resident?.personalInfo ? residentLabel(resident) : null}
-              Title={SheetTitle}
-              Description={SheetDescription}
+              Title={DialogTitle}
+              Description={DialogDescription}
               onChanged={() => setReload((value) => value + 1)}
             />
           )}
-        </SheetContent>
-      </Sheet>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

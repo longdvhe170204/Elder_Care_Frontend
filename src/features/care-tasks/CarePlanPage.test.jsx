@@ -105,6 +105,10 @@ it('Q447_dangCoBanSua_khongLapThemMaMoBanDo', async () => {
   fireEvent.click(screen.getByRole('button', { name: 'Mở bản sửa' }))
   await waitFor(() => expect(api.calls('GET', '/care-plans/15').length).toBeGreaterThan(0))
   expect(api.calls('POST', '/residents/77/care-plans')).toHaveLength(0)
+  // Bản sửa mở trong hộp thoại giữa màn, không phải panel trượt từ phải
+  const dialog = await screen.findByRole('dialog')
+  expect(dialog).toHaveAttribute('data-slot', 'dialog-content')
+  expect(document.querySelector('[data-slot="sheet-content"]')).toBeNull()
 })
 
 it('F5_timNguoiCaoTuoi_goiYHoTenVaMaHoSo_chonThiTaiKeHoach', async () => {
