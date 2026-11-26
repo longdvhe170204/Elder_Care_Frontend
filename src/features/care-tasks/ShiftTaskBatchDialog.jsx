@@ -375,8 +375,8 @@ export function ShiftTaskBatchDialog({
         showCloseButton={false}
         className="flex max-h-[90vh] flex-col gap-0 overflow-hidden bg-background p-0 sm:max-w-5xl"
       >
-        <div className="flex items-start justify-between gap-4 border-b bg-card p-5">
-          <div className="flex flex-col gap-1">
+        <div className="flex flex-col items-start justify-between gap-4 border-b bg-card p-5 sm:flex-row">
+          <div className="flex min-w-0 flex-col gap-1">
             <DialogTitle className="type-title">Lập công việc cho ca</DialogTitle>
             <DialogDescription className="type-body-sm text-muted-foreground">{subtitle}</DialogDescription>
             {shiftPicker && <div className="pt-2">{shiftPicker}</div>}
@@ -384,7 +384,7 @@ export function ShiftTaskBatchDialog({
               <p className="type-body-sm text-muted-foreground">Gửi hoặc bỏ các dòng trước khi đổi ngày, ca.</p>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" onClick={onCompare}>
               Đối chiếu nguồn
             </Button>
