@@ -6,6 +6,7 @@ import {
   getMe,
   getResidencyEndingsByIdConditions,
   getStaff,
+  getTestingClock,
   postResidencyEndings,
   postResidencyEndingsByIdCancel,
   postResidencyEndingsByIdChangeDate,
@@ -125,6 +126,11 @@ function Conditions({ conditions, ending, onNavigate }) {
 }
 
 // Giờ hiện tại theo giờ máy cho ô datetime-local (người dùng sửa được)
+// Giờ Việt Nam của một mốc thời gian, dạng giá trị ô datetime-local
+function vietnamLocal(iso) {
+  return new Date(Date.parse(iso) + 7 * 3600_000).toISOString().slice(0, 16)
+}
+
 function nowLocal() {
   const d = new Date()
   const p = (n) => String(n).padStart(2, '0')
@@ -145,13 +151,24 @@ function ConfirmEndForm({ ending, onDone, onCancel }) {
   const [staff, setStaff] = useState(null)
   const [me, setMe] = useState('')
   const [memberId, setMemberId] = useState('')
-  const [at, setAt] = useState(nowLocal)
+  const [initialAt] = useState(nowLocal)
+  const [at, setAt] = useState(initialAt)
   const [staffId, setStaffId] = useState('')
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const [keys] = useState(() => ({ handover: newKey(), end: crypto.randomUUID() }))
+
+  // Bản demo, test chạy đồng hồ giả lập (000 NFR-13): điền sẵn theo giờ backend khi người dùng chưa sửa ô; nơi khác
+  // đường dẫn này không có nên giữ giờ máy
+  useEffect(() => {
+    getTestingClock()
+      .then(({ data }) => {
+        if (data?.simulated) setAt((current) => (current === initialAt ? vietnamLocal(data.now) : current))
+      })
+      .catch(() => {})
+  }, [initialAt])
 
   useEffect(() => {
     getResidentsByResidentIdRelationships({ path: { residentId: ending.residentId } })

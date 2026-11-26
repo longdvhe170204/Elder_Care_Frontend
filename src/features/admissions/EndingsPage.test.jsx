@@ -110,6 +110,17 @@ describe('EndingsPage', () => {
     expect(await screen.findByText('Chi phí kỳ cuối đã chốt')).toBeInTheDocument()
   })
 
+  // Góp ý demo BF-10 (B14): backend chạy đồng hồ giả lập thì giờ bàn giao điền sẵn theo giờ backend, không theo máy
+  it('gioBanGiaoDienSan_theoDongHoGiaLap', async () => {
+    api.on('GET', '/residency-endings/14/conditions', json(200, READY))
+    api.on('GET', '/testing/clock', json(200, { now: '2026-11-26T02:05:00Z', simulated: true }))
+    renderPage()
+    await openEnding()
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết thúc' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Thời điểm bàn giao, kết thúc')).toHaveValue('2026-11-26T09:05'))
+  })
+
   // Demo 2026-11-26: yêu cầu người đại diện gửi trên app; lập hồ sơ điền sẵn
   it('yeuCauNguoiThan_lapHoSoDienSan_guiMaYeuCau', async () => {
     api.on('GET', '/residency-ending-requests', json(200, [REQUEST]))
