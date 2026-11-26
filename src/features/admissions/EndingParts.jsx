@@ -487,14 +487,15 @@ function useRequesterOptions(residentId) {
   return [...(resident.id === residentId ? resident.names : []), ...staff]
 }
 
-export function CreateEndingSheet({ role, onClose, onDone }) {
-  const [residentId, setResidentId] = useState('')
-  const [endCase, setEndCase] = useState('')
+// request: yêu cầu người đại diện gửi trên app (demo 2026-11-26), điền sẵn form và gửi kèm endingRequestId
+export function CreateEndingSheet({ role, request = null, onClose, onDone }) {
+  const [residentId, setResidentId] = useState(request ? String(request.residentId) : '')
+  const [endCase, setEndCase] = useState(request?.endCase ?? '')
   const [medical, setMedical] = useState(false)
-  const [date, setDate] = useState('')
+  const [date, setDate] = useState(request?.expectedEndDate ?? '')
   const [destination, setDestination] = useState('')
-  const [requestedBy, setRequestedBy] = useState('')
-  const [reason, setReason] = useState('')
+  const [requestedBy, setRequestedBy] = useState(request ? `${request.familyMemberName} (người thân)` : '')
+  const [reason, setReason] = useState(request?.reason ?? '')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
@@ -534,6 +535,7 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
           ...(destination.trim() && { destination: destination.trim() }),
           requestedBy: requestedBy.trim(),
           reason: reason.trim(),
+          ...(request && { endingRequestId: request.id }),
         },
       })
       onDone(data)
