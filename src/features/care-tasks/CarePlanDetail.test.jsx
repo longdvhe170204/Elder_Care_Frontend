@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { CarePlanDetail } from './CarePlanDetail'
 
@@ -81,7 +81,10 @@ it('Q447_choDuyet_bacSiThayThayDoiSoVoiHienHanh', async () => {
   render(<CarePlanDetail planId={17} currentPlanId={11} resident="[Họ tên kiểm thử] · NCT-077" onChanged={vi.fn()} />)
   expect(await screen.findByRole('article', { name: 'Loại kiểm thử' })).toBeInTheDocument()
   expect(screen.getByText('[Họ tên kiểm thử] · NCT-077')).toBeInTheDocument()
-  expect(screen.getByRole('tab', { name: 'Thay đổi so với hiện hành' })).toHaveAttribute('aria-selected', 'true')
+  expect(screen.getByRole('tab', { name: 'Thay đổi so với kế hoạch đang áp dụng' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
   expect(screen.getByRole('tab', { name: 'Mục công việc' })).toBeInTheDocument()
   // Chủ dự án bỏ phần thỏa thuận rủi ro khỏi màn kế hoạch (2026-11-26)
   expect(screen.queryByRole('tab', { name: 'Thỏa thuận có rủi ro' })).not.toBeInTheDocument()
@@ -117,16 +120,36 @@ it('FR_004_412HienGiaTriMoiVaTaiLaiKhongGhiDe', async () => {
   expect(api.calls('PUT', '/care-plans/17/items')).toHaveLength(1)
 })
 
-it('FR_003_boBanSuaBatBuocLyDoTaiO', async () => {
+it('FR_003_huyBanSua_hopXacNhanCoLyDoHuy', async () => {
+  api.on('POST', '/care-plans/17/cancel', json(200, null))
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Bỏ bản sửa' }))
-  expect(await screen.findByText('Nhập lý do trước khi thực hiện.')).toBeInTheDocument()
+  fireEvent.click(await screen.findByRole('button', { name: 'Hủy bản sửa' }))
+  const ask = await screen.findByRole('alertdialog', { name: 'Hủy bản sửa này?' })
+  expect(within(ask).getByText(/Kế hoạch đang áp dụng giữ nguyên/)).toBeInTheDocument()
+  fireEvent.click(within(ask).getByRole('button', { name: 'Hủy bản sửa' }))
+  expect(await within(ask).findByText('Nhập lý do hủy.')).toBeInTheDocument()
   expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(0)
+  fireEvent.change(within(ask).getByLabelText('Lý do hủy'), { target: { value: 'Bác sĩ giữ kế hoạch cũ' } })
+  fireEvent.click(within(ask).getByRole('button', { name: 'Hủy bản sửa' }))
+  await waitFor(() => expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(1))
+  expect(JSON.parse(api.calls('POST', '/care-plans/17/cancel')[0][1].body)).toEqual({ reason: 'Bác sĩ giữ kế hoạch cũ' })
+})
+
+it('Q447_banNhap_daiBaoChuaApDung_vaTabThayDoi', async () => {
+  api.on('GET', '/care-plans/compare', json(200, { added: [{ id: 9, taskTypeId: 5 }], removed: [], changed: [] }))
+  render(<CarePlanDetail planId={17} currentPlanId={11} currentEffectiveFrom="2026-11-26" onChanged={vi.fn()} />)
+  expect(await screen.findByRole('heading', { name: 'Bản nháp sửa kế hoạch' })).toBeInTheDocument()
+  expect(screen.getByText(/Bản nháp – chưa áp dụng\./)).toBeInTheDocument()
+  expect(screen.getByText(/Do \[Người lập kiểm thử\] lập\./)).toBeInTheDocument()
+  expect(screen.getByText(/Kế hoạch đang áp dụng vẫn là bản hiệu lực từ 26\/11\/2026\./)).toBeInTheDocument()
+  expect(screen.getByRole('tab', { name: 'Mục công việc' })).toHaveAttribute('aria-selected', 'true')
+  fireEvent.click(screen.getByRole('tab', { name: 'Thay đổi so với kế hoạch đang áp dụng' }))
+  expect(await screen.findByRole('article', { name: 'Loại kiểm thử' })).toBeInTheDocument()
 })
 
 it('Figma_banSuaDangSoan_tieuDeVaTheThongTin_nutCoDinhCuoiPanel', async () => {
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
-  expect(await screen.findByRole('heading', { name: 'Bản sửa kế hoạch' })).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Bản nháp sửa kế hoạch' })).toBeInTheDocument()
   expect(screen.getByText('Người lập')).toBeInTheDocument()
   expect(screen.getByText('[Người lập kiểm thử]')).toBeInTheDocument()
   expect(screen.getByText('Chưa duyệt')).toBeInTheDocument()

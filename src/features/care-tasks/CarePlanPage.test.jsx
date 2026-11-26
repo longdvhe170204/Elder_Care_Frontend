@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { CarePlanPage } from './CarePlanPage'
@@ -92,17 +92,18 @@ it('Q447_dangCoBanSua_khongLapThemMaMoBanDo', async () => {
   api.on(
     'GET',
     '/residents/77/care-plans',
-    json(200, [effective, { id: 15, revision: 3, status: 'PENDING_APPROVAL', items: [] }]),
+    json(200, [effective, { id: 15, revision: 3, status: 'PENDING_APPROVAL', createdBy: 'Hoàng Thị Dung', items: [] }]),
   )
   api.on(
     'GET',
     '/care-plans/15',
     json(200, { id: 15, residentId: 77, status: 'PENDING_APPROVAL', items: [], riskAgreements: [], allowedCommands: [] }),
   )
+  api.on('GET', '/care-plans/compare', json(200, { added: [], removed: [item], changed: [] }))
   renderPage()
-  expect(await screen.findByText('Chờ Bác sĩ duyệt')).toBeInTheDocument()
+  expect(await screen.findByRole('heading', { name: 'Bản sửa chờ Bác sĩ duyệt' })).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Sửa kế hoạch' })).not.toBeInTheDocument()
-  fireEvent.click(screen.getByRole('button', { name: 'Mở bản sửa' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Xem bản sửa' }))
   await waitFor(() => expect(api.calls('GET', '/care-plans/15').length).toBeGreaterThan(0))
   expect(api.calls('POST', '/residents/77/care-plans')).toHaveLength(0)
   // Bản sửa mở trong hộp thoại giữa màn, không phải panel trượt từ phải
@@ -122,7 +123,7 @@ it('F5_timNguoiCaoTuoi_goiYHoTenVaMaHoSo_chonThiTaiKeHoach', async () => {
 
 it('Figma_keHoachHienHanhDangBang_cotTheoThietKe', async () => {
   renderPage()
-  const table = await screen.findByRole('table', { name: 'Mục của kế hoạch hiện hành' })
+  const table = await screen.findByRole('table', { name: 'Mục của kế hoạch đang áp dụng' })
   for (const head of ['Loại công việc', 'Nội dung', 'Tần suất và giờ', 'Vai trò thực hiện', 'Mức quan trọng', 'Mục tiêu nước'])
     expect(screen.getByRole('columnheader', { name: head })).toBeInTheDocument()
   expect(table).toHaveTextContent('Hỗ trợ vận động')
@@ -139,4 +140,68 @@ it('FR_007_khongCoQuyenXemThiKhongHienDuLieuHayLenhLap', async () => {
   renderPage()
   expect(await screen.findByText('Bạn không có quyền xem kế hoạch chăm sóc')).toBeInTheDocument()
   expect(screen.queryByRole('button', { name: 'Lập kế hoạch' })).not.toBeInTheDocument()
+})
+
+it('Q447_banNhap_tachKhoiRieng_ghiNguoiLapVaSoThayDoi', async () => {
+  api.on(
+    'GET',
+    '/residents/77/care-plans',
+    json(200, [effective, { id: 16, status: 'DRAFT', createdBy: 'Hoàng Thị Dung', items: [item] }]),
+  )
+  api.on(
+    'GET',
+    '/care-plans/compare',
+    json(200, {
+      added: [{ id: 1, taskTypeId: 5 }],
+      removed: [],
+      changed: [{ before: item, after: item, changedFields: ['intervalHours'] }],
+    }),
+  )
+  renderPage()
+  expect(await screen.findByRole('heading', { name: 'Kế hoạch đang áp dụng' })).toBeInTheDocument()
+  expect(screen.getByRole('heading', { name: 'Bản nháp chưa áp dụng' })).toBeInTheDocument()
+  expect(
+    await screen.findByText('Hoàng Thị Dung đang soạn · 2 thay đổi so với kế hoạch đang áp dụng'),
+  ).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Xem / tiếp tục bản nháp' })).toBeInTheDocument()
+  const [url] = api.calls('GET', '/care-plans/compare')[0]
+  expect(new URL(url, 'http://localhost').searchParams.get('to')).toBe('16')
+})
+
+it('Q447_dongKhiChuaLuu_hoiTruocKhiDong', async () => {
+  api.on(
+    'GET',
+    '/residents/77/care-plans',
+    json(200, [effective, { id: 16, status: 'DRAFT', createdBy: 'Hoàng Thị Dung', items: [item] }]),
+  )
+  api.on('GET', '/care-plans/compare', json(200, { added: [], removed: [], changed: [] }))
+  api.on(
+    'GET',
+    '/care-plans/16',
+    json(
+      200,
+      {
+        id: 16,
+        residentId: 77,
+        status: 'DRAFT',
+        items: [item],
+        allowedCommands: ['replaceItems', 'submit', 'cancel'],
+        createdBy: 'Hoàng Thị Dung',
+      },
+      { ETag: '"1"' },
+    ),
+  )
+  renderPage()
+  fireEvent.click(await screen.findByRole('button', { name: 'Xem / tiếp tục bản nháp' }))
+  fireEvent.change(await screen.findByLabelText('Lý do sửa'), { target: { value: 'Sau ngã' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+  const ask = await screen.findByRole('alertdialog', { name: 'Bạn có thay đổi chưa lưu' })
+  fireEvent.click(within(ask).getByRole('button', { name: 'Ở lại' }))
+  await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument())
+  expect(screen.getByLabelText('Lý do sửa')).toHaveValue('Sau ngã')
+  fireEvent.click(screen.getByRole('button', { name: 'Đóng' }))
+  fireEvent.click(
+    within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Đóng không lưu' }),
+  )
+  await waitFor(() => expect(screen.queryByLabelText('Lý do sửa')).not.toBeInTheDocument())
 })

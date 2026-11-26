@@ -12,6 +12,7 @@ import {
 } from '@/api'
 import { Clock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { SectionTabs } from '@/common/SectionTabs'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { PermissionDeniedState } from '@/common/PageState'
@@ -35,13 +36,26 @@ const LABELS = {
   retract: 'Rút lại',
   approve: 'Duyệt',
   return: 'Trả lại',
-  cancel: 'Bỏ bản sửa',
+  cancel: 'Hủy bản sửa',
 }
 const NO_REASON = ['approve', 'retract']
 
-// currentPlanId: kế hoạch Hiệu lực để hiện thay đổi khi bản sửa Chờ duyệt (FR-008, sửa Q-447)
-// resident: dòng "Họ tên · Mã hồ sơ" ở đầu panel (thiết kế Figma "Panel soạn kế hoạch")
-export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Title = 'h2', Description = 'p' }) {
+// currentPlanId, currentEffectiveFrom: kế hoạch đang áp dụng, để hiện thay đổi và dải báo bản nháp (FR-008, Q-447)
+// resident: dòng "Họ tên · Mã hồ sơ" ở đầu hộp thoại; onDirtyChange: báo còn thay đổi chưa lưu (hỏi trước khi đóng)
+export function CarePlanDetail({
+  planId,
+  currentPlanId,
+  currentEffectiveFrom,
+  resident,
+  onChanged,
+  onDirtyChange,
+  Title = 'h2',
+  Description = 'p',
+}) {
+  const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelReason, setCancelReason] = useState('')
+  const [cancelError, setCancelError] = useState(false)
+  const [itemsDirty, setItemsDirty] = useState(false)
   const [tab, setTab] = useState(null)
   const [resource, setResource] = useState(null)
   const [taskTypes, setTaskTypes] = useState([])
@@ -77,8 +91,13 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
     }
   }, [planId, reload])
   const pendingApproval = resource?.data.status === 'PENDING_APPROVAL'
+  const inProgress = pendingApproval || resource?.data.status === 'DRAFT'
+  const reasonDirty = resource?.data.status === 'DRAFT' && reason.trim() !== ''
   useEffect(() => {
-    if (!pendingApproval || !currentPlanId) return undefined
+    onDirtyChange?.(itemsDirty || reasonDirty)
+  }, [itemsDirty, reasonDirty, onDirtyChange])
+  useEffect(() => {
+    if (!inProgress || !currentPlanId) return undefined
     let cancelled = false
     getCarePlansCompare({ query: { from: currentPlanId, to: planId } })
       .then(({ data }) => {
@@ -90,13 +109,14 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
     return () => {
       cancelled = true
     }
-  }, [pendingApproval, currentPlanId, planId])
+  }, [inProgress, currentPlanId, planId, reload])
   function refresh() {
     setResource(null)
     setProblem(null)
     setReasonError(false)
     setReason('')
     setComparison(null)
+    setItemsDirty(false)
     setReload((value) => value + 1)
     onChanged?.()
   }
@@ -146,7 +166,21 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
       setBusy(false)
     }
   }
+  function confirmCancel() {
+    if (!cancelReason.trim()) {
+      setCancelError(true)
+      return
+    }
+    setCancelOpen(false)
+    command(COMMANDS.cancel, { reason: cancelReason.trim() })
+  }
   function transition(name) {
+    if (name === 'cancel') {
+      setCancelReason('')
+      setCancelError(false)
+      setCancelOpen(true)
+      return
+    }
     if (!NO_REASON.includes(name) && !reason.trim()) {
       setReasonError(true)
       return
@@ -160,11 +194,22 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
   const editable = isAllowed(plan, 'replaceItems')
   const hasPlan = !plan.noEffectivePlan || Boolean(currentPlanId)
   const commands = Object.keys(LABELS).filter((name) => isAllowed(plan, name))
-  const showChanges = pendingApproval && Boolean(currentPlanId)
-  const tabs = [
-    ...(showChanges ? [['changes', 'Thay đổi so với hiện hành']] : []),
-    ['items', 'Mục công việc'],
-  ]
+  const showChanges = inProgress && Boolean(currentPlanId)
+  const changesTab = ['changes', 'Thay đổi so với kế hoạch đang áp dụng']
+  // Bác sĩ duyệt xem thay đổi trước; người soạn xem mục trước
+  const tabs = !showChanges
+    ? [['items', 'Mục công việc']]
+    : pendingApproval
+      ? [changesTab, ['items', 'Mục công việc']]
+      : [['items', 'Mục công việc'], changesTab]
+  const draft = plan.status === 'DRAFT'
+  const heading = draft
+    ? hasPlan
+      ? 'Bản nháp sửa kế hoạch'
+      : 'Bản nháp kế hoạch'
+    : hasPlan && pendingApproval
+      ? 'Bản sửa kế hoạch'
+      : 'Kế hoạch chăm sóc'
   const activeTab = tabs.some(([key]) => key === tab) ? tab : tabs[0][0]
   const names = Object.fromEntries(taskTypes.map((type) => [String(type.id), type.name]))
   const reasonAlert = reasonError && (
@@ -192,7 +237,7 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
         <div className="flex flex-wrap items-center gap-3">
           <Title>
             {/* SheetTitle có sẵn text-base; cỡ chữ đặt ở phần chữ bên trong */}
-            <span className="type-section">{hasPlan ? 'Bản sửa kế hoạch' : 'Kế hoạch chăm sóc'}</span>
+            <span className="type-section">{heading}</span>
           </Title>
           <StatusBadge status={planLabel(plan, hasPlan)} />
         </div>
@@ -207,6 +252,18 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
         )}
       </header>
       <div className="flex flex-1 flex-col gap-5 bg-background px-6 py-5">
+        {inProgress && (
+          <p className="rounded-xl border border-(--warning-foreground)/30 bg-warning px-4 py-3 type-body-sm text-warning-foreground">
+            <strong>{draft ? 'Bản nháp – chưa áp dụng.' : 'Bản sửa chờ Bác sĩ duyệt – chưa áp dụng.'}</strong> Do{' '}
+            {plan.createdBy} lập.{' '}
+            {currentEffectiveFrom
+              ? `Kế hoạch đang áp dụng vẫn là bản hiệu lực từ ${formatDate(currentEffectiveFrom)}.`
+              : hasPlan
+                ? 'Kế hoạch đang áp dụng giữ nguyên.'
+                : 'Người cao tuổi chưa có kế hoạch đang áp dụng.'}{' '}
+            Mọi thay đổi ở đây chỉ có hiệu lực sau khi Bác sĩ duyệt.
+          </p>
+        )}
         <section className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-2" aria-label="Thông tin kế hoạch">
           <div>
             <p className="type-caption text-muted-foreground">Người lập</p>
@@ -229,15 +286,17 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
           )}
           <div className="flex flex-col gap-1 sm:col-span-2">
             {editable ? (
-              <CareField
-                label={hasPlan ? 'Lý do sửa *' : 'Lý do'}
-                name={hasPlan ? 'Lý do sửa' : 'Lý do'}
-                value={reason}
-                onChange={setReason}
-                type="textarea"
-                maxLength={2000}
-                hint={hasPlan ? 'Bắt buộc khi sửa kế hoạch đã có.' : 'Chỉ cần khi bỏ kế hoạch đang soạn.'}
-              />
+              hasPlan && (
+                <CareField
+                  label="Lý do sửa *"
+                  name="Lý do sửa"
+                  value={reason}
+                  onChange={setReason}
+                  type="textarea"
+                  maxLength={2000}
+                  hint="Bắt buộc khi sửa kế hoạch đã có."
+                />
+              )
             ) : (
               plan.changeReason && (
                 <>
@@ -278,6 +337,7 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
               onSave={(items) => command(putCarePlansByIdItems, items, true)}
               onSubmitForApproval={isAllowed(plan, 'submit') ? sendForApproval : undefined}
               leading={commandButtons(['cancel'])}
+              onDirtyChange={setItemsDirty}
             />
           ) : (
             <section className="flex flex-col gap-3">
@@ -332,6 +392,28 @@ export function CarePlanDetail({ planId, currentPlanId, resident, onChanged, Tit
           <div className="flex flex-wrap justify-end gap-3">{commandButtons(['cancel', 'retract', 'return', 'approve'])}</div>
         </footer>
       )}
+      <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
+        <DialogContent role="alertdialog" className="sm:max-w-md">
+          <DialogTitle className="type-title">Hủy bản sửa này?</DialogTitle>
+          <DialogDescription>
+            Kế hoạch đang áp dụng giữ nguyên. Mọi phần đã soạn trong bản này, kể cả phần người khác đã lưu, sẽ bị bỏ.
+          </DialogDescription>
+          <CareField label="Lý do hủy" value={cancelReason} onChange={setCancelReason} type="textarea" maxLength={2000} />
+          {cancelError && (
+            <p role="alert" className="type-body-sm text-destructive">
+              Nhập lý do hủy.
+            </p>
+          )}
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setCancelOpen(false)}>
+              Quay lại
+            </Button>
+            <Button variant="destructive" disabled={busy} onClick={confirmCancel}>
+              Hủy bản sửa
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

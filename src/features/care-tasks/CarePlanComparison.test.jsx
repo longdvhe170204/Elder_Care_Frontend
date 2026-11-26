@@ -51,5 +51,5 @@ it('Figma_moiMucMotThe_bangTruongTruocSau', () => {
 
 it('Figma_khongCoThayDoi_ghiRo', () => {
   render(<CarePlanComparison taskTypes={types} value={{ added: [], removed: [], changed: [] }} />)
-  expect(screen.getByText('Bản sửa chưa khác kế hoạch hiện hành.')).toBeInTheDocument()
+  expect(screen.getByText('Bản sửa chưa khác kế hoạch đang áp dụng.')).toBeInTheDocument()
 })

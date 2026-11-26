@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { getResidentsByResidentIdCarePlans, getTaskTypes, postResidentsByResidentIdCarePlans } from '@/api'
+import { X } from 'lucide-react'
+import {
+  getCarePlansCompare,
+  getResidentsByResidentIdCarePlans,
+  getTaskTypes,
+  postResidentsByResidentIdCarePlans,
+} from '@/api'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -17,7 +23,7 @@ import { CARE_ROLES, IMPORTANCE, frequencyText, planLabel, planState, residentLa
 // Kế hoạch hiện hành dạng bảng (Figma "Kế hoạch chăm sóc · Kế hoạch hiện hành")
 function CurrentItems({ plan, typeName }) {
   return (
-    <Table aria-label="Mục của kế hoạch hiện hành">
+    <Table aria-label="Mục của kế hoạch đang áp dụng">
       <TableHeader>
         <TableRow className="bg-muted hover:bg-muted">
           <TableHead>Loại công việc</TableHead>
@@ -64,6 +70,9 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   const [selected, setSelected] = useState(null)
   const [reload, setReload] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [askClose, setAskClose] = useState(false)
+  const [changes, setChanges] = useState({ key: null, count: null })
   useEffect(() => {
     getTaskTypes()
       .then(({ data }) => setTaskTypes(data))
@@ -114,6 +123,41 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
   const { current, scheduled, open } = planState(plans)
   const hasPlan = Boolean(scheduled ?? current)
   const canCreate = can('CARE_PLAN', 'CREATE') && !open
+  // Số thay đổi của bản nháp so với kế hoạch đang áp dụng, để người mở sau biết bản nháp đã đổi gì
+  const compareKey = current?.id && open?.id ? `${current.id}:${open.id}:${reload}` : null
+  useEffect(() => {
+    if (!compareKey) return undefined
+    const [from, to] = compareKey.split(':').map(Number)
+    let cancelled = false
+    getCarePlansCompare({ query: { from, to } })
+      .then(({ data }) => {
+        if (!cancelled)
+          setChanges({ key: compareKey, count: data.added.length + data.removed.length + data.changed.length })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [compareKey])
+  const changeCount = changes.key === compareKey ? changes.count : null
+  function close() {
+    setAskClose(false)
+    setDirty(false)
+    setSelected(null)
+  }
+  // Đóng khi còn thay đổi chưa lưu thì hỏi trước (chủ dự án 2026-11-26)
+  function requestClose() {
+    if (dirty) setAskClose(true)
+    else close()
+  }
+  const draftOpen = open?.status === 'DRAFT'
+  const draftLine = !open
+    ? ''
+    : !current
+      ? `${open.createdBy ?? 'Điều dưỡng'} ${draftOpen ? 'đang soạn' : 'đã gửi'} kế hoạch đầu tiên`
+      : `${open.createdBy ?? 'Điều dưỡng'} ${draftOpen ? 'đang soạn' : 'đã gửi'}${
+          changeCount == null ? '' : ` · ${changeCount} thay đổi so với kế hoạch đang áp dụng`
+        }`
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-5">
       <PageHeader title="Kế hoạch chăm sóc" subtitle="Điều dưỡng lập, sửa kế hoạch rồi gửi Bác sĩ duyệt" />
@@ -127,19 +171,13 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
             <section className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-busy={busy || plans === null}>
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-col gap-1">
-                  <h2 className="type-title">Kế hoạch hiện hành</h2>
+                  <h2 className="type-title">Kế hoạch đang áp dụng</h2>
                   {current && (
                     <p className="type-body-sm text-muted-foreground">Hiệu lực từ {formatDate(current.effectiveFrom)}</p>
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   {scheduled && <StatusBadge status={planLabel(scheduled, true)} />}
-                  {open && <StatusBadge status={planLabel(open, hasPlan)} />}
-                  {open && (
-                    <Button variant="outline" onClick={() => setSelected(open.id)}>
-                      {hasPlan ? 'Mở bản sửa' : 'Mở kế hoạch đang soạn'}
-                    </Button>
-                  )}
                   {canCreate && plans !== null && (
                     <Button disabled={busy} onClick={create}>
                       {hasPlan ? 'Sửa kế hoạch' : 'Lập kế hoạch'}
@@ -147,6 +185,20 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
                   )}
                 </div>
               </div>
+              {/* Bản nháp đặt ngay dưới tiêu đề để người mở sau thấy trước bảng dài */}
+              {open && (
+                <section className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-(--warning-foreground)/40 bg-warning/40 p-4">
+                  <div className="flex flex-col gap-1">
+                    <h3 className="type-card-title">
+                      {draftOpen ? 'Bản nháp chưa áp dụng' : 'Bản sửa chờ Bác sĩ duyệt'}
+                    </h3>
+                    <p className="type-body-sm text-muted-foreground">{draftLine}</p>
+                  </div>
+                  <Button variant="outline" onClick={() => setSelected(open.id)}>
+                    {draftOpen ? 'Xem / tiếp tục bản nháp' : 'Xem bản sửa'}
+                  </Button>
+                </section>
+              )}
               {plans === null ? (
                 <p role="status">Đang tải kế hoạch…</p>
               ) : current ? (
@@ -160,19 +212,47 @@ export function CarePlanPage({ residentId: initialResidentId = 0 }) {
           )}
         </>
       )}
-      <Dialog open={selected !== null} onOpenChange={(next) => !next && setSelected(null)}>
-        <DialogContent className="block max-h-[90vh] gap-0 overflow-y-auto p-0 sm:max-w-[960px]">
+      <Dialog open={selected !== null} onOpenChange={(next) => !next && requestClose()}>
+        <DialogContent
+          showCloseButton={false}
+          className="block max-h-[90vh] gap-0 overflow-y-auto p-0 sm:max-w-[960px]"
+        >
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            className="absolute top-3 right-3 z-10"
+            aria-label="Đóng"
+            onClick={requestClose}
+          >
+            <X aria-hidden="true" />
+          </Button>
           {selected !== null && (
             <CarePlanDetail
               key={selected}
               planId={selected}
               currentPlanId={current?.id}
+              currentEffectiveFrom={current?.effectiveFrom}
               resident={resident?.personalInfo ? residentLabel(resident) : null}
               Title={DialogTitle}
               Description={DialogDescription}
+              onDirtyChange={setDirty}
               onChanged={() => setReload((value) => value + 1)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={askClose} onOpenChange={setAskClose}>
+        <DialogContent role="alertdialog" className="sm:max-w-md">
+          <DialogTitle className="type-title">Bạn có thay đổi chưa lưu</DialogTitle>
+          <DialogDescription>
+            Đóng bây giờ thì phần vừa sửa sẽ mất. Muốn giữ lại, ở lại rồi bấm Lưu nháp.
+          </DialogDescription>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={close}>
+              Đóng không lưu
+            </Button>
+            <Button onClick={() => setAskClose(false)}>Ở lại</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

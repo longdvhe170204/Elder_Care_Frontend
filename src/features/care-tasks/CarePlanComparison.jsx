@@ -107,12 +107,12 @@ export function CarePlanComparison({ value, taskTypes = [] }) {
   const typeName = (id) => names[String(id)] ?? `Loại công việc mã ${id}`
   const total = value.added.length + value.removed.length + value.changed.length
   return (
-    <section className="flex flex-col gap-3" aria-label="Thay đổi so với kế hoạch hiện hành">
+    <section className="flex flex-col gap-3" aria-label="Thay đổi so với kế hoạch đang áp dụng">
       <div>
-        <h3 className="type-title">Thay đổi so với kế hoạch hiện hành</h3>
+        <h3 className="type-title">Thay đổi so với kế hoạch đang áp dụng</h3>
         <p className="type-body-sm text-muted-foreground">Đối chiếu từng thay đổi trước khi duyệt.</p>
       </div>
-      {total === 0 && <p className="type-body-sm">Bản sửa chưa khác kế hoạch hiện hành.</p>}
+      {total === 0 && <p className="type-body-sm">Bản sửa chưa khác kế hoạch đang áp dụng.</p>}
       {['added', 'removed', 'changed'].flatMap((kind) =>
         value[kind].map((entry, index) => (
           <ChangeCard

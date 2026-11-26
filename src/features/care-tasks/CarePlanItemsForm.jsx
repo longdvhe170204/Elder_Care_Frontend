@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, Plus, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { StatusBadge } from '@/common/StatusBadge'
@@ -138,13 +138,19 @@ function ItemSummary({ index, row, typeName, importance, onOpen }) {
 }
 
 // leading: lệnh đặt đầu thanh dưới cố định (vd. "Bỏ bản sửa" của panel, thiết kế Figma)
-export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForApproval, leading }) {
+// onDirtyChange: báo khi các mục khác lúc mở (chưa lưu), để hỏi trước khi đóng hộp thoại
+export function CarePlanItemsForm({ items, taskTypes, busy, onSave, onSubmitForApproval, leading, onDirtyChange }) {
   // Backend trả giờ dạng HH:mm:ss; chip và lần gửi dùng HH:mm để so trùng đúng
   const [rows, setRows] = useState(() =>
     items.map((row) => ({ ...row, times: (row.times ?? []).map((at) => String(at).slice(0, 5)) })),
   )
   const [errors, setErrors] = useState([])
   const [open, setOpen] = useState(0)
+  const [initial] = useState(() => JSON.stringify(rows))
+  const dirty = JSON.stringify(rows) !== initial
+  useEffect(() => {
+    onDirtyChange?.(dirty)
+  }, [dirty, onDirtyChange])
   const typeById = Object.fromEntries(taskTypes.map((type) => [String(type.id), type]))
   const errorOf = (index, key) => errors[index]?.[key]
   // Mức luôn theo loại công việc, kể cả mục lập từ trước khi bỏ ô chọn (chủ dự án 2026-11-26)
