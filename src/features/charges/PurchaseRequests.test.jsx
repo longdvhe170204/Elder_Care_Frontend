@@ -1,4 +1,5 @@
 import { expect, it, vi, beforeEach } from 'vitest'
+import { pickResident } from '@/test/pickResident'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import * as api from '@/api'
 import { PurchaseRequests } from './PurchaseRequests'
@@ -236,8 +237,7 @@ it('taoDeNghi_nguoiThanYeuCau_chonTheoTen', async () => {
   render(<PurchaseRequests />)
   fireEvent.click(await screen.findByRole('button', { name: 'Lập đề nghị mua hộ' }))
   expect(screen.queryByLabelText('Mã người cao tuổi (bắt buộc)')).toBeNull()
-  await screen.findByRole('option', { name: 'Nguyễn Thị Lan (NCT-0007)' })
-  fireEvent.change(screen.getByLabelText('Người cao tuổi (bắt buộc)'), { target: { value: '7' } })
+  await pickResident('Nguyễn Thị Lan', { label: 'Người cao tuổi (bắt buộc)' })
   fireEvent.change(screen.getByLabelText('Mô tả mục cần mua (bắt buộc)'), { target: { value: 'Áo ấm' } })
   fireEvent.change(screen.getByLabelText('Số lượng (bắt buộc)'), { target: { value: '1' } })
   fireEvent.change(screen.getByLabelText('Số tiền dự kiến (bắt buộc)'), { target: { value: '200000' } })

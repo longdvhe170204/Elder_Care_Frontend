@@ -1,4 +1,5 @@
 import { beforeEach, expect, it, vi } from 'vitest'
+import { pickResident } from '@/test/pickResident'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { getCostsBillingSources, postCostsItemsFromEvents } from '@/api'
 import { BillingSources } from './BillingSources'
@@ -48,8 +49,7 @@ beforeEach(() => {
 
 async function fillFilter() {
   render(<BillingSources />)
-  await screen.findByRole('option', { name: 'Nguyễn Văn Tư (NCT-0042)' })
-  fireEvent.change(screen.getByLabelText('Người cao tuổi'), { target: { value: '42' } })
+  await pickResident('Nguyễn Văn Tư', { label: 'Người cao tuổi' })
   fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-11-01' } })
   fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-11-02' } })
 }
