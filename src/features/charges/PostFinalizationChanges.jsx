@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react'
 import { getCostsPostFinalizationChanges } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
 import { CostAdjustmentForm } from './CostAdjustmentForm'
+import { ResidentField } from './ResidentField'
+import { residentLabel, useResidentDirectory } from './useResidentDirectory'
 
 function SourceSnapshot({ value = {} }) {
   const day = value.day
@@ -75,6 +76,7 @@ function SourceSnapshot({ value = {} }) {
 
 export function PostFinalizationChanges() {
   const [resident, setResident] = useState('')
+  const residents = useResidentDirectory()
   const [rows, setRows] = useState(null)
   const [failure, setFailure] = useState(null)
   const [pending, setPending] = useState(false)
@@ -103,20 +105,18 @@ export function PostFinalizationChanges() {
   return (
     <Card className="space-y-4 p-4">
       <form onSubmit={search} className="space-y-3">
-        <label className="type-body-sm">
-          Mã người cao tuổi (không bắt buộc)
-          <Input
-            type="number"
-            min="1"
-            value={resident}
-            disabled={pending}
-            onChange={(e) => {
-              setResident(e.target.value)
-              setRows(null)
-              setSelected(null)
-            }}
-          />
-        </label>
+        <ResidentField
+          label="Người cao tuổi (không bắt buộc)"
+          fallbackLabel="Mã người cao tuổi (không bắt buộc)"
+          residents={residents}
+          value={resident}
+          disabled={pending}
+          onChange={(value) => {
+            setResident(value)
+            setRows(null)
+            setSelected(null)
+          }}
+        />
         <Button type="submit" disabled={pending}>
           Tra cứu biến động
         </Button>
@@ -126,7 +126,7 @@ export function PostFinalizationChanges() {
       {rows?.map((row) => (
         <div key={row.id} className="space-y-2 border-b border-line py-3 type-body-sm">
           <p>
-            Khoản #{row.itemId} · {formatDateTime(row.occurredAt)}
+            Khoản #{row.itemId} · {residentLabel(residents, row.residentId)} · {formatDateTime(row.occurredAt)}
           </p>
           <p>Căn cứ: {row.reference}</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

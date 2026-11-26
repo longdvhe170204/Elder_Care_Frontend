@@ -160,7 +160,9 @@ function FeedbackRow({ item, onChanged }) {
       cancelled = true
     }
   }, [item.id, item.status, needDetail])
-  const can = (name) => detail?.allowedCommands?.includes(name)
+  // Chi tiết đọc ở trạng thái cũ (trước lệnh vừa làm) thì không dùng lệnh được phép của nó (test BF-12 2026-11-24)
+  const current = detail?.status === item.status ? detail : null
+  const can = (name) => current?.allowedCommands?.includes(name)
 
   async function run(command, body, message) {
     setFailure(null)

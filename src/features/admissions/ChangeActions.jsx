@@ -3,7 +3,6 @@ import { CheckCircle2, MessageSquarePlus, MinusCircle, XCircle } from 'lucide-re
 import {
   getResidencyChangeRequestsByIdResidentOpinions,
   getResidentsByResidentIdRelationships,
-  getStaff,
   postApprovalRequestsByIdCancel,
   postApprovalRequestsByIdReturnToDraft,
   postApprovalRequestsByIdSubmit,
@@ -22,6 +21,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDate } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
+import { useHandoverStaff } from '@/common/useHandoverStaff'
 import { SELECT, labelOf, newKey } from './admissionLabels'
 import {
   EVIDENCE_ACCEPT,
@@ -95,19 +95,15 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
   const [signedDate, setSignedDate] = useState(isoDate())
   const [signer, setSigner] = useState(null)
   const [staffId, setStaffId] = useState('')
-  const [staff, setStaff] = useState(null)
+  // "Tôi" và nhân viên đang làm việc người ghi xem được (góp ý test BF-12 2026-11-25: Hành chính không xem được hồ sơ
+  // nhân viên nào nên trước đây danh sách rỗng)
+  const staff = useHandoverStaff()
   const [file, setFile] = useState(null)
   const [note, setNote] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const [showHelp, setShowHelp] = useState(false)
-
-  useEffect(() => {
-    getStaff({ query: { status: 'WORKING' } })
-      .then(({ data }) => setStaff(data ?? []))
-      .catch(() => setStaff([]))
-  }, [])
 
   const errors = {
     signedDate: !signedDate ? 'Nhập ngày ký' : signedDate > isoDate() ? 'Ngày ký không được sau hôm nay' : null,
@@ -199,7 +195,7 @@ export function SignatureSheet({ request, etag, onClose, onDone }) {
               <option value="">{staff?.length === 0 ? 'Không có nhân viên để chọn' : 'Không ghi'}</option>
               {(staff ?? []).map((s) => (
                 <option key={s.id} value={s.id}>
-                  {s.fullName ?? `Nhân viên mã ${s.id}`}
+                  {s.label ?? `Nhân viên mã ${s.id}`}
                 </option>
               ))}
             </select>

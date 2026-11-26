@@ -69,3 +69,10 @@ export function presetLevel(type) {
 export function needsLowerReason(level, type) {
   return !!type && LEVEL_ORDER.indexOf(level) > LEVEL_ORDER.indexOf(type.defaultLevel)
 }
+
+// Cách báo người nhà được ghi nhận (BF-06)
+export const FAMILY_METHODS = [
+  ['PHONE', 'Gọi điện'],
+  ['IN_PERSON', 'Gặp trực tiếp'],
+  ['MESSAGE', 'Nhắn tin'],
+]

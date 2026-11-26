@@ -74,7 +74,9 @@ export function FamilyStaysPage({ role }) {
 
   if (failure?.status === 403) return <PermissionDeniedState label="Người thân ở lại" />
 
-  const memberName = (s) => members[`${s.residentId}:${s.familyMemberId}`]?.name ?? `Người thân mã ${s.familyMemberId}`
+  // familyMemberName do backend trả (thêm 2026-11-24, test BF-12) cho người không đọc được quan hệ, như Trưởng tầng
+  const memberName = (s) =>
+    s.familyMemberName ?? members[`${s.residentId}:${s.familyMemberId}`]?.name ?? `Người thân mã ${s.familyMemberId}`
   const residentName = (s) => residents[s.residentId] ?? `Người cao tuổi mã ${s.residentId}`
   const statusesOf = (key) => STAY_FILTERS.find(([k]) => k === key)[2]
   const rows = (stays ?? []).filter((s) => statusesOf(filter).includes(s.status))

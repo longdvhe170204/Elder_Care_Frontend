@@ -314,15 +314,20 @@ export function CaseLink({ label, text, action, onOpen }) {
 }
 
 // Hộp lệnh: tiêu đề, một dòng nói hậu quả, form; lỗi của lệnh hiện ngay trong hộp. wide cho form nhiều ô (Chuyển viện)
-export function CaseDialog({ title, description, problem, wide, onClose, children }) {
+export function CaseDialog({ title, description, problem, wide, paper = false, onClose, children }) {
   return (
     <Dialog open onOpenChange={(next) => !next && onClose()}>
       <DialogContent
         showCloseButton={false}
-        className={cn('max-h-[90vh] overflow-y-auto p-6', wide ? 'sm:max-w-3xl' : 'sm:max-w-xl')}
+        className={cn(
+          !paper && 'max-h-[94vh] overflow-y-auto',
+          paper
+            ? 'top-0 left-0 h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none border-0 bg-muted p-0 shadow-none ring-0 sm:max-w-none'
+            : cn('p-6', wide ? 'sm:max-w-3xl' : 'sm:max-w-xl'),
+        )}
       >
-        <DialogTitle className="type-title">{title}</DialogTitle>
-        {description && (
+        <DialogTitle className={paper ? 'sr-only' : 'type-title'}>{title}</DialogTitle>
+        {description && !paper && (
           <DialogDescription className="type-body-sm text-muted-foreground">{description}</DialogDescription>
         )}
         {problem && <ProblemAlert problem={problem} />}

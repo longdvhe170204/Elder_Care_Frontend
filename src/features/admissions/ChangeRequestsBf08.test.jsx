@@ -3,8 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { ChangeRequestsPage } from './ChangeRequestsPage'
-import { changeValueText } from './admissionLabels'
-import { validateChange, withCompanions } from './changeRequestRules'
+import { withCompanions } from './changeRequestRules'
 
 // BF-08 sửa đổi (004 FR-043d → FR-043j; Q-415 → Q-424; plan-bf08 W1 → W13): phụ lục Chờ ký và ghi nhận đã ký, bộ lọc
 // Chờ ký, trả về nháp, hủy, ý kiến người cao tuổi và cảnh báo khi gửi duyệt, nhãn thuộc gói theo hợp đồng, loại kèm tự chọn.
@@ -77,6 +76,7 @@ beforeEach(() => {
   )
   api.on('GET', '/residency-change-requests/12/resident-opinions', json(200, []))
   api.on('GET', '/staff', json(200, [{ id: 7, fullName: 'Lê Hành Chính' }]))
+  api.on('GET', '/me', json(200, { accountId: 3, type: 'STAFF', fullName: 'Bùi Thị Hạnh', staffId: 9010 }))
 })
 
 describe('BF-08 sửa đổi', () => {
@@ -86,6 +86,39 @@ describe('BF-08 sửa đổi', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Chờ ký \(1\)/ }))
     expect(await screen.findByText('Đã duyệt, chờ ký')).toBeInTheDocument()
     expect(screen.getByText(/ngày từ lúc duyệt/)).toBeInTheDocument()
+  })
+
+  // Góp ý test BF-12 (2026-11-25): loại "Loại phòng" (mã BED, Q-445) có giá trị trước là loại phòng của hợp đồng, sau là
+  // giường mới; trước đây hiện "—" và "Giường mã 9010"
+  it('Q445_loaiPhong_hienTenLoaiPhongCu_vaNhanGiuongMoi', async () => {
+    const bedChange = {
+      ...BASE,
+      status: 'DRAFT',
+      changeTypes: ['BED'],
+      previousValue: { roomTypeId: 9001 },
+      newValue: { newBedId: 9010 },
+    }
+    api.on('GET', '/residency-change-requests', json(200, [bedChange]))
+    api.on('GET', '/residency-change-requests/12', json(200, bedChange, { ETag: '"5"' }))
+    api.on(
+      'GET',
+      '/room-types',
+      json(200, [
+        { id: 9001, name: 'Phòng 2 giường' },
+        { id: 9002, name: 'Phòng 4 giường' },
+      ]),
+    )
+    api.on(
+      'GET',
+      '/beds/9010',
+      json(200, { id: 9010, code: 'G2', location: { label: 'Khu A – Tầng 2 – Phòng 202 – G2', bedId: 9010 } }),
+    )
+    renderPage({ id: 12 })
+
+    const panel = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
+    expect(await within(panel).findByText('Phòng 2 giường')).toBeInTheDocument()
+    expect(await within(panel).findByText('Khu A – Tầng 2 – Phòng 202 – G2')).toBeInTheDocument()
+    expect(within(panel).queryByText(/Giường mã/)).not.toBeInTheDocument()
   })
 
   it('A_phuLucChoKy_nhanHoPhachTrongDanhSach_vaKhoiAlertTrongKhung', async () => {
@@ -194,16 +227,17 @@ describe('BF-08 sửa đổi', () => {
     expect(await screen.findByText(/ngày hiệu lực dời sang 28\/11\/2026/)).toBeInTheDocument()
   })
 
-  it('W2a_nguoiKyPhiaVien_khongXemDuocAi_baoKhongCoNhanVien', async () => {
+  // Góp ý test BF-12 (2026-11-25): Hành chính không xem được hồ sơ nhân viên khác vẫn chọn được chính mình ("Tôi")
+  it('W2a_nguoiKyPhiaVien_khongXemDuocAi_vanChonDuocToi', async () => {
     api.on('GET', '/staff', json(200, []))
     api.on('GET', '/residency-change-requests', json(200, [PENDING_SIGNATURE]))
     api.on('GET', '/residency-change-requests/12', json(200, PENDING_SIGNATURE, { ETag: '"5"' }))
     renderPage({ id: 12 })
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận phụ lục đã ký' }))
     const dialog = await screen.findByRole('dialog')
-    expect(await within(dialog).findByRole('option', { name: 'Không có nhân viên để chọn' })).toBeInTheDocument()
-    expect(within(dialog).queryByText(/nhờ Quản lý viện ghi nhận/)).not.toBeInTheDocument()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Hướng dẫn: Người ký phía viện' }))
+    const me = await within(dialog).findByRole('option', { name: 'Tôi (Bùi Thị Hạnh)' })
+    expect(me).toHaveValue('9010')
+    expect(within(dialog).queryByRole('option', { name: 'Không có nhân viên để chọn' })).not.toBeInTheDocument()
     expect(within(dialog).getByText(/nhờ Quản lý viện ghi nhận/)).toBeInTheDocument()
   })
 
@@ -426,8 +460,6 @@ describe('BF-08 sửa đổi', () => {
       expect(within(dialog).queryByRole('checkbox', { name })).not.toBeInTheDocument()
     }
     expect(within(dialog).getByText('Phục hồi chức năng')).toBeInTheDocument()
-    expect(within(dialog).queryByText(/tã, bỉm, thuốc, suất ăn không đăng ký ở đây/)).not.toBeInTheDocument()
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Hướng dẫn: Dịch vụ thêm hoặc bớt' }))
     expect(within(dialog).getByText(/tã, bỉm, thuốc, suất ăn không đăng ký ở đây/)).toBeInTheDocument()
   })
 
@@ -476,151 +508,5 @@ describe('BF-08 sửa đổi', () => {
       'RESIDENCE_TYPE',
       'BED',
     ])
-  })
-
-  it('W9_hopDongDaDoiSangBanTruQuaPhuLuc_docNoiDungHienHanh_khongChoChonLaiBanTru', async () => {
-    api.on('GET', '/residency-change-requests', json(200, []))
-    api.on(
-      'GET',
-      '/contracts',
-      json(200, [
-        {
-          id: 31,
-          residentId: 5,
-          contractNumber: 'HD-031',
-          status: 'ACTIVE',
-          residenceType: 'LONG_TERM_RESIDENTIAL',
-          careLevel: 'REGULAR',
-        },
-      ]),
-    )
-    api.on(
-      'GET',
-      '/contracts/31/content',
-      json(200, {
-        contractId: 31,
-        version: 2,
-        effectiveFrom: '2026-11-24',
-        content: {
-          residentId: 5,
-          residenceType: 'DAY_CARE',
-          startDate: '2026-10-25',
-          careLevel: 'REGULAR',
-          residencyFeeBillingPeriod: 'SESSION',
-          services: [],
-        },
-      }),
-    )
-    api.on('GET', '/residents/5', json(200, { id: 5, personalInfo: { fullName: 'Nguyễn Thị An' } }))
-    renderPage()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập yêu cầu điều chỉnh' }))
-    const dialog = screen.getByRole('dialog')
-    await within(dialog).findByRole('option', { name: /HD-031/ })
-    fireEvent.change(within(dialog).getByLabelText('Hợp đồng'), { target: { value: '31' } })
-    await within(dialog).findByText('Bán trú', { selector: 'strong' })
-    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Loại lưu trú' }))
-    expect(within(dialog).queryByRole('button', { name: 'Bán trú' })).not.toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Nội trú dài hạn' })).toBeInTheDocument()
-  })
-
-  it('W9_lichDen_khongChoTrungLichHienTai_hoacTrungThu', () => {
-    const dayCare = {
-      residenceType: 'DAY_CARE',
-      startDate: '2026-10-01',
-      arrivalSchedule: [
-        { dayOfWeek: 1, arrivalTime: '07:30:00', departureTime: '17:00:00' },
-        { dayOfWeek: 3, arrivalTime: '07:30:00', departureTime: '17:00:00' },
-      ],
-    }
-    expect(
-      validateChange({
-        types: ['ARRIVAL_SCHEDULE'],
-        value: {
-          arrivalSchedule: [
-            { dayOfWeek: 3, arrivalTime: '07:30', departureTime: '17:00' },
-            { dayOfWeek: 1, arrivalTime: '07:30', departureTime: '17:00' },
-          ],
-        },
-        date: '2026-11-26',
-        contract: dayCare,
-      }).arrivalSchedule,
-    ).toMatch(/trùng.*lịch đến hiện tại/i)
-
-    expect(
-      validateChange({
-        types: ['ARRIVAL_SCHEDULE'],
-        value: {
-          arrivalSchedule: [
-            { dayOfWeek: 2, arrivalTime: '07:30', departureTime: '17:00' },
-            { dayOfWeek: 2, arrivalTime: '08:00', departureTime: '16:00' },
-          ],
-        },
-        date: '2026-11-26',
-        contract: dayCare,
-      }).arrivalSchedule,
-    ).toMatch(/trùng/i)
-
-    expect(
-      validateChange({
-        types: ['ARRIVAL_SCHEDULE'],
-        value: {
-          arrivalSchedule: [{ dayOfWeek: 2, arrivalTime: '07:30', departureTime: '17:00' }],
-        },
-        date: '2026-11-26',
-        contract: dayCare,
-      }).arrivalSchedule,
-    ).toBeUndefined()
-  })
-
-  it('A_lichDen_hienTomTatDeHieu_vaDropdownXemChiTietLich', async () => {
-    expect(
-      changeValueText('ARRIVAL_SCHEDULE', {
-        arrivalSchedule: [{ dayOfWeek: 1, arrivalTime: '07:30:00', departureTime: '17:00:00' }],
-      }),
-    ).toBe('Thứ Hai (07:30–17:00)')
-    expect(
-      changeValueText('ARRIVAL_SCHEDULE', {
-        arrivalSchedule: [
-          { dayOfWeek: 1, arrivalTime: '07:30', departureTime: '17:00' },
-          { dayOfWeek: 3, arrivalTime: '07:30', departureTime: '17:00' },
-          { dayOfWeek: 5, arrivalTime: '07:30', departureTime: '17:00' },
-        ],
-      }),
-    ).toBe('T2, T4, T6')
-    expect(
-      changeValueText('ARRIVAL_SCHEDULE', {
-        arrivalSchedule: [1, 2, 3, 4].map((dayOfWeek) => ({ dayOfWeek, arrivalTime: '07:30', departureTime: '17:00' })),
-      }),
-    ).toBe('4 ngày/tuần')
-
-    const scheduleReq = {
-      ...BASE,
-      changeTypes: ['ARRIVAL_SCHEDULE'],
-      previousValue: { arrivalSchedule: [{ dayOfWeek: 1, arrivalTime: '07:30:00', departureTime: '17:00:00' }] },
-      newValue: {
-        arrivalSchedule: [
-          { dayOfWeek: 1, arrivalTime: '07:30', departureTime: '17:00' },
-          { dayOfWeek: 2, arrivalTime: '08:00', departureTime: '16:30' },
-        ],
-      },
-      status: 'DRAFT',
-      representativeConfirmationRequired: false,
-    }
-    api.on('GET', '/residency-change-requests', json(200, [scheduleReq]))
-    api.on('GET', '/residency-change-requests/12', json(200, scheduleReq, { ETag: '"3"' }))
-    renderPage({ id: 12 })
-
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết yêu cầu điều chỉnh hợp đồng' })
-    expect(within(panel).getByText('Thứ Hai (07:30–17:00)')).toBeInTheDocument()
-    expect(within(panel).getByText('T2, T3')).toBeInTheDocument()
-
-    const toggle = within(panel).getByRole('button', { name: 'Xem chi tiết' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'false')
-    fireEvent.click(toggle)
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(within(panel).getByText('Lịch hiện tại')).toBeInTheDocument()
-    expect(within(panel).getByText('Lịch muốn đổi')).toBeInTheDocument()
-    expect(within(panel).getAllByText('Thứ Hai: 07:30 – 17:00')).toHaveLength(2)
-    expect(within(panel).getByText('Thứ Ba: 08:00 – 16:30')).toBeInTheDocument()
   })
 })

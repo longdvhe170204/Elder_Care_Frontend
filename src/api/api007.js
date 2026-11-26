@@ -99,7 +99,7 @@ export const postAlertsByIdChangeLevel = (params) => request('POST', '/alerts/{i
 /** Đóng (kết quả bắt buộc; lý do với cảnh báo công việc Bắt buộc quá hạn; nguy kịch cần kết quả xác nhận lại và lựa chọn) (FR-029, FR-050d, BR-M04-06) */
 export const postAlertsByIdClose = (params) => request('POST', '/alerts/{id}/close', params)
 
-/** Ghi kết quả theo dõi vào cảnh báo đang mở (bổ sung 2026-11-22, Q-419); không đổi trạng thái (FR-087) */
+/** Ghi kết quả theo dõi vào cảnh báo đang mở (bổ sung 2026-11-22, Q-443); không đổi trạng thái (FR-087) */
 export const postAlertsByIdFollowUps = (params) => request('POST', '/alerts/{id}/follow-ups', params)
 
 /** Chuyển sự cố (từ Đang xử lý); sự cố liên kết mức mặc định bằng mức cảnh báo (FR-029, FR-040) */
@@ -131,6 +131,12 @@ export const postIncidentsByIdReceive = (params) => request('POST', '/incidents/
 
 /** Giao người xử lý (Mới → Đang xử lý; hoặc giao lại khi Đang xử lý, Đang theo dõi) (FR-045, FR-045a, FR-044) */
 export const postIncidentsByIdAssignHandler = (params) => request('POST', '/incidents/{id}/assign-handler', params)
+
+/** Tình trạng báo người nhà của sự cố (đề xuất BF-06, 2026-11-24) */
+export const getIncidentsByIdFamilyNotice = (params) => request('GET', '/incidents/{id}/family-notice', params)
+
+/** Ghi nhận đã báo người nhà (ai, lúc nào, cách nào); Bác sĩ, Điều dưỡng, Trưởng tầng hoặc người được giao thay (đề xuất BF-06, 2026-11-24) */
+export const postIncidentsByIdFamilyNotice = (params) => request('POST', '/incidents/{id}/family-notice', params)
 
 /** Tham gia xử lý sự cố Khẩn cấp đang mở (không tạo sự cố mới) (FR-041, FR-048b) */
 export const postIncidentsByIdJoinHandling = (params) => request('POST', '/incidents/{id}/join-handling', params)

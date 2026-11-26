@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import {
+  getPickupExceptions,
   getResidentsByResidentIdPickupList,
   getResidentsByResidentIdPickupRecords,
   getResidentsByResidentIdVisitPickupWishes,
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { DetailLayout } from '@/common/DetailLayout'
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -19,7 +21,7 @@ import { problemOf } from '@/common/problem'
 import { ResidentPicker } from '../FamilyMembersPage'
 import { RELATIONSHIP_LABELS } from '../relationshipLabels'
 import { describeWish, wishSource } from '../right-change-requests/requestLabels'
-import { ExceptionCommandForm, PickupExceptionSheet } from './PickupExceptions'
+import { PickupExceptionDetail, PickupExceptionSheet, PickupExceptionTable } from './PickupExceptions'
 import { RecordPickupSheet } from './RecordPickupSheet'
 import { PICKUP_BASIS_LABELS, PICKUP_STATUS_LABELS, PICKUP_TYPE_LABELS } from './pickupLabels'
 
@@ -134,6 +136,9 @@ export function PickupPage() {
   const [records, setRecords] = useState(null)
   const [failure, setFailure] = useState(null)
   const [wishes, setWishes] = useState(null)
+  const [exceptions, setExceptions] = useState(null)
+  const [exceptionFailure, setExceptionFailure] = useState(null)
+  const [selectedExceptionId, setSelectedExceptionId] = useState(null)
   const [sheet, setSheet] = useState(null)
   const [announcement, setAnnouncement] = useState('')
 
@@ -146,6 +151,16 @@ export function PickupPage() {
     getResidentsByResidentIdVisitPickupWishes({ path: { residentId } })
       .then(({ data }) => setWishes(data))
       .catch(() => setWishes(null))
+    // Ngoại lệ đón, mới nhất trước (api-012 `GET /pickup-exceptions`, thêm 2026-11-24, test BF-12 C-2)
+    getPickupExceptions({ query: { residentId } })
+      .then(({ data }) => {
+        setExceptions([...data].sort((x, y) => y.id - x.id))
+        setExceptionFailure(null)
+      })
+      .catch((error) => {
+        setExceptions([])
+        setExceptionFailure(problemOf(error))
+      })
     try {
       const { data } = await getResidentsByResidentIdPickupRecords({ path: { residentId } })
       setRecords(data)
@@ -161,11 +176,14 @@ export function PickupPage() {
     setPickupList(null)
     setRecords(null)
     setWishes(null)
+    setExceptions(null)
+    setSelectedExceptionId(null)
     load(next.id)
   }
 
   function changed(message) {
     setSheet(null)
+    setSelectedExceptionId(null)
     setAnnouncement(message)
     load(resident.id)
   }
@@ -174,13 +192,26 @@ export function PickupPage() {
     return <PermissionDeniedState label="Quy trình đón" />
   }
 
-  const exceptionCommands = [
-    ...(can(FUNCTION, 'APPROVE') ? ['approve', 'reject'] : []),
-    ...(can(FUNCTION, 'CREATE') ? ['cancel'] : []),
-  ]
+  const selectedException = exceptions?.find((e) => e.id === selectedExceptionId) ?? null
 
   return (
-    <div className="flex flex-col gap-5">
+    <DetailLayout
+      open={!!selectedException}
+      detailKey={selectedException && `exception:${selectedException.id}`}
+      onClose={() => setSelectedExceptionId(null)}
+      label={selectedException ? `Chi tiết ngoại lệ đón ${selectedException.fullName}` : 'Chi tiết ngoại lệ đón'}
+      renderDetail={({ Title, Description }) =>
+        selectedException && (
+          <PickupExceptionDetail
+            exception={selectedException}
+            can={(operation) => can(FUNCTION, operation)}
+            onChanged={changed}
+            Title={Title}
+            Description={Description}
+          />
+        )
+      }
+    >
       <PageHeader
         title={resident ? `Quy trình đón của ${resident.name}` : 'Quy trình đón'}
         subtitle={
@@ -232,15 +263,32 @@ export function PickupPage() {
             )}
           </section>
 
-          {exceptionCommands.length > 0 && (
-            <ExceptionCommandForm commands={exceptionCommands} onDone={(message) => changed(message)} />
-          )}
+          <section aria-labelledby="pickup-exceptions-title" className="flex flex-col gap-3">
+            <h2 id="pickup-exceptions-title" className="type-card-title">
+              Yêu cầu ngoại lệ đón
+            </h2>
+            <ProblemAlert problem={exceptionFailure} />
+            {exceptions === null ? (
+              <Skeleton className="h-24 w-full" />
+            ) : exceptions.length === 0 ? (
+              !exceptionFailure && (
+                <p className="type-body-sm text-muted-foreground">Chưa có yêu cầu ngoại lệ đón nào.</p>
+              )
+            ) : (
+              <PickupExceptionTable
+                exceptions={exceptions}
+                selectedId={selectedExceptionId}
+                onSelect={setSelectedExceptionId}
+              />
+            )}
+          </section>
 
           {sheet === 'record' && (
             <RecordPickupSheet
               residentId={resident.id}
               residentName={resident.name}
               pickupList={pickupList ?? []}
+              exceptions={(exceptions ?? []).filter((e) => e.status === 'EFFECTIVE')}
               onClose={() => setSheet(null)}
               onDone={changed}
             />
@@ -255,6 +303,6 @@ export function PickupPage() {
           )}
         </>
       )}
-    </div>
+    </DetailLayout>
   )
 }

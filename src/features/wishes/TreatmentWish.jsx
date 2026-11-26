@@ -22,6 +22,8 @@ import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
 import { FileField, Row } from '../consents/ConsentTab'
 import { POSITIVE_INTEGER, uploadProblem, toRequestOpinion } from './wishUtils'
+import { FamilyMemberSelect } from '@/common/FamilyMemberSelect'
+import { useFamilyMembers } from '@/common/useFamilyMembers'
 import { OpinionEditor, OpinionList } from './Opinions'
 import { DiscardDraftForm, DraftCard } from './WishDraft'
 import { useWishDraft } from './useWishDraft'
@@ -116,6 +118,8 @@ const FORM_HINTS = {
 
 function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial = null }) {
   const draftMode = mode === 'draft'
+  // Demo 2026-11-25: người cần báo, người trả lời chọn theo tên thay cho ô nhập mã
+  const members = useFamilyMembers(residentId)
   const [hospitals, setHospitals] = useState(() =>
     initial?.preferredHospitals?.length
       ? initial.preferredHospitals.map((h) => ({ name: h.name ?? '', address: h.address ?? '' }))
@@ -127,7 +131,6 @@ function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial 
     expiry: initial?.healthInsurance?.cardExpiry ?? '',
   })
   const [ask, setAsk] = useState(initial?.askFamilyFirst ?? false)
-  const [idInput, setIdInput] = useState('')
   const [ids, setIds] = useState(() => (initial?.notifyFamilyMembers ?? []).map((m) => m.familyMemberId))
   const [escort, setEscort] = useState(initial?.accompaniedBy ?? null)
   const [note, setNote] = useState(initial?.note ?? '')
@@ -143,18 +146,6 @@ function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial 
   const [key] = useState(() => crypto.randomUUID())
   const uploaded = useRef(new Map())
 
-  function addId() {
-    const text = idInput.trim()
-    if (!POSITIVE_INTEGER.test(text)) {
-      setErrors((current) => ({ ...current, notifyIds: 'Mã người thân là số nguyên dương' }))
-      return
-    }
-    const value = Number(text)
-    setIds((current) => (current.includes(value) ? current : [...current, value]))
-    setIdInput('')
-    setErrors((current) => ({ ...current, notifyIds: undefined }))
-  }
-
   function setHospital(index, field, value) {
     setHospitals((current) => current.map((h, i) => (i === index ? { ...h, [field]: value } : h)))
   }
@@ -169,7 +160,7 @@ function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial 
     }
     if (!draftMode && !escort) next.escort = 'Chọn người đi kèm'
     if (respondentType === 'FAMILY_MEMBER' && !POSITIVE_INTEGER.test(respondentId.trim())) {
-      next.respondentId = 'Nhập mã người thân trả lời'
+      next.respondentId = 'Chọn người thân trả lời'
     }
     return next
   }
@@ -316,52 +307,30 @@ function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial 
         <span className="type-body-sm">Hỏi gia đình trước khi chuyển viện không khẩn cấp</span>
       </label>
 
-      <Field data-invalid={!!errors.notifyIds || undefined}>
-        <FieldLabel htmlFor="tw-notify-id">Mã người thân cần báo</FieldLabel>
-        <div className="flex gap-2">
-          <Input
-            id="tw-notify-id"
-            inputMode="numeric"
-            value={idInput}
-            onChange={(e) => setIdInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                addId()
-              }
-            }}
-            aria-invalid={!!errors.notifyIds || undefined}
-          />
-          <Button type="button" variant="outline" className="h-11" onClick={addId}>
-            Thêm mã
-          </Button>
-        </div>
+      <fieldset className="flex flex-col gap-2">
+        <legend className="type-label">Người thân cần báo</legend>
+        {members.length === 0 ? (
+          <p className="type-body-sm text-muted-foreground">Hồ sơ chưa có người thân có quan hệ Hiệu lực.</p>
+        ) : (
+          members.map((m) => (
+            <label key={m.id} className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3">
+              <Checkbox
+                checked={ids.includes(m.id)}
+                onCheckedChange={(on) =>
+                  setIds((current) => (on ? [...current, m.id] : current.filter((x) => x !== m.id)))
+                }
+                aria-label={`Báo ${m.fullName}`}
+              />
+              <span className="type-body-sm">{m.fullName}</span>
+            </label>
+          ))
+        )}
         {errors.notifyIds ? (
           <FieldError>{errors.notifyIds}</FieldError>
         ) : (
-          <FieldDescription>
-            Tạm thời nhập mã tới khi hồ sơ người thân (feature 012) có danh sách; để trống nếu chưa chọn. Hệ thống kiểm
-            người này có quan hệ Hiệu lực.
-          </FieldDescription>
+          <FieldDescription>Không chọn ai nếu chưa cần báo người thân nào.</FieldDescription>
         )}
-        {ids.length > 0 && (
-          <ul aria-label="Người thân cần báo" className="flex flex-wrap gap-2">
-            {ids.map((id) => (
-              <li key={id} className="flex items-center gap-1 rounded-full border px-3 py-1 type-body-sm">
-                <span>Mã {id}</span>
-                <button
-                  type="button"
-                  className="min-h-8 min-w-8 rounded-full text-muted-foreground"
-                  aria-label={`Bỏ mã ${id}`}
-                  onClick={() => setIds((current) => current.filter((x) => x !== id))}
-                >
-                  ×
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Field>
+      </fieldset>
 
       <Field data-invalid={!!errors.escort || undefined}>
         <span className="type-label" id="tw-escort-label">
@@ -409,22 +378,20 @@ function TreatmentForm({ residentId, onCancel, onDone, mode = 'record', initial 
             </Button>
           ))}
         </div>
-        {respondentType === 'FAMILY_MEMBER' && (
-          <>
-            <FieldLabel htmlFor="tw-respondent-id">Mã người thân trả lời</FieldLabel>
-            <Input
-              id="tw-respondent-id"
-              inputMode="numeric"
-              value={respondentId}
-              onChange={(e) => setRespondentId(e.target.value)}
-              aria-invalid={!!errors.respondentId || undefined}
-            />
-          </>
-        )}
-        {errors.respondentId && <FieldError>{errors.respondentId}</FieldError>}
+        {respondentType !== 'FAMILY_MEMBER' && errors.respondentId && <FieldError>{errors.respondentId}</FieldError>}
       </Field>
+      {respondentType === 'FAMILY_MEMBER' && (
+        <FamilyMemberSelect
+          id="tw-respondent-id"
+          label="Người thân trả lời"
+          members={members}
+          value={respondentId}
+          onChange={setRespondentId}
+          error={errors.respondentId}
+        />
+      )}
 
-      <OpinionEditor idPrefix="tw" items={opinions} onChange={setOpinions} error={errors.opinions} />
+      <OpinionEditor idPrefix="tw" residentId={residentId} items={opinions} onChange={setOpinions} error={errors.opinions} />
 
       <FileField
         id="tw-signed-copy"

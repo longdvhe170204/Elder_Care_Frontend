@@ -74,6 +74,11 @@ beforeEach(() => {
     ]),
   )
   api.on('GET', '/costs/statements', () => json(200, [{ ...statement, items: undefined }]))
+  api.on(
+    'GET',
+    '/residents',
+    json(200, { items: [{ id: 5, profileCode: 'NCT-0005', personalInfo: { fullName: 'Nguyễn Thị Lan' } }] }),
+  )
   api.on('GET', '/costs/statements/31', () => json(200, statement, { ETag: etag }))
   api.on('GET', '/costs/items/3', () =>
     json(200, {
@@ -235,4 +240,55 @@ it('DBR_17_bang_da_chot_chi_doc_du_co_quyen_cap_nhat', async () => {
   await openStatement()
   expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   expect(screen.queryByRole('button', { name: /Kiểm tra các khoản|Gửi chốt/ })).not.toBeInTheDocument()
+})
+
+// Demo 2026-11-25: bảng chi phí hiện tên người cao tuổi, tìm theo tên hoặc mã hồ sơ thay cho mã số
+it('bangChiPhi_hienTen_timTheoTen', async () => {
+  render(
+    <PermissionsProvider>
+      <ChargesPage />
+    </PermissionsProvider>,
+  )
+  await screen.findByRole('option', { name: /10\/2026/ })
+  fireEvent.change(screen.getByLabelText('Kỳ chi phí'), { target: { value: '10' } })
+  expect(await screen.findByText('Nguyễn Thị Lan (NCT-0005)')).toBeInTheDocument()
+  expect(screen.queryByText('Người cao tuổi mã 5')).toBeNull()
+  fireEvent.change(screen.getByLabelText('Tìm theo tên, mã hồ sơ'), { target: { value: 'thị lan' } })
+  expect(screen.getByRole('button', { name: 'Xem bảng #31' })).toBeInTheDocument()
+  fireEvent.change(screen.getByLabelText('Tìm theo tên, mã hồ sơ'), { target: { value: 'Trần' } })
+  expect(screen.queryByRole('button', { name: 'Xem bảng #31' })).toBeNull()
+})
+
+// Demo 2026-11-25: nút vào màn gom đổi tên theo việc nó làm (gom toàn bộ, không chỉ lập từng khoản)
+it('nutGomChiPhiPhatSinh_moManGom', async () => {
+  api.on(
+    'GET',
+    '/me/permissions',
+    json(200, [
+      { function: 'COST_ADJUSTMENT', operation: 'VIEW' },
+      { function: 'COST_ADJUSTMENT', operation: 'CREATE' },
+      { function: 'PERIOD_CLOSING', operation: 'VIEW' },
+    ]),
+  )
+  render(
+    <PermissionsProvider>
+      <ChargesPage />
+    </PermissionsProvider>,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Gom chi phí phát sinh' }))
+  expect(await screen.findByRole('heading', { name: 'Gom chi phí phát sinh' })).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Gom toàn bộ chi phí chưa lập' })).toBeInTheDocument()
+})
+
+// Demo 2026-11-25 (E, chờ chủ dự án duyệt): bảng kỳ cuối do Hành chính chốt luôn khi gửi; Quản lý viện chỉ được báo
+it('bangKyCuoi_hanhChinhChotLuon_nhanNutVaHopXacNhan', async () => {
+  statement = { ...statement, finalPeriod: true }
+  api.on('POST', '/costs/statements/31/submit-for-finalization', json(200, {}))
+  await openStatement()
+  expect(screen.queryByRole('button', { name: 'Gửi chốt' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Chốt bảng kỳ cuối' }))
+  const dialog = screen.getByRole('dialog', { name: 'Xác nhận chốt bảng kỳ cuối' })
+  expect(within(dialog).getByText(/Khoản nhập tay, mua hộ, điều chỉnh/)).toBeInTheDocument()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận chốt bảng kỳ cuối' }))
+  await waitFor(() => expect(api.calls('POST', '/costs/statements/31/submit-for-finalization')).toHaveLength(1))
 })

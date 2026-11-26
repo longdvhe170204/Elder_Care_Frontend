@@ -27,10 +27,15 @@ function json(status, body, type = 'application/json') {
 }
 
 let fetchMock
+let staffList
 
+// Demo 2026-11-25: ô Người thực hiện tải danh sách nhân viên (/staff) riêng, không tính vào fetchMock của nhật ký
 beforeEach(() => {
   fetchMock = vi.fn()
-  vi.stubGlobal('fetch', fetchMock)
+  staffList = []
+  vi.stubGlobal('fetch', (url, init) =>
+    String(url).includes('/api/v1/staff') ? json(200, staffList) : fetchMock(url, init),
+  )
 })
 
 afterEach(() => {
@@ -192,5 +197,21 @@ describe('AuditLogTable', () => {
     expect(alert).toHaveTextContent('Không tải được nhật ký')
     fireEvent.click(within(alert).getByRole('button', { name: 'Thử lại' }))
     expect(await screen.findByText('SAMPLE_PROFILE_UPDATED')).toBeInTheDocument()
+  })
+})
+
+describe('AuditLogTable: chọn người thực hiện theo tên', () => {
+  it('chonNguoiThucHienTheoTen_guiMaTaiKhoan', async () => {
+    staffList = [
+      { id: 5, accountId: 20, fullName: 'Lê Thị Hành', position: 'Hành chính' },
+      { id: 6, fullName: 'Chưa Có Tài Khoản', position: 'Nhân viên bếp' },
+    ]
+    fetchMock.mockReturnValue(json(200, { items: [], nextCursor: null }))
+    render(<AuditLogTable />)
+    await screen.findByRole('option', { name: 'Lê Thị Hành (Hành chính)' })
+    expect(screen.queryByRole('option', { name: /Chưa Có Tài Khoản/ })).toBeNull()
+    fireEvent.change(screen.getByLabelText('Người thực hiện'), { target: { value: '20' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tra cứu' }))
+    await waitFor(() => expect(lastUrl().searchParams.get('actorId')).toBe('20'))
   })
 })

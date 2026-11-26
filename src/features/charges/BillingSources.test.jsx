@@ -20,11 +20,15 @@ vi.mock('@/api', () => ({
       ],
     }),
   postCostsItemsFromEvents: vi.fn(),
+  // Demo 2026-11-25: chọn người cao tuổi theo tên thay cho ô nhập mã
+  getResidents: vi.fn().mockResolvedValue({ data: { items: [{ id: 42, profileCode: 'NCT-0042', personalInfo: { fullName: 'Nguyễn Văn Tư' } }] } }),
 }))
 
 it('FR_005_keepsSourcesWithExistingCostsAndDoesNotPreselect', async () => {
   render(<BillingSources />)
-  fireEvent.change(screen.getByLabelText('Mã người cao tuổi'), { target: { value: '42' } })
+  await screen.findByRole('option', { name: 'Nguyễn Văn Tư (NCT-0042)' })
+  expect(screen.queryByLabelText('Mã người cao tuổi')).toBeNull()
+  fireEvent.change(screen.getByLabelText('Người cao tuổi'), { target: { value: '42' } })
   fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-11-01' } })
   fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-11-01' } })
   fireEvent.click(screen.getByRole('button', { name: 'Tra cứu nguồn' }))

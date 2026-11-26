@@ -3,6 +3,17 @@ import { getBelongingsById, getBelongingsHandoversById, getRecipientConfirmation
 // Trang mở bản ghi nguồn của thông báo đồ gửi (013; hoàn thiện BF-14, 2026-11-23). Chỉ dùng khi backend trả
 // sourceRecord.canOpen (009 SourceRecordAccessPort). resolve(id) trả [trang, tham số] cho onNavigate của màn nhân viên.
 
+// Nguồn mở thẳng được trên màn nhân viên khi nơi dùng truyền onNavigate: [màn, tên tham số mã, nhãn nút] (004 BF-08 sửa
+// đổi, W12: yêu cầu thay đổi lưu trú, hồ sơ người cao tuổi; demo 2026-11-25: nhắc hợp đồng). Dùng ở chi tiết thông báo
+// và ở "Việc gửi tới bạn" của Tổng quan.
+export const SOURCE_PAGES = {
+  'M02.RESIDENCY_CHANGE': ['residency-changes', 'id', 'Mở yêu cầu điều chỉnh hợp đồng'],
+  'M01.RESIDENT': ['residents', 'residentId', 'Mở hồ sơ người cao tuổi'],
+  'M02.CONTRACT_EXPIRING': ['contracts', 'contractId', 'Mở hợp đồng'],
+  'M02.SHORT_TERM_CONTRACT': ['contracts', 'contractId', 'Mở hợp đồng'],
+  'M02.CONTRACT_OVERDUE': ['contracts', 'contractId', 'Mở hợp đồng'],
+}
+
 const ALL_CONFIRMATION_STATUSES = 'PENDING_CONFIRMATION,EFFECTIVE,REJECTED,CANCELLED,USED,EXPIRED'
 
 export const SOURCE_TARGETS = {

@@ -7,9 +7,11 @@ vi.mock('@/api', () => ({ postCostsItemsByIdAdjust: vi.fn().mockResolvedValue({ 
 
 it('FR_027_doesNotSuggestAnAmountAndSendsExplicitAdjustmentWithSourceReference', async () => {
   render(<CostAdjustmentForm itemId={7} sourceChangeId={9} />)
-  const amount = screen.getByLabelText('Số tiền điều chỉnh (đồng)')
-  expect(amount).toHaveValue(null)
+  const amount = screen.getByLabelText('Số tiền điều chỉnh')
+  expect(amount).toHaveValue('')
   fireEvent.change(amount, { target: { value: '-30000' } })
+  // Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ, điều chỉnh cho phép số âm
+  expect(amount).toHaveValue('-30.000')
   fireEvent.change(screen.getByLabelText('Lý do'), { target: { value: 'Hủy ghi nhận nguồn' } })
   fireEvent.click(screen.getByRole('button', { name: 'Lập khoản điều chỉnh' }))
   await waitFor(() =>

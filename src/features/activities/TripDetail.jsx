@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  getStaff,
   getTripsById,
   postTripsByIdAssignment,
   postTripsByIdByCommand,
@@ -36,6 +37,27 @@ export function TripDetail({ sessionId, residents, canCreate, canUpdate, onChang
   const [problem, setProblem] = useState(null)
   const [leader, setLeader] = useState('')
   const [companions, setCompanions] = useState('')
+  // Demo 2026-11-25: chọn trưởng đoàn, tick người đi cùng theo tên; chưa đọc được danh sách nhân viên thì nhập mã như trước
+  const [staff, setStaff] = useState([])
+  useEffect(() => {
+    let live = true
+    getStaff({ query: { status: 'WORKING' } })
+      .then(({ data }) => live && setStaff(Array.isArray(data) ? data : []))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  const staffName = (id) => {
+    const s = staff.find((x) => x.id === Number(id))
+    return s ? (s.position ? `${s.fullName} (${s.position})` : s.fullName) : null
+  }
+  const companionIds = companions
+    .split(',')
+    .map((v) => v.trim())
+    .filter(Boolean)
+  const toggleCompanion = (id, on) =>
+    setCompanions((on ? [...companionIds, String(id)] : companionIds.filter((v) => v !== String(id))).join(', '))
   const [selected, setSelected] = useState([])
   const [reason, setReason] = useState('')
   const [confirm, setConfirm] = useState(false)
@@ -221,20 +243,50 @@ export function TripDetail({ sessionId, residents, canCreate, canUpdate, onChang
                   )
                 }}
               >
-                <ActivityField label="Mã trưởng đoàn" type="number" value={leader} onChange={setLeader} required />
-                <ActivityField
-                  label="Mã người đi cùng (cách nhau bằng dấu phẩy)"
-                  value={companions}
-                  onChange={setCompanions}
-                />
+                {staff.length > 0 ? (
+                  <>
+                    <ActivityField
+                      label="Trưởng đoàn"
+                      value={leader}
+                      onChange={setLeader}
+                      options={staff.map((s) => [String(s.id), staffName(s.id)])}
+                      required
+                    />
+                    <fieldset className="flex flex-col gap-2">
+                      <legend className="type-label">Người đi cùng</legend>
+                      {staff
+                        .filter((s) => String(s.id) !== String(leader))
+                        .map((s) => (
+                          <label key={s.id} className="flex min-h-10 items-center gap-2 rounded-lg border px-3">
+                            <input
+                              type="checkbox"
+                              className="size-4"
+                              checked={companionIds.includes(String(s.id))}
+                              onChange={(e) => toggleCompanion(s.id, e.target.checked)}
+                            />
+                            <span className="type-body-sm">{staffName(s.id)}</span>
+                          </label>
+                        ))}
+                    </fieldset>
+                  </>
+                ) : (
+                  <>
+                    <ActivityField label="Mã trưởng đoàn" type="number" value={leader} onChange={setLeader} required />
+                    <ActivityField
+                      label="Mã người đi cùng (cách nhau bằng dấu phẩy)"
+                      value={companions}
+                      onChange={setCompanions}
+                    />
+                  </>
+                )}
                 <Button type="submit" variant="outline" size="lg" disabled={busy}>
                   Lưu phân công
                 </Button>
               </form>
             ) : (
               <p className="type-body-sm">
-                Trưởng đoàn: {trip.leaderId ?? 'Chưa phân công'} · Người đi cùng:{' '}
-                {trip.companionIds.join(', ') || 'Chưa phân công'}
+                Trưởng đoàn: {trip.leaderId == null ? 'Chưa phân công' : (staffName(trip.leaderId) ?? trip.leaderId)} ·
+                Người đi cùng: {trip.companionIds.map((id) => staffName(id) ?? id).join(', ') || 'Chưa phân công'}
               </p>
             )}
           </section>

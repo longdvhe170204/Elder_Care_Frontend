@@ -67,6 +67,31 @@ function routes({ current = CURRENT, history = [CURRENT, OLD], forbidden = false
       ? problem(403, 'PERMISSION_DENIED')
       : json(200, { hasEndOfLifeWish: !!current, current, history, hiddenFields: [] }),
   )
+  // Demo 2026-11-25: Bác sĩ, người thân chọn theo tên thay cho ô nhập mã
+  api.on('GET', '/staff', json(200, [{ id: 2, accountId: 8, fullName: 'Phạm Văn Bác', position: 'Bác sĩ' }]))
+  api.on(
+    'GET',
+    '/residents/5/relationships',
+    json(200, [
+      { id: 1, status: 'ACTIVE', familyMember: { id: 31, fullName: 'Trần Văn Minh' } },
+      { id: 2, status: 'ACTIVE', familyMember: { id: 32, fullName: 'Đỗ Thị Lan' } },
+      { id: 3, status: 'ACTIVE', familyMember: { id: 41, fullName: 'Lê Thị Hoa' } },
+      { id: 4, status: 'ACTIVE', familyMember: { id: 99, fullName: 'Ngô Văn Khác' } },
+    ]),
+  )
+}
+
+// Chọn người thân theo mã khi danh sách đã tải (ô chọn theo tên)
+async function pickMember(label, id) {
+  const select = screen.getByLabelText(label)
+  await waitFor(() =>
+    expect(
+      within(select)
+        .getAllByRole('option')
+        .map((o) => o.value),
+    ).toContain(String(id)),
+  )
+  fireEvent.change(select, { target: { value: String(id) } })
 }
 
 function open(props = {}) {
@@ -79,12 +104,21 @@ function choose(label, file) {
   fireEvent.change(screen.getByLabelText(label), { target: { files: [file] } })
 }
 
-function fillCommon({ self = true } = {}) {
+async function fillCommon({ self = true } = {}) {
   fireEvent.click(screen.getByRole('radio', { name: 'Đưa về nhà' }))
-  fireEvent.change(screen.getByLabelText('Người cần liên hệ trước khi thực hiện'), { target: { value: 'Con gái 0912' } })
-  fireEvent.change(screen.getByLabelText('Mã tài khoản Bác sĩ nhận định'), { target: { value: '8' } })
-  fireEvent.click(within(screen.getByRole('radiogroup', { name: /tự quyết được/ })).getByRole('radio', { name: self ? 'Có' : 'Không' }))
-  fireEvent.change(screen.getByLabelText('Cách đã hỗ trợ người cao tuổi hiểu thông tin'), { target: { value: 'Giải thích bằng lời' } })
+  fireEvent.change(screen.getByLabelText('Người cần liên hệ trước khi thực hiện'), {
+    target: { value: 'Con gái 0912' },
+  })
+  await screen.findByRole('option', { name: 'Phạm Văn Bác (Bác sĩ)' })
+  fireEvent.change(screen.getByLabelText('Bác sĩ nhận định'), { target: { value: '8' } })
+  fireEvent.click(
+    within(screen.getByRole('radiogroup', { name: /tự quyết được/ })).getByRole('radio', {
+      name: self ? 'Có' : 'Không',
+    }),
+  )
+  fireEvent.change(screen.getByLabelText('Cách đã hỗ trợ người cao tuổi hiểu thông tin'), {
+    target: { value: 'Giải thích bằng lời' },
+  })
   fireEvent.change(screen.getByLabelText('Ngày xem lại nhận định'), { target: { value: '2099-01-01' } })
   choose('Bản ký đã scan', pdf())
 }
@@ -108,7 +142,9 @@ describe('EndOfLifeWish', () => {
     const history = screen.getByRole('list', { name: 'Lịch sử phiếu nguyện vọng cuối đời' })
     expect(within(history).getByText('Được thay thế')).toBeInTheDocument()
     expect(within(history).getByText('Chuyển bệnh viện điều trị tích cực')).toBeInTheDocument()
-    expect(within(history).getByText(/Người đại diện của người bệnh · Trần Thị B · Do thành viên gia đình chọn/)).toBeInTheDocument()
+    expect(
+      within(history).getByText(/Người đại diện của người bệnh · Trần Thị B · Do thành viên gia đình chọn/),
+    ).toBeInTheDocument()
     // không có nhãn năng lực chung
     expect(screen.queryByText(/năng lực/i)).not.toBeInTheDocument()
   })
@@ -159,7 +195,7 @@ describe('EndOfLifeWish', () => {
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'], onChanged })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
-    fillCommon()
+    await fillCommon()
     expect(screen.getByText(/Người quyết định:/)).toHaveTextContent('Người cao tuổi')
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
@@ -170,7 +206,11 @@ describe('EndOfLifeWish', () => {
       firstContact: 'Con gái 0912',
       respondentType: 'RESIDENT',
       assessingDoctorId: 8,
-      selfDeterminationAssessment: { canSelfDetermine: true, supportMethod: 'Giải thích bằng lời', reviewDate: '2099-01-01' },
+      selfDeterminationAssessment: {
+        canSelfDetermine: true,
+        supportMethod: 'Giải thích bằng lời',
+        reviewDate: '2099-01-01',
+      },
       signerType: 'RESIDENT',
       signedCopyFileId: 90,
       source: 'ADMISSION',
@@ -204,15 +244,15 @@ describe('EndOfLifeWish', () => {
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
-    fillCommon({ self: false })
+    await fillCommon({ self: false })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     expect(await screen.findByText('Chọn người ký thay')).toBeInTheDocument()
-    expect(screen.getByText('Nhập mã người thân là người ký')).toBeInTheDocument()
+    expect(screen.getByText('Chọn người thân là người ký')).toBeInTheDocument()
     expect(screen.getByText('Nhập quan hệ với người cao tuổi')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/end-of-life-wishes')).toHaveLength(0)
 
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện theo pháp luật' }))
-    fireEvent.change(screen.getByLabelText('Mã người thân là người ký'), { target: { value: '41' } })
+    await pickMember('Người thân là người ký', 41)
     fireEvent.change(screen.getByLabelText('Quan hệ với người cao tuổi'), { target: { value: 'Con gái' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     expect(await screen.findByText('Nhập số quyết định')).toBeInTheDocument()
@@ -246,9 +286,9 @@ describe('EndOfLifeWish', () => {
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
-    fillCommon({ self: false })
+    await fillCommon({ self: false })
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện của người bệnh' }))
-    fireEvent.change(screen.getByLabelText('Mã người thân là người ký'), { target: { value: '41' } })
+    await pickMember('Người thân là người ký', 41)
     fireEvent.change(screen.getByLabelText('Quan hệ với người cao tuổi'), { target: { value: 'Con gái' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     expect(await screen.findByText('Chọn cách người đại diện được chọn')).toBeInTheDocument()
@@ -262,19 +302,19 @@ describe('EndOfLifeWish', () => {
     expect(body.signerType).toBe('PATIENT_REPRESENTATIVE')
   })
 
-  it('ý kiến khác: mỗi ý kiến một mục có nguồn, ý kiến người thân cần mã người thân', async () => {
+  it('ý kiến khác: mỗi ý kiến một mục có nguồn, ý kiến người thân cần chọn người thân', async () => {
     routes({ current: null, history: [] })
     api.on('POST', '/files', json(201, { fileId: 90 }))
     api.on('POST', '/residents/5/end-of-life-wishes', json(201, CURRENT))
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
-    fillCommon()
+    await fillCommon()
     fireEvent.change(screen.getByLabelText('Nội dung ý kiến'), { target: { value: 'Muốn chuyển bệnh viện' } })
     fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến' }))
-    expect(await screen.findByText('Nhập mã người thân nêu ý kiến')).toBeInTheDocument()
+    expect(await screen.findByText('Chọn người thân nêu ý kiến')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Mã người thân nêu ý kiến'), { target: { value: '31' } })
+    await pickMember('Người thân nêu ý kiến', 31)
     fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến' }))
     fireEvent.click(screen.getByRole('radio', { name: 'Nhân viên quan sát' }))
     fireEvent.change(screen.getByLabelText('Nội dung ý kiến'), { target: { value: 'Cụ hay nhắc nhớ nhà' } })
@@ -290,16 +330,16 @@ describe('EndOfLifeWish', () => {
     ])
   })
 
-  it('backend từ chối người ký không có quan hệ: báo tại ô mã người ký', async () => {
+  it('backend từ chối người ký không có quan hệ: báo tại ô người ký', async () => {
     routes({ current: null, history: [] })
     api.on('POST', '/files', json(201, { fileId: 5 }))
     api.on('POST', '/residents/5/end-of-life-wishes', problem(409, 'INVALID_SIGNER'))
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
-    fillCommon({ self: false })
+    await fillCommon({ self: false })
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện của người bệnh' }))
-    fireEvent.change(screen.getByLabelText('Mã người thân là người ký'), { target: { value: '99' } })
+    await pickMember('Người thân là người ký', 99)
     fireEvent.change(screen.getByLabelText('Quan hệ với người cao tuổi'), { target: { value: 'Bạn' } })
     fireEvent.click(screen.getByRole('radio', { name: 'Do người cao tuổi chọn' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
@@ -313,7 +353,7 @@ describe('EndOfLifeWish', () => {
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
-    fillCommon()
+    await fillCommon()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
     expect(await screen.findByText('Tệp quá 10 MB')).toBeInTheDocument()

@@ -1,24 +1,9 @@
 import { useEffect, useState } from 'react'
-import {
-  ArrowRight,
-  ChevronDown,
-  ClipboardCheck,
-  FilePlus2,
-  FileSignature,
-  Pencil,
-  Printer,
-  RefreshCw,
-  RotateCcw,
-  Search,
-  Send,
-  X,
-  XCircle,
-} from 'lucide-react'
+import { ArrowRight, FilePlus2, Search, X } from 'lucide-react'
 import {
   getApprovalRequestsById,
   getBeds,
   getContracts,
-  getContractsByIdContent,
   getRoomTypes,
   getRooms,
   getResidents,
@@ -48,7 +33,6 @@ import {
   CHANGE_TYPES,
   RESIDENCE_TYPES,
   SELECT,
-  arrivalScheduleLines,
   changeValueText,
   costItemLabel,
   labelOf,
@@ -81,7 +65,7 @@ import {
 } from './changeRequestRules'
 import { CHANGE_TYPE_ICONS, CHANGE_TYPE_TONES } from './changeTypeIcons'
 import { ChangeProgress } from './ChangeProgress'
-import { Choices, HelpHintBox, HelpHintButton, Info, LabelWithHelp, ReasonField } from './FormParts'
+import { Choices, Info, ReasonField } from './FormParts'
 import {
   ReasonCommandSheet,
   RepresentativeSelect,
@@ -89,6 +73,7 @@ import {
   SignatureSheet,
   SubmitSheet,
 } from './ChangeActions'
+import { useBedChangeNames } from './useBedChangeNames'
 
 // Yêu cầu thay đổi lưu trú (004 T047; US5, FR-037 → FR-047). Lập, sửa ở Nháp; gửi duyệt ở màn này hoặc màn Yêu cầu phê
 // duyệt (api-000). Giá trị trước và ảnh hưởng chi phí do hệ thống điền (FR-038). Yêu cầu do Hành chính hoặc Bác sĩ lập chỉ
@@ -126,70 +111,27 @@ function confirmationText(c, confirmerName) {
 // Nội dung thay đổi (trước, sau theo loại) và ảnh hưởng chi phí; dùng ở màn này và màn Yêu cầu phê duyệt (nội dung yêu cầu
 // phê duyệt loại M02.RESIDENCY_CHANGE cùng các trường changeTypes, previousValue, newValue, costImpact).
 // Một loại thay đổi dạng thẻ: biểu tượng, tên loại, giá trị trước và giá trị sau (variant "cards" của ChangeContent)
-function ChangeRow({ type, content }) {
+function ChangeRow({ type, content, names }) {
   const Icon = CHANGE_TYPE_ICONS[type]
-  const [expanded, setExpanded] = useState(false)
-  const prevLines = type === 'ARRIVAL_SCHEDULE' ? arrivalScheduleLines(content.previousValue) : []
-  const nextLines = type === 'ARRIVAL_SCHEDULE' ? arrivalScheduleLines(content.newValue) : []
-  const expandable = type === 'ARRIVAL_SCHEDULE' && (prevLines.length > 0 || nextLines.length > 0)
   return (
     <li className="flex flex-col gap-2.5 rounded-xl border border-border/80 bg-muted/40 p-3.5 transition-colors hover:border-primary/40 hover:bg-accent/30 shadow-2xs">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between">
         <span className="flex items-center gap-2 type-label font-semibold text-foreground">
           {Icon && <Icon aria-hidden className={`size-4 shrink-0 ${CHANGE_TYPE_TONES[type]}`} />}
           {labelOf(CHANGE_TYPES, type)}
         </span>
-        {expandable && (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((v) => !v)}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-primary hover:bg-primary/10 transition-colors"
-          >
-            {expanded ? 'Thu gọn' : 'Xem chi tiết'}
-            <ChevronDown aria-hidden className={`size-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          </button>
-        )}
       </div>
       <div className="flex items-center justify-between gap-2 type-body-sm tabular-nums">
         <span className="sr-only">Trước:</span>
         <span className="flex-1 rounded-md bg-card px-2.5 py-1.5 text-center text-muted-foreground ring-1 ring-border shadow-2xs font-medium truncate">
-          {changeValueText(type, content.previousValue)}
+          {changeValueText(type, content.previousValue, names)}
         </span>
         <ArrowRight aria-hidden className="size-4 shrink-0 text-primary" />
         <span className="sr-only">Sau:</span>
         <span className="flex-1 rounded-md bg-primary px-2.5 py-1.5 text-center font-semibold text-primary-foreground shadow-sm truncate">
-          {changeValueText(type, content.newValue)}
+          {changeValueText(type, content.newValue, names)}
         </span>
       </div>
-      {expandable && expanded && (
-        <div className="grid gap-2 rounded-lg border border-border/70 bg-card/80 p-2.5 text-xs sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <span className="font-semibold text-muted-foreground">Lịch hiện tại</span>
-            {prevLines.length > 0 ? (
-              <ul className="flex flex-col gap-0.5 text-muted-foreground tabular-nums">
-                {prevLines.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-            ) : (
-              <span className="text-muted-foreground">Chưa có lịch</span>
-            )}
-          </div>
-          <div className="flex flex-col gap-1">
-            <span className="font-semibold text-foreground">Lịch muốn đổi</span>
-            {nextLines.length > 0 ? (
-              <ul className="flex flex-col gap-0.5 font-medium text-foreground tabular-nums">
-                {nextLines.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-            ) : (
-              <span className="text-muted-foreground">Chưa có lịch</span>
-            )}
-          </div>
-        </div>
-      )}
     </li>
   )
 }
@@ -200,6 +142,7 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
   const types = content.changeTypes ?? []
   const confirmation = content.representativeConfirmation
   const confirmerName = useFamilyMemberName(content.residentId, confirmation?.representativeFamilyMemberId)
+  const names = useBedChangeNames(types.includes('BED') ? [content.previousValue, content.newValue] : [])
   return (
     <>
       <section className={`flex flex-col ${cards ? 'gap-3' : 'gap-2'}`}>
@@ -207,14 +150,12 @@ export function ChangeContent({ content, headingClassName = 'type-card-title', v
         <ul className="flex flex-col gap-2">
           {types.map((type) =>
             cards ? (
-              <ChangeRow key={type} type={type} content={content} />
+              <ChangeRow key={type} type={type} content={content} names={names} />
             ) : (
               <li key={type} className="flex flex-col">
                 <span className="type-body-sm">{labelOf(CHANGE_TYPES, type)}</span>
                 <span className="type-caption text-muted-foreground">
-                  {type === 'ARRIVAL_SCHEDULE'
-                    ? `Trước: ${arrivalScheduleLines(content.previousValue).join(', ') || 'Chưa có lịch'}; sau: ${arrivalScheduleLines(content.newValue).join(', ') || 'Chưa có lịch'}`
-                    : `Trước: ${changeValueText(type, content.previousValue)}; sau: ${changeValueText(type, content.newValue)}`}
+                  {`Trước: ${changeValueText(type, content.previousValue, names)}; sau: ${changeValueText(type, content.newValue, names)}`}
                 </span>
               </li>
             ),
@@ -349,106 +290,65 @@ export function ChangeRequestView({
   const pendingSignature = request.status === 'APPROVED' && addendum?.status === 'PENDING_SIGNATURE'
   const open = draft || request.status === 'PENDING_APPROVAL'
   const warnings = (request.warnings ?? []).map((w) => WARNING_LABELS[w] ?? w)
-  const progress = changeSteps(request)
   const closeAction = () => setAction(null)
   const actionDone = (message, id) => {
     setAction(null)
     onSubmitted?.(message, id)
   }
 
-  const showSendForConfirm = draft && canUpdate && canConfirm && needsConfirmation
-  const showSignAddendum = pendingSignature && canConfirm
-  const showSubmit = draft && canUpdate && !needsConfirmation
-  const hasPrimary = showSendForConfirm || showSignAddendum || showSubmit
-
-  const showEdit = draft && canUpdate
-  const showRecordConfirm = draft && canUpdate && canConfirm && needsConfirmation
-  const showPrint = Boolean(addendum && onPrint)
-  const showReturnDraft = request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft')
-  const hasSecondary = showEdit || showRecordConfirm || showPrint || showReturnDraft
-  const showCancel = (open && canUpdate) || (request.status === 'APPROVED' && allowed.includes('cancel'))
-  const hasMainActions = hasPrimary || hasSecondary
-
   return (
-    <div className="flex flex-col gap-5 [&_svg]:stroke-[2.5]">
-      {/* Thanh tiến trình 5 bước nổi cố định trên đầu khung cuộn */}
-      {progress && (
-        <div className="sticky top-0 z-20 -mx-6 border-b border-border/60 bg-card/95 px-6 pt-2 pb-3 shadow-sm backdrop-blur-xs max-xl:pr-14">
-          <ChangeProgress progress={progress} />
-        </div>
-      )}
-
-      {/* Thông tin đầu mục */}
-      <div className="flex flex-col gap-1.5 border-b border-border/60 pb-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden [&_svg]:stroke-[2.5]">
+      {/* 1. HEADER (Cố định trên cùng) */}
+      <div className="shrink-0 flex flex-col gap-1 border-b border-border/60 pb-3 pr-8">
         <Title className="type-title font-bold text-foreground">{residentName ?? `Yêu cầu mã ${request.approvalRequestId}`}</Title>
-        <Description className="flex flex-col gap-1 type-body-sm text-muted-foreground leading-relaxed">
-          <span className="block">
-            Trạng thái:{' '}
-            <strong className="font-semibold text-foreground">
-              {REQUEST_STATUS[request.status] ?? request.status}
-            </strong>
-          </span>
-          <span className="block">
-            Ngày hiệu lực mong muốn:{' '}
-            <strong className="font-semibold text-foreground tabular-nums">
-              {formatDate(request.requestedEffectiveDate)}
-            </strong>
-          </span>
-          {request.requestedBy && (
-            <span className="block">
-              Lập bởi: <strong className="font-semibold text-foreground">{request.requestedBy}</strong>
-            </span>
-          )}
-          {contractNumber && (
-            <span className="block">
-              Hợp đồng: <strong className="font-semibold text-foreground tabular-nums">{contractNumber}</strong>
-            </span>
-          )}
+        <Description className="type-body-sm text-muted-foreground leading-relaxed">
+          {`${REQUEST_STATUS[request.status] ?? request.status}. Ngày hiệu lực mong muốn ${formatDate(request.requestedEffectiveDate)}${request.requestedBy ? `, lập bởi ${request.requestedBy}` : ''}${contractNumber ? `. Hợp đồng ${contractNumber}` : ''}`}
         </Description>
       </div>
 
-      {/* Nội dung chi tiết (cuộn chung cùng thông tin đầu mục và chân nút) */}
-      <div className="flex flex-col gap-5">
-        <div className="rounded-xl border-l-4 border-primary bg-muted/50 p-4 shadow-2xs">
-          <Info label="Lý do">{request.reason}</Info>
-        </div>
-        <ChangeContent content={request} variant="cards" />
-        {request.representativeConfirmation?.recordedAt && (
-          <p className="type-caption text-muted-foreground">
-            {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
-          </p>
-        )}
+      {/* 2. BODY (Khu vực cuộn độc lập) */}
+      <div className="flex-1 min-h-0 overflow-y-auto py-4 pr-1 flex flex-col gap-5">
+        <ChangeProgress progress={changeSteps(request)} />
+        <div className="flex flex-col gap-5">
+          <div className="rounded-xl border-l-4 border-primary bg-muted/50 p-4 shadow-2xs">
+            <Info label="Lý do">{request.reason}</Info>
+          </div>
+          <ChangeContent content={request} variant="cards" />
+          {request.representativeConfirmation?.recordedAt && (
+            <p className="type-caption text-muted-foreground">
+              {`Ghi xác nhận lúc ${formatDateTime(request.representativeConfirmation.recordedAt)}`}
+            </p>
+          )}
 
-        {request.minorChange && (
-          <p className="type-body-sm">Điều chỉnh nhẹ: Hành chính tự duyệt, không cần xác nhận người đại diện.</p>
-        )}
-        {state && (draft || sent) && (
-          <section className="flex flex-col gap-2" aria-label="Xác nhận của người đại diện">
-            <div className="flex items-center justify-between gap-2">
-              <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
-              {state.done ? (
-                <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
-                  <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
-                  Đã xác nhận
-                </span>
-              ) : sent?.status === 'AWAITING' ? (
-                <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/30">
-                  <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden />
-                  Chờ phản hồi
-                </span>
-              ) : sent?.status === 'DECLINED' ? (
-                <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive border border-destructive/30">
-                  <span className="size-1.5 rounded-full bg-destructive" aria-hidden />
-                  Từ chối
-                </span>
-              ) : (
-                <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
-                  <span className="size-1.5 rounded-full bg-warning-foreground" aria-hidden />
-                  Chưa xác nhận
-                </span>
-              )}
-            </div>
-            <div className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-3.5 shadow-2xs">
+          {request.minorChange && (
+            <p className="type-body-sm">Thay đổi nhỏ: Hành chính duyệt được, không cần xác nhận với người đại diện.</p>
+          )}
+          {state && (draft || sent) && (
+            <section className="flex flex-col gap-2 rounded-xl border border-border/80 bg-card p-4 shadow-2xs">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="type-card-title font-bold text-foreground">Xác nhận của người đại diện</h3>
+                {state.done ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-0.5 text-xs font-semibold text-success-foreground border border-success/30">
+                    <span className="size-1.5 rounded-full bg-success-foreground" aria-hidden />
+                    Đã xác nhận
+                  </span>
+                ) : sent?.status === 'AWAITING' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                    <span className="size-1.5 rounded-full bg-amber-500 animate-pulse" aria-hidden />
+                    Chờ phản hồi
+                  </span>
+                ) : sent?.status === 'DECLINED' ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-destructive/15 px-2.5 py-0.5 text-xs font-semibold text-destructive border border-destructive/30">
+                    <span className="size-1.5 rounded-full bg-destructive" aria-hidden />
+                    Từ chối
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/20 px-2.5 py-0.5 text-xs font-semibold text-warning-foreground border border-warning/40">
+                    <span className="size-1.5 rounded-full bg-warning-foreground" aria-hidden />
+                    Chưa xác nhận
+                  </span>
+                )}
+              </div>
               {state.attention && draft ? (
                 <Alert variant="attention">
                   <AlertTitle>{state.text}</AlertTitle>
@@ -461,159 +361,153 @@ export function ChangeRequestView({
                   {confirmationRequestText(sent)}
                 </div>
               )}
-              {draft && needsConfirmation && !canConfirm && (
+              {draft && needsConfirmation && (
                 <p className="type-caption text-muted-foreground leading-relaxed">
-                  Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.
+                  {canConfirm
+                    ? 'Gửi người đại diện xác nhận trên ứng dụng, hoặc ghi xác nhận trực tiếp kèm bằng chứng khi gia đình đã đồng ý tại viện, qua điện thoại hay tin nhắn; có xác nhận rồi mới gửi Quản lý viện duyệt được.'
+                    : 'Yêu cầu đã chuyển Hành chính: Hành chính xác nhận với người đại diện rồi gửi Quản lý viện duyệt.'}
                 </p>
               )}
-            </div>
-          </section>
-        )}
-        {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
-          <p className="type-body-sm">
-            Gia đình tự gửi trên ứng dụng: Hành chính kiểm tra rồi gửi duyệt.
-          </p>
-        )}
-        {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
-          <p className="type-caption text-muted-foreground">
-            {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
-          </p>
-        )}
-        <ResidentOpinions request={request} canRecord={canRecordOpinion} warnings={warnings} onChanged={onReload} />
-        {pendingSignature && (
-          <Alert variant="attention">
-            <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>
-            <AlertDescription>
-              In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
-            </AlertDescription>
-          </Alert>
-        )}
-        {addendum ? (
-          <section className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Phụ lục hợp đồng">
-            <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
-            <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
-            <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
-            {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
-            {addendum.signedFileId && (
-              <Button variant="outline" className="h-11 self-start rounded-xl" onClick={() => openFile(addendum.signedFileId).catch(() => { })}>
-                Xem bản đã ký
-              </Button>
-            )}
-          </section>
-        ) : (
-          request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
-        )}
-        <p className="type-caption text-muted-foreground">{`Mã yêu cầu: #${request.approvalRequestId}`}</p>
-        <ProblemAlert problem={failure} />
+            </section>
+          )}
+          {draft && request.representativeConfirmationRequired === false && !request.minorChange && (
+            <p className="type-body-sm">
+              Người đại diện tự gửi qua cổng: không cần xác nhận thêm, Hành chính hoàn thiện rồi gửi duyệt.
+            </p>
+          )}
+          {warnings.length > 0 && (
+            <Alert variant="attention" aria-label="Cảnh báo của yêu cầu">
+              {warnings.map((w) => (
+                <AlertDescription key={w}>{w}</AlertDescription>
+              ))}
+            </Alert>
+          )}
+          {request.assessedCareLevel && request.changeTypes?.includes('CARE_LEVEL') && (
+            <p className="type-caption text-muted-foreground">
+              {`Theo đánh giá ngày ${formatDate(request.assessedCareLevel.confirmedAt)}: mức ${labelOf(CARE_LEVELS, request.assessedCareLevel.careLevel)}`}
+            </p>
+          )}
+          <ResidentOpinions request={request} canRecord={canRecordOpinion} onChanged={onReload} />
+          {pendingSignature && (
+            <Alert variant="attention">
+              <AlertTitle>{`${addendumNoText(addendum.addendumNo)} chờ ký`}</AlertTitle>
+              <AlertDescription>
+                In phụ lục cho người đại diện ký rồi ghi nhận bản đã ký; chưa ký thì phụ lục chưa có hiệu lực.
+              </AlertDescription>
+            </Alert>
+          )}
+          {addendum ? (
+            <section className="flex flex-col gap-1 rounded-xl border border-border/80 bg-card p-4 shadow-2xs" aria-label="Phụ lục hợp đồng">
+              <h3 className="type-card-title">{addendumNoText(addendum.addendumNo)}</h3>
+              <StatusBadge status={ADDENDUM_STATUS[addendum.status] ?? addendum.status} className="self-start" />
+              <p className="type-body-sm">{`Ngày hiệu lực ${formatDate(addendum.effectiveDate)}`}</p>
+              {addendum.signedDate && <p className="type-body-sm">{`Đã ký ngày ${formatDate(addendum.signedDate)}`}</p>}
+              {addendum.signedFileId && (
+                <Button variant="outline" className="h-11 self-start rounded-xl" onClick={() => openFile(addendum.signedFileId).catch(() => { })}>
+                  Xem bản đã ký
+                </Button>
+              )}
+            </section>
+          ) : (
+            request.addendumId && <p className="type-body-sm">{`Đã tạo phụ lục mã ${request.addendumId}.`}</p>
+          )}
+          <p className="type-caption text-muted-foreground">{`Yêu cầu phê duyệt mã ${request.approvalRequestId}.`}</p>
+          <ProblemAlert problem={failure} />
+        </div>
       </div>
 
-      {/* Nhóm nút thao tác cuối form (cuộn cùng nội dung chi tiết) */}
+      {/* 3. FOOTER (Cố định ở đáy, không đè lên Body) */}
       <div
         role="group"
         aria-label="Lệnh của yêu cầu"
-        className="flex flex-col gap-2.5 border-t border-border/70 pt-4"
+        className="shrink-0 border-t border-border bg-card pt-3 mt-auto flex flex-col gap-2"
       >
-        {hasPrimary && (
-          <div className="flex flex-col gap-2">
-            {showSendForConfirm && (
-              <Button
-                className="h-10 w-full gap-2 rounded-lg font-semibold shadow-xs transition-all hover:shadow-sm"
-                disabled={busy || !etag}
-                onClick={sendToRepresentative}
-              >
-                <Send aria-hidden className="size-4 stroke-[1.75]" />
-                {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
-              </Button>
-            )}
-            {showSignAddendum && (
-              <Button
-                className="h-10 w-full gap-2 rounded-lg font-semibold shadow-xs transition-all hover:shadow-sm"
-                disabled={!etag}
-                onClick={() => setAction('sign')}
-              >
-                <FileSignature aria-hidden className="size-4 stroke-[1.75]" />
-                Ghi nhận phụ lục đã ký
-              </Button>
-            )}
-            {showSubmit && (
-              <Button
-                className="h-10 w-full gap-2 rounded-lg font-semibold shadow-xs transition-all hover:shadow-sm"
-                disabled={busy || !etag}
-                onClick={() => setAction('submit')}
-              >
-                <Send aria-hidden className="size-4 stroke-[1.75]" />
-                Gửi duyệt
-              </Button>
-            )}
-          </div>
-        )}
+        {/* Hàng 1: Các nút tác vụ chính và phụ gọn gàng trên 1-2 hàng */}
+        <div className="flex flex-wrap items-center gap-2">
+          {draft && canUpdate && canConfirm && needsConfirmation && (
+            <Button
+              className="h-10 flex-1 min-w-[150px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={busy || !etag}
+              onClick={sendToRepresentative}
+            >
+              {sent ? 'Gửi lại cho người đại diện' : 'Gửi người đại diện xác nhận'}
+            </Button>
+          )}
+          {pendingSignature && canConfirm && (
+            <Button
+              className="h-10 flex-1 min-w-[150px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={!etag}
+              onClick={() => setAction('sign')}
+            >
+              Ghi nhận phụ lục đã ký
+            </Button>
+          )}
+          {draft && canUpdate && !needsConfirmation && (
+            <Button
+              className="h-10 flex-1 min-w-[140px] font-bold shadow-xs hover:shadow-sm transition-all"
+              disabled={busy || !etag}
+              onClick={() => setAction('submit')}
+            >
+              Gửi duyệt
+            </Button>
+          )}
+          {draft && canUpdate && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[130px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onEdit(request)}
+            >
+              Sửa yêu cầu nháp
+            </Button>
+          )}
+          {draft && canUpdate && canConfirm && needsConfirmation && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[140px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onConfirm(request)}
+            >
+              Ghi xác nhận trực tiếp
+            </Button>
+          )}
+          {addendum && onPrint && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[110px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              onClick={() => onPrint(request)}
+            >
+              In phụ lục
+            </Button>
+          )}
+          {request.status === 'PENDING_APPROVAL' && allowed.includes('return-to-draft') && (
+            <Button
+              variant="outline"
+              className="h-10 flex-1 min-w-[110px] font-semibold border-border/80 shadow-2xs hover:bg-accent"
+              disabled={!etag}
+              onClick={() => setAction('return-to-draft')}
+            >
+              Trả về nháp
+            </Button>
+          )}
+        </div>
 
-        {hasSecondary && (
-          <div className="flex flex-wrap gap-2">
-            {showEdit && (
-              <Button
-                variant="outline"
-                className="h-10 flex-1 min-w-[160px] gap-1.5 rounded-lg border-border/80 bg-card px-3 text-[13px] font-medium shadow-2xs hover:bg-accent"
-                onClick={() => onEdit(request)}
-              >
-                <Pencil aria-hidden className="size-4 stroke-[1.75]" />
-                Sửa yêu cầu nháp
-              </Button>
-            )}
-            {showRecordConfirm && (
-              <Button
-                variant="outline"
-                className="h-10 flex-1 min-w-[160px] gap-1.5 rounded-lg border-border/80 bg-card px-3 text-[13px] font-medium shadow-2xs hover:bg-accent"
-                onClick={() => onConfirm(request)}
-              >
-                <ClipboardCheck aria-hidden className="size-4 stroke-[1.75]" />
-                Ghi xác nhận trực tiếp
-              </Button>
-            )}
-            {showPrint && (
-              <Button
-                variant="outline"
-                className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-lg border-border/80 bg-card px-3 text-[13px] font-medium shadow-2xs hover:bg-accent"
-                onClick={() => onPrint(request)}
-              >
-                <Printer aria-hidden className="size-4 stroke-[1.75]" />
-                In phụ lục
-              </Button>
-            )}
-            {showReturnDraft && (
-              <Button
-                variant="outline"
-                className="h-10 flex-1 min-w-[140px] gap-1.5 rounded-lg border-border/80 bg-card px-3 text-[13px] font-medium shadow-2xs hover:bg-accent"
-                disabled={!etag}
-                onClick={() => setAction('return-to-draft')}
-              >
-                <RotateCcw aria-hidden className="size-4 stroke-[1.75]" />
-                Trả về nháp
-              </Button>
-            )}
-          </div>
-        )}
-
-        {/* Tải lại & Hủy yêu cầu */}
-        <div className={`flex items-center justify-between ${hasMainActions ? 'border-t border-border/60 pt-2.5' : ''}`}>
+        {/* Hàng 2: Tiện ích & Hủy (Tải lại và Hủy) */}
+        <div className="flex items-center justify-between border-t border-border/50 pt-2">
           <Button
             variant="ghost"
             size="sm"
-            className="h-8 gap-1.5 rounded-lg px-2 text-xs font-medium text-muted-foreground hover:text-foreground"
+            className="h-8 px-2.5 text-xs text-muted-foreground hover:text-foreground"
             onClick={onReload}
           >
-            <RefreshCw aria-hidden className="size-3.5 stroke-[1.75]" />
             Tải lại
           </Button>
-          {showCancel && (
+          {((open && canUpdate) || (request.status === 'APPROVED' && allowed.includes('cancel'))) && (
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 gap-1.5 rounded-lg px-2 text-xs font-medium text-red-600 hover:bg-red-50 hover:text-red-700 dark:text-red-400 dark:hover:bg-red-950/40"
+              className="h-8 px-2.5 text-xs text-muted-foreground hover:bg-muted/60 hover:text-foreground font-medium"
               disabled={!etag}
               onClick={() => setAction('cancel')}
             >
-              <XCircle aria-hidden className="size-3.5 stroke-[1.75]" />
               Hủy yêu cầu
             </Button>
           )}
@@ -650,7 +544,6 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [residents, setResidents] = useState([])
   const [residentId, setResidentId] = useState(request?.residentId ? String(request.residentId) : '')
   const [contractId, setContractId] = useState(request ? String(request.contractId) : '')
-  const [currentContent, setCurrentContent] = useState(null)
   const [contractSearch, setContractSearch] = useState('')
   const [residentSearch, setResidentSearch] = useState('')
   const [types, setTypes] = useState(request?.changeTypes ?? [])
@@ -662,7 +555,6 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
-  const [showSheetHelp, setShowSheetHelp] = useState(false)
   // Lần đánh giá gần nhất đã xác nhận: mức chăm sóc mới lấy từ đây, không chọn tay (FR-043j)
   const [assessment, setAssessment] = useState(null)
   // Người lập không được xem Đánh giá (Phụ lục 27, ví dụ Hành chính: 403) thì chọn mức tay, backend kiểm FR-043j khi lưu
@@ -716,26 +608,6 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   }, [wantsBed, emptyBeds])
 
   const contract = contracts.find((c) => String(c.id) === contractId)
-  useEffect(() => {
-    let live = true
-    if (!contract?.id) return undefined
-    getContractsByIdContent({ path: { id: contract.id }, query: { date: isoDate() } })
-      .then(({ data }) => {
-        if (live) setCurrentContent(data ?? null)
-      })
-      .catch(() => {
-        if (live) setCurrentContent(null)
-      })
-    return () => {
-      live = false
-    }
-  }, [contract?.id])
-  // Nội dung hiệu lực tại hôm nay (sau các phụ lục đã áp dụng); fallback về hợp đồng gốc nếu chưa tải xong
-  const effectiveContract = contract
-    ? currentContent?.contractId === contract.id && currentContent.content
-      ? { ...contract, ...currentContent.content }
-      : contract
-    : undefined
   const filteredContracts = contracts.filter((c) => {
     if (String(c.id) === contractId) return true
     if (!contractSearch.trim()) return true
@@ -750,16 +622,16 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     const resName = r.personalInfo?.fullName ?? `Mã ${r.id}`
     return plain(resName).includes(kw)
   })
-  const contractServiceIds = new Set((effectiveContract?.services ?? []).map((s) => s.serviceId))
+  const contractServiceIds = new Set((contract?.services ?? []).map((s) => s.serviceId))
   // Dấu thuộc gói theo hợp đồng hiện hành (R19): chỉ dòng có trong hợp đồng mang dấu thuộc gói
-  const inPackageIds = new Set((effectiveContract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
-  const subjectId = effectiveContract?.residentId ?? (residentId ? Number(residentId) : null)
+  const inPackageIds = new Set((contract?.services ?? []).filter((s) => s.inPackage).map((s) => s.serviceId))
+  const subjectId = contract?.residentId ?? (residentId ? Number(residentId) : null)
 
   // Loại phòng (FR-043l, R22): chỉ các loại phòng khác loại phòng của hợp đồng và còn giường trống; chuyển sang giường cùng
   // loại phòng dùng Chuyển giường trực tiếp (7.4), không lập yêu cầu
   const knowsRoomTypes = !!roomTypeOf && Object.keys(roomTypeOf).length > 0
   const roomTypeOfBed = (bed) => roomTypeOf?.[bed?.location?.roomId]?.id ?? null
-  const currentRoomTypeId = effectiveContract?.roomTypeId ?? null
+  const currentRoomTypeId = contract?.roomTypeId ?? null
   const otherRoomTypes = roomTypes.filter(
     (t) => t.id !== currentRoomTypeId && (emptyBeds ?? []).some((b) => roomTypeOfBed(b) === t.id),
   )
@@ -790,30 +662,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     }
   }, [subjectId])
 
-  const assessedLevel = assessedLevelFor(assessment, effectiveContract)
+  const assessedLevel = assessedLevelFor(assessment, contract)
   const careLevelBlocked = !assessedLevel && !assessmentHidden
 
   const set = (patch) => setValue((v) => ({ ...v, ...patch }))
-  const toggleType = (type) => {
-    const adding = !types.includes(type)
-    setTypes((t) => (adding ? [...t, type] : t.filter((x) => x !== type)))
-    if (
-      adding &&
-      type === 'ARRIVAL_SCHEDULE' &&
-      !value.arrivalSchedule?.length &&
-      effectiveContract?.residenceType === 'DAY_CARE' &&
-      effectiveContract?.arrivalSchedule?.length > 0
-    ) {
-      set({
-        arrivalSchedule: effectiveContract.arrivalSchedule.map((r) => ({
-          ...(r.dayOfWeek != null ? { dayOfWeek: r.dayOfWeek } : {}),
-          ...(r.date ? { date: r.date } : {}),
-          arrivalTime: String(r.arrivalTime ?? '').slice(0, 5),
-          departureTime: String(r.departureTime ?? '').slice(0, 5),
-        })),
-      })
-    }
-  }
+  const toggleType = (type) => setTypes((t) => (t.includes(type) ? t.filter((x) => x !== type) : [...t, type]))
   const pickedServices = value.services ?? []
   const lineOf = (id) => pickedServices.find((s) => s.serviceId === id)
   const toggleService = (id) =>
@@ -830,7 +683,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
 
   // Mức chăm sóc mới luôn là mức theo đánh giá (FR-043j), không chọn tay
   const effectiveValue = assessedLevel && !assessmentHidden ? { ...value, careLevel: assessedLevel } : value
-  const changeErrors = validateChange({ types: activeTypes, value: effectiveValue, date, contract: effectiveContract })
+  const changeErrors = validateChange({ types: activeTypes, value: effectiveValue, date, contract })
   const errors = {
     contract: seesContracts ? !contractId && 'Chọn hợp đồng' : !residentId && 'Chọn người cao tuổi',
     ...changeErrors,
@@ -839,7 +692,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
   }
   const shown = (key) => (submitted ? errors[key] || null : null)
   const companions = activeTypes.includes('RESIDENCE_TYPE')
-    ? requiredCompanions(effectiveContract?.residenceType, value.residenceType)
+    ? requiredCompanions(contract?.residenceType, value.residenceType)
     : []
   // Sửa nháp: giường đã chọn có thể không còn Trống, vẫn hiện để không mất giá trị
   const candidateBeds = knowsRoomTypes
@@ -905,22 +758,12 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <SheetTitle className="type-title text-primary">
               {editing ? 'Sửa yêu cầu điều chỉnh hợp đồng' : 'Lập yêu cầu điều chỉnh hợp đồng'}
             </SheetTitle>
-            <HelpHintButton
-              label="lập yêu cầu"
-              open={showSheetHelp}
-              onToggle={() => setShowSheetHelp((v) => !v)}
-            />
           </div>
           <SheetDescription className="text-xs text-muted-foreground leading-relaxed">
-            Điền nội dung cần điều chỉnh để lưu bản nháp.
+            {seesContracts
+              ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
+              : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
           </SheetDescription>
-          {showSheetHelp && (
-            <HelpHintBox>
-              {seesContracts
-                ? 'Yêu cầu ở Nháp; giá trị trước và ảnh hưởng chi phí do hệ thống điền khi lưu. Lưu xong, mở yêu cầu để gửi người đại diện xác nhận trên ứng dụng hoặc ghi xác nhận trực tiếp, rồi gửi Quản lý viện duyệt.'
-                : 'Yêu cầu ở Nháp và chuyển Hành chính xác nhận với người đại diện trước khi gửi Quản lý viện duyệt.'}
-            </HelpHintBox>
-          )}
         </div>
 
         {/* 2. BODY (Khu vực cuộn độc lập) */}
@@ -1038,12 +881,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 className={SELECT}
                 value={contractId}
                 disabled={editing}
-                onChange={(e) => {
-                  setContractId(e.target.value)
-                  setCurrentContent(null)
-                  setNewRoomTypeId(null)
-                  setValue({})
-                }}
+                onChange={(e) => setContractId(e.target.value)}
               >
                 <option value="">
                   {filteredContracts.length === 0
@@ -1058,41 +896,18 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
-              {effectiveContract && (
-                <div className="mt-2 flex flex-col gap-1 rounded-lg border border-border/70 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                  {effectiveContract.residenceType && (
-                    <div>
-                      Loại lưu trú:{' '}
-                      <strong className="font-semibold text-foreground">
-                        {labelOf(RESIDENCE_TYPES, effectiveContract.residenceType)}
-                      </strong>
-                    </div>
-                  )}
-                  {effectiveContract.careLevel && (
-                    <div>
-                      Mức chăm sóc:{' '}
-                      <strong className="font-semibold text-foreground">
-                        {labelOf(CARE_LEVELS, effectiveContract.careLevel)}
-                      </strong>
-                    </div>
-                  )}
-                  {effectiveContract.startDate && (
-                    <div>
-                      Ngày bắt đầu:{' '}
-                      <strong className="font-semibold text-foreground tabular-nums">
-                        {formatDate(effectiveContract.startDate)}
-                      </strong>
-                    </div>
-                  )}
-                  {(effectiveContract.currentEndDate ?? effectiveContract.endDate) && (
-                    <div>
-                      Ngày kết thúc:{' '}
-                      <strong className="font-semibold text-foreground tabular-nums">
-                        {formatDate(effectiveContract.currentEndDate ?? effectiveContract.endDate)}
-                      </strong>
-                    </div>
-                  )}
-                </div>
+              {contract && (
+                <FieldDescription>
+                  {[
+                    contract.residenceType && `Hiện tại: ${labelOf(RESIDENCE_TYPES, contract.residenceType)}`,
+                    contract.careLevel && `mức ${labelOf(CARE_LEVELS, contract.careLevel)}`,
+                    contract.startDate && `bắt đầu ${formatDate(contract.startDate)}`,
+                    (contract.currentEndDate ?? contract.endDate) &&
+                    `kết thúc ${formatDate(contract.currentEndDate ?? contract.endDate)}`,
+                  ]
+                    .filter(Boolean)
+                    .join(', ')}
+                </FieldDescription>
               )}
               {shown('contract') && <FieldError>{shown('contract')}</FieldError>}
             </Field>
@@ -1135,11 +950,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
             <>
               <Choices
                 label="Loại lưu trú mới"
-                options={RESIDENCE_TYPES.filter(([k]) => k !== effectiveContract?.residenceType)}
+                options={RESIDENCE_TYPES}
                 value={value.residenceType ?? ''}
                 onChange={(v) => {
                   // Tự chọn loại kèm bắt buộc của loại lưu trú mới, bỏ loại kèm của lựa chọn trước (FR-041)
-                  setTypes((t) => withCompanions(t, effectiveContract?.residenceType, value.residenceType, v))
+                  setTypes((t) => withCompanions(t, contract?.residenceType, value.residenceType, v))
                   set({ residenceType: v })
                 }}
                 error={shown('residenceType')}
@@ -1148,20 +963,24 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 <FieldDescription>
                   {`Loại này cần chọn kèm: ${companions
                     .map((t) => labelOf(CHANGE_TYPES, t))
-                    .join(', ')} (hệ thống kiểm tra khi duyệt).`}
+                    .join(', ')} (kiểm khi duyệt).`}
                 </FieldDescription>
               )}
             </>
           )}
           {activeTypes.includes('CARE_LEVEL') && assessmentHidden && (
-            <Choices
-              label="Mức chăm sóc mới"
-              hint="Chọn đúng mức của lần đánh giá lại gần nhất do Bác sĩ xác nhận; hệ thống kiểm tra khi lưu."
-              options={CARE_LEVELS.filter(([k]) => k !== effectiveContract?.careLevel)}
-              value={value.careLevel ?? ''}
-              onChange={(v) => set({ careLevel: v })}
-              error={shown('careLevel')}
-            />
+            <>
+              <Choices
+                label="Mức chăm sóc mới"
+                options={CARE_LEVELS}
+                value={value.careLevel ?? ''}
+                onChange={(v) => set({ careLevel: v })}
+                error={shown('careLevel')}
+              />
+              <FieldDescription>
+                Chọn đúng mức của lần đánh giá lại gần nhất do Bác sĩ xác nhận; hệ thống kiểm khi lưu.
+              </FieldDescription>
+            </>
           )}
           {activeTypes.includes('CARE_LEVEL') && !assessmentHidden && (
             <Field data-invalid={!!shown('careLevel') || undefined}>
@@ -1191,11 +1010,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           )}
           {activeTypes.includes('BED') && knowsRoomTypes && (
             <Field data-invalid={!!shown('newRoomTypeId') || undefined}>
-              <LabelWithHelp
-                htmlFor="change-room-type"
-                label="Loại phòng mới"
-                hint="Chỉ dùng khi đổi sang loại phòng khác (đổi phí lưu trú, phải ký phụ lục). Chuyển sang giường khác cùng loại phòng thì dùng Chuyển giường trực tiếp ở màn Giường, không cần lập yêu cầu."
-              />
+              <FieldLabel htmlFor="change-room-type">Loại phòng mới</FieldLabel>
               <select
                 id="change-room-type"
                 className={SELECT}
@@ -1214,16 +1029,16 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
+              <FieldDescription>
+                Chỉ dùng khi đổi sang loại phòng khác (đổi phí lưu trú, phải ký phụ lục). Chuyển sang giường khác cùng loại
+                phòng thì dùng Chuyển giường trực tiếp ở màn Giường, không cần lập yêu cầu.
+              </FieldDescription>
               {shown('newRoomTypeId') && <FieldError>{shown('newRoomTypeId')}</FieldError>}
             </Field>
           )}
           {activeTypes.includes('BED') && (
             <Field data-invalid={!!shown('newBedId') || undefined}>
-              <LabelWithHelp
-                htmlFor="change-bed"
-                label={knowsRoomTypes ? 'Giường trong loại phòng mới' : 'Giường mới'}
-                hint="Giữ trước giường này tới ngày hiệu lực; giường phải còn trống và hợp mức chăm sóc lúc duyệt."
-              />
+              <FieldLabel htmlFor="change-bed">{knowsRoomTypes ? 'Giường trong loại phòng mới' : 'Giường mới'}</FieldLabel>
               <select
                 id="change-bed"
                 className={SELECT}
@@ -1245,18 +1060,22 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                   </option>
                 ))}
               </select>
+              <FieldDescription>
+                Giữ trước giường này tới ngày hiệu lực; giường phải còn trống và hợp mức chăm sóc lúc duyệt.
+              </FieldDescription>
               {shown('newBedId') && <FieldError>{shown('newBedId')}</FieldError>}
             </Field>
           )}
           {activeTypes.includes('SERVICE') && (
             <Field data-invalid={!!shown('services') || undefined}>
-              <LabelWithHelp
-                label="Dịch vụ thêm hoặc bớt"
-                hint={`${SERVICE_CHOICE_HINT} Thuộc gói hay ngoài gói theo hợp đồng hiện hành; chỉ thêm, bớt dịch vụ thuộc gói là điều chỉnh nhẹ.`}
-              />
+              <FieldLabel>Dịch vụ thêm hoặc bớt</FieldLabel>
+              <FieldDescription>
+                {SERVICE_CHOICE_HINT} Thuộc gói hay ngoài gói theo hợp đồng hiện hành; chỉ thêm, bớt dịch vụ thuộc gói
+                là thay đổi nhỏ.
+              </FieldDescription>
               {(() => {
                 // FR-043k (Q-426): dòng đang có (mọi loại) để bớt; chỉ 4 loại để thêm, nhóm theo loại
-                const { removable, addGroups } = serviceChoices(catalog, effectiveContract?.services)
+                const { removable, addGroups } = serviceChoices(catalog, contract?.services)
                 const row = (s) => {
                   const line = lineOf(s.id)
                   const inContract = contractServiceIds.has(s.id)
@@ -1340,16 +1159,11 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 onClick={() => {
                   const rows = value.arrivalSchedule ?? []
                   const last = rows[rows.length - 1]
-                  const used = new Set(rows.map((r) => r.dayOfWeek))
-                  const start = last ? (last.dayOfWeek % 7) + 1 : ARRIVAL_ROW.dayOfWeek
-                  const nextDay =
-                    Array.from({ length: 7 }, (_, idx) => ((start - 1 + idx) % 7) + 1).find((d) => !used.has(d)) ??
-                    start
-                  // Gợi ý dòng mới: thứ chưa dùng tiếp theo, cùng giờ với dòng trước
+                  // Gợi ý dòng mới: ngày kế tiếp, cùng giờ với dòng trước
                   set({
                     arrivalSchedule: [
                       ...rows,
-                      last ? { ...last, dayOfWeek: nextDay } : { ...ARRIVAL_ROW, dayOfWeek: nextDay },
+                      last ? { ...last, dayOfWeek: (last.dayOfWeek % 7) + 1 } : { ...ARRIVAL_ROW },
                     ],
                   })
                 }}
@@ -1361,12 +1175,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
           )}
 
           <Field data-invalid={!!shown('date') || undefined}>
-            <LabelWithHelp
-              htmlFor="change-date"
-              label="Ngày hiệu lực mong muốn"
-              className={REQUIRED}
-              hint="Duyệt muộn hơn ngày này thì thay đổi tính từ ngày duyệt, không tính lùi."
-            />
+            <FieldLabel htmlFor="change-date" className={REQUIRED}>
+              Ngày hiệu lực mong muốn
+            </FieldLabel>
             <Input
               id="change-date"
               type="date"
@@ -1375,15 +1186,16 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
-            <div className="flex items-center">
+            <FieldDescription>
+              Duyệt muộn hơn ngày này thì thay đổi tính từ ngày duyệt, không tính lùi.{' '}
               <button
                 type="button"
-                className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-foreground hover:bg-accent/80"
+                className="rounded-md bg-accent px-2 py-0.5 text-accent-foreground"
                 onClick={() => setDate(tomorrowIso())}
               >
                 {`Dùng ngày mai (${formatDate(tomorrowIso())})`}
               </button>
-            </div>
+            </FieldDescription>
             {shown('date') && <FieldError>{shown('date')}</FieldError>}
           </Field>
           <ReasonField id="change-reason" value={reason} onChange={setReason} error={shown('reason')} showCount />
@@ -1428,7 +1240,6 @@ export function ConfirmationSheet({ request, etag, onClose, onDone }) {
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
-  const [showHelp, setShowHelp] = useState(false)
 
   const errors = {
     ...validateConfirmation({ method, confirmedOn, file: evidence, existingFileId: null, note }),
@@ -1472,21 +1283,11 @@ export function ConfirmationSheet({ request, etag, onClose, onDone }) {
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
       <SheetContent className="overflow-y-auto p-6 sm:max-w-lg">
-        <div className="flex items-center gap-1.5 pr-8">
-          <SheetTitle>Ghi xác nhận trực tiếp</SheetTitle>
-          <HelpHintButton label="ghi xác nhận" open={showHelp} onToggle={() => setShowHelp((v) => !v)} />
-        </div>
-        <SheetDescription className="text-xs text-muted-foreground">
-          Đính kèm bằng chứng xác nhận từ người đại diện.
+        <SheetTitle>Ghi xác nhận trực tiếp</SheetTitle>
+        <SheetDescription>
+          Dùng khi người đại diện đã đồng ý nội dung thay đổi tại viện, qua điện thoại hoặc tin nhắn. Đính kèm bằng
+          chứng rồi lưu; sau đó gửi Quản lý viện duyệt.
         </SheetDescription>
-        {showHelp && (
-          <div className="mt-2">
-            <HelpHintBox>
-              Dùng khi người đại diện đã đồng ý nội dung thay đổi tại viện, qua điện thoại hoặc tin nhắn. Đính kèm bằng
-              chứng rồi lưu; sau đó gửi Quản lý viện duyệt.
-            </HelpHintBox>
-          </div>
-        )}
         <FieldGroup className="mt-4">
           <RepresentativeSelect
             id="change-confirmer"
@@ -1516,16 +1317,13 @@ export function ConfirmationSheet({ request, etag, onClose, onDone }) {
             {shown('confirmedOn') && <FieldError>{shown('confirmedOn')}</FieldError>}
           </Field>
           <Field data-invalid={!!shown('evidence') || undefined}>
-            <LabelWithHelp
-              htmlFor="change-evidence"
-              label="Bằng chứng xác nhận"
-              hint={`${EVIDENCE_HINTS[method] ?? ''} PDF, JPG hoặc PNG, tối đa 10 MB.`}
-            />
+            <FieldLabel htmlFor="change-evidence">Bằng chứng xác nhận</FieldLabel>
             <FileInput
               id="change-evidence"
               accept={EVIDENCE_ACCEPT}
               onChange={(e) => setEvidence(e.target.files?.[0] ?? null)}
             />
+            <FieldDescription>{`${EVIDENCE_HINTS[method] ?? ''} PDF, JPG hoặc PNG, tối đa 10 MB.`}</FieldDescription>
             {shown('evidence') && <FieldError>{shown('evidence')}</FieldError>}
           </Field>
           <Field data-invalid={!!shown('note') || undefined}>

@@ -30,6 +30,7 @@ import {
 } from './procurementLabels'
 import { Choices, Info, ReasonField, SELECT, TextField } from './FormParts'
 import { FileInput } from '@/common/FileInput'
+import { MoneyInput } from '@/common/MoneyInput'
 
 // Khung chi tiết và khung lập, sửa yêu cầu mua sắm (019 T008; bảng FR-008, FR-008a, FR-008b, FR-008d). Nút lệnh chỉ
 // theo allowedCommands backend trả (api-019 bổ sung 2026-11-10; DESIGN.md 7.4), backend kiểm lại khi gọi; sửa Nháp gửi
@@ -295,14 +296,17 @@ export function ProcurementDetail({ request, departmentName, residentName, onCha
       {mode === 'purchase' && (
         <div className="flex flex-col gap-3 border-t pt-4">
           <FieldGroup>
-            <TextField
-              id="procurement-actual"
-              label="Số tiền thực tế (đồng)"
-              inputMode="numeric"
-              value={actual}
-              onChange={setActual}
-              error={show(purchaseErrors, 'actual')}
-            />
+            {/* Demo 2026-11-25: ô tiền dạng xxx.xxx.xxx đ */}
+            <Field data-invalid={!!show(purchaseErrors, 'actual') || undefined}>
+              <FieldLabel htmlFor="procurement-actual">Số tiền thực tế</FieldLabel>
+              <MoneyInput
+                id="procurement-actual"
+                value={actual}
+                onChange={setActual}
+                aria-invalid={!!show(purchaseErrors, 'actual') || undefined}
+              />
+              {show(purchaseErrors, 'actual') && <FieldError>{show(purchaseErrors, 'actual')}</FieldError>}
+            </Field>
             <TextField
               id="procurement-date"
               label="Ngày mua"

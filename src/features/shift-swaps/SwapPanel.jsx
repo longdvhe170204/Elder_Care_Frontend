@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { StaffField } from '@/common/StaffField'
 import { problemOf } from '@/common/problem'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
@@ -333,16 +334,23 @@ function SwapCommand({ row, command, onDone, onCancel }) {
             </p>
           )}
           {command === 'approve' && needLead(checks.leadAfterSwap?.shiftX) && (
-            <Field>
-              <FieldLabel htmlFor="lead-x">Mã người phụ trách mới của ca X</FieldLabel>
-              <Input id="lead-x" inputMode="numeric" value={leadX} onChange={(e) => setLeadX(e.target.value)} />
-            </Field>
+            // Demo 2026-11-25: chọn theo tên; không đọc được danh sách nhân viên thì nhập mã như trước
+            <StaffField
+              id="lead-x"
+              label="Người phụ trách mới của ca X"
+              fallbackLabel="Mã người phụ trách mới của ca X"
+              value={leadX}
+              onChange={setLeadX}
+            />
           )}
           {command === 'approve' && needLead(checks.leadAfterSwap?.shiftY) && (
-            <Field>
-              <FieldLabel htmlFor="lead-y">Mã người phụ trách mới của ca Y</FieldLabel>
-              <Input id="lead-y" inputMode="numeric" value={leadY} onChange={(e) => setLeadY(e.target.value)} />
-            </Field>
+            <StaffField
+              id="lead-y"
+              label="Người phụ trách mới của ca Y"
+              fallbackLabel="Mã người phụ trách mới của ca Y"
+              value={leadY}
+              onChange={setLeadY}
+            />
           )}
           {checks.monthlyHours && <p className="type-body-sm">Giờ làm trong tháng đã có trong kết quả kiểm tra.</p>}
         </div>

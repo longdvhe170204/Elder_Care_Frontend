@@ -87,17 +87,24 @@ function ShiftWorkspace({ initialMonth }) {
   useEffect(() => {
     if (status !== 'ready' || !manage) return
     let cancelled = false
-    const named = (result) =>
+    const list = (result) =>
+      result.status === 'fulfilled'
+        ? Array.isArray(result.value.data)
+          ? result.value.data
+          : (result.value.data?.items ?? [])
+        : []
+    const named = (items, suffix = () => null) =>
       Object.fromEntries(
-        (result.status === 'fulfilled'
-          ? Array.isArray(result.value.data)
-            ? result.value.data
-            : (result.value.data?.items ?? [])
-          : []
-        ).map((p) => [p.id, p.name || p.code]),
+        items.map((p) => {
+          const where = suffix(p)
+          return [p.id, where ? `${p.name || p.code} (${where})` : p.name || p.code]
+        }),
       )
     Promise.allSettled([getFloors(), getAreas()]).then(([floors, areas]) => {
-      if (!cancelled) setPlaces({ FLOOR: named(floors), AREA: named(areas) })
+      if (cancelled) return
+      const areaNames = named(list(areas))
+      // Tầng cùng tên ở hai nhà (Tầng 1 Nhà A, Tầng 1 Nhà B) ghi thêm tên nhà, không có thì tên khu
+      setPlaces({ FLOOR: named(list(floors), (f) => f.buildingName || areaNames[f.areaId]), AREA: areaNames })
     })
     return () => {
       cancelled = true
@@ -337,7 +344,7 @@ function ShiftWorkspace({ initialMonth }) {
                 onDone={done}
               />
             )}
-            {panel?.kind === 'schedule' && <ScheduleForm month={month} onDone={done} />}
+            {panel?.kind === 'schedule' && <ScheduleForm month={month} places={places} onDone={done} />}
             {panel?.kind === 'assignments' && (
               <AssignmentPanel
                 key={panel.shift.id}
@@ -351,6 +358,7 @@ function ShiftWorkspace({ initialMonth }) {
             {panel?.kind === 'floorManagers' && (
               <FloorManagerPanel
                 staff={staff}
+                places={places}
                 canCreate={can('SHIFT_SCHEDULE', 'CREATE')}
                 canUpdate={can('SHIFT_SCHEDULE', 'UPDATE')}
               />

@@ -6,11 +6,12 @@ import {
 } from '@/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Field, FieldError, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { FieldError } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ChoiceTray } from '@/common/ChoiceTray'
+import { FamilyMemberField } from '@/common/FamilyMemberField'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { useFamilyMembers } from '@/common/useFamilyMembers'
 import { FAMILY_DECLARED_CHOICES } from '@/common/quickChoices'
 import { problemOf } from '@/common/problem'
 import { FAMILY_DECLARED_TOPIC_LABELS } from './assessmentLabels'
@@ -102,7 +103,7 @@ function entriesOf(rows) {
     }))
 }
 
-function SourceRow({ row, label, onChange, onRemove, error }) {
+function SourceRow({ row, label, members = [], onChange, onRemove, error }) {
   const id = `family-declared-${row.key}`
   return (
     <div className="flex flex-col gap-2 border-t pt-3 first:border-0 first:pt-0">
@@ -139,16 +140,17 @@ function SourceRow({ row, label, onChange, onRemove, error }) {
           </div>
         </div>
         {row.sourceType === 'FAMILY_MEMBER' && (
-          <Field data-invalid={!!error || undefined} className="w-40">
-            <FieldLabel htmlFor={`${id}-member`}>Mã người thân</FieldLabel>
-            <Input
+          // Demo 2026-11-25: chọn người thân theo tên; chưa có danh sách thì nhập mã như trước
+          <div className="min-w-48">
+            <FamilyMemberField
               id={`${id}-member`}
-              inputMode="numeric"
+              label="Người thân"
+              fallbackLabel="Mã người thân"
+              members={members}
               value={row.memberId}
-              onChange={(e) => onChange({ memberId: e.target.value })}
-              aria-invalid={!!error || undefined}
+              onChange={(memberId) => onChange({ memberId })}
             />
-          </Field>
+          </div>
         )}
         {onRemove && (
           <Button type="button" variant="ghost" className="h-10" onClick={onRemove}>
@@ -162,6 +164,7 @@ function SourceRow({ row, label, onChange, onRemove, error }) {
 }
 
 export function FamilyDeclaredEditor({ residentId }) {
+  const members = useFamilyMembers(residentId)
   const [state, setState] = useState('loading')
   const [saved, setSaved] = useState([])
   const [rows, setRows] = useState([])
@@ -258,6 +261,7 @@ export function FamilyDeclaredEditor({ residentId }) {
                   <SourceRow
                     key={row.key}
                     row={row}
+                    members={members}
                     label={i === 0 ? topicLabel : `${topicLabel}, nguồn thứ ${i + 1}`}
                     error={errors[row.key]}
                     onChange={(patch) => change(row.key, patch)}

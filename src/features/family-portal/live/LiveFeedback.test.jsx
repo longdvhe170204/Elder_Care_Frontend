@@ -113,4 +113,20 @@ describe('Phản hồi trên cổng', () => {
     expect(within(item).queryByRole('button', { name: 'Mở lại' })).not.toBeInTheDocument()
     expect(within(item).queryByRole('button', { name: 'Đồng ý đóng' })).not.toBeInTheDocument()
   })
+
+  // Test BF-12 (2026-11-24): sau lệnh, danh sách tải lại ở trạng thái mới thì không giữ nút của trạng thái cũ
+  it('FR_066_sauDongYDong_khongConNutCu', async () => {
+    api.on('POST', '/feedback/91/agree-to-close', json(200, { ...REPLIED, status: 'CLOSED', items: [] }))
+    render(<LiveFeedbackPage viewer={VIEWER} />)
+    const item = (await screen.findByText('Vì sao đổi thuốc?')).closest('li')
+    const agree = await within(item).findByRole('button', { name: 'Đồng ý đóng' })
+
+    api.on('GET', '/feedback', json(200, [{ ...REPLIED, status: 'CLOSED' }]))
+    fireEvent.click(agree)
+
+    expect(await screen.findByText('Đã đóng phản hồi.')).toBeInTheDocument()
+    await waitFor(() => expect(within(item).getByText('Đóng')).toBeInTheDocument())
+    expect(within(item).queryByRole('button', { name: 'Đồng ý đóng' })).not.toBeInTheDocument()
+    expect(within(item).queryByRole('button', { name: 'Mở lại' })).not.toBeInTheDocument()
+  })
 })

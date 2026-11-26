@@ -313,7 +313,15 @@ it('FR_039_nguoiThamGia_sauPhanThongTin_theoQuyenVaNguon', async () => {
           info: {
             medicationDoses: {
               availability: 'AVAILABLE',
-              items: [{ doseKey: 'd1', medicationName: 'Amlodipin', strength: '5 mg', scheduledTime: '2026-11-05T02:00:00Z', status: 'UPCOMING' }],
+              items: [
+                {
+                  doseKey: 'd1',
+                  medicationName: 'Amlodipin',
+                  strength: '5 mg',
+                  scheduledTime: '2026-11-05T02:00:00Z',
+                  status: 'UPCOMING',
+                },
+              ],
             },
             carriedMedication: { availability: 'NO_DATA' },
             health: { availability: 'NOT_PERMITTED' },
@@ -333,4 +341,30 @@ it('FR_039_nguoiThamGia_sauPhanThongTin_theoQuyenVaNguon', async () => {
   expect(within(info).getByText('Đi chậm, cần người dìu')).toBeInTheDocument()
   expect(within(info).getByText('Nguyễn Văn Nam, 0900000000')).toBeInTheDocument()
   expect(within(info).getByText('Chưa lấy được dữ liệu từ nguồn')).toBeInTheDocument()
+})
+
+// Demo 2026-11-25: đọc được danh sách nhân viên thì chọn trưởng đoàn, tick người đi cùng theo tên thay cho ô nhập mã
+it('FR_035_phanCongChonTheoTen_guiDungMa', async () => {
+  api.on(
+    'GET',
+    '/staff',
+    json(200, [
+      { id: 21, fullName: 'Lê Văn Trưởng', position: 'Điều dưỡng' },
+      { id: 22, fullName: 'Trần Thị Đi', position: 'Nhân viên chăm sóc' },
+      { id: 23, fullName: 'Ngô Văn Thêm', position: 'Nhân viên chăm sóc' },
+    ]),
+  )
+  api.on('POST', '/trips/41/assignment', json(200, {}))
+  await open()
+  const leader = await screen.findByLabelText(/^Trưởng đoàn/)
+  await within(leader).findByRole('option', { name: 'Lê Văn Trưởng (Điều dưỡng)' })
+  expect(screen.queryByLabelText(/Mã người đi cùng/)).toBeNull()
+  expect(screen.getByRole('checkbox', { name: 'Trần Thị Đi (Nhân viên chăm sóc)' })).toBeChecked()
+  fireEvent.click(screen.getByRole('checkbox', { name: 'Ngô Văn Thêm (Nhân viên chăm sóc)' }))
+  fireEvent.click(screen.getByRole('button', { name: 'Lưu phân công' }))
+  await screen.findByText('Đã lưu phân công chuyến')
+  expect(JSON.parse(api.calls('POST', '/trips/41/assignment')[0][1].body)).toEqual({
+    leaderId: 21,
+    companionIds: [22, 23],
+  })
 })

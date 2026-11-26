@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { PageHeader } from '@/common/PageHeader'
 import { PermissionDeniedState } from '@/common/PageState'
 import { formatDateTime } from '@/common/dateTime'
+import { StaffField } from '@/common/StaffField'
 
 // Tra cứu nhật ký toàn viện (000 T073; FR-049, NFR-10, NFR-11; hợp đồng GET /audit-logs). Chỉ Quản lý viện:
 // backend trả 403 cho vai trò khác; nhân viên xem lịch sử của từng đối tượng ở màn của đối tượng đó.
@@ -203,9 +204,13 @@ export function AuditLogTable() {
             value={filter.entityId}
             onChange={update('entityId')}
           />
-          <FilterField
+          {/* Demo 2026-11-25: chọn người thực hiện theo tên (mã tài khoản); không đọc được danh sách thì nhập mã */}
+          <StaffField
             id="audit-actor"
-            label="Mã người thực hiện"
+            label="Người thực hiện"
+            fallbackLabel="Mã người thực hiện"
+            valueKey="accountId"
+            emptyLabel="Tất cả"
             value={filter.actorId}
             onChange={update('actorId')}
             error={actorError}

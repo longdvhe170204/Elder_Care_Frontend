@@ -22,6 +22,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { MoneyInput } from '@/common/MoneyInput'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
@@ -120,6 +121,7 @@ export function PaymentRecording({ residentId: presetResidentId = null } = {}) {
   }, [presetResidentId])
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
+  const setMoney = (key) => (value) => setForm((f) => ({ ...f, [key]: value }))
 
   async function search(event) {
     event.preventDefault()
@@ -273,11 +275,11 @@ export function PaymentRecording({ residentId: presetResidentId = null } = {}) {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field data-invalid={!!errors.amounts || undefined}>
                         <FieldLabel htmlFor="deposit-amount">Số tiền vào sổ cọc</FieldLabel>
-                        <Input id="deposit-amount" inputMode="numeric" value={form.deposit} onChange={set('deposit')} />
+                        <MoneyInput id="deposit-amount" value={form.deposit} onChange={setMoney('deposit')} />
                       </Field>
                       <Field data-invalid={!!errors.amounts || undefined}>
                         <FieldLabel htmlFor="balance-amount">Số tiền vào số dư</FieldLabel>
-                        <Input id="balance-amount" inputMode="numeric" value={form.balance} onChange={set('balance')} />
+                        <MoneyInput id="balance-amount" value={form.balance} onChange={setMoney('balance')} />
                         {errors.amounts && <FieldError>{errors.amounts}</FieldError>}
                       </Field>
                     </div>
@@ -313,11 +315,10 @@ export function PaymentRecording({ residentId: presetResidentId = null } = {}) {
                     <div className="grid gap-4 sm:grid-cols-2">
                       <Field data-invalid={!!errors.cashAmount || undefined}>
                         <FieldLabel htmlFor="cash-amount">Số tiền</FieldLabel>
-                        <Input
+                        <MoneyInput
                           id="cash-amount"
-                          inputMode="numeric"
                           value={form.cashAmount}
-                          onChange={set('cashAmount')}
+                          onChange={setMoney('cashAmount')}
                           aria-invalid={!!errors.cashAmount || undefined}
                         />
                         {errors.cashAmount && <FieldError>{errors.cashAmount}</FieldError>}
