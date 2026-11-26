@@ -32,13 +32,17 @@ const COMMANDS = {
   approve: postCarePlansByIdApprove,
   return: postCarePlansByIdReturn,
   cancel: postCarePlansByIdCancel,
+  discardDraft: postCarePlansByIdCancel,
 }
+// Q-449: người lập tự bỏ bản Nháp của mình (discardDraft) không cần lý do; bỏ bản khác (cancel) vẫn bắt buộc lý do
 const LABELS = {
+  discardDraft: 'Bỏ bản nháp',
   retract: 'Rút lại',
   approve: 'Duyệt',
   return: 'Trả lại',
-  cancel: 'Hủy bản sửa',
+  cancel: 'Bỏ bản sửa',
 }
+const DISCARDS = ['discardDraft', 'cancel']
 const NO_REASON = ['approve', 'retract']
 
 // currentPlanId, currentEffectiveFrom: kế hoạch đang áp dụng, để hiện thay đổi và dải báo bản nháp (FR-008, Q-447)
@@ -54,6 +58,7 @@ export function CarePlanDetail({
   Description = 'p',
 }) {
   const [cancelOpen, setCancelOpen] = useState(false)
+  const [cancelMode, setCancelMode] = useState('cancel')
   const [cancelReason, setCancelReason] = useState('')
   const [cancelError, setCancelError] = useState(false)
   const [itemsDirty, setItemsDirty] = useState(false)
@@ -168,15 +173,17 @@ export function CarePlanDetail({
     }
   }
   function confirmCancel() {
-    if (!cancelReason.trim()) {
+    const withoutReason = cancelMode === 'discardDraft'
+    if (!withoutReason && !cancelReason.trim()) {
       setCancelError(true)
       return
     }
     setCancelOpen(false)
-    command(COMMANDS.cancel, { reason: cancelReason.trim() })
+    command(COMMANDS.cancel, withoutReason ? {} : { reason: cancelReason.trim() })
   }
   function transition(name) {
-    if (name === 'cancel') {
+    if (DISCARDS.includes(name)) {
+      setCancelMode(name)
       setCancelReason('')
       setCancelError(false)
       setCancelOpen(true)
@@ -229,7 +236,7 @@ export function CarePlanDetail({
       .map((name) => (
         <Button
           key={name}
-          variant={name === 'approve' ? 'default' : name === 'cancel' ? 'destructive' : 'outline'}
+          variant={name === 'approve' ? 'default' : DISCARDS.includes(name) ? 'destructive' : 'outline'}
           disabled={busy || problem?.status === 412}
           onClick={() => transition(name)}
         >
@@ -344,7 +351,7 @@ export function CarePlanDetail({
               busy={busy || problem?.status === 412}
               onSave={(items) => command(putCarePlansByIdItems, items, true)}
               onSubmitForApproval={isAllowed(plan, 'submit') ? sendForApproval : undefined}
-              leading={commandButtons(['cancel'])}
+              leading={commandButtons(DISCARDS)}
               onDirtyChange={setItemsDirty}
             />
           ) : (
@@ -398,26 +405,32 @@ export function CarePlanDetail({
           </div>
           {reasonAlert}
           <div className="flex flex-wrap justify-end gap-3">
-            {commandButtons(['cancel', 'retract', 'return', 'approve'])}
+            {commandButtons([...DISCARDS, 'retract', 'return', 'approve'])}
           </div>
         </footer>
       )}
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
         <DialogContent role="alertdialog" className="sm:max-w-md">
-          <DialogTitle className="type-title">Hủy bản sửa này?</DialogTitle>
+          <DialogTitle className="type-title">
+            {cancelMode === 'discardDraft' ? 'Bỏ bản nháp này?' : 'Bỏ bản sửa này?'}
+          </DialogTitle>
           <DialogDescription>
-            Kế hoạch đang áp dụng giữ nguyên. Mọi phần đã soạn trong bản này, kể cả phần người khác đã lưu, sẽ bị bỏ.
+            {cancelMode === 'discardDraft'
+              ? 'Kế hoạch đang áp dụng giữ nguyên. Phần đã soạn trong bản nháp sẽ bị bỏ.'
+              : 'Kế hoạch đang áp dụng giữ nguyên. Mọi phần đã soạn trong bản này, kể cả phần người khác đã lưu, sẽ bị bỏ.'}
           </DialogDescription>
-          <CareField
-            label="Lý do hủy"
-            value={cancelReason}
-            onChange={setCancelReason}
-            type="textarea"
-            maxLength={2000}
-          />
+          {cancelMode !== 'discardDraft' && (
+            <CareField
+              label="Lý do bỏ bản sửa"
+              value={cancelReason}
+              onChange={setCancelReason}
+              type="textarea"
+              maxLength={2000}
+            />
+          )}
           {cancelError && (
             <p role="alert" className="type-body-sm text-destructive">
-              Nhập lý do hủy.
+              Nhập lý do bỏ bản sửa.
             </p>
           )}
           <div className="flex justify-end gap-3">
@@ -425,7 +438,7 @@ export function CarePlanDetail({
               Quay lại
             </Button>
             <Button variant="destructive" disabled={busy} onClick={confirmCancel}>
-              Hủy bản sửa
+              {LABELS[cancelMode]}
             </Button>
           </div>
         </DialogContent>

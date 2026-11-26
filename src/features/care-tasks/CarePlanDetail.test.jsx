@@ -120,17 +120,18 @@ it('FR_004_412HienGiaTriMoiVaTaiLaiKhongGhiDe', async () => {
   expect(api.calls('PUT', '/care-plans/17/items')).toHaveLength(1)
 })
 
-it('FR_003_huyBanSua_hopXacNhanCoLyDoHuy', async () => {
+it('FR_003_boBanSuaNguoiKhac_hopXacNhanCoLyDo_Q449', async () => {
+  // Q-449: bản Nháp của người khác (allowedCommands có cancel) vẫn bắt buộc lý do
   api.on('POST', '/care-plans/17/cancel', json(200, null))
   render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
-  fireEvent.click(await screen.findByRole('button', { name: 'Hủy bản sửa' }))
-  const ask = await screen.findByRole('alertdialog', { name: 'Hủy bản sửa này?' })
+  fireEvent.click(await screen.findByRole('button', { name: 'Bỏ bản sửa' }))
+  const ask = await screen.findByRole('alertdialog', { name: 'Bỏ bản sửa này?' })
   expect(within(ask).getByText(/Kế hoạch đang áp dụng giữ nguyên/)).toBeInTheDocument()
-  fireEvent.click(within(ask).getByRole('button', { name: 'Hủy bản sửa' }))
-  expect(await within(ask).findByText('Nhập lý do hủy.')).toBeInTheDocument()
+  fireEvent.click(within(ask).getByRole('button', { name: 'Bỏ bản sửa' }))
+  expect(await within(ask).findByText('Nhập lý do bỏ bản sửa.')).toBeInTheDocument()
   expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(0)
-  fireEvent.change(within(ask).getByLabelText('Lý do hủy'), { target: { value: 'Bác sĩ giữ kế hoạch cũ' } })
-  fireEvent.click(within(ask).getByRole('button', { name: 'Hủy bản sửa' }))
+  fireEvent.change(within(ask).getByLabelText('Lý do bỏ bản sửa'), { target: { value: 'Bác sĩ giữ kế hoạch cũ' } })
+  fireEvent.click(within(ask).getByRole('button', { name: 'Bỏ bản sửa' }))
   await waitFor(() => expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(1))
   expect(JSON.parse(api.calls('POST', '/care-plans/17/cancel')[0][1].body)).toEqual({
     reason: 'Bác sĩ giữ kế hoạch cũ',
@@ -191,4 +192,35 @@ it('Q448_soanKeHoach_hienCanCuDanhGiaGanNhatCuaBacSi', async () => {
   expect(within(basis).getByText('Đi lại phải có người đỡ')).toBeInTheDocument()
   expect(within(basis).getByText('Yếu chân trái sau ngã')).toBeInTheDocument()
   expect(within(basis).getByText(/Lê Văn Minh/)).toBeInTheDocument()
+})
+
+it('Q449_nguoiLapBoBanNhapCuaMinh_khongHoiLyDo', async () => {
+  api.on(
+    'GET',
+    '/care-plans/17',
+    json(200, { ...plan, allowedCommands: ['submit', 'replaceItems', 'discardDraft'] }, { ETag: '"4"' }),
+  )
+  api.on('POST', '/care-plans/17/cancel', json(200, null))
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Bỏ bản nháp' }))
+  const dialog = await screen.findByRole('alertdialog')
+  expect(within(dialog).getByText('Bỏ bản nháp này?')).toBeInTheDocument()
+  expect(within(dialog).queryByRole('textbox')).not.toBeInTheDocument()
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Bỏ bản nháp' }))
+  await waitFor(() => expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(1))
+  expect(JSON.parse(api.calls('POST', '/care-plans/17/cancel')[0][1].body)).toEqual({})
+})
+
+it('Q449_boBanCuaNguoiKhac_vanBatBuocLyDo', async () => {
+  api.on(
+    'GET',
+    '/care-plans/17',
+    json(200, { ...plan, allowedCommands: ['cancel'], status: 'PENDING_APPROVAL' }, { ETag: '"4"' }),
+  )
+  render(<CarePlanDetail planId={17} onChanged={vi.fn()} />)
+  fireEvent.click(await screen.findByRole('button', { name: 'Bỏ bản sửa' }))
+  const dialog = await screen.findByRole('alertdialog')
+  fireEvent.click(within(dialog).getByRole('button', { name: 'Bỏ bản sửa' }))
+  expect(await within(dialog).findByText('Nhập lý do bỏ bản sửa.')).toBeInTheDocument()
+  expect(api.calls('POST', '/care-plans/17/cancel')).toHaveLength(0)
 })
