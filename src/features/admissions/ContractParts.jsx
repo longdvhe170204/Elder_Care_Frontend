@@ -637,7 +637,7 @@ export function ContractSheet({ contract, residentId: presetResidentId = null, r
 
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="overflow-y-auto p-6 sm:max-w-3xl">
+      <SheetContent side="center" className="overflow-y-auto p-6 sm:max-w-5xl">
         <SheetTitle>{editing ? 'Sửa hợp đồng nháp' : 'Lập hợp đồng nháp'}</SheetTitle>
         <SheetDescription>
           Đúng một dịch vụ chăm sóc theo mức của hợp đồng; người cao tuổi phải có người đại diện.

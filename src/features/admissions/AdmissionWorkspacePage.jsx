@@ -8,7 +8,7 @@ import {
   getResidentsByIdInitialHealthRecord,
 } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PermissionDeniedState } from '@/common/PageState'
@@ -18,7 +18,7 @@ import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
-import { BedAllocationForm } from '../beds/BedAllocationForm'
+import { BedAllocationSheet } from '../beds/BedAllocationSheet'
 import { ResidentDetail, ResidentPartSheet } from '../residents/ResidentDetail'
 import { GENDER_LABELS } from '../residents/residentLabels'
 import {
@@ -432,16 +432,6 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                               )}
                             </span>
                             {showNote && <span className="type-caption text-muted-foreground">{step.note}</span>}
-                            {/* Chưa có giường phù hợp thì đưa vào danh sách chờ (BF-01 bước 7b; audit 2026-11-18) */}
-                            {step.key === 'bed' && step.view === 'mine' && (
-                              <Button
-                                variant="link"
-                                className="h-auto self-start p-0 text-left whitespace-normal type-caption"
-                                onClick={() => onNavigate('waiting-list')}
-                              >
-                                Chưa có giường phù hợp: mở Danh sách chờ
-                              </Button>
-                            )}
                           </span>
                           <span className={ACTION}>{rightOf(step)}</span>
                         </li>
@@ -487,6 +477,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
         open={
           !!sheet &&
           ![
+            'bed',
             'new-contract',
             'edit-contract',
             'edit-application',
@@ -510,31 +501,6 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
               Title={SheetTitle}
               Description={SheetDescription}
             />
-          )}
-          {sheet?.kind === 'bed' && (
-            <>
-              <SheetHeader className="p-0">
-                <SheetTitle>{sheet.afterContract ? 'Chọn giường cho hợp đồng vừa lập' : 'Phân bổ giường'}</SheetTitle>
-                <SheetDescription>
-                  {sheet.afterContract ? `${name}. Hợp đồng nháp đã lưu; ngày vào lấy từ hợp đồng, sửa được.` : name}
-                </SheetDescription>
-              </SheetHeader>
-              <BedAllocationForm
-                defaultDate={sheet.defaultDate}
-                resident={{
-                  id: resident.id,
-                  fullName: name,
-                  profileCode: resident.profileCode,
-                  status: resident.status,
-                }}
-                onSaved={() => changed('Đã phân bổ giường')}
-              />
-              {sheet.afterContract && (
-                <Button variant="ghost" className="h-11 self-end" onClick={() => changed()}>
-                  Để sau
-                </Button>
-              )}
-            </>
           )}
           {sheet?.kind === 'contract' && contract && (
             <ContractDetail
@@ -570,6 +536,17 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
             )
               setSheet({ kind: 'bed', afterContract: true, defaultDate: saved.startDate })
           }}
+        />
+      )}
+      {/* Phân bổ giường: khung riêng xl (audit 2026-11-26); chưa có giường phù hợp thì mở Danh sách chờ trong khung (BF-01 bước 7b) */}
+      {sheet?.kind === 'bed' && (
+        <BedAllocationSheet
+          afterContract={sheet.afterContract}
+          defaultDate={sheet.defaultDate}
+          resident={{ id: resident.id, fullName: name, profileCode: resident.profileCode, status: resident.status }}
+          onClose={() => changed()}
+          onSaved={() => changed('Đã phân bổ giường')}
+          onOpenWaitingList={() => onNavigate('waiting-list')}
         />
       )}
       {/* Sửa hợp đồng nháp ngay trên màn này, không chuyển sang màn Hợp đồng (audit 2026-11-18) */}

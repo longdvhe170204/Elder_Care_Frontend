@@ -178,7 +178,9 @@ export function NewAdmissionSheet({
 
   return (
     <Sheet open onOpenChange={(next) => !next && requestClose()}>
-      <SheetContent className="gap-0 p-0 sm:max-w-xl">{body}</SheetContent>
+      <SheetContent side="center" className="gap-0 p-0 sm:max-w-3xl">
+        {body}
+      </SheetContent>
       <DiscardChangesDialog
         open={confirmClose}
         description={

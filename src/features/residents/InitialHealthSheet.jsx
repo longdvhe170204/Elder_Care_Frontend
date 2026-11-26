@@ -413,7 +413,7 @@ export function InitialHealthSheet({ residentId, residentName, allowedCommands =
 
   return (
     <Sheet open onOpenChange={(next) => !next && requestClose()}>
-      <SheetContent className="gap-0 p-0 sm:max-w-xl">
+      <SheetContent side="center" className="gap-0 p-0 sm:max-w-3xl">
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex shrink-0 items-center gap-3 border-b px-6 pt-6 pb-4 pr-12">
             <SheetTitle className="type-title">{`Sức khỏe ban đầu của ${residentName}`}</SheetTitle>

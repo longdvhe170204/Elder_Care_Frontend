@@ -418,7 +418,7 @@ export function AssessmentSheet({
 
   return (
     <Sheet open onOpenChange={(next) => !next && requestClose()}>
-      <SheetContent className="gap-0 p-0 sm:max-w-4xl">
+      <SheetContent side="center" className="gap-0 p-0 sm:max-w-5xl">
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex shrink-0 flex-col gap-1 border-b px-6 pt-6 pb-4 pr-12">
             <div className="flex flex-wrap items-center gap-3">
