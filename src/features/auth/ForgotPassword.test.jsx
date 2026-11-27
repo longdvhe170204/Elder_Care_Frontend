@@ -25,7 +25,7 @@ describe('ForgotPassword', () => {
     render(<LoginPage onNavigate={vi.fn()} />)
 
     await waitFor(() => expect(api.calls('GET', '/auth/password-reset/availability')).toHaveLength(1))
-    expect(screen.queryByRole('button', { name: 'Quên mật khẩu' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Quên mật khẩu?' })).not.toBeInTheDocument()
     expect(screen.getByText(/Nhân viên liên hệ Quản lý viện/)).toBeInTheDocument()
   })
 
@@ -35,7 +35,7 @@ describe('ForgotPassword', () => {
     api.on('POST', '/auth/password-reset/confirm', empty(204))
     render(<LoginPage onNavigate={vi.fn()} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Quên mật khẩu' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Quên mật khẩu?' }))
     fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value: ' nt-a ' } })
     fireEvent.click(screen.getByRole('button', { name: 'Gửi mã' }))
 
@@ -62,7 +62,7 @@ describe('ForgotPassword', () => {
     )
     render(<LoginPage onNavigate={vi.fn()} />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Quên mật khẩu' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Quên mật khẩu?' }))
     fireEvent.change(screen.getByLabelText('Tên đăng nhập'), { target: { value: 'nt-a' } })
     fireEvent.click(screen.getByRole('button', { name: 'Gửi mã' }))
     fireEvent.change(await screen.findByLabelText('Mã trong tin nhắn'), { target: { value: '000000' } })

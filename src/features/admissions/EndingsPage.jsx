@@ -14,6 +14,7 @@ import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { END_CASES, ENDING_STATUS, labelOf } from './admissionLabels'
 import { CreateEndingSheet, EndingView } from './EndingParts'
+import { EndingRequests } from './EndingRequests'
 
 // Kết thúc lưu trú (004 T061, T107; US7, FR-062 → FR-067): bảng hồ sơ kết thúc lọc theo trạng thái (GET /residency-endings,
 // "Đổi api" 004 A duyệt 2026-11-07), chọn dòng để xem điều kiện (a) → (h), bàn giao, ngoại lệ; lập mới thì mở ngay hồ sơ
@@ -25,16 +26,21 @@ const FILTERS = [
   ['CANCELLED', 'Đã hủy'],
 ]
 
-export function EndingsPage({ role, onNavigate }) {
+// endingId (demo 2026-11-26): mở từ nút Xử lý của thông báo, hiện ngay hồ sơ đó (chuyển sang nhóm trạng thái của hồ sơ)
+export function EndingsPage({ role, onNavigate, endingId = null, requestId = null }) {
   const { can } = usePermissions()
   const [filter, setFilter] = useState('PREPARING')
   const [endings, setEndings] = useState(null)
   const [ending, setEnding] = useState(null)
   const [failure, setFailure] = useState(null)
   const [creating, setCreating] = useState(false)
+  // Yêu cầu của người thân đang được lập hồ sơ; version đổi thì bảng yêu cầu đọc lại (lập trực tiếp cũng đóng yêu cầu)
+  const [fromRequest, setFromRequest] = useState(null)
+  const [version, setVersion] = useState(0)
   const [announcement, setAnnouncement] = useState('')
   const [names, setNames] = useState({})
   const requested = useRef(new Set())
+  const wanted = useRef(endingId)
 
   const loadNames = useCallback((rows) => {
     for (const id of new Set(rows.map((e) => e.residentId))) {
@@ -53,6 +59,12 @@ export function EndingsPage({ role, onNavigate }) {
           setEndings(data)
           setFailure(null)
           loadNames(data)
+          const found = wanted.current && data.find((e) => e.id === wanted.current)
+          if (found) {
+            wanted.current = null
+            setFilter(found.status)
+            setEnding(found)
+          }
         })
         .catch((e) => {
           setEndings([])
@@ -93,17 +105,26 @@ export function EndingsPage({ role, onNavigate }) {
           )
         }
       />
-      {creating && (
+      {(creating || fromRequest) && (
         <CreateEndingSheet
           role={role}
-          onClose={() => setCreating(false)}
+          request={fromRequest}
+          onClose={() => {
+            setCreating(false)
+            setFromRequest(null)
+          }}
           onDone={(created) => {
             setCreating(false)
+            setFromRequest(null)
+            setVersion((v) => v + 1)
             setAnnouncement('Đã lập hồ sơ kết thúc lưu trú')
             setEnding(created)
             load()
           }}
         />
+      )}
+      {role !== 'DOCTOR' && can('RESIDENCY_END_DEATH', 'CREATE') && (
+        <EndingRequests key={version} requestId={requestId} onCreate={setFromRequest} onRejected={setAnnouncement} />
       )}
       <ToggleGroup
         variant="filter"

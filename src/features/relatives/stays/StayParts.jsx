@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
 import { problemOf } from '@/common/problem'
@@ -405,24 +406,18 @@ export function RegisterStaySheet({ onClose, onDone }) {
         </SheetDescription>
         <form onSubmit={submit} noValidate className="mt-4 flex flex-col gap-4">
           <FieldGroup>
-            <Field data-invalid={!!show('resident') || undefined}>
-              <FieldLabel htmlFor="stay-resident">Người cao tuổi</FieldLabel>
-              <select
-                id="stay-resident"
-                value={residentId}
-                onChange={(e) => pickResident(e.target.value)}
-                aria-invalid={!!show('resident') || undefined}
-                className={SELECT}
-              >
-                <option value="">{residents === null ? 'Đang tải…' : 'Chọn người'}</option>
-                {(residents ?? []).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {`${r.personalInfo.fullName}, ${r.profileCode}`}
-                  </option>
-                ))}
-              </select>
-              {show('resident') && <FieldError>{errors.resident}</FieldError>}
-            </Field>
+            {/* Demo 2026-11-26 (E): ô tìm theo tên hoặc mã hồ sơ thay dropdown */}
+            <ResidentCombobox
+              id="stay-resident"
+              options={(residents ?? []).map((r) => ({
+                value: String(r.id),
+                label: `${r.personalInfo.fullName} (${r.profileCode})`,
+              }))}
+              value={residentId}
+              onChange={pickResident}
+              loading={residents === null}
+              error={show('resident') && errors.resident}
+            />
             <Field data-invalid={!!show('member') || undefined}>
               <FieldLabel htmlFor="stay-member">Người thân ở lại</FieldLabel>
               <select

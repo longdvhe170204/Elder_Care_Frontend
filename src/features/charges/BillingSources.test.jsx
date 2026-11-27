@@ -1,4 +1,5 @@
 import { expect, it, vi } from 'vitest'
+import { pickResident } from '@/test/pickResident'
 import { fireEvent, render, screen } from '@testing-library/react'
 import { BillingSources } from './BillingSources'
 
@@ -26,9 +27,8 @@ vi.mock('@/api', () => ({
 
 it('FR_005_keepsSourcesWithExistingCostsAndDoesNotPreselect', async () => {
   render(<BillingSources />)
-  await screen.findByRole('option', { name: 'Nguyễn Văn Tư (NCT-0042)' })
   expect(screen.queryByLabelText('Mã người cao tuổi')).toBeNull()
-  fireEvent.change(screen.getByLabelText('Người cao tuổi'), { target: { value: '42' } })
+  await pickResident('Nguyễn Văn Tư', { label: 'Người cao tuổi' })
   fireEvent.change(screen.getByLabelText('Từ ngày'), { target: { value: '2026-11-01' } })
   fireEvent.change(screen.getByLabelText('Đến ngày'), { target: { value: '2026-11-01' } })
   fireEvent.click(screen.getByRole('button', { name: 'Tra cứu nguồn' }))

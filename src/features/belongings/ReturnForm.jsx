@@ -39,6 +39,7 @@ export function ReturnForm({
   locationName,
   onConfirmationCreated,
   onDone,
+  allowOtherRecipient = false,
 }) {
   const [chosen, setChosen] = useState({})
   const [v, setV] = useState({
@@ -236,7 +237,7 @@ export function ReturnForm({
           label="Người nhận"
           value={v.type}
           onChange={set('type')}
-          options={office ? RECIPIENTS : RECIPIENTS.filter((r) => r.value !== 'OTHER_PERSON')}
+          options={office && allowOtherRecipient ? RECIPIENTS : RECIPIENTS.filter((r) => r.value !== 'OTHER_PERSON')}
           error={errors.type}
         />
         {!office && consentItems && (

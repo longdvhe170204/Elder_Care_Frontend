@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { amountText, confirmationFit, holderLabel, kindLabel, statusLabel, toOffsetIso } from './belongingLabels'
+import {
+  amountText,
+  confirmationFit,
+  holderLabel,
+  kindLabel,
+  pickLabel,
+  statusLabel,
+  toOffsetIso,
+} from './belongingLabels'
 
 // Chép luật ReturnRecipient.matches của backend: lọc ở web chỉ để gợi ý, backend kiểm lại khi trả (FR-017)
 describe('confirmationFit (FR-017, Q-253)', () => {
@@ -41,7 +49,11 @@ describe('confirmationFit (FR-017, Q-253)', () => {
   })
 
   it('FR_017_xacNhanGomNhieuDoHon_traVeDoConLai', () => {
-    expect(confirmationFit(conf({ belongingIds: [18, 19] }), nam())).toEqual({ fits: true, reason: null, extraIds: [19] })
+    expect(confirmationFit(conf({ belongingIds: [18, 19] }), nam())).toEqual({
+      fits: true,
+      reason: null,
+      extraIds: [19],
+    })
   })
 
   it('Q_253_nguoiCaoTuoi_chiXetCoNguoiCaoTuoi', () => {
@@ -78,5 +90,15 @@ describe('belongingLabels', () => {
 
   it('NFR_11_guiThoiDiemDangISO_cong7', () => {
     expect(toOffsetIso('2026-11-06T09:30')).toBe('2026-11-06T09:30:00+07:00')
+  })
+})
+
+// Demo 2026-11-26 (E): dòng mô tả đồ khi chọn trả, xác nhận người nhận khác không hiện mã đồ gửi
+describe('pickLabel', () => {
+  it('tenSoLuongViTri_khongCoMaDo', () => {
+    const item = { id: 9004, description: 'Sổ khám bệnh', quantity: 2, unit: 'cuốn', storageLocationId: 3 }
+    expect(pickLabel(item, () => 'Két văn phòng hành chính')).toBe(
+      'Sổ khám bệnh, ' + amountText(item) + ', Két văn phòng hành chính',
+    )
   })
 })

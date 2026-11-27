@@ -11,17 +11,18 @@ import { ResidentAvatar } from '@/common/ResidentAvatar'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
-import { createAlert, loadIncidentTypes } from '@/features/alerts/alerts'
-import { getIncidentResidents } from '@/api/api007'
+import { createAlert, loadIncidentTypes, runAlertCommand } from '@/features/alerts/alerts'
+import { getAlerts, getIncidentResidents, postEmergencyAssist } from '@/api/api007'
+import { typeLabel } from '@/features/alerts/alertView'
 import { LevelChoices } from './CaseFormParts'
 import { CasePage } from './CasePage'
 import { IncidentTypePicker } from './IncidentTypePicker'
-import { loadFloorChoices, loadResidentChoices, recordIncident, runIncidentCommand } from './incidents'
-import { LEVEL_LABEL, needsLowerReason, presetLevel, vietnamIso, vietnamNowLocal } from './incidentView'
+import { loadFloorChoices, loadOpenIncidents, loadResidentChoices, recordIncident, runIncidentCommand } from './incidents'
+import { FAMILY_METHODS, LEVEL_LABEL, needsLowerReason, presetLevel, vietnamIso, vietnamNowLocal } from './incidentView'
 
 // Báo sự việc (đề xuất 2026-11-24, góp ý demo BF-06): một form thay cho "Tạo cảnh báo" và "Ghi nhận sự cố" vốn giống hệt
-// nhau. Người dùng trả lời "Đã xảy ra chưa?": đã xảy ra thì ghi sự cố (BF-06 bước 7, FR-040), mới là dấu hiệu cần người xem
-// thì tạo cảnh báo thủ công (bước 1, FR-026). Loại không phải sức khỏe (đồ gửi, cơ sở vật chất) và người không có quyền
+// nhau. Trang Cảnh báo mở form "Tạo cảnh báo", trang Sự cố mở form "Ghi sự cố"; đổi qua lại bằng một dòng nhỏ khi cả hai làm được
+// (bước 1, FR-026). Loại không phải sức khỏe (đồ gửi, cơ sở vật chất) và người không có quyền
 // tạo cảnh báo luôn ghi sự cố; người chỉ có quyền tạo cảnh báo luôn tạo cảnh báo. Mức chọn sẵn theo mặc định của loại,
 // mức thấp hơn mặc định của sự cố cần lý do (FR-042). Mô tả để trống thì ghép tên loại và nơi xảy ra (backend bắt buộc).
 
@@ -33,6 +34,7 @@ const AWAY_STATUS_TEXT = {
 }
 
 const RESIDENT_TILES_MAX = 9
+const OPEN_ALERT = ['NEW', 'ESCALATED', 'RECEIVED', 'IN_PROGRESS']
 const SEARCH_DELAY_MS = 300
 
 // Chọn người cao tuổi (đề xuất 2026-11-24): ô tìm luôn hiện, con trỏ đặt sẵn. Gõ tên hoặc mã thì lọc ngay các cụ trong
@@ -82,7 +84,7 @@ function ResidentPicker({ residents, currentFloorId, onPick }) {
       <Input
         autoFocus
         className="h-11 bg-card"
-        placeholder="Gõ tên hoặc mã để tìm"
+        placeholder="Gõ tên, mã hoặc số phòng để tìm"
         aria-label="Tìm người cao tuổi"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -116,7 +118,8 @@ function ResidentPicker({ residents, currentFloorId, onPick }) {
   )
 }
 
-function recipientsText(kind, level) {
+function recipientsText(kind, level, later = false) {
+  if (later) return 'Chỉ lưu hồ sơ, báo thông tin cho Điều dưỡng phụ trách, Trưởng tầng; không báo khẩn, không leo thang.'
   if (kind === 'alert') return 'Điều dưỡng phụ trách tiếp nhận; quá hạn tự báo Trưởng tầng, Bác sĩ trực.'
   if (level === 'CRITICAL') return 'Báo ngay Bác sĩ trực, Trưởng tầng, Quản lý viện, người liên hệ chính.'
   return 'Báo người phụ trách theo mức; mở được thẻ khẩn cấp, chuyển viện ở sự cố.'
@@ -137,7 +140,14 @@ function Section({ title, children, className }) {
  * onDone({ kind: 'incident' | 'alert', id, level, message }): đã lưu. onOpenIncident(id): mở sự cố Khẩn cấp đang có của
  * người này (FR-041).
  */
-export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'report-event' }) {
+export function ReportForm({
+  onClose,
+  onDone,
+  onOpenIncident,
+  onOpenAlert,
+  returnFocusId = 'report-event',
+  defaultKind = 'incident',
+}) {
   const { can } = usePermissions()
   const canAlert = can('ALERT_HANDLING', 'CREATE')
   const canIncident = can('INCIDENT_EMERGENCY', 'CREATE')
@@ -149,7 +159,8 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
   const [noResident, setNoResident] = useState(false)
   const [floorId, setFloorId] = useState('')
   const [typeId, setTypeId] = useState('')
-  const [happened, setHappened] = useState(true)
+  // Ghi thành cảnh báo hay sự cố: chọn sẵn theo màn đang mở (Cảnh báo → cảnh báo, Sự cố → sự cố), đổi được bằng hai nút
+  const [wantAlert, setWantAlert] = useState(defaultKind === 'alert')
   const [level, setLevel] = useState('')
   const [note, setNote] = useState('')
   const [place, setPlace] = useState('')
@@ -158,7 +169,17 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
   const [discoveredAt, setDiscoveredAt] = useState(() => vietnamNowLocal())
   const [occurredAt, setOccurredAt] = useState('')
   const [initialResponse, setInitialResponse] = useState('')
+  // Ghi nhận sau (BF-06): việc đã xảy ra và đã xử lý xong, chỉ lưu hồ sơ, không báo khẩn; phải nói rõ đã báo người nhà chưa
+  const [status, setStatus] = useState('')
+  const [resolution, setResolution] = useState('')
+  const [needHelp, setNeedHelp] = useState(false)
+  const [familyState, setFamilyState] = useState('')
+  const [familyMethod, setFamilyMethod] = useState('PHONE')
+  const [familyAt, setFamilyAt] = useState(() => vietnamNowLocal())
   const [existingId, setExistingId] = useState(null)
+  // Người này đang có cảnh báo hoặc sự cố mở: hỏi ghi vào hồ sơ đó để khỏi trùng (BF-06)
+  const [found, setFound] = useState({ for: null, list: [] })
+  const [ignoredFor, setIgnoredFor] = useState(null)
   const [submitted, setSubmitted] = useState(false)
   const [problem, setProblem] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -189,24 +210,61 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
   }, [])
 
   const residentId = picked?.id ?? null
+  const allOpen = found.for === residentId ? found.list : []
+  // Mới nhất trước; chỉ hiện 2 hồ sơ gần nhất để khung hỏi gọn (BF-06)
+  const openRecords = [...allOpen].sort((a, b) => b.id - a.id).slice(0, 2)
+  const moreOpen = allOpen.length - openRecords.length
+  const ignoreOpen = ignoredFor === residentId
+
+  useEffect(() => {
+    if (residentId == null) return undefined
+    let live = true
+    Promise.all([
+      getAlerts({ query: { residentId } }).then(
+        ({ data }) =>
+          (data ?? [])
+            .filter((a) => a.residentId === residentId && OPEN_ALERT.includes(a.status))
+            .map((a) => ({ kind: 'alert', id: a.id, label: `cảnh báo "${typeLabel(a.type)}"` })),
+        () => [],
+      ),
+      loadOpenIncidents(residentId).then((list) =>
+        list.map((i) => ({ kind: 'incident', id: i.id, label: `sự cố SC-${i.id}` })),
+      ),
+    ]).then((lists) => live && setFound({ for: residentId, list: lists.flat() }))
+    return () => {
+      live = false
+    }
+  }, [residentId])
   const currentFloorId = floors.find((f) => f.current)?.id ?? null
   const activeTypes = (types ?? []).filter((t) => t.active !== false && t.status !== 'INACTIVE')
   const choosable = noResident ? activeTypes.filter((t) => t.allowsNoResident) : activeTypes
   const type = activeTypes.find((t) => String(t.id) === typeId) ?? null
   const answered = residentId != null || noResident
-  // Có hỏi "Đã xảy ra chưa?" không: chỉ khi làm được cả hai và việc là sức khỏe của một người cao tuổi
+  // Có cho chọn Cảnh báo hay Sự cố không: chỉ khi làm được cả hai và việc là sức khỏe của một người cao tuổi
   const ask = canAlert && canIncident && !!type && !type.nonHealth && residentId != null
   // Chỉ tạo được cảnh báo (không có quyền ghi sự cố) thì luôn là cảnh báo; còn lại mặc định ghi sự cố
   const alertOnly = canAlert && !canIncident
-  const kind = alertOnly || (ask && !happened) ? 'alert' : 'incident'
+  const kind = alertOnly || (canAlert && canIncident && wantAlert && (!type || !type.nonHealth)) ? 'alert' : 'incident'
+  // Tình trạng chỉ hỏi khi ghi sự cố cho một người cao tuổi; không chọn sẵn (BF-06): ĐANG XỬ LÝ hay ĐÃ XỬ LÝ XONG
+  const needsStatus = kind === 'incident' && residentId != null
+  const isLater = needsStatus && status === 'DONE'
+  // Chỉ người có quyền xử lý sự cố mới đóng được; người khác chỉ Lưu, chờ người có chuyên môn đóng
+  const canClose = can('INCIDENT_EMERGENCY', 'UPDATE')
+  const closeNow = isLater && canClose
+  // Cụ đang ở bệnh viện: không tạo cảnh báo hay ghi sự cố mới, chỉ ghi nhận sau việc đã xảy ra trước đó (BF-06)
+  const atHospital = picked?.status === 'HOSPITALIZED' && !(kind === 'incident' && isLater)
   const lowerNeeded = kind === 'incident' && needsLowerReason(level, type)
   const description = note.trim() || [type?.name, place.trim()].filter(Boolean).join(', ')
   const errors = {
     resident: !answered || (kind === 'alert' && residentId == null),
+    hospital: atHospital,
     floor: noResident && !floorId,
     type: !type,
     level: !level,
     lowerReason: lowerNeeded && !lowerReason.trim(),
+    family: isLater && !familyState,
+    status: needsStatus && !status,
+    resolution: closeNow && !resolution.trim(),
   }
 
   function pickType(value) {
@@ -225,13 +283,21 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
     try {
       if (kind === 'alert') {
         const alert = await createAlert({ residentId, incidentTypeId: type.id, level, description })
+        // Người có quyền xử lý tạo thì coi như đã nhận: khỏi bấm Tiếp nhận (BF-06); lỗi nhận không làm mất cảnh báo đã tạo
+        let received = false
+        if (canClose && alert?.id != null && !alert.merged) {
+          received = await runAlertCommand(alert.id, 'receive').then(
+            () => true,
+            () => false,
+          )
+        }
         onDone({
           kind,
           id: alert?.id ?? null,
           level,
           message: alert?.merged
             ? `Đã gộp vào cảnh báo đang mở của ${who}, lần thứ ${alert.occurrenceCount}`
-            : `Đã tạo cảnh báo ${type.name.toLowerCase()}, ${who}`,
+            : `Đã tạo cảnh báo ${type.name.toLowerCase()}, ${who}${received ? ', bạn đã nhận' : ''}`,
         })
         return
       }
@@ -247,13 +313,27 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
         ...(initialResponse.trim() ? { initialResponse: initialResponse.trim() } : {}),
         ...(occurredAt ? { occurredAt: vietnamIso(occurredAt) } : {}),
         ...(lowerNeeded ? { lowerLevelReason: lowerReason.trim() } : {}),
-        ...(separate ? { createDespiteOpen: true } : {}),
+        ...(separate || ignoreOpen ? { createDespiteOpen: true } : {}),
+        ...(isLater
+          ? {
+              recordedLater: true,
+              ...(closeNow ? { closeNow: true, resolution: resolution.trim() } : {}),
+              familyNotice:
+                familyState === 'INFORMED'
+                  ? { state: 'INFORMED', method: familyMethod, at: vietnamIso(familyAt) }
+                  : { state: 'NOT_YET' },
+            }
+          : {}),
       })
+      // Cần thêm người đến giúp: gửi thêm yêu cầu Cần hỗ trợ (cùng cách bấm nút Cần hỗ trợ); lỗi không làm mất sự cố đã ghi
+      if (needHelp && !isLater) {
+        await postEmergencyAssist({ headers: { 'Idempotency-Key': crypto.randomUUID() } }).catch(() => null)
+      }
       onDone({
         kind,
         id: recorded?.incident?.id ?? recorded?.id ?? null,
         level,
-        message: `Đã ghi sự cố ${type.name.toLowerCase()}, ${who}`,
+        message: `${closeNow ? 'Đã ghi và đóng' : isLater ? 'Đã ghi nhận sau' : 'Đã ghi'} sự cố ${type.name.toLowerCase()}, ${who}`,
       })
     } catch (error) {
       // FR-041: người đã có sự cố Khẩn cấp đang mở thì chỉ ra sự cố đó, không tự gộp
@@ -287,11 +367,12 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
       : level === 'LOW'
         ? ['border-border', 'text-foreground']
         : ['border-warning-foreground', 'text-warning-foreground']
+  const title = kind === 'alert' ? 'Tạo cảnh báo' : 'Ghi sự cố'
   const resultText = `${kind === 'incident' ? 'Sự cố' : 'Cảnh báo'}${level ? ` · ${LEVEL_LABEL[level]}` : ''}`
 
   return (
-    <CasePage label="Báo sự việc" backLabel="Quay lại" here="Báo sự việc" onBack={onClose} returnFocusId={returnFocusId}>
-      <h1 className="type-page text-primary">Báo sự việc</h1>
+    <CasePage label={title} backLabel="Quay lại" here={title} onBack={onClose} returnFocusId={returnFocusId}>
+      <h1 className="type-page text-primary">{title}</h1>
       <form
         noValidate
         onSubmit={(event) => {
@@ -376,9 +457,33 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
             {picked && AWAY_STATUS_TEXT[picked.status] && (
               <Alert role="note" variant="attention">
                 {picked.name} {AWAY_STATUS_TEXT[picked.status]}.
+                {picked.status === 'HOSPITALIZED' && ' Không tạo cảnh báo hay ghi sự cố mới; việc đã xảy ra trước đó thì chọn "Đã xử lý xong" để ghi nhận sau.'}
               </Alert>
             )}
           </Section>
+          {openRecords.length > 0 && !ignoreOpen && (
+            <Alert variant="attention" className="gap-3 p-4">
+              <p>
+                {picked?.name} đang có {openRecords.map((r) => r.label).join(', ')}
+                {moreOpen > 0 ? ` và ${moreOpen} hồ sơ khác` : ''}. Ghi vào hồ sơ đó để khỏi trùng?
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {openRecords.map((r) => {
+                  const open = r.kind === 'alert' ? onOpenAlert : onOpenIncident
+                  return (
+                    open && (
+                      <Button key={`${r.kind}-${r.id}`} type="button" className="h-11" onClick={() => open(r.id)}>
+                        Mở {r.kind === 'alert' ? 'cảnh báo' : `SC-${r.id}`} đó
+                      </Button>
+                    )
+                  )
+                })}
+                <Button type="button" variant="outline" className="h-11" onClick={() => setIgnoredFor(residentId)}>
+                  Vẫn ghi mới
+                </Button>
+              </div>
+            </Alert>
+          )}
           <Section title="Chuyện gì">
             {types ? (
               <IncidentTypePicker types={choosable} value={typeId} onChange={pickType} />
@@ -386,26 +491,36 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
               <Skeleton className="h-28 w-full" />
             )}
             {submitted && errors.type && <FieldError>Chọn chuyện gì</FieldError>}
+            {ask && (
+              <Button
+                type="button"
+                variant="link"
+                className="h-9 self-start px-0"
+                onClick={() => setWantAlert(kind !== 'alert')}
+              >
+                {kind === 'alert' ? 'Việc đã xảy ra? Ghi sự cố' : 'Việc chưa xảy ra? Tạo cảnh báo'}
+              </Button>
+            )}
           </Section>
         </div>
 
         <div className="flex min-w-0 flex-col gap-4 lg:sticky lg:top-6">
-          {ask && (
-            <Section title="Đã xảy ra chưa?">
-              <div role="group" aria-label="Đã xảy ra chưa?" className="grid grid-cols-2 gap-2">
+          {needsStatus && (
+            <Section title="Tình trạng (chọn một)">
+              <div role="group" aria-label="Tình trạng" className="grid grid-cols-2 gap-2">
                 {[
-                  [true, 'Đã xảy ra', 'Cụ đã ngã, đã nghẹn…'],
-                  [false, 'Mới là dấu hiệu', 'Cần người xem'],
+                  ['ACTIVE', 'Đang xử lý', 'Cần người xem ngay, báo theo mức'],
+                  ['DONE', 'Đã xử lý xong', 'Chỉ ghi hồ sơ, không báo khẩn'],
                 ].map(([value, label, hint]) => (
                   <Button
-                    key={label}
+                    key={value}
                     type="button"
                     variant="outline"
-                    aria-pressed={happened === value}
-                    onClick={() => setHappened(value)}
+                    aria-pressed={status === value}
+                    onClick={() => setStatus(value)}
                     className={cn(
                       'h-auto min-h-16 flex-col items-start gap-0.5 rounded-lg bg-card px-3 py-2 text-left whitespace-normal',
-                      happened === value && 'border-2 border-primary bg-accent',
+                      status === value && 'border-2 border-primary bg-accent',
                     )}
                   >
                     <span className="type-label">{label}</span>
@@ -413,6 +528,89 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
                   </Button>
                 ))}
               </div>
+              {submitted && errors.status && <FieldError>Chọn tình trạng</FieldError>}
+              {status === 'ACTIVE' && (
+                <>
+                  <p className="type-body-sm text-muted-foreground">
+                    Bác sĩ, Điều dưỡng ghi sự cố đang xử lý thì được ghi là người xử lý, không cần bấm Tiếp nhận.
+                  </p>
+                  <label className="flex items-center gap-2 type-body">
+                    <input type="checkbox" checked={needHelp} onChange={(e) => setNeedHelp(e.target.checked)} />
+                    Cần thêm người đến giúp
+                  </label>
+                </>
+              )}
+            </Section>
+          )}
+          {closeNow && (
+            <Section title="Kết quả xử lý">
+              <Field data-invalid={(submitted && errors.resolution) || undefined}>
+                <Textarea
+                  id="report-resolution"
+                  aria-label="Kết quả xử lý"
+                  rows={3}
+                  maxLength={2000}
+                  placeholder="VD: cụ ngã nhẹ, đã kiểm tra, không đau, đã đỡ về giường"
+                  value={resolution}
+                  onChange={(e) => setResolution(e.target.value)}
+                />
+                {submitted && errors.resolution && <FieldError>Nhập kết quả xử lý</FieldError>}
+              </Field>
+            </Section>
+          )}
+          {isLater && (
+            <Section title="Đã báo người nhà chưa?">
+              <div role="group" aria-label="Đã báo người nhà chưa?" className="grid grid-cols-2 gap-2">
+                {[
+                  ['INFORMED', 'Đã báo rồi', 'Ghi cách báo và lúc báo'],
+                  ['NOT_YET', 'Chưa báo', 'Gửi thông báo cho người liên hệ chính'],
+                ].map(([value, label, hint]) => (
+                  <Button
+                    key={value}
+                    type="button"
+                    variant="outline"
+                    aria-pressed={familyState === value}
+                    onClick={() => setFamilyState(value)}
+                    className={cn(
+                      'h-auto min-h-16 flex-col items-start gap-0.5 rounded-lg bg-card px-3 py-2 text-left whitespace-normal',
+                      familyState === value && 'border-2 border-primary bg-accent',
+                    )}
+                  >
+                    <span className="type-label">{label}</span>
+                    <span className="type-caption font-normal text-muted-foreground">{hint}</span>
+                  </Button>
+                ))}
+              </div>
+              {submitted && errors.family && <FieldError>Chọn đã báo người nhà chưa</FieldError>}
+              {familyState === 'INFORMED' && (
+                <div className="flex flex-col gap-3">
+                  <div role="group" aria-label="Cách báo" className="flex flex-wrap gap-2">
+                    {FAMILY_METHODS.map(([value, label]) => (
+                      <Button
+                        key={value}
+                        type="button"
+                        variant="outline"
+                        aria-pressed={familyMethod === value}
+                        onClick={() => setFamilyMethod(value)}
+                        className={cn('h-11', familyMethod === value && 'border-2 border-primary bg-accent')}
+                      >
+                        {label}
+                      </Button>
+                    ))}
+                  </div>
+                  <Field>
+                    <FieldLabel htmlFor="report-family-at">Báo lúc</FieldLabel>
+                    <Input
+                      id="report-family-at"
+                      type="datetime-local"
+                      className="h-11"
+                      value={familyAt}
+                      max={vietnamNowLocal()}
+                      onChange={(event) => setFamilyAt(event.target.value)}
+                    />
+                  </Field>
+                </div>
+              )}
             </Section>
           )}
           <Section title="Mức">
@@ -512,7 +710,7 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
               <span role="status" className={cn('type-title', tone[1])}>
                 {resultText}
               </span>
-              {type && <span className="type-body-sm text-muted-foreground">{recipientsText(kind, level)}</span>}
+              {type && <span className="type-body-sm text-muted-foreground">{recipientsText(kind, level, isLater)}</span>}
               {existingId != null && (
                 <Alert variant="attention" className="gap-3 p-4">
                   <p>
@@ -554,7 +752,7 @@ export function ReportForm({ onClose, onDone, onOpenIncident, returnFocusId = 'r
                 )}
                 disabled={busy}
               >
-                {kind === 'incident' && level === 'CRITICAL' ? 'Lưu và mở khẩn cấp' : 'Lưu'}
+                {kind === 'incident' && level === 'CRITICAL' && !isLater ? 'Lưu và mở khẩn cấp' : closeNow ? 'Lưu và đóng' : 'Lưu'}
               </Button>
               <Button type="button" variant="ghost" className="h-11" disabled={busy} onClick={onClose}>
                 Hủy

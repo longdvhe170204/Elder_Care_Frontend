@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Pause, Play } from 'lucide-react'
-import { getMeCallReminders, getMeNotifications, getResidents, postNotificationsByIdAcknowledge } from '@/api'
+import { getCarePlansById, getMeCallReminders, getMeNotifications, getResidents, postNotificationsByIdAcknowledge } from '@/api'
 import { Alert, AlertAction, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
+import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
 import { CallReminderSheet } from './CallReminderSheet'
@@ -43,6 +44,28 @@ function toQuery({ level, unread, eventType, residentId }, cursor) {
 }
 
 const isOpenUrgent = (n) => n.level === 'URGENT' && !n.acknowledgedAt
+
+function CarePlanWorkButton({ notification, onNavigate }) {
+  const { can } = usePermissions()
+  const [opening, setOpening] = useState(false)
+
+  async function open() {
+    setOpening(true)
+    const plan = await getCarePlansById({ path: { id: Number(notification.sourceRecord.id) } })
+      .then(({ data }) => data)
+      .catch(() => null)
+    setOpening(false)
+    const target = plan?.residentId ? { residentId: plan.residentId, at: notification.sentAt } : undefined
+    onNavigate('care-task-planning', target)
+  }
+
+  if (!can('SHIFT_TASK_PLANNING', 'CREATE')) return null
+  return (
+    <Button className="self-start" disabled={opening} onClick={open}>
+      Xem việc cần lập
+    </Button>
+  )
+}
 
 export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
   const [filter, setFilter] = useState({ level: '', unread: false, eventType: '', residentId: '' })
@@ -158,15 +181,6 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
     setState((s) => ({ ...s, items: s.items.map((n) => (n.id === data.id ? data : n)) }))
   }, [])
 
-  const hide = useCallback(
-    (id) => {
-      setState((s) => ({ ...s, items: s.items.filter((n) => n.id !== id) }))
-      onClose()
-      setAnnouncement('Đã ẩn thông báo khỏi danh sách')
-    },
-    [onClose],
-  )
-
   const openReminder = useCallback(
     (id, startRecording = false) => {
       onClose()
@@ -184,7 +198,6 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
           key={id}
           id={id}
           onOpened={replace}
-          onHidden={hide}
           onNavigate={onNavigate}
           sourceAction={(n) => {
             if (reminderIdOf(n) !== null)
@@ -193,6 +206,13 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
                   Mở lượt nhắc gọi
                 </Button>
               )
+            if (
+              onNavigate &&
+              n.eventType === 'CarePlanChanged' &&
+              n.sourceRecord?.type === 'M04.CARE_PLAN'
+            ) {
+              return <CarePlanWorkButton notification={n} onNavigate={onNavigate} />
+            }
             // BF-01 bước 15 nối BF-02 bước 1: thông báo cần lập công việc mở màn Lập công việc ca cho người đó
             const planning = planningOf(n)
             return (

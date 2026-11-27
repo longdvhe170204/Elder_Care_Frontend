@@ -137,7 +137,7 @@ export const ABSENCE_TYPES = {
 export const ABSENCE_STATUS = { OPEN: 'Tạm vắng', CLOSED: 'Đã đóng' }
 
 export const END_CASES = [
-  ['CONTRACT_EXPIRED', 'Hết hợp đồng'],
+  ['CONTRACT_EXPIRED', 'Hết hạn hợp đồng'],
   ['DISCHARGE', 'Xuất viện'],
   ['TRANSFER_TO_ANOTHER_FACILITY', 'Chuyển cơ sở'],
   ['CONTRACT_TERMINATION', 'Chấm dứt hợp đồng'],

@@ -16,8 +16,8 @@ import { SamplesTab } from './SamplesTab'
 import { SlipsTab } from './SlipsTab'
 
 // Mục menu "Suất ăn" (011 T027, T031, T033, T039; bố cục duyệt 2026-11-08): bữa trong ngày (tính sẵn, chốt suất, phát
-// sinh), phiếu bữa ăn (bếp và người nhận tại tầng, xác nhận phục vụ), lưu mẫu. Tab theo quyền các dòng "Suất ăn đã chốt,
-// phiếu bữa ăn", "Chuẩn bị, giao phiếu, lưu mẫu", "Nhận phiếu, báo sai lệch", "Xác nhận phục vụ suất đặc biệt".
+// sinh), phiếu bữa ăn (bếp và người nhận tại tầng; Q-445 bỏ xác nhận phục vụ), lưu mẫu. Tab theo quyền các dòng "Suất ăn
+// đã chốt, phiếu bữa ăn", "Chuẩn bị, giao phiếu, lưu mẫu", "Nhận phiếu, báo sai lệch".
 
 const safe = (promise, fallback = []) => promise.then((r) => r.data).catch(() => fallback)
 
@@ -35,7 +35,11 @@ export function MealsPage({ initialDate = todayInVietnam() }) {
         safe(getNutritionDiets()),
         safe(getNutritionDishes({ query: {} })),
         safe(getResidents({ query: { status: ['IN_RESIDENCE'] } }), { items: [] }).then((p) =>
-          (p.items ?? []).map((r) => ({ id: r.id, name: r.personalInfo?.fullName ?? `Người cao tuổi mã ${r.id}` })),
+          (p.items ?? []).map((r) => ({
+            id: r.id,
+            name: r.personalInfo?.fullName ?? `Người cao tuổi mã ${r.id}`,
+            code: r.profileCode,
+          })),
         ),
         safe(getCatalogsByType({ path: { type: 'allergens' }, query: { group: 'FOOD' } })),
       ]).then(([floors, diets, dishes, residents, allergens]) => ({ floors, diets, dishes, residents, allergens })),
@@ -49,13 +53,11 @@ export function MealsPage({ initialDate = todayInVietnam() }) {
     closer: can('MEAL_PREPARATION', 'CREATE'),
     confirmer: can('MEAL_PREPARATION', 'CONFIRM'),
     receiver: can('MEAL_RECEIPT', 'CREATE'),
-    server: can('SPECIAL_MEAL_SERVICE', 'CREATE'),
-    doctor: can('DIET', 'UPDATE'),
     samples: can('MEAL_PREPARATION', 'VIEW'),
   }
   const tabs = [
     can_.count && ['day', 'Bữa trong ngày'],
-    (can_.count || can('MEAL_RECEIPT', 'VIEW') || can('SPECIAL_MEAL_SERVICE', 'VIEW')) && ['slips', 'Phiếu bữa ăn'],
+    (can_.count || can('MEAL_RECEIPT', 'VIEW')) && ['slips', 'Phiếu bữa ăn'],
     can_.samples && ['samples', 'Lưu mẫu'],
   ].filter(Boolean)
   if (tabs.length === 0 || meals.failure?.status === 403) return <PermissionDeniedState label="Suất ăn" />
@@ -131,10 +133,8 @@ export function MealsPage({ initialDate = todayInVietnam() }) {
           {current === 'slips' && (
             <SlipsTab
               meals={meals.data}
-              dishes={data.dishes}
-              residents={data.residents}
-              allergens={data.allergens}
-              can={{ kitchen: can_.kitchen, receiver: can_.receiver, server: can_.server, doctor: can_.doctor }}
+              floors={data.floors}
+              can={{ kitchen: can_.kitchen, receiver: can_.receiver }}
               {...props}
             />
           )}

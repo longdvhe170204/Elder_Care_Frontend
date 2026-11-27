@@ -2,21 +2,16 @@ import { useEffect, useState } from 'react'
 import {
   getMealSlips,
   postMealSlipsByIdByCommand,
-  postSpecialPortionsByIdAssignDish,
-  postSpecialPortionsByIdConfirmServing,
-  postSpecialPortionsByIdDiscardHeldPortion,
-  postSpecialPortionsByIdMarkPrepared,
-  postSpecialPortionsByIdServeHeldPortion,
+  postHeldPortionsByIdDiscard,
+  postHeldPortionsByIdServe,
   postSupplementaryPortionsByIdByCommand,
 } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { AllergyNote } from '@/common/CareNotes'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDateTime } from '@/common/dateTime'
@@ -24,260 +19,57 @@ import { Info, ReasonField, SELECT } from '../NutritionParts'
 import { useCommand, useLoad } from '../useNutrition'
 import {
   CLOSING_FLAG,
-  PORTION_FLAG,
+  HELD_STATUS,
   RESOLUTION,
   SLIP_COMMAND,
   SLIP_STATUS,
-  TEXTURE,
   label,
   slipCommands,
+  slipGroupName,
 } from '../nutritionView'
 
-// Phiếu bữa ăn (011 T031, T033; FR-044 → FR-050, BR-M08-09 → 12, 14): bếp nhận phiếu không có dị ứng, bệnh lý (SC-008),
-// đánh dấu chuẩn bị, giao; người nhận tại tầng nhận, báo sai lệch, xác nhận phục vụ suất đặc biệt (chặn khi sai người, dị
-// ứng, hạn chế; đã ăn món dị ứng thì ghi sự cố 007 trong cùng lệnh). Nút theo trạng thái và quyền; backend kiểm lại.
+// Phiếu bữa ăn (011 FR-044 → FR-048b, BR-M08-09 → 12; Q-445): mỗi tầng/khu và phiếu nhân viên ghi các món của bữa và
+// tổng suất, không có tên, dị ứng (SC-008). Bếp chuẩn bị, giao; người nhận tại tầng nhận, báo sai lệch, xử lý suất giữ.
+// Khi phục vụ, nhân viên đối chiếu dị ứng, chế độ ăn trong hồ sơ (BR-M08-14). Nút theo trạng thái và quyền.
 
-function ServingForm({ portion, residents, onClose, onDone }) {
-  const [residentId, setResidentId] = useState('')
-  const [eaten, setEaten] = useState(null)
-  const [incident, setIncident] = useState({ severity: '', symptoms: '', treatment: '' })
-  const [submitted, setSubmitted] = useState(false)
+// Suất giữ có tên của người chưa trở về đúng dự kiến (FR-040a): người nhận tại tầng phục vụ hoặc hủy bỏ.
+function HeldRow({ portion, can, onChanged }) {
   const { busy, failure, run } = useCommand()
-  const allergen = failure?.errorCode === 'PORTION_HAS_ALLERGEN' || eaten !== null
-  const set = (patch) => setIncident((i) => ({ ...i, ...patch }))
-
-  async function submit() {
-    setSubmitted(true)
-    if (!residentId) return
-    const body = { residentId: Number(residentId), deviceTime: new Date().toISOString() }
-    if (allergen) {
-      if (eaten === null) return
-      body.hasEaten = eaten
-      if (eaten) {
-        if (!incident.severity.trim() || !incident.symptoms.trim()) return
-        body.incident = {
-          severity: incident.severity.trim(),
-          symptoms: incident.symptoms.trim(),
-          ...(incident.treatment.trim() && { treatment: incident.treatment.trim() }),
-        }
-      }
-    }
-    const ok = await run(postSpecialPortionsByIdConfirmServing, { path: { id: portion.id }, body })
-    if (!ok) return
-    if (!allergen) onDone('Đã xác nhận phục vụ')
-    else onDone(eaten ? 'Đã ghi sự cố ăn món có thành phần dị ứng' : 'Đã ghi suất bị chặn, người cao tuổi chưa ăn')
-  }
-
-  return (
-    <div className="flex flex-col gap-3 rounded-md border p-3">
-      <h4 className="type-label">{`Xác nhận phục vụ suất của ${portion.fullName}`}</h4>
-      <FieldGroup>
-        <Field data-invalid={(submitted && !residentId) || undefined}>
-          <FieldLabel htmlFor={`serve-resident-${portion.id}`}>Người đang được phục vụ</FieldLabel>
-          <select
-            id={`serve-resident-${portion.id}`}
-            className={SELECT}
-            value={residentId}
-            onChange={(e) => setResidentId(e.target.value)}
-          >
-            <option value="">Chọn người cao tuổi</option>
-            {residents.map((r) => (
-              <option key={r.id} value={r.id}>
-                {r.name}
-              </option>
-            ))}
-          </select>
-          {submitted && !residentId && <FieldError>Chọn đúng người đang được phục vụ</FieldError>}
-        </Field>
-        {allergen && (
-          <>
-            <Field data-invalid={(submitted && eaten === null) || undefined}>
-              <FieldLabel>Người cao tuổi đã ăn món này chưa?</FieldLabel>
-              <ToggleGroup
-                variant="outline"
-                value={eaten === null ? [] : [eaten ? 'yes' : 'no']}
-                onValueChange={(n) => n[0] && setEaten(n[0] === 'yes')}
-                aria-label="Người cao tuổi đã ăn món này chưa"
-              >
-                <ToggleGroupItem value="no" className="h-11 px-4">
-                  Chưa ăn
-                </ToggleGroupItem>
-                <ToggleGroupItem value="yes" className="h-11 px-4">
-                  Đã ăn
-                </ToggleGroupItem>
-              </ToggleGroup>
-              {submitted && eaten === null && <FieldError>Chọn đã ăn hoặc chưa ăn</FieldError>}
-            </Field>
-            {eaten && (
-              <>
-                <Field data-invalid={(submitted && !incident.severity.trim()) || undefined}>
-                  <FieldLabel htmlFor={`serve-severity-${portion.id}`}>Mức độ</FieldLabel>
-                  <Input
-                    id={`serve-severity-${portion.id}`}
-                    className="h-11"
-                    value={incident.severity}
-                    onChange={(e) => set({ severity: e.target.value })}
-                  />
-                  {submitted && !incident.severity.trim() && <FieldError>Nhập mức độ</FieldError>}
-                </Field>
-                <ReasonField
-                  id={`serve-symptoms-${portion.id}`}
-                  label="Triệu chứng"
-                  value={incident.symptoms}
-                  onChange={(symptoms) => set({ symptoms })}
-                  error={submitted && !incident.symptoms.trim() ? 'Nhập triệu chứng' : null}
-                />
-                <ReasonField
-                  id={`serve-treatment-${portion.id}`}
-                  label="Xử trí"
-                  value={incident.treatment}
-                  onChange={(treatment) => set({ treatment })}
-                />
-              </>
-            )}
-          </>
-        )}
-      </FieldGroup>
-      <ProblemAlert problem={failure} />
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" className="h-11" onClick={onClose}>
-          Thôi
-        </Button>
-        <Button className="h-11" disabled={busy} onClick={submit}>
-          {allergen ? 'Ghi kết quả' : 'Xác nhận phục vụ'}
-        </Button>
-      </div>
-    </div>
-  )
-}
-
-function LabelRow({ slip, portion, dishes, residents, can, onChanged }) {
-  const [mode, setMode] = useState(null)
-  const [dishId, setDishId] = useState('')
-  const [note, setNote] = useState('')
-  const { busy, failure, run } = useCommand()
-  const held = portion.flags?.includes('HELD_PORTION') || portion.flags?.includes('EXPECTED_RETURN')
-
   async function simple(call, message) {
     if (await run(call, { path: { id: portion.id } })) onChanged(message)
   }
-
   return (
     <li className="flex flex-col gap-2 rounded-md border p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="type-label">{`${portion.fullName}, phòng ${portion.room ?? '—'}`}</span>
-        {portion.prepared && <StatusBadge status="Đã chuẩn bị" />}
+        <span className="type-label">{portion.fullName}</span>
+        <StatusBadge status={label(HELD_STATUS, portion.status)} />
       </div>
-      <span className="type-body-sm">{`${portion.diet}, kết cấu ${label(TEXTURE, portion.texture).toLowerCase()}: ${portion.dishes ?? '—'}`}</span>
-      {portion.flags?.length > 0 && (
-        <span className="type-caption text-muted-foreground">
-          {portion.flags.map((f) => label(PORTION_FLAG, f)).join(', ')}
-        </span>
-      )}
       <ProblemAlert problem={failure} />
-      {mode === 'serve' && (
-        <ServingForm portion={portion} residents={residents} onClose={() => setMode(null)} onDone={onChanged} />
-      )}
-      {mode === 'assign' && (
-        <div className="flex flex-col gap-2">
-          <Field>
-            <FieldLabel htmlFor={`assign-dish-${portion.id}`}>Món chỉ định</FieldLabel>
-            <select
-              id={`assign-dish-${portion.id}`}
-              className={SELECT}
-              value={dishId}
-              onChange={(e) => setDishId(e.target.value)}
-            >
-              <option value="">Chọn món</option>
-              {dishes
-                .filter((d) => d.status === 'ACTIVE')
-                .map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-            </select>
-          </Field>
-          <Field>
-            <FieldLabel htmlFor={`assign-note-${portion.id}`}>Ghi chú</FieldLabel>
-            <Input
-              id={`assign-note-${portion.id}`}
-              className="h-11"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
-          </Field>
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" className="h-11" onClick={() => setMode(null)}>
-              Thôi
-            </Button>
-            <Button
-              className="h-11"
-              disabled={busy || !dishId}
-              onClick={async () => {
-                const body = { dishId: Number(dishId), ...(note.trim() && { note: note.trim() }) }
-                if (await run(postSpecialPortionsByIdAssignDish, { path: { id: portion.id }, body }))
-                  onChanged('Đã chỉ định món')
-              }}
-            >
-              Chỉ định món
-            </Button>
-          </div>
-        </div>
-      )}
-      {mode === null && (
+      {can.receiver && portion.status === 'HELD' && (
         <div className="flex flex-wrap justify-end gap-2">
-          {can.kitchen && slip.status === 'CLOSED' && !portion.prepared && (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              onClick={() => simple(postSpecialPortionsByIdMarkPrepared, `Đã chuẩn bị suất của ${portion.fullName}`)}
-            >
-              Đã chuẩn bị
-            </Button>
-          )}
-          {can.doctor && (slip.status === 'CLOSED' || slip.status === 'PREPARED') && (
-            <Button variant="outline" size="sm" onClick={() => setMode('assign')}>
-              Chỉ định món…
-            </Button>
-          )}
-          {can.receiver && held && (
-            <>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  simple(postSpecialPortionsByIdServeHeldPortion, `Đã phục vụ suất giữ của ${portion.fullName}`)
-                }
-              >
-                Phục vụ suất giữ
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={busy}
-                onClick={() =>
-                  simple(postSpecialPortionsByIdDiscardHeldPortion, `Đã hủy suất giữ của ${portion.fullName}`)
-                }
-              >
-                Hủy suất giữ
-              </Button>
-            </>
-          )}
-          {can.server && slip.status === 'RECEIVED' && (
-            <Button size="sm" onClick={() => setMode('serve')}>
-              Xác nhận phục vụ…
-            </Button>
-          )}
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => simple(postHeldPortionsByIdServe, `Đã phục vụ suất giữ của ${portion.fullName}`)}
+          >
+            Phục vụ suất giữ
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => simple(postHeldPortionsByIdDiscard, `Đã hủy suất giữ của ${portion.fullName}`)}
+          >
+            Hủy suất giữ
+          </Button>
         </div>
       )}
     </li>
   )
 }
 
-function SlipDetail({ slip, dishes, residents, allergenName, residentName, can, onChanged, Title, Description }) {
+function SlipDetail({ slip, floors, can, onChanged, Title, Description }) {
   const [mode, setMode] = useState(null)
   const [content, setContent] = useState('')
   const [resolution, setResolution] = useState('')
@@ -310,52 +102,29 @@ function SlipDetail({ slip, dishes, residents, allergenName, residentName, can, 
     else command(cmd)
   }
 
-  const allergyLines = (slip.allergies ?? []).map(
-    (a) => `${residentName(a.residentId)}: ${a.allergenId ? allergenName(a.allergenId) : a.text}`,
-  )
-
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <StatusBadge status={label(SLIP_STATUS, slip.status)} />
-        <Title className="type-title">{`Phiếu ${slip.meal}, ${slip.floorArea}`}</Title>
+        <Title className="type-title">{`Phiếu ${slip.meal}, ${slipGroupName(slip, floors)}`}</Title>
         <Description className="type-body-sm text-muted-foreground">
-          {(slip.flags ?? []).map((f) => label(CLOSING_FLAG, f)).join(', ') || 'Phiếu bữa ăn của tầng/khu'}
+          {(slip.flags ?? []).map((f) => label(CLOSING_FLAG, f)).join(', ') ||
+            (slip.group === 'STAFF' ? 'Suất của Quản lý viện, nhân viên trong ca' : 'Phiếu bữa ăn của tầng/khu')}
         </Description>
       </div>
-      <AllergyNote allergies={allergyLines} />
-      {(slip.needsCrossCheck ?? []).length > 0 && (
-        <Info label="Cần đối chiếu dị ứng loại khác">{slip.needsCrossCheck.map(residentName).join(', ')}</Info>
-      )}
-      <section className="flex flex-col gap-2" aria-labelledby={`slip-diets-${slip.id}`}>
-        <h3 id={`slip-diets-${slip.id}`} className="type-card-title">
-          Số suất theo chế độ ăn
-        </h3>
-        <ul className="flex flex-col gap-1 type-body-sm">
-          {(slip.portionsByDiet ?? []).map((p) => (
-            <li key={p.diet} className="flex justify-between gap-2">
-              <span>{p.diet}</span>
-              <span className="tabular-nums">{p.portionCount}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      {(slip.labels ?? []).length > 0 && (
-        <section className="flex flex-col gap-2" aria-labelledby={`slip-labels-${slip.id}`}>
-          <h3 id={`slip-labels-${slip.id}`} className="type-card-title">
-            Suất đặc biệt
+      <div className="grid gap-3">
+        <Info label="Các món">{(slip.dishes ?? []).join(', ') || 'Chưa có thực đơn công bố'}</Info>
+        <Info label="Tổng suất">{slip.portionCount}</Info>
+        {slip.heldPortionCount > 0 && <Info label="Suất giữ">{slip.heldPortionCount}</Info>}
+      </div>
+      {(slip.heldPortions ?? []).length > 0 && (
+        <section className="flex flex-col gap-2" aria-labelledby={`slip-held-${slip.id}`}>
+          <h3 id={`slip-held-${slip.id}`} className="type-card-title">
+            Suất giữ
           </h3>
           <ul className="flex flex-col gap-2">
-            {slip.labels.map((p) => (
-              <LabelRow
-                key={p.id}
-                slip={slip}
-                portion={p}
-                dishes={dishes}
-                residents={residents}
-                can={can}
-                onChanged={onChanged}
-              />
+            {slip.heldPortions.map((p) => (
+              <HeldRow key={p.id} portion={p} can={can} onChanged={onChanged} />
             ))}
           </ul>
         </section>
@@ -494,7 +263,7 @@ function Supplement({ supplement, can, onChanged }) {
   )
 }
 
-export function SlipsTab({ meals, dishes, residents, allergens, can, openedKey, open, announce }) {
+export function SlipsTab({ meals, floors, can, openedKey, open, announce }) {
   const closed = meals.filter((m) => m.closed)
   const [dailyMealId, setDailyMealId] = useState(closed[0]?.dailyMealId ?? null)
   const selected = closed.some((m) => m.dailyMealId === dailyMealId) ? dailyMealId : (closed[0]?.dailyMealId ?? null)
@@ -502,8 +271,6 @@ export function SlipsTab({ meals, dishes, residents, allergens, can, openedKey, 
     () => (selected ? getMealSlips({ query: { dailyMealId: selected } }).then((r) => r.data) : Promise.resolve([])),
     [selected],
   )
-  const residentName = (id) => residents.find((r) => r.id === id)?.name ?? `Người cao tuổi mã ${id}`
-  const allergenName = (id) => allergens.find((a) => a.id === id)?.name ?? `dị nguyên mã ${id}`
 
   function changed(message) {
     announce(message)
@@ -515,10 +282,7 @@ export function SlipsTab({ meals, dishes, residents, allergens, can, openedKey, 
       <SlipDetail
         key={s.id}
         slip={s}
-        dishes={dishes}
-        residents={residents}
-        allergenName={allergenName}
-        residentName={residentName}
+        floors={floors}
         can={can}
         onChanged={changed}
         {...titles}
@@ -565,9 +329,9 @@ export function SlipsTab({ meals, dishes, residents, allergens, can, openedKey, 
           <Table aria-label="Phiếu bữa ăn">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-4">Tầng/khu</TableHead>
+                <TableHead className="pl-4">Phiếu</TableHead>
                 <TableHead>Tổng suất</TableHead>
-                <TableHead>Suất đặc biệt</TableHead>
+                <TableHead>Suất giữ</TableHead>
                 <TableHead className="pr-4">Trạng thái</TableHead>
               </TableRow>
             </TableHeader>
@@ -581,13 +345,11 @@ export function SlipsTab({ meals, dishes, residents, allergens, can, openedKey, 
                       aria-pressed={openedKey === `slip-${s.id}`}
                       onClick={() => openSlip(s)}
                     >
-                      {s.floorArea}
+                      {slipGroupName(s, floors)}
                     </button>
                   </TableCell>
-                  <TableCell className="tabular-nums">
-                    {(s.portionsByDiet ?? []).reduce((n, p) => n + p.portionCount, 0)}
-                  </TableCell>
-                  <TableCell className="tabular-nums">{(s.labels ?? []).length}</TableCell>
+                  <TableCell className="tabular-nums">{s.portionCount}</TableCell>
+                  <TableCell className="tabular-nums">{s.heldPortionCount ?? 0}</TableCell>
                   <TableCell className="pr-4">
                     <StatusBadge status={label(SLIP_STATUS, s.status)} />
                   </TableCell>

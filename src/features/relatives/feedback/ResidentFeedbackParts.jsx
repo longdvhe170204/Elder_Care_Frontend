@@ -12,6 +12,7 @@ import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/
 import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
@@ -118,24 +119,18 @@ export function OnBehalfSheet({ onClose, onDone }) {
         </SheetDescription>
         <form onSubmit={submit} noValidate className="mt-4 flex flex-col gap-4">
           <FieldGroup>
-            <Field data-invalid={!!show('resident') || undefined}>
-              <FieldLabel htmlFor="on-behalf-resident">Người cao tuổi</FieldLabel>
-              <select
-                id="on-behalf-resident"
-                value={residentId}
-                onChange={(e) => setResidentId(e.target.value)}
-                aria-invalid={!!show('resident') || undefined}
-                className={SELECT}
-              >
-                <option value="">{residents === null ? 'Đang tải…' : 'Chọn người'}</option>
-                {(residents ?? []).map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {`${r.personalInfo.fullName}, ${r.profileCode}`}
-                  </option>
-                ))}
-              </select>
-              {show('resident') && <FieldError>{errors.resident}</FieldError>}
-            </Field>
+            {/* Demo 2026-11-26 (E): ô tìm theo tên hoặc mã hồ sơ thay dropdown */}
+            <ResidentCombobox
+              id="on-behalf-resident"
+              options={(residents ?? []).map((r) => ({
+                value: String(r.id),
+                label: `${r.personalInfo.fullName} (${r.profileCode})`,
+              }))}
+              value={residentId}
+              onChange={setResidentId}
+              loading={residents === null}
+              error={show('resident') && errors.resident}
+            />
             <Choices
               label="Loại"
               options={[...FEEDBACK_TYPES, WISH]}

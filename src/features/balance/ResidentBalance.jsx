@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getResidentsByResidentIdBalance, getResidentsByResidentIdBalanceTransactions } from '@/api'
+import {
+  getBalanceTransactionsByIdReceipt,
+  getResidentsByResidentIdBalance,
+  getResidentsByResidentIdBalanceTransactions,
+  getResidentsByResidentIdBalanceTransactionsSummary,
+} from '@/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -12,6 +17,7 @@ import { ProblemAlert } from '@/common/ProblemAlert'
 import { formatDateTime } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
+import { saveBlob } from './download'
 import { OffsetForm } from './OffsetForm'
 import { ResidentNotices } from './ResidentNotices'
 import { SettlementPanel } from './SettlementPanel'
@@ -23,7 +29,9 @@ import {
   TRANSACTION_STATUS_LABELS,
   TYPE_LABELS,
   formatMoney,
+  hasReceipt,
   labelOf,
+  receiptName,
 } from './balanceLabels'
 
 // Số dư, giao dịch, quyết toán và phiếu báo phí của một người cao tuổi (017 T027, T033, T036; FR-002 → FR-004, FR-010 →
@@ -45,6 +53,36 @@ export function ResidentBalance({ residentId, fullName }) {
   const [state, setState] = useState({ status: 'loading' })
   const [sheet, setSheet] = useState(null)
   const [notice, setNotice] = useState('')
+  const [receiptFailure, setReceiptFailure] = useState(null)
+
+  // Q-460: biên nhận nộp tiền dựng ở backend, số theo mã giao dịch
+  async function downloadReceipt(t) {
+    setReceiptFailure(null)
+    try {
+      const { data } = await getBalanceTransactionsByIdReceipt({ path: { id: t.id }, responseType: 'blob' })
+      saveBlob(data, receiptName(t))
+    } catch (error) {
+      setReceiptFailure(problemOf(error))
+    }
+  }
+
+  // Bảng kê các khoản đã tick (Q-460): một bản PDF chia nhóm nộp, hoàn, trừ chi phí
+  const [picked, setPicked] = useState([])
+  const toggle = (id) => setPicked((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
+
+  async function printSummary() {
+    setReceiptFailure(null)
+    try {
+      const { data } = await getResidentsByResidentIdBalanceTransactionsSummary({
+        path: { residentId },
+        query: { id: [...picked].sort((a, b) => a - b) },
+        responseType: 'blob',
+      })
+      saveBlob(data, `bang-ke-giao-dich-${residentId}.pdf`)
+    } catch (error) {
+      setReceiptFailure(problemOf(error))
+    }
+  }
 
   const load = useCallback(async () => {
     try {
@@ -71,6 +109,8 @@ export function ResidentBalance({ residentId, fullName }) {
 
   const canCreate = can('BALANCE_LEDGER', 'CREATE')
   const balance = state.balance
+  // Hành chính chỉ thấy một phần sổ (hiddenFields) nên không tải biên nhận
+  const fullView = !balance?.hiddenFields?.length
   return (
     <div className="flex flex-col gap-5">
       <h2 className="type-title">Số dư của {fullName}</h2>
@@ -138,7 +178,15 @@ export function ResidentBalance({ residentId, fullName }) {
       {state.status === 'ready' && (
         <Card>
           <CardContent className="flex flex-col gap-3">
-            <h3 className="type-title">Giao dịch</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="type-title">Giao dịch</h3>
+              {fullView && state.transactions.length > 0 && (
+                <Button variant="outline" className="h-11" disabled={picked.length === 0} onClick={printSummary}>
+                  {`In bảng kê (${picked.length})`}
+                </Button>
+              )}
+            </div>
+            <ProblemAlert problem={receiptFailure} />
             {state.transactions.length === 0 ? (
               <Empty>
                 <EmptyHeader>
@@ -150,17 +198,38 @@ export function ResidentBalance({ residentId, fullName }) {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {fullView && (
+                      <TableHead>
+                        <span className="sr-only">Chọn để in bảng kê</span>
+                      </TableHead>
+                    )}
                     <TableHead>Thời điểm</TableHead>
                     <TableHead>Sổ</TableHead>
                     <TableHead>Loại</TableHead>
                     <TableHead className="text-right">Số tiền</TableHead>
                     <TableHead>Trạng thái</TableHead>
                     <TableHead>Người lập</TableHead>
+                    {fullView && <TableHead className="text-right">Biên nhận</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {state.transactions.map((t) => (
                     <TableRow key={t.id}>
+                      {fullView && (
+                        <TableCell>
+                          {t.status === 'CONFIRMED' && (
+                            <label className="flex size-11 items-center justify-center">
+                              <input
+                                type="checkbox"
+                                className="size-5"
+                                aria-label={`Chọn giao dịch ${labelOf(TYPE_LABELS, t.type)} ${formatMoney(t.amount)}`}
+                                checked={picked.includes(t.id)}
+                                onChange={() => toggle(t.id)}
+                              />
+                            </label>
+                          )}
+                        </TableCell>
+                      )}
                       <TableCell className="tabular-nums">{formatDateTime(t.at)}</TableCell>
                       <TableCell>{labelOf(LEDGER_LABELS, t.ledger)}</TableCell>
                       <TableCell>{labelOf(TYPE_LABELS, t.type)}</TableCell>
@@ -179,6 +248,15 @@ export function ResidentBalance({ residentId, fullName }) {
                         </Badge>
                       </TableCell>
                       <TableCell>{t.createdBy}</TableCell>
+                      {fullView && (
+                        <TableCell className="text-right">
+                          {hasReceipt(t) && (
+                            <Button variant="outline" className="h-11" onClick={() => downloadReceipt(t)}>
+                              Tải biên nhận
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>

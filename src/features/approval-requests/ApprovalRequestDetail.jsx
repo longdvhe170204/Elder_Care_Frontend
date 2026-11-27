@@ -10,6 +10,14 @@ import {
   postApprovalRequestsByIdSubmit,
 } from '@/api'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
@@ -27,6 +35,13 @@ import { useRequestSubject } from './requestSubject'
 // Sửa nội dung nháp (edit-content) chưa có trên màn: nội dung theo schema của module sở hữu loại yêu cầu.
 
 const TEXT_MAX = 2000
+
+// Demo 2026-11-26 (E): Duyệt, Từ chối, Trả về nháp hỏi lại bằng hộp xác nhận giữa màn; Hủy thì không đổi gì
+const CONFIRM_TITLES = {
+  approve: 'Duyệt yêu cầu này?',
+  reject: 'Từ chối yêu cầu này?',
+  'return-to-draft': 'Trả yêu cầu này về nháp?',
+}
 
 function valueText(value) {
   if (value === null || value === undefined) return 'trống'
@@ -91,6 +106,7 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [confirming, setConfirming] = useState(null)
   const subject = useRequestSubject(state.request?.content)
 
   // Tải lại sau 409/412 giữ nguyên khung, không hiện trạng thái đang tải
@@ -160,25 +176,27 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
     }
   }
 
-  function approve() {
-    run(postApprovalRequestsByIdApprove, comment.trim() ? { comment } : {}, 'comment')
-  }
-
-  function reject() {
-    if (!comment.trim()) {
+  // Bấm nút: kiểm ý kiến bắt buộc rồi mở hộp xác nhận; lệnh chỉ gửi khi bấm Xác nhận
+  function ask(command) {
+    if (command === 'reject' && !comment.trim()) {
       setErrors({ comment: 'Nhập ý kiến khi từ chối' })
       return
     }
-    run(postApprovalRequestsByIdReject, { comment }, 'comment')
-  }
-
-  // Trả về nháp để người lập sửa, bắt buộc lý do (000 FR-041a, Q-419); dùng ô Ý kiến làm lý do
-  function returnToDraft() {
-    if (!comment.trim()) {
+    // Trả về nháp để người lập sửa, bắt buộc lý do (000 FR-041a, Q-419); dùng ô Ý kiến làm lý do
+    if (command === 'return-to-draft' && !comment.trim()) {
       setErrors({ comment: 'Nhập lý do trả về nháp' })
       return
     }
-    run(postApprovalRequestsByIdReturnToDraft, { reason: comment }, 'comment')
+    setErrors({})
+    setConfirming(command)
+  }
+
+  function confirmed() {
+    const command = confirming
+    setConfirming(null)
+    if (command === 'approve') run(postApprovalRequestsByIdApprove, comment.trim() ? { comment } : {}, 'comment')
+    else if (command === 'reject') run(postApprovalRequestsByIdReject, { comment }, 'comment')
+    else if (command === 'return-to-draft') run(postApprovalRequestsByIdReturnToDraft, { reason: comment }, 'comment')
   }
 
   function cancel() {
@@ -194,8 +212,9 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
   return (
     <div className="flex flex-col gap-5 type-body-sm">
       <div className="flex flex-col gap-1">
-        <Title className="type-title tabular-nums">{request.displayCode}</Title>
-        <Description className="type-body-sm text-muted-foreground">{typeLabel(request.type)}</Description>
+        {/* Demo 2026-11-26 (E): tiêu đề là tên chức năng, mã yêu cầu ở dòng mô tả */}
+        <Title className="type-title">{typeLabel(request.type, request.content)}</Title>
+        <Description className="type-body-sm tabular-nums text-muted-foreground">{request.displayCode}</Description>
       </div>
       <div className="flex flex-col gap-2">
         <StatusBadge status={statusLabel(request.status)} className="self-start" />
@@ -282,28 +301,50 @@ export function ApprovalRequestDetail({ id, onChanged, Title = 'h2', Description
             {errors.comment ? (
               <FieldError>{errors.comment}</FieldError>
             ) : (
-              <FieldDescription>Bắt buộc khi từ chối, trả về nháp, hoặc khi duyệt yêu cầu do chính mình lập.</FieldDescription>
+              <FieldDescription>
+                Bắt buộc khi từ chối, trả về nháp, hoặc khi duyệt yêu cầu do chính mình lập.
+              </FieldDescription>
             )}
           </Field>
           <div className="flex flex-wrap gap-2">
             {allowed.includes('approve') && (
-              <Button className="h-11" disabled={busy} onClick={approve}>
+              <Button className="h-11" disabled={busy} onClick={() => ask('approve')}>
                 Duyệt
               </Button>
             )}
             {allowed.includes('reject') && (
-              <Button variant="outline" className="h-11" disabled={busy} onClick={reject}>
+              <Button variant="outline" className="h-11" disabled={busy} onClick={() => ask('reject')}>
                 Từ chối
               </Button>
             )}
             {allowed.includes('return-to-draft') && (
-              <Button variant="outline" className="h-11" disabled={busy} onClick={returnToDraft}>
+              <Button variant="outline" className="h-11" disabled={busy} onClick={() => ask('return-to-draft')}>
                 Trả về nháp
               </Button>
             )}
           </div>
         </section>
       )}
+
+      <Dialog open={confirming !== null} onOpenChange={(open) => !open && setConfirming(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{CONFIRM_TITLES[confirming] ?? ''}</DialogTitle>
+            <DialogDescription>
+              {[typeLabel(request.type, request.content), subject?.residentName, request.displayCode].filter(Boolean).join(' · ')}
+              {comment.trim() ? `. Ý kiến: ${comment.trim()}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" className="h-11" onClick={() => setConfirming(null)}>
+              Hủy
+            </Button>
+            <Button className="h-11" disabled={busy} onClick={confirmed}>
+              Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {(allowed.includes('submit') || allowed.includes('cancel')) && (
         <div className="flex flex-wrap gap-2">

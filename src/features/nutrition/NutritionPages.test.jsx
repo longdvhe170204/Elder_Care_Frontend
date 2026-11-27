@@ -51,6 +51,38 @@ it('Dinh dưỡng chỉ hiện tab theo quyền; bếp thấy nút tạo thực 
   expect(screen.queryByText('Loại đồ ăn cấm')).toBeNull()
 })
 
+it('Thực đơn: Quản lý viện công bố từ danh sách chờ duyệt thì khung chi tiết cập nhật trạng thái', async () => {
+  permissions([
+    ['DISH_MENU', 'VIEW'],
+    ['DISH_MENU', 'APPROVE'],
+  ])
+  const summary = { id: 2, weekStart: '2026-11-30', status: 'PENDING_PUBLICATION', version: 1 }
+  let published = false
+  api.on('GET', '/menus', () => json(200, published ? [] : [summary]))
+  api.on('GET', '/menus/2', () =>
+    json(200, {
+      ...summary,
+      status: published ? 'PUBLISHED' : 'PENDING_PUBLICATION',
+      version: published ? 2 : 1,
+      content: { dishes: [] },
+    }),
+  )
+  api.on('POST', '/menus/2/publish', () => {
+    published = true
+    return json(200, {})
+  })
+  render(
+    <PermissionsProvider>
+      <NutritionCatalogPage today="2026-11-25" />
+    </PermissionsProvider>,
+  )
+  fireEvent.click(await screen.findByRole('button', { name: 'Thực đơn tuần 30/11/2026' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'Công bố thực đơn' }))
+  await waitFor(() => expect(api.calls('POST', '/menus/2/publish')).toHaveLength(1))
+  expect(await screen.findByText('Đã công bố')).toBeTruthy()
+  expect(screen.queryByRole('button', { name: 'Công bố thực đơn' })).toBeNull()
+})
+
 it('Suất ăn: bếp chốt suất sau bước xác nhận, ghi Idempotency-Key', async () => {
   permissions([
     ['MEAL_COUNT_TICKET', 'VIEW'],
@@ -67,8 +99,8 @@ it('Suất ăn: bếp chốt suất sau bước xác nhận, ghi Idempotency-Key
     'GET',
     '/daily-meals/9/precomputed',
     json(200, {
-      portionsByFloorArea: [{ floorAreaId: 5, dietId: 1, portionCount: 4 }],
-      specialPortions: 0,
+      portionsByGroup: [{ group: 'FLOOR', floorAreaId: 5, portionCount: 4 }],
+      staffPortions: 0,
       familyMealPortions: 0,
       flags: [],
       missingData: [],

@@ -23,6 +23,7 @@ const BALANCE = {
   hiddenFields: [],
 }
 const NO_REPRESENTATIVE = { ...BALANCE, representative: null }
+const POSITIVE = { ...BALANCE, balance: 2000000, debt: null, status: 'NORMAL', unfinalizedTotal: 0 }
 const TRANSACTIONS = [
   {
     id: 1,
@@ -85,6 +86,47 @@ describe('ResidentBalance (017)', () => {
     vi.unstubAllGlobals()
   })
 
+  // Q-460: biên nhận chỉ có ở khoản nộp đã xác nhận, người xem đủ sổ
+  it('Q_460_taiBienNhan_chiKhoanNopDaXacNhan', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    const api = setup()
+    api.on('GET', '/balance-transactions/1/receipt', json(200, {}))
+    const buttons = await screen.findAllByRole('button', { name: 'Tải biên nhận' })
+    expect(buttons).toHaveLength(1)
+
+    fireEvent.click(buttons[0])
+
+    await waitFor(() => expect(api.calls('GET', '/balance-transactions/1/receipt')).toHaveLength(1))
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+  })
+
+  // Q-460 mở rộng: khoản hoàn đã xác nhận có biên nhận; tick nhiều khoản đã xác nhận để in một bảng kê
+  it('Q_460_chonKhoan_inBangKe', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    const api = setup()
+    api.on('GET', '/residents/7/balance-transactions/summary', json(200, {}))
+    const print = await screen.findByRole('button', { name: 'In bảng kê (0)' })
+    expect(print).toBeDisabled()
+    const boxes = screen.getAllByRole('checkbox', { name: /Chọn giao dịch/ })
+    // khoản hoàn còn Chờ duyệt không chọn được
+    expect(boxes).toHaveLength(2)
+
+    fireEvent.click(boxes[0])
+    fireEvent.click(boxes[1])
+    fireEvent.click(screen.getByRole('button', { name: 'In bảng kê (2)' }))
+
+    await waitFor(() => expect(api.calls('GET', '/residents/7/balance-transactions/summary')).toHaveLength(1))
+    expect(String(api.calls('GET', '/residents/7/balance-transactions/summary')[0][0])).toContain('id=1&id=2')
+  })
+
+  it('Q_460_hanhChinh_khongCoNutBienNhan', async () => {
+    setup({ balance: { ...BALANCE, hiddenFields: ['paymentCode'] } })
+    await screen.findAllByText('Nộp tiền mặt')
+    expect(screen.queryByRole('button', { name: 'Tải biên nhận' })).not.toBeInTheDocument()
+  })
+
   it('FR_002_hienSoDuCocNoMaNopTienVaTinhTrang', async () => {
     setup()
     expect(await screen.findByText('NCT7K2M9X4A')).toBeInTheDocument()
@@ -114,7 +156,7 @@ describe('ResidentBalance (017)', () => {
   })
 
   it('FR_014_lapHoanTien_guiNguoiNhanLyDoVaIdempotencyKey', async () => {
-    const api = setup()
+    const api = setup({ balance: POSITIVE })
     api.on('POST', '/balance-transactions', json(201, { id: 9, status: 'PENDING_APPROVAL' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
     fill('Loại giao dịch', 'REFUND')
@@ -157,13 +199,14 @@ describe('ResidentBalance (017)', () => {
     expect(api.calls('POST', '/balance-transactions')).toHaveLength(0)
   })
 
-  // Demo 2026-11-25: hoàn số dư và tiền cọc một lần; nút Hoàn toàn bộ điền số còn hoàn được, vẫn sửa tay được
-  it('hoanSoDuVaCoc_nutHoanToanBo_guiHaiGiaoDich', async () => {
-    const api = setup({ balance: { ...BALANCE, balance: 800000, debt: null, status: 'NORMAL' } })
+  // Demo 2026-11-26: mở form là "Hoàn số dư và tiền cọc", điền sẵn toàn bộ số còn hoàn được (bỏ nút Hoàn toàn bộ), vẫn
+  // sửa tay được
+  it('moForm_macDinhHoanSoDuVaCoc_dienSanToanBo_guiHaiGiaoDich', async () => {
+    const api = setup({ balance: { ...POSITIVE, balance: 800000 } })
     api.on('POST', '/balance-transactions', json(201, { id: 12, status: 'PENDING_APPROVAL' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
-    fill('Loại giao dịch', 'BOTH')
-    fireEvent.click(screen.getByRole('button', { name: 'Hoàn toàn bộ (3.800.000 đ)' }))
+    expect(screen.getByLabelText('Loại giao dịch')).toHaveValue('BOTH')
+    expect(screen.queryByRole('button', { name: /Hoàn toàn bộ/ })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Hoàn từ số dư')).toHaveValue('800.000')
     expect(screen.getByLabelText('Hoàn từ tiền cọc')).toHaveValue('3.000.000')
     fill('Hoàn từ tiền cọc', '2000000')
@@ -178,13 +221,43 @@ describe('ResidentBalance (017)', () => {
     expect(a.headers['Idempotency-Key']).not.toBe(b.headers['Idempotency-Key'])
   })
 
-  it('hoanCoc_conNo_goiYDaTruNo', async () => {
+  it('hoanCoc_conNo_dienSanDaTruNo', async () => {
     setup()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
     fill('Loại giao dịch', 'DEPOSIT_REFUND')
-    expect(screen.getByRole('button', { name: 'Hoàn toàn bộ (1.750.000 đ)' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Số tiền')).toHaveValue('1.750.000')
     fill('Loại giao dịch', 'REFUND')
-    expect(screen.queryByRole('button', { name: /Hoàn toàn bộ/ })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Số tiền')).toHaveValue('')
+  })
+
+  // Demo 2026-11-26: vượt số dư hoặc tiền cọc còn hoàn được thì báo đỏ ngay tại ô, không gửi
+  it('BR_M11_14_vuotSoConHoanDuoc_baoDoNgay_khongGui', async () => {
+    const api = setup({ balance: { ...POSITIVE, balance: 800000 } })
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
+    fill('Hoàn từ số dư', '900000')
+    expect(screen.getByText('Vượt số dư còn hoàn được (800.000 đ).')).toBeInTheDocument()
+    fill('Hoàn từ tiền cọc', '3500000')
+    expect(screen.getByText('Vượt tiền cọc còn hoàn được (3.000.000 đ).')).toBeInTheDocument()
+    fill('Loại giao dịch', 'REFUND')
+    fill('Số tiền', '900000')
+    expect(screen.getByText('Vượt số dư còn hoàn được (800.000 đ).')).toBeInTheDocument()
+    fill('Phương thức', 'CASH')
+    fill('Lý do', 'Xin rút')
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi duyệt' }))
+    expect(api.calls('POST', '/balance-transactions')).toHaveLength(0)
+  })
+
+  it('loaiGiaoDich_hoanSoDu_phuongThucKhongCoKhac', async () => {
+    setup({ balance: POSITIVE })
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hoàn tiền, điều chỉnh' }))
+    const types = within(screen.getByLabelText('Loại giao dịch'))
+      .getAllByRole('option')
+      .map((o) => o.textContent)
+    expect(types).toEqual(['Hoàn số dư và tiền cọc', 'Hoàn số dư', 'Hoàn tiền cọc', 'Điều chỉnh'])
+    const methods = within(screen.getByLabelText('Phương thức'))
+      .getAllByRole('option')
+      .map((o) => o.textContent)
+    expect(methods).not.toContain('Khác')
   })
 
   it('FR_014_hoanTien_batBuocPhuongThuc', async () => {
@@ -223,7 +296,7 @@ describe('ResidentBalance (017)', () => {
   })
 
   it('BR_M11_14_vuotGioiHanHoan_409_hienLoiTrongForm', async () => {
-    const api = setup()
+    const api = setup({ balance: { ...POSITIVE, balance: 3000000 } })
     api.on(
       'POST',
       '/balance-transactions',

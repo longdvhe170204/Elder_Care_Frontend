@@ -5,6 +5,7 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/c
 import { Input } from '@/components/ui/input'
 import { SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ProblemAlert } from '@/common/ProblemAlert'
+import { ResidentCombobox } from '@/common/ResidentCombobox'
 import { problemOf } from '@/common/problem'
 import { ResidentConsentFields } from './ResidentConsentFields'
 import { EMPTY_CONSENT, consentBody, consentErrors } from './residentConsent'
@@ -88,28 +89,19 @@ export function CreateResidentAccount({ onCreated, onClose }) {
         ) : (
           <form onSubmit={submit} noValidate className="flex flex-col gap-4">
             <FieldGroup>
-              <Field data-invalid={!!errors.resident || undefined}>
-                <FieldLabel htmlFor="create-resident-account-resident">Người cao tuổi</FieldLabel>
-                <select
-                  id="create-resident-account-resident"
-                  value={residentId}
-                  onChange={(e) => setResidentId(e.target.value)}
-                  aria-invalid={!!errors.resident || undefined}
-                  className="h-10 w-full rounded-md border border-input bg-transparent px-3"
-                >
-                  <option value="">{residents === null ? 'Đang tải…' : 'Chọn người cao tuổi'}</option>
-                  {(residents ?? []).map((r) => (
-                    <option key={r.id} value={r.id}>
-                      {`${r.personalInfo.fullName} · ${r.profileCode}`}
-                    </option>
-                  ))}
-                </select>
-                {errors.resident ? (
-                  <FieldError>{errors.resident}</FieldError>
-                ) : (
-                  <FieldDescription>Hồ sơ Đang lưu trú; mỗi người tối đa một tài khoản.</FieldDescription>
-                )}
-              </Field>
+              {/* Demo 2026-11-26 (E): ô tìm theo tên hoặc mã hồ sơ thay dropdown */}
+              <ResidentCombobox
+                id="create-resident-account-resident"
+                options={(residents ?? []).map((r) => ({
+                  value: String(r.id),
+                  label: `${r.personalInfo.fullName} (${r.profileCode})`,
+                }))}
+                value={residentId}
+                onChange={setResidentId}
+                loading={residents === null}
+                error={errors.resident}
+                hint="Hồ sơ Đang lưu trú; mỗi người tối đa một tài khoản."
+              />
               <Field data-invalid={!!errors.username || undefined}>
                 <FieldLabel htmlFor="create-resident-account-username">Tên đăng nhập</FieldLabel>
                 <Input

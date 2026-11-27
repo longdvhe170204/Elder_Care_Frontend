@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { pickResident } from '@/test/pickResident'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { FamilyStaysPage } from './FamilyStaysPage'
 
@@ -204,7 +205,7 @@ describe('Người thân ở lại', () => {
     expect(await within(sheet).findByText('Chọn người cao tuổi')).toBeInTheDocument()
     expect(api.calls('POST', '/family-stays')).toHaveLength(0)
 
-    fireEvent.change(within(sheet).getByLabelText('Người cao tuổi'), { target: { value: '5' } })
+    await pickResident('Nguyễn Thị Lan', { container: sheet })
     await within(sheet).findByRole('option', { name: 'Trần Văn Minh' })
     fireEvent.change(within(sheet).getByLabelText('Người thân ở lại'), { target: { value: '31' } })
     fireEvent.change(within(sheet).getByLabelText('Bắt đầu dự kiến'), { target: { value: '2026-11-01T18:00' } })

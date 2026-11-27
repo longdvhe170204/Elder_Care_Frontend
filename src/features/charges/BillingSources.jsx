@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { getCostsBillingSources, postCostsItemsFromEvents } from '@/api'
+import { useEffect, useRef, useState } from 'react'
+import { getContracts, getCostsBillingSources, postCostsItemsFromEvents } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -45,8 +45,46 @@ async function collectAll({ residentId, from, to }, keys) {
   return perType
 }
 
-export function BillingSources({ onChanged = () => {} }) {
-  const [filter, setFilter] = useState({ residentId: '', type: 'RESIDENCY_DAY', from: '', to: '' })
+// Nguồn bị bỏ qua: ngày lưu trú (mã nguồn "người:yyyy-mm-dd") nêu ngày, gộp theo lý do; nguồn khác chỉ nêu lý do
+function skippedText(skipped) {
+  const byReason = new Map()
+  for (const x of skipped) {
+    const day = /:(\d{4}-\d{2}-\d{2})$/.exec(x.source ?? '')?.[1]
+    if (!byReason.has(x.reason)) byReason.set(x.reason, [])
+    if (day) byReason.get(x.reason).push(formatDate(day))
+  }
+  return [...byReason].map(([reason, days]) => (days.length ? `${days.join(', ')}: ${reason}` : reason)).join('; ')
+}
+
+// Hợp đồng tính phí: hợp đồng Hiệu lực, không có thì hợp đồng bắt đầu gần nhất
+function billingContract(contracts) {
+  const sorted = [...(contracts ?? [])].sort((a, b) => (a.startDate < b.startDate ? 1 : -1))
+  return sorted.find((c) => c.status === 'ACTIVE') ?? sorted[0] ?? null
+}
+
+// preset (demo 2026-11-26, E): mở từ điều kiện (a) của Kết thúc lưu trú { residentId, until }: chọn sẵn người cao tuổi,
+// khoảng ngày tự tính từ ngày bắt đầu hợp đồng tới ngày kết thúc dự kiến, không có ô chọn ngày; backend vẫn bỏ qua ngày
+// ngoài thời gian tính phí và nguồn đã có khoản nên gom lại không lập trùng
+export function BillingSources({ onChanged = () => {}, preset = null }) {
+  const [filter, setFilter] = useState({
+    residentId: preset ? String(preset.residentId) : '',
+    type: 'RESIDENCY_DAY',
+    from: '',
+    to: preset?.until ?? '',
+  })
+  useEffect(() => {
+    if (!preset) return
+    let live = true
+    getContracts({ query: { residentId: preset.residentId } })
+      .then(({ data }) => {
+        const contract = billingContract(data)
+        if (live && contract) setFilter((current) => ({ ...current, from: contract.startDate }))
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [preset])
   const residents = useResidentDirectory()
   const [loaded, setLoaded] = useState(null)
   const [rows, setRows] = useState(null)
@@ -169,27 +207,37 @@ export function BillingSources({ onChanged = () => {} }) {
             ))}
           </select>
         </label>
-        <label className="type-body-sm">
-          Từ ngày
-          <Input
-            type="date"
-            required
-            value={filter.from}
-            disabled={pending}
-            onChange={(e) => change('from', e.target.value)}
-          />
-        </label>
-        <label className="type-body-sm">
-          Đến ngày
-          <Input
-            type="date"
-            required
-            min={filter.from}
-            value={filter.to}
-            disabled={pending}
-            onChange={(e) => change('to', e.target.value)}
-          />
-        </label>
+        {preset ? (
+          <p className="type-body-sm sm:col-span-2">
+            {filter.from
+              ? `Khoảng ngày: ${formatDate(filter.from)} (bắt đầu hợp đồng) đến ${formatDate(filter.to)} (kết thúc dự kiến).`
+              : 'Đang tính khoảng ngày từ hợp đồng…'}
+          </p>
+        ) : (
+          <>
+            <label className="type-body-sm">
+              Từ ngày
+              <Input
+                type="date"
+                required
+                value={filter.from}
+                disabled={pending}
+                onChange={(e) => change('from', e.target.value)}
+              />
+            </label>
+            <label className="type-body-sm">
+              Đến ngày
+              <Input
+                type="date"
+                required
+                min={filter.from}
+                value={filter.to}
+                disabled={pending}
+                onChange={(e) => change('to', e.target.value)}
+              />
+            </label>
+          </>
+        )}
         <div className="flex flex-wrap gap-2 sm:col-span-2">
           <Button type="button" disabled={pending} onClick={gather}>
             Gom toàn bộ chi phí chưa lập
@@ -218,10 +266,16 @@ export function BillingSources({ onChanged = () => {} }) {
                 {collected.map((t) => (
                   <li key={t.type}>
                     {types[t.type]}: lập {t.created}, bỏ qua {t.skipped.length}
-                    {t.skipped.length > 0 && ` (${[...new Set(t.skipped.map((x) => x.reason))].join('; ')})`}
+                    {t.skipped.length > 0 && ` (${skippedText(t.skipped)})`}
                   </li>
                 ))}
               </ul>
+              {collected.some((t) => t.skipped.some((x) => /ngoài thời gian tính phí/.test(x.reason))) && (
+                <p className="type-caption text-muted-foreground">
+                  Ngày ngoài thời gian tính phí là ngày sau ngày kết thúc lưu trú, trước ngày bắt đầu hợp đồng hoặc sau
+                  khi đã giải phóng giường; hệ thống không lập khoản cho những ngày này.
+                </p>
+              )}
             </>
           )}
         </div>

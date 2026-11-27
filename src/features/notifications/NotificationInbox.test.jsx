@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { PermissionsProvider } from '@/common/permissions/permissions'
 import { DetailHost } from '@/test/DetailHost'
 import { NotificationInbox } from './NotificationInbox'
 
@@ -229,6 +230,32 @@ describe('NotificationInbox', () => {
     expect(navigate).toHaveBeenCalledWith('care-task-planning', { residentId: 9001, at: '2026-11-23T03:00:00Z' })
   })
 
+  it('FR_006_thongBaoKeHoachHieuLuc_moDungNguoiTrenManLapCongViec', async () => {
+    const effective = notification({
+      id: 15,
+      level: 'LOW',
+      eventType: 'CarePlanChanged',
+      title: 'Kế hoạch chăm sóc đã có hiệu lực',
+      sourceRecord: { type: 'M04.CARE_PLAN', id: '42', canOpen: false },
+    })
+    api.on('GET', '/me/permissions', json(200, [{ function: 'SHIFT_TASK_PLANNING', operation: 'CREATE' }]))
+    api.on('GET', '/me/notifications', json(200, { ...PAGE, items: [effective] }))
+    api.on('GET', '/me/notifications/15', json(200, { ...effective, status: 'VIEWED', viewedAt: effective.sentAt }))
+    api.on('GET', '/care-plans/42', json(200, { residentId: 9001 }))
+    const navigate = vi.fn()
+    render(
+      <PermissionsProvider>
+        <DetailHost>{(host) => <NotificationInbox {...host} onNavigate={navigate} />}</DetailHost>
+      </PermissionsProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: effective.title }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Xem việc cần lập' }))
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith('care-task-planning', { residentId: 9001, at: effective.sentAt }),
+    )
+  })
+
   it('FR_020_thongBaoKhac_khongCoNutLapCongViec', async () => {
     api.on('GET', '/me/notifications', json(200, PAGE))
     api.on(
@@ -242,18 +269,16 @@ describe('NotificationInbox', () => {
     expect(within(dialog).queryByRole('button', { name: 'Lập công việc cho người này' })).not.toBeInTheDocument()
   })
 
-  it('FR_036_anSauKhiXem_boKhoiDanhSach_coIdempotencyKey', async () => {
+  // Góp ý demo BF-10 (2026-11-27): bỏ ẩn thông báo, chỉ còn Chưa xem → Đã xem
+  it('thongBaoDaXem_khongCoNutAn', async () => {
     api.on('GET', '/me/notifications', json(200, PAGE))
     api.on('GET', '/me/notifications/13', json(200, VIEWED))
-    api.on('POST', '/me/notifications/13/hide', json(200, {}))
     render(<DetailHost>{(host) => <NotificationInbox {...host} />}</DetailHost>)
     fireEvent.click(await screen.findByRole('button', { name: 'Yêu cầu phê duyệt mới' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Ẩn khỏi danh sách' }))
+    const dialog = await screen.findByRole('dialog')
 
-    await screen.findByText('Đã ẩn thông báo khỏi danh sách')
-    const [, init] = api.calls('POST', '/me/notifications/13/hide')[0]
-    expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
-    expect(within(screen.getByRole('list', { name: 'Thông báo' })).queryByText('Yêu cầu phê duyệt mới')).toBeNull()
+    await within(dialog).findByText('Nội dung hiện theo quyền hiện hành của bạn.')
+    expect(screen.queryByRole('button', { name: 'Ẩn khỏi danh sách' })).not.toBeInTheDocument()
   })
 
   it('loiTai_hienThuLai', async () => {

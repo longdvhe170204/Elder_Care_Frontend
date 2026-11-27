@@ -5,6 +5,7 @@ export const BASIS = {
   MEAL: 'Bữa ăn',
   ACTIVITY_SESSION: 'Buổi hoạt động',
   POST_FALL_MONITORING: 'Theo dõi sau ngã',
+  INCIDENT_FOLLOW_UP: 'Việc tiếp theo của sự cố',
   CONTACT_MONITORING: 'Theo dõi tiếp xúc',
   WATER_INTAKE_ALERT: 'Cảnh báo uống nước',
   SHIFT_START_CHECK: 'Kiểm tra đầu ca',
@@ -29,7 +30,7 @@ export const ERRORS = {
   DAY_CARE_NOT_PRESENT: ['resident', 'Người bán trú chưa có mặt trong khoảng này.'],
   OUTSIDE_SHIFT: ['time', null],
   PLAN_ITEM_MISMATCH: ['time', 'Thời điểm, khung hoặc mức chưa khớp mục kế hoạch.'],
-  INVALID_BASIS: ['basis', 'Căn cứ chưa hợp lệ hoặc nguồn chưa xác nhận.'],
+  INVALID_BASIS: ['basis', 'Kế hoạch hoặc sự kiện có thể đã hết hiệu lực hoặc không còn đủ điều kiện. Kiểm tra lại nguồn và giờ dự kiến.'],
   MEDICATION_IS_NOT_A_TASK: ['basis', 'Liều thuốc không được lập thành công việc.'],
   INVALID_PERFORMER: ['performer', 'Người thực hiện hoặc lựa chọn công việc chung chưa hợp lệ.'],
   MISSING_CERTIFICATE: ['performer', 'Người thực hiện chưa đủ chứng chỉ.'],
@@ -54,11 +55,26 @@ export const shiftLabel = (shift) => `Ca ${timeOf(shift.startsAt)}–${timeOf(sh
 // Giờ dự kiến trong ca: giờ nhỏ hơn giờ bắt đầu của ca qua đêm thuộc ngày hôm sau
 export function plannedAtOf(shift, time) {
   const start = dateOf(shift.startsAt)
-  const date = time < timeOf(shift.startsAt) ? nextDate(start) : start
+  const overnight = start !== dateOf(shift.endsAt)
+  const date = overnight && time < timeOf(shift.startsAt) ? nextDate(start) : start
   return `${date}T${time}:00+07:00`
 }
 
+export function shiftTimeOptions(shift) {
+  const minute = 60_000
+  const first = Math.ceil(Date.parse(shift.startsAt) / minute) * minute
+  const end = Date.parse(shift.endsAt)
+  const options = []
+  for (let at = first; at < end; at += 15 * minute) options.push(timeOf(at))
+  return {
+    options,
+    first: timeOf(first),
+    last: timeOf((Math.ceil(end / minute) - 1) * minute),
+  }
+}
+
 export const pad = (n) => String(n).padStart(2, '0')
+export const newPlanningRow = () => ({ key: crypto.randomUUID(), content: '', mode: 'adHoc' })
 
 // Giờ (HH:MM) có nằm trong ca không, tính cả ca qua đêm
 export function inShift(shift, time) {
@@ -84,39 +100,68 @@ export function itemTimes(item) {
 // Mục kế hoạch của người cao tuổi (bỏ trùng khi ca qua đêm lấy kế hoạch của hai ngày) kèm giờ rơi vào ca; null là
 // làm lúc nào trong ca cũng được
 function planItemsInShift(resident, shift) {
+  if (resident?.planOccurrences) {
+    const timesByItem = new Map()
+    for (const { itemId, plannedAt } of resident.planOccurrences) {
+      const times = timesByItem.get(itemId) ?? []
+      times.push(plannedAt)
+      timesByItem.set(itemId, times)
+    }
+    return (resident.planItems ?? []).map((item) => {
+      const occurrences = timesByItem.get(item.id) ?? []
+      return { item, times: occurrences.map(timeOf), occurrences }
+    })
+  }
   const seen = new Set()
   return (resident?.planItems ?? [])
     .filter((item) => !seen.has(item.id) && seen.add(item.id))
     .map((item) => ({ item, times: anyTimeItem(item) ? null : itemTimes(item).filter((t) => inShift(shift, t)) }))
 }
 
-// Đối chiếu loại công việc và giờ người lập đã nhập với nguồn của người cao tuổi (FR-017, FR-023). Không điền thay
-// người lập (Q-307): chỉ trả mục kế hoạch cùng loại có đúng giờ đó, các nguồn khác có đúng giờ đó, và các mục kế hoạch
-// cùng loại kèm giờ của mục nằm trong ca để báo khi chưa khớp.
-export function matchBasis(resident, shift, taskTypeId, time) {
-  const items = planItemsInShift(resident, shift).filter(({ item }) => String(item.taskTypeId) === String(taskTypeId))
-  const plan = time ? items.find((i) => i.times === null || i.times.includes(time))?.item : undefined
-  const sources = time && !plan ? (resident?.otherSources ?? []).filter((s) => timeOf(s.at) === time) : []
-  return { items, plan, sources }
+// Chỉ liệt kê nguồn thuộc người đã chọn. Backend xác nhận lại hiệu lực tại giờ dự kiến.
+export function matchingSources(resident, shift, taskTypeId, time) {
+  if (!resident || !taskTypeId || !time || !inShift(shift, time)) return []
+  const at = Date.parse(plannedAtOf(shift, time))
+  return [
+    ...planItemsInShift(resident, shift)
+      .filter(({ item, times }) => String(item.taskTypeId) === String(taskTypeId) && (times === null || times.includes(time)))
+      .map(({ item, occurrences }) => ({
+        type: 'CARE_PLAN_ITEM',
+        id: item.id,
+        description: item.content,
+        item,
+        plannedAt: occurrences?.find((occurrence) => timeOf(occurrence) === time),
+      })),
+    ...(resident.otherSources ?? []).filter((source) => {
+      const startsAt = Date.parse(source.at)
+      // Nguồn theo dõi có thể bắt đầu trước ca. Backend kiểm mốc kết thúc khi lưu.
+      if (source.type === 'POST_FALL_MONITORING') return startsAt < at
+      if (source.type === 'CONTACT_MONITORING') return startsAt <= at
+      if (source.type === 'INCIDENT_FOLLOW_UP') return true
+      return Math.floor(startsAt / 60_000) === at / 60_000
+    }),
+  ]
 }
 
 const sameBasis = (task, basis, time) =>
   task.basis && `${task.basis.type}:${task.basis.id}` === basis && (time === null || timeOf(task.plannedAt) === time)
 
-// Việc cần lập của một người cao tuổi trong ca (hiển thị để đối chiếu, không tự lập, Q-307): mỗi giờ của mục kế hoạch
+// Việc cần lập của một người cao tuổi trong ca: mỗi giờ của mục kế hoạch
 // rơi vào ca và mỗi nguồn khác trong ca là một việc; Đã lập khi ca đã có công việc chưa hủy cùng căn cứ, giờ; Đang
 // nhập khi một dòng của lô đang nhập đã khớp.
 export function needsOf(resident, shift, tasks, drafts) {
   const id = resident.residentId
   const own = tasks.filter((t) => t.residentId === id && t.status !== 'CANCELLED')
   const entries = [
-    ...planItemsInShift(resident, shift).flatMap(({ item, times }) =>
-      (times ?? [null]).map((time) => ({
+    ...planItemsInShift(resident, shift).flatMap(({ item, times, occurrences }) =>
+      (times ?? [null]).map((time, index) => ({
         basis: `CARE_PLAN_ITEM:${item.id}`,
         kind: BASIS.CARE_PLAN_ITEM,
+        planItemId: item.id,
         text: item.content,
         taskTypeId: item.taskTypeId,
         time,
+        plannedAt: occurrences?.[index],
         importance: item.importance,
         role: item.performerRole,
       })),

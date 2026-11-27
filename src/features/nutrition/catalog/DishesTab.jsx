@@ -1,128 +1,71 @@
 import { useEffect, useState } from 'react'
 import {
+  deleteNutritionDishesByIdImage,
   getNutritionDishes,
   postNutritionDishes,
   postNutritionDishesByIdByCommand,
   putNutritionDishesById,
+  putNutritionDishesByIdImage,
 } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { Textarea } from '@/components/ui/textarea'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
-import { CheckList, Info, ReasonField } from '../NutritionParts'
+import { Info, ReasonField } from '../NutritionParts'
 import { useCommand, useLoad } from '../useNutrition'
-import {
-  DISH_COMMAND,
-  DISH_REASON_COMMANDS,
-  DISH_STATUS,
-  TEXTURE,
-  dishCommands,
-  dishContent,
-  label,
-} from '../nutritionView'
+import { DISH_COMMAND, DISH_REASON_COMMANDS, DISH_STATUS, dishCommands, label } from '../nutritionView'
 
-// Món ăn (011 FR-004, FR-004a; Q-283, Q-308): Nhân viên bếp lập món, gửi xác nhận, gửi bản sửa; Bác sĩ xác nhận hoặc
-// trả lại. Nút theo trạng thái và quyền "Món ăn, thực đơn" (bếp CREATE, Bác sĩ APPROVE); backend kiểm lại.
+// Món ăn (011 FR-004, FR-004a; Q-445): Nhân viên bếp tạo món gồm tên, mô tả, ảnh; Nháp → Hiệu lực bằng lệnh Đưa vào
+// dùng, không cần Bác sĩ xác nhận; sửa áp dụng ngay. Nút theo trạng thái và quyền "Món ăn, thực đơn"; backend kiểm lại.
 
-const EMPTY = { name: '', note: '', ingredients: [], noCatalogIngredient: false, suitableDietIds: [], texture: '' }
+const EMPTY = { name: '', description: '' }
+const IMAGE_TYPES = ['image/jpeg', 'image/png']
+const MAX_IMAGE = 5 * 1024 * 1024
 
-export function DishForm({
-  title,
-  description,
-  initial,
-  allergens,
-  diets,
-  submitLabel,
-  onSubmit,
-  onClose,
-  busy,
-  failure,
-}) {
+export function DishForm({ title, description, initial, submitLabel, onSubmit, onClose, busy, failure }) {
   const [form, setForm] = useState(initial ?? EMPTY)
   const [submitted, setSubmitted] = useState(false)
   const set = (patch) => setForm((f) => ({ ...f, ...patch }))
-  const errors = {
-    name: !form.name.trim() ? 'Nhập tên món' : null,
-    diets: form.suitableDietIds.length === 0 ? 'Chọn ít nhất một chế độ ăn phù hợp' : null,
-    texture: !form.texture ? 'Chọn kết cấu' : null,
-    ingredients:
-      form.ingredients.length === 0 && !form.noCatalogIngredient
-        ? 'Chọn thành phần, hoặc đánh dấu món không có thành phần trong danh mục'
-        : null,
-  }
+  const nameError = !form.name.trim() ? 'Nhập tên món' : form.name.trim().length > 200 ? 'Tên tối đa 200 ký tự' : null
+  const descriptionError = form.description.trim().length > 2000 ? 'Mô tả tối đa 2000 ký tự' : null
   function submit() {
     setSubmitted(true)
-    if (Object.values(errors).some(Boolean)) return
-    onSubmit({ ...form, name: form.name.trim(), note: form.note.trim() })
+    if (nameError || descriptionError) return
+    onSubmit({ name: form.name.trim(), description: form.description.trim() })
   }
-  const show = (key) => (submitted ? errors[key] : null)
   return (
     <Sheet open onOpenChange={(next) => !next && onClose()}>
-      <SheetContent className="overflow-y-auto p-6 sm:max-w-2xl">
+      <SheetContent className="overflow-y-auto p-6 sm:max-w-xl">
         <SheetTitle className="type-title">{title}</SheetTitle>
         <SheetDescription className="type-body-sm text-muted-foreground">{description}</SheetDescription>
         <FieldGroup className="mt-4">
-          <Field data-invalid={!!show('name') || undefined}>
+          <Field data-invalid={(submitted && !!nameError) || undefined}>
             <FieldLabel htmlFor="dish-name">Tên món</FieldLabel>
             <Input
               id="dish-name"
               className="h-11"
               value={form.name}
               onChange={(e) => set({ name: e.target.value })}
-              aria-invalid={!!show('name') || undefined}
+              aria-invalid={(submitted && !!nameError) || undefined}
             />
-            {show('name') && <FieldError>{show('name')}</FieldError>}
+            {submitted && nameError && <FieldError>{nameError}</FieldError>}
           </Field>
-          <Field>
-            <FieldLabel htmlFor="dish-note">Ghi chú</FieldLabel>
-            <Input id="dish-note" className="h-11" value={form.note} onChange={(e) => set({ note: e.target.value })} />
-          </Field>
-          <CheckList
-            idPrefix="dish-ingredient"
-            legend="Thành phần"
-            options={allergens}
-            value={form.ingredients}
-            onChange={(ingredients) => set({ ingredients })}
-            error={show('ingredients')}
-          />
-          <Field orientation="horizontal">
-            <Checkbox
-              id="dish-no-catalog"
-              checked={form.noCatalogIngredient}
-              onCheckedChange={(c) => set({ noCatalogIngredient: c === true })}
+          <Field data-invalid={(submitted && !!descriptionError) || undefined}>
+            <FieldLabel htmlFor="dish-description">Mô tả</FieldLabel>
+            <Textarea
+              id="dish-description"
+              rows={4}
+              value={form.description}
+              onChange={(e) => set({ description: e.target.value })}
             />
-            <FieldLabel htmlFor="dish-no-catalog">Món không có thành phần trong danh mục</FieldLabel>
-          </Field>
-          <CheckList
-            idPrefix="dish-diet"
-            legend="Chế độ ăn phù hợp"
-            options={diets}
-            value={form.suitableDietIds}
-            onChange={(suitableDietIds) => set({ suitableDietIds })}
-            error={show('diets')}
-          />
-          <Field data-invalid={!!show('texture') || undefined}>
-            <FieldLabel>Kết cấu</FieldLabel>
-            <ToggleGroup
-              variant="outline"
-              value={form.texture ? [form.texture] : []}
-              onValueChange={(n) => n[0] && set({ texture: n[0] })}
-              aria-label="Kết cấu"
-            >
-              {Object.entries(TEXTURE).map(([code, text]) => (
-                <ToggleGroupItem key={code} value={code} className="h-11 px-4">
-                  {text}
-                </ToggleGroupItem>
-              ))}
-            </ToggleGroup>
-            {show('texture') && <FieldError>{show('texture')}</FieldError>}
+            <FieldDescription>Người dùng app thấy mô tả này khi xem thực đơn.</FieldDescription>
+            {submitted && descriptionError && <FieldError>{descriptionError}</FieldError>}
           </Field>
         </FieldGroup>
         <div className="mt-4 flex flex-col gap-3">
@@ -141,13 +84,63 @@ export function DishForm({
   )
 }
 
-function DishDetail({ dish, allergens, diets, kitchen, doctor, onChanged, Title, Description }) {
+function DishImage({ dish, editable, onChanged }) {
+  const [error, setError] = useState(null)
+  const { busy, failure, run } = useCommand()
+  async function upload(file) {
+    setError(null)
+    if (!file) return
+    if (!IMAGE_TYPES.includes(file.type)) return setError('Chỉ nhận ảnh JPEG hoặc PNG')
+    if (file.size > MAX_IMAGE) return setError('Ảnh tối đa 5 MB')
+    const body = new FormData()
+    body.append('file', file)
+    if (await run(putNutritionDishesByIdImage, { path: { id: dish.id }, body })) onChanged('Đã cập nhật ảnh món')
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {dish.imageUrl ? (
+        <img src={dish.imageUrl} alt={`Ảnh món ${dish.name}`} className="aspect-video w-full rounded-md object-cover" />
+      ) : (
+        <p className="type-body-sm text-muted-foreground">Món chưa có ảnh.</p>
+      )}
+      {editable && (
+        <Field data-invalid={!!error || undefined}>
+          <FieldLabel htmlFor={`dish-image-${dish.id}`}>{dish.imageUrl ? 'Thay ảnh' : 'Thêm ảnh'}</FieldLabel>
+          <Input
+            id={`dish-image-${dish.id}`}
+            type="file"
+            accept={IMAGE_TYPES.join(',')}
+            disabled={busy}
+            onChange={(e) => upload(e.target.files?.[0])}
+          />
+          <FieldDescription>JPEG hoặc PNG, tối đa 5 MB.</FieldDescription>
+          {error && <FieldError>{error}</FieldError>}
+        </Field>
+      )}
+      {editable && dish.imageUrl && (
+        <div>
+          <Button
+            variant="outline"
+            className="h-11"
+            disabled={busy}
+            onClick={async () => {
+              if (await run(deleteNutritionDishesByIdImage, { path: { id: dish.id } })) onChanged('Đã bỏ ảnh món')
+            }}
+          >
+            Bỏ ảnh
+          </Button>
+        </div>
+      )}
+      <ProblemAlert problem={failure} />
+    </div>
+  )
+}
+
+function DishDetail({ dish, kitchen, onChanged, Title, Description }) {
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const { busy, failure, setFailure, run } = useCommand()
-  const content = dishContent(dish)
-  const names = (ids, list) => ids?.map((id) => list.find((x) => x.id === id)?.name ?? `mã ${id}`).join(', ')
 
   async function command(cmd, body, message) {
     const ok = await run(postNutritionDishesByIdByCommand, { path: { id: dish.id, command: cmd }, body })
@@ -165,7 +158,8 @@ function DishDetail({ dish, allergens, diets, kitchen, doctor, onChanged, Title,
     else command(cmd, {}, `${DISH_COMMAND[cmd]}: xong`)
   }
 
-  const commands = dishCommands(dish, { kitchen, doctor })
+  const commands = dishCommands(dish, { kitchen })
+  const editable = kitchen && (dish.status === 'DRAFT' || dish.status === 'ACTIVE')
   const reasonError = submitted && !reason.trim() ? 'Nhập lý do' : null
 
   return (
@@ -174,21 +168,16 @@ function DishDetail({ dish, allergens, diets, kitchen, doctor, onChanged, Title,
         <StatusBadge status={label(DISH_STATUS, dish.status)} />
         <Title className="type-title">{dish.name}</Title>
         <Description className="type-body-sm text-muted-foreground">
-          {dish.pendingRevision ? 'Có bản sửa chờ Bác sĩ xác nhận' : 'Nội dung đang áp dụng'}
+          {dish.status === 'DRAFT' ? 'Đưa vào dùng để chọn được món này khi lập thực đơn.' : 'Nội dung đang áp dụng'}
         </Description>
       </div>
-      {content && (
-        <div className="grid gap-3">
-          <Info label="Thành phần">
-            {content.ingredients?.length ? names(content.ingredients, allergens) : 'Không có thành phần trong danh mục'}
-          </Info>
-          <Info label="Chế độ ăn phù hợp">{names(content.suitableDietIds, diets)}</Info>
-          <Info label="Kết cấu">{label(TEXTURE, content.texture)}</Info>
-          {content.note && <Info label="Ghi chú">{content.note}</Info>}
-        </div>
-      )}
+      <DishImage dish={dish} editable={editable} onChanged={onChanged} />
+      <div className="grid gap-3">
+        <Info label="Mô tả">{dish.description || '—'}</Info>
+        {dish.inactiveReason && <Info label="Lý do ngừng">{dish.inactiveReason}</Info>}
+      </div>
       <ProblemAlert problem={failure} />
-      {mode && (
+      {mode === 'deactivate' && (
         <div className="flex flex-col gap-3 border-t pt-4">
           <ReasonField id="dish-reason" value={reason} onChange={setReason} error={reasonError} />
           <div className="flex justify-end gap-2">
@@ -196,36 +185,30 @@ function DishDetail({ dish, allergens, diets, kitchen, doctor, onChanged, Title,
               Thôi
             </Button>
             <Button
-              variant={mode === 'cancel' || mode === 'deactivate' ? 'destructive' : 'default'}
+              variant="destructive"
               className="h-11"
               disabled={busy}
               onClick={() => {
                 setSubmitted(true)
-                if (reason.trim())
-                  command(mode, { reason: reason.trim() }, `${DISH_COMMAND[mode].replace('…', '')}: xong`)
+                if (reason.trim()) command(mode, { reason: reason.trim() }, 'Đã ngừng hiệu lực món')
               }}
             >
-              {DISH_COMMAND[mode].replace('…', '')}
+              Ngừng hiệu lực
             </Button>
           </div>
         </div>
       )}
-      {!mode && (commands.length > 0 || kitchen) && (
+      {!mode && (commands.length > 0 || editable) && (
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-          {kitchen && dish.status === 'DRAFT' && (
+          {editable && (
             <Button variant="outline" className="h-11" onClick={() => setMode('edit')}>
               Sửa món
-            </Button>
-          )}
-          {kitchen && dish.status === 'ACTIVE' && !dish.pendingRevision && (
-            <Button variant="outline" className="h-11" onClick={() => setMode('revision')}>
-              Gửi bản sửa…
             </Button>
           )}
           {commands.map((cmd) => (
             <Button
               key={cmd}
-              variant={cmd === 'confirm' || cmd === 'submit' ? 'default' : 'outline'}
+              variant={cmd === 'activate' ? 'default' : 'outline'}
               className="h-11"
               disabled={busy}
               onClick={() => start(cmd)}
@@ -235,36 +218,24 @@ function DishDetail({ dish, allergens, diets, kitchen, doctor, onChanged, Title,
           ))}
         </div>
       )}
-      {(mode === 'edit' || mode === 'revision') && (
+      {mode === 'edit' && (
         <DishForm
-          title={mode === 'edit' ? `Sửa món ${dish.name}` : `Bản sửa của ${dish.name}`}
-          description={
-            mode === 'edit'
-              ? 'Sửa nội dung món Nháp.'
-              : 'Bản sửa chờ Bác sĩ xác nhận; món vẫn dùng nội dung cũ tới khi được xác nhận.'
-          }
-          initial={{ ...EMPTY, ...content, name: dish.name, note: content?.note ?? '' }}
-          allergens={allergens}
-          diets={diets}
-          submitLabel={mode === 'edit' ? 'Lưu món' : 'Gửi bản sửa'}
+          title={`Sửa món ${dish.name}`}
+          description="Sửa tên, mô tả; áp dụng ngay, kể cả ở thực đơn đã công bố."
+          initial={{ name: dish.name, description: dish.description ?? '' }}
+          submitLabel="Lưu món"
           busy={busy}
           failure={failure}
           onClose={() => setMode(null)}
           onSubmit={async (body) => {
-            const ok =
-              mode === 'edit'
-                ? await run(putNutritionDishesById, {
-                    path: { id: dish.id },
-                    headers: { 'If-Match': `"${dish.version}"` },
-                    body,
-                  })
-                : await run(postNutritionDishesByIdByCommand, {
-                    path: { id: dish.id, command: 'submit-revision' },
-                    body: { content: body },
-                  })
+            const ok = await run(putNutritionDishesById, {
+              path: { id: dish.id },
+              headers: { 'If-Match': `"${dish.version}"` },
+              body,
+            })
             if (ok) {
               setMode(null)
-              onChanged(mode === 'edit' ? 'Đã lưu món' : 'Đã gửi bản sửa')
+              onChanged('Đã lưu món')
             }
           }}
         />
@@ -273,7 +244,7 @@ function DishDetail({ dish, allergens, diets, kitchen, doctor, onChanged, Title,
   )
 }
 
-export function DishesTab({ allergens, diets, kitchen, doctor, openedKey, open, announce }) {
+export function DishesTab({ kitchen, openedKey, open, announce }) {
   const [creating, setCreating] = useState(false)
   const dishes = useLoad(() => getNutritionDishes({ query: {} }).then((r) => r.data), [])
   const create = useCommand()
@@ -285,16 +256,7 @@ export function DishesTab({ allergens, diets, kitchen, doctor, openedKey, open, 
 
   function openDish(dish) {
     open(`dish-${dish.id}`, 'Chi tiết món', (titles) => (
-      <DishDetail
-        key={dish.id}
-        dish={dish}
-        allergens={allergens}
-        diets={diets}
-        kitchen={kitchen}
-        doctor={doctor}
-        onChanged={changed}
-        {...titles}
-      />
+      <DishDetail key={dish.id} dish={dish} kitchen={kitchen} onChanged={changed} {...titles} />
     ))
   }
 
@@ -317,9 +279,7 @@ export function DishesTab({ allergens, diets, kitchen, doctor, openedKey, open, 
       {creating && (
         <DishForm
           title="Thêm món"
-          description="Món mới ở Nháp; gửi xác nhận để Bác sĩ xác nhận trước khi dùng trong thực đơn."
-          allergens={allergens}
-          diets={diets}
+          description="Món mới ở Nháp; thêm ảnh rồi bấm Đưa vào dùng để chọn được khi lập thực đơn."
           submitLabel="Lưu món"
           busy={create.busy}
           failure={create.failure}
@@ -342,15 +302,22 @@ export function DishesTab({ allergens, diets, kitchen, doctor, openedKey, open, 
           <Table aria-label="Món ăn">
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead className="pl-4">Món</TableHead>
-                <TableHead>Kết cấu</TableHead>
+                <TableHead className="w-16 pl-4">Ảnh</TableHead>
+                <TableHead>Món</TableHead>
                 <TableHead className="pr-4">Trạng thái</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {dishes.data.map((d) => (
                 <TableRow key={d.id} className={openedKey === `dish-${d.id}` ? 'bg-accent/40' : undefined}>
-                  <TableCell className="whitespace-normal pl-4">
+                  <TableCell className="pl-4">
+                    {d.imageUrl ? (
+                      <img src={d.imageUrl} alt="" className="size-10 rounded-md object-cover" />
+                    ) : (
+                      <span className="block size-10 rounded-md bg-muted" aria-hidden="true" />
+                    )}
+                  </TableCell>
+                  <TableCell className="whitespace-normal">
                     <button
                       type="button"
                       className="text-left underline-offset-4 hover:underline"
@@ -359,11 +326,10 @@ export function DishesTab({ allergens, diets, kitchen, doctor, openedKey, open, 
                     >
                       {d.name}
                     </button>
-                    {d.pendingRevision && (
-                      <span className="block type-caption text-muted-foreground">có bản sửa chờ xác nhận</span>
+                    {d.description && (
+                      <span className="block type-caption text-muted-foreground line-clamp-1">{d.description}</span>
                     )}
                   </TableCell>
-                  <TableCell>{label(TEXTURE, dishContent(d)?.texture)}</TableCell>
                   <TableCell className="pr-4">
                     <StatusBadge status={label(DISH_STATUS, d.status)} />
                   </TableCell>

@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import {
   getResidentsById,
+  getResidentsByResidentIdLocation,
   getResidentsByResidentIdRelationships,
   getMe,
   getResidencyEndingsByIdConditions,
   getStaff,
+  getTestingClock,
   postResidencyEndings,
   postResidencyEndingsByIdCancel,
   postResidencyEndingsByIdChangeDate,
@@ -35,17 +37,23 @@ const HOUSE_LABEL = 'Điều kiện (h): số dư và tiền cọc đã quyết 
 // Màn xử lý cho từng điều kiện chưa đạt (demo 2026-11-25): bấm Xử lý mở thẳng màn của feature sở hữu, đã chọn sẵn người
 // cao tuổi khi màn đó nhận tham số. (e) bàn giao ghi ngay trong Xác nhận kết thúc; (f), (g) tự động nên không có nút.
 const HANDLERS = {
-  END_A_COSTS: { page: 'charges', label: 'Chi phí', withResident: false },
+  // Demo 2026-11-26: (a) mở thẳng Gom chi phí của người đó, khoảng ngày tự tính tới ngày kết thúc dự kiến
+  END_A_COSTS: {
+    page: 'charges',
+    label: 'Chi phí',
+    params: (ending) => ({ residentId: ending.residentId, workspace: 'sources', until: ending.expectedEndDate }),
+  },
   END_B_BELONGINGS: { page: 'belongings', label: 'Đồ gửi', withResident: true },
   END_C_STORED_MEDICATION: { page: 'medication', label: 'Thuốc', withResident: true },
   END_D_ALERTS_INCIDENTS: { page: 'alerts', label: 'Cảnh báo', withResident: false },
-  END_H_SETTLEMENT: { page: 'balance', label: 'Số dư, thu chi', withResident: true },
-  END_H_SETTLEMENT_CONFIRMATION: { page: 'balance', label: 'Số dư, thu chi', withResident: true },
+  END_H_SETTLEMENT: { page: 'balance', label: 'Số dư, thu chi', withResident: true, focus: 'resident' },
+  END_H_SETTLEMENT_CONFIRMATION: { page: 'balance', label: 'Số dư, thu chi', withResident: true, focus: 'resident' },
 }
 
 // Trạng thái có màu (Đạt xanh, Chưa đạt đỏ; DESIGN.md mục 3.5). Lý do chỉ hiện khi Chưa đạt: dòng Đạt, Tự động backend
 // trả căn cứ là mã spec (FR-063 …), không phải chữ cho người dùng
-function ConditionRow({ line, residentId, onNavigate }) {
+function ConditionRow({ line, ending, onNavigate }) {
+  const residentId = ending.residentId
   const handler = line.status === 'NOT_MET' ? HANDLERS[line.code] : null
   return (
     <TableRow>
@@ -63,7 +71,16 @@ function ConditionRow({ line, residentId, onNavigate }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => onNavigate(handler.page, handler.withResident ? { residentId } : {})}
+            onClick={() =>
+              onNavigate(
+                handler.page,
+                handler.params
+                  ? handler.params(ending)
+                  : handler.withResident
+                    ? { residentId, ...(handler.focus && { focus: handler.focus }) }
+                    : {},
+              )
+            }
           >
             Xử lý ở {handler.label} →
           </Button>
@@ -73,10 +90,16 @@ function ConditionRow({ line, residentId, onNavigate }) {
   )
 }
 
-function Conditions({ conditions, residentId, onNavigate }) {
-  const settlement = conditions.filter((c) => SETTLEMENT.includes(c.code))
-  const rest = conditions.filter((c) => !SETTLEMENT.includes(c.code))
-  const row = (c) => <ConditionRow key={c.code} line={c} residentId={residentId} onNavigate={onNavigate} />
+// Demo 2026-11-26 (E): (f) hợp đồng, (g) giường do hệ thống tự làm khi kết thúc nên không hiện; (e) bàn giao ở dòng cuối vì
+// ghi ngay trong Xác nhận kết thúc, sau khi các điều kiện khác đã đạt
+const AUTOMATIC = ['END_F_CONTRACT', 'END_G_BED']
+
+function Conditions({ conditions, ending, onNavigate }) {
+  const shown = conditions.filter((c) => !AUTOMATIC.includes(c.code))
+  const settlement = shown.filter((c) => SETTLEMENT.includes(c.code))
+  const handover = shown.filter((c) => c.code === HANDOVER)
+  const rest = shown.filter((c) => !SETTLEMENT.includes(c.code) && c.code !== HANDOVER)
+  const row = (c) => <ConditionRow key={c.code} line={c} ending={ending} onNavigate={onNavigate} />
   return (
     <section className="flex flex-col gap-2">
       <h3 id="ending-conditions-title" className="type-card-title">
@@ -96,12 +119,18 @@ function Conditions({ conditions, residentId, onNavigate }) {
             {settlement.map(row)}
           </TableBody>
         )}
+        {handover.length > 0 && <TableBody className="border-t">{handover.map(row)}</TableBody>}
       </Table>
     </section>
   )
 }
 
 // Giờ hiện tại theo giờ máy cho ô datetime-local (người dùng sửa được)
+// Giờ Việt Nam của một mốc thời gian, dạng giá trị ô datetime-local
+function vietnamLocal(iso) {
+  return new Date(Date.parse(iso) + 7 * 3600_000).toISOString().slice(0, 16)
+}
+
 function nowLocal() {
   const d = new Date()
   const p = (n) => String(n).padStart(2, '0')
@@ -122,13 +151,24 @@ function ConfirmEndForm({ ending, onDone, onCancel }) {
   const [staff, setStaff] = useState(null)
   const [me, setMe] = useState('')
   const [memberId, setMemberId] = useState('')
-  const [at, setAt] = useState(nowLocal)
+  const [initialAt] = useState(nowLocal)
+  const [at, setAt] = useState(initialAt)
   const [staffId, setStaffId] = useState('')
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const [keys] = useState(() => ({ handover: newKey(), end: crypto.randomUUID() }))
+
+  // Bản demo, test chạy đồng hồ giả lập (000 NFR-13): điền sẵn theo giờ backend khi người dùng chưa sửa ô; nơi khác
+  // đường dẫn này không có nên giữ giờ máy
+  useEffect(() => {
+    getTestingClock()
+      .then(({ data }) => {
+        if (data?.simulated) setAt((current) => (current === initialAt ? vietnamLocal(data.now) : current))
+      })
+      .catch(() => {})
+  }, [initialAt])
 
   useEffect(() => {
     getResidentsByResidentIdRelationships({ path: { residentId: ending.residentId } })
@@ -248,8 +288,39 @@ function ConfirmEndForm({ ending, onDone, onCancel }) {
   )
 }
 
+// Demo 2026-11-26 (E): hồ sơ hiện người đại diện (họ tên, số điện thoại; api-012) và phòng, giường đang ở (api-003); không
+// tải được (thiếu quyền, đã trả giường) thì không hiện dòng đó
+function useEndingContacts(residentId) {
+  const [contacts, setContacts] = useState({ representative: null, place: null })
+  useEffect(() => {
+    let live = true
+    getResidentsByResidentIdRelationships({ path: { residentId } })
+      .then(({ data }) => {
+        const member = (data ?? []).find((r) => r.representative && r.status !== 'ENDED')?.familyMember
+        if (live && member)
+          setContacts((c) => ({
+            ...c,
+            representative: member.phoneNumber ? `${member.fullName} · ${member.phoneNumber}` : member.fullName,
+          }))
+      })
+      .catch(() => {})
+    getResidentsByResidentIdLocation({ path: { residentId } })
+      .then(({ data }) => {
+        const place = data?.location
+        if (live && place?.room)
+          setContacts((c) => ({ ...c, place: `Phòng ${place.room}${place.bed ? `, giường ${place.bed}` : ''}` }))
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [residentId])
+  return contacts
+}
+
 export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
   const [name, setName] = useState('')
+  const contacts = useEndingContacts(ending.residentId)
   const [conditions, setConditions] = useState(null)
   const [mode, setMode] = useState(null)
   const [reason, setReason] = useState('')
@@ -324,6 +395,8 @@ export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <Info label="Ngày kết thúc dự kiến">{formatDate(ending.expectedEndDate)}</Info>
+        {contacts.representative && <Info label="Người đại diện">{contacts.representative}</Info>}
+        {contacts.place && <Info label="Phòng, giường">{contacts.place}</Info>}
         {ending.destination && <Info label="Nơi chuyển đến">{ending.destination}</Info>}
         {ending.actualEndedAt && <Info label="Đã kết thúc lúc">{formatDateTime(ending.actualEndedAt)}</Info>}
         {ending.overdueSince && <Info label="Quá hạn từ">{formatDate(ending.overdueSince)}</Info>}
@@ -334,7 +407,7 @@ export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
         )}
       </div>
       <ProblemAlert problem={failure} />
-      {conditions && <Conditions conditions={conditions} residentId={ending.residentId} onNavigate={onNavigate} />}
+      {conditions && <Conditions conditions={conditions} ending={ending} onNavigate={onNavigate} />}
 
       {preparing && canUpdate && mode === null && (
         <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
@@ -431,20 +504,27 @@ function useRequesterOptions(residentId) {
   return [...(resident.id === residentId ? resident.names : []), ...staff]
 }
 
-export function CreateEndingSheet({ role, onClose, onDone }) {
-  const [residentId, setResidentId] = useState('')
-  const [endCase, setEndCase] = useState('')
+// request: yêu cầu người đại diện gửi trên app (demo 2026-11-26), điền sẵn form và gửi kèm endingRequestId
+export function CreateEndingSheet({ role, request = null, onClose, onDone }) {
+  const [residentId, setResidentId] = useState(request ? String(request.residentId) : '')
+  const [endCase, setEndCase] = useState(request?.endCase ?? '')
   const [medical, setMedical] = useState(false)
-  const [date, setDate] = useState('')
+  const [date, setDate] = useState(request?.expectedEndDate ?? '')
   const [destination, setDestination] = useState('')
-  const [requestedBy, setRequestedBy] = useState('')
-  const [reason, setReason] = useState('')
+  const [requestedBy, setRequestedBy] = useState(request ? `${request.familyMemberName} (người thân)` : '')
+  const [reason, setReason] = useState(request?.reason ?? '')
   const [submitted, setSubmitted] = useState(false)
   const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
   const requesterOptions = useRequesterOptions(residentId)
-  const cases =
-    role === 'DOCTOR' ? END_CASES.filter(([c]) => ['DISCHARGE', 'TRANSFER_TO_ANOTHER_FACILITY'].includes(c)) : END_CASES
+  // Demo 2026-11-26 (E): Bác sĩ lập xuất viện, chuyển cơ sở (kèm lý do y tế, nơi chuyển đến); vai trò khác (Hành chính) chỉ
+  // lập hết hạn, chấm dứt hợp đồng, không có hai ô đó
+  const clinical = role === 'DOCTOR'
+  const cases = END_CASES.filter(([c]) =>
+    clinical
+      ? ['DISCHARGE', 'TRANSFER_TO_ANOTHER_FACILITY'].includes(c)
+      : ['CONTRACT_EXPIRED', 'CONTRACT_TERMINATION'].includes(c),
+  )
 
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
@@ -472,6 +552,7 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
           ...(destination.trim() && { destination: destination.trim() }),
           requestedBy: requestedBy.trim(),
           reason: reason.trim(),
+          ...(request && { endingRequestId: request.id }),
         },
       })
       onDone(data)
@@ -505,12 +586,14 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
             onChange={setEndCase}
             error={shown('endCase')}
           />
-          <Field>
-            <label className="flex items-center gap-2 type-body-sm">
-              <input type="checkbox" checked={medical} onChange={(e) => setMedical(e.target.checked)} />
-              Vì lý do y tế
-            </label>
-          </Field>
+          {clinical && (
+            <Field>
+              <label className="flex items-center gap-2 type-body-sm">
+                <input type="checkbox" checked={medical} onChange={(e) => setMedical(e.target.checked)} />
+                Vì lý do y tế
+              </label>
+            </Field>
+          )}
           <Field data-invalid={!!shown('date') || undefined}>
             <FieldLabel htmlFor="ending-date">Ngày kết thúc dự kiến</FieldLabel>
             <Input
@@ -522,16 +605,18 @@ export function CreateEndingSheet({ role, onClose, onDone }) {
             />
             {shown('date') && <FieldError>{shown('date')}</FieldError>}
           </Field>
-          <Field data-invalid={!!shown('destination') || undefined}>
-            <FieldLabel htmlFor="ending-destination">Nơi chuyển đến</FieldLabel>
-            <Input
-              id="ending-destination"
-              className="h-11"
-              value={destination}
-              onChange={(e) => setDestination(e.target.value)}
-            />
-            {shown('destination') && <FieldError>{shown('destination')}</FieldError>}
-          </Field>
+          {clinical && (
+            <Field data-invalid={!!shown('destination') || undefined}>
+              <FieldLabel htmlFor="ending-destination">Nơi chuyển đến</FieldLabel>
+              <Input
+                id="ending-destination"
+                className="h-11"
+                value={destination}
+                onChange={(e) => setDestination(e.target.value)}
+              />
+              {shown('destination') && <FieldError>{shown('destination')}</FieldError>}
+            </Field>
+          )}
           <SuggestField
             id="ending-requested-by"
             label="Người đề nghị"

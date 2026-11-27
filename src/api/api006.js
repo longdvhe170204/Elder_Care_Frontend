@@ -24,6 +24,9 @@ export const getResidentsByResidentIdPrescriptions = (params) => request('GET', 
 /** Nhập đơn (nội bộ hoặc bên ngoài) (FR-004, FR-005, FR-006, FR-007, FR-008, FR-010, FR-011, FR-037, BR-M07-05, BR-M07-06) */
 export const postResidentsByResidentIdPrescriptions = (params) => request('POST', '/residents/{residentId}/prescriptions', params)
 
+/** Kê đơn gồm nhiều dòng thuốc cùng lúc (FR-004, FR-005, FR-006, FR-007) */
+export const postResidentsByResidentIdPrescriptionsBatch = (params) => request('POST', '/residents/{residentId}/prescriptions/batch', params)
+
 /** Xem trước kết quả kiểm tra trùng hoạt chất và dị ứng (không ghi) (FR-007, FR-008) */
 export const postResidentsByResidentIdPrescriptionsCheck = (params) => request('POST', '/residents/{residentId}/prescriptions/check', params)
 
@@ -54,6 +57,9 @@ export const postPrescriptionsByIdExtend = (params) => request('POST', '/prescri
 /** Lịch thuốc của một người cao tuổi trong khoảng (tính từ đơn, ghép liều đã vật hóa) (FR-018, FR-019, FR-020, FR-021, FR-049, BR-M07-01) */
 export const getResidentsByResidentIdMedicationSchedule = (params) => request('GET', '/residents/{residentId}/medication-schedule', params)
 
+/** Lịch sử trạng thái các liều thuốc của người cao tuổi theo khoảng ngày */
+export const getMedicationDosesHistory = (params) => request('GET', '/medication-doses/history', params)
+
 /** Liều của vòng phát thuốc cho Điều dưỡng hiện tại (được phân công, liều chung của tầng, Người phụ trách ca) (FR-026, FR-026a, FR-028) */
 export const getMedicationDosesRounds = (params) => request('GET', '/medication-doses/rounds', params)
 
@@ -72,11 +78,8 @@ export const postMedicationDosesByDoseKeySkip = (params) => request('POST', '/me
 /** Hoãn có chủ đích (bắt buộc lý do) (FR-021, FR-026, BR-M07-26) */
 export const postMedicationDosesByDoseKeyPostpone = (params) => request('POST', '/medication-doses/{doseKey}/postpone', params)
 
-/** Nhận liều trước khi soạn thuốc (FR-026, BR-M07-26) */
-export const postMedicationDosesByDoseKeyClaim = (params) => request('POST', '/medication-doses/{doseKey}/claim', params)
-
-/** Bỏ nhận liều (BR-M07-26) */
-export const postMedicationDosesByDoseKeyRelease = (params) => request('POST', '/medication-doses/{doseKey}/release', params)
+/** Tạm giữ 1 liều do chỉ số đo bất thường (chỉ tạm giữ liều này, không ngừng toàn đơn) */
+export const postMedicationDosesByDoseKeyHold = (params) => request('POST', '/medication-doses/{doseKey}/hold', params)
 
 /** Điều dưỡng đang được chỉ định phụ trách tạm của tầng (còn hiệu lực) (BR-M07-31) */
 export const getFloorsByFloorAreaIdTemporaryNurses = (params) => request('GET', '/floors/{floorAreaId}/temporary-nurses', params)
@@ -105,6 +108,9 @@ export const getResidentsByResidentIdMedicationReconciliations = (params) => req
 /** Lập phiếu (Bác sĩ, Điều dưỡng) (FR-034, FR-034a, FR-034b, FR-035, BR-M07-09, BR-M07-25) */
 export const postResidentsByResidentIdMedicationReconciliations = (params) => request('POST', '/residents/{residentId}/medication-reconciliations', params)
 
+/** Cập nhật ghi chú điều dưỡng, kết luận bác sĩ, thông tin đơn đối chiếu */
+export const patchMedicationReconciliationsByIdNotes = (params) => request('PATCH', '/medication-reconciliations/{id}/notes', params)
+
 /** Ghi lần tiếp nhận thuốc cung ứng (Điều dưỡng) cho một dòng của yêu cầu mua sắm loại "thuốc" đã ghi đã mua (FR-054, FR-055, BR-M07-24, BR-M11-17) */
 export const postSuppliedMedicationIntakes = (params) => request('POST', '/supplied-medication-intakes', params)
 
@@ -123,10 +129,13 @@ export const putMedicationReconciliationsByIdItems = (params) => request('PUT', 
 /** Gửi xác nhận (FR-034, FR-034a, FR-035) */
 export const postMedicationReconciliationsByIdSubmit = (params) => request('POST', '/medication-reconciliations/{id}/submit', params)
 
+/** Lưu phiếu đối chiếu vào trạng thái Bản nháp (Bác sĩ) (FR-035) */
+export const postMedicationReconciliationsByIdDraft = (params) => request('POST', '/medication-reconciliations/{id}/draft', params)
+
 /** Trả lại về Mở (bắt buộc lý do) (FR-035) */
 export const postMedicationReconciliationsByIdReturn = (params) => request('POST', '/medication-reconciliations/{id}/return', params)
 
-/** Hủy phiếu Mở hoặc Chờ xác nhận (bắt buộc lý do; bổ sung 2026-11-26, Q-447) (FR-035) */
+/** Hủy phiếu đối chiếu đang Mở hoặc Chờ xác nhận (bắt buộc lý do) (FR-034) */
 export const postMedicationReconciliationsByIdCancel = (params) => request('POST', '/medication-reconciliations/{id}/cancel', params)
 
 /** Xác nhận phiếu và áp quyết định từng dòng trong một lệnh (FR-036, FR-038, FR-034a, BR-M07-09) */

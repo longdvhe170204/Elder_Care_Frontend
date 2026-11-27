@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { pickResident } from '@/test/pickResident'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
 import { AbsencesPage } from './AbsencesPage'
@@ -37,9 +38,7 @@ function renderPage(role = 'OFFICE_STAFF') {
 }
 
 async function chooseResident() {
-  const select = await screen.findByLabelText('Người cao tuổi')
-  await screen.findByRole('option', { name: 'Nguyễn Thị Lan (NCT-0005)' })
-  fireEvent.change(select, { target: { value: '5' } })
+  await pickResident('Nguyễn Thị Lan')
 }
 
 beforeEach(() => {
