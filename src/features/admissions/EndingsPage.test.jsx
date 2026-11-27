@@ -80,6 +80,11 @@ beforeEach(() => {
   )
   api.on('GET', '/residency-endings', json(200, [ENDING, { ...ENDING, id: 15, status: 'CANCELLED' }]))
   api.on('GET', '/residency-ending-requests', json(200, []))
+  api.on(
+    'GET',
+    '/contracts',
+    json(200, [{ id: 3, status: 'ACTIVE', startDate: '2026-01-01', currentEndDate: '2026-11-30' }]),
+  )
   api.on('GET', '/residency-endings/14', json(200, ENDING))
   api.on('GET', '/residency-endings/14/conditions', json(200, CONDITIONS))
   api.on('GET', '/residents/5', json(200, { id: 5, personalInfo: { fullName: 'Nguyễn Thị Lan' } }))
@@ -144,6 +149,29 @@ describe('EndingsPage', () => {
       reason: 'Gia đình đón về',
       endingRequestId: 7,
     })
+  })
+
+  // Demo BF-10 (2026-11-27): không chọn hết hạn hay chấm dứt; theo ngày so với ngày hết hạn hợp đồng
+  it('truongHopTheoNgay_truocHanLaChamDut', async () => {
+    api.on('GET', '/residency-ending-requests', json(200, [REQUEST]))
+    api.on('POST', '/residency-endings', json(201, ENDING))
+    render(
+      <PermissionsProvider>
+        <EndingsPage role="OFFICE_STAFF" onNavigate={vi.fn()} requestId={7} />
+      </PermissionsProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ từ yêu cầu' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).queryByRole('group', { name: 'Trường hợp kết thúc' })).not.toBeInTheDocument()
+    expect(await within(sheet).findByText(/Hợp đồng hết hạn ngày 30\/11\/2026/)).toBeInTheDocument()
+    expect(within(sheet).getByText(/Kết thúc khi hết hạn hợp đồng/)).toBeInTheDocument()
+
+    fireEvent.change(within(sheet).getByLabelText('Ngày kết thúc dự kiến'), { target: { value: '2026-11-20' } })
+    expect(within(sheet).getByText(/Chấm dứt trước hạn hợp đồng/)).toBeInTheDocument()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Lập hồ sơ' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residency-endings')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residency-endings')[0][1].body).endCase).toBe('CONTRACT_TERMINATION')
   })
 
   it('yeuCauNguoiThan_tuChoiBatBuocLyDo', async () => {
@@ -346,15 +374,12 @@ describe('EndingsPage', () => {
 
   // Demo 2026-11-26 (E): Hành chính chỉ lập hết hạn, chấm dứt hợp đồng; xuất viện, chuyển cơ sở (kèm nơi chuyển đến, lý do
   // y tế) còn ở form của Bác sĩ
-  it('lapHoSo_hanhChinh_chiHetHanVaChamDut_khongCoNoiChuyenDenVaLyDoYTe', async () => {
+  it('lapHoSo_hanhChinh_khongChonTruongHop_khongCoNoiChuyenDenVaLyDoYTe', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ kết thúc' }))
     const dialog = screen.getByRole('dialog')
-    const group = within(dialog).getByRole('group', { name: 'Trường hợp kết thúc' })
-    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Hết hạn hợp đồng',
-      'Chấm dứt hợp đồng',
-    ])
+    // 2026-11-27: không còn ô chọn hết hạn hay chấm dứt; hệ thống xác định theo ngày
+    expect(within(dialog).queryByRole('group', { name: 'Trường hợp kết thúc' })).not.toBeInTheDocument()
     expect(within(dialog).queryByLabelText('Nơi chuyển đến')).not.toBeInTheDocument()
     expect(within(dialog).queryByText('Vì lý do y tế')).not.toBeInTheDocument()
   })

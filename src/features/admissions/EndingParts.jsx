@@ -5,6 +5,7 @@ import {
   getResidentsByResidentIdRelationships,
   getMe,
   getResidencyEndingsByIdConditions,
+  getContracts,
   getStaff,
   getTestingClock,
   postResidencyEndings,
@@ -473,6 +474,26 @@ export function EndingView({ ending, canUpdate, onChanged, onNavigate }) {
 
 // Gợi ý người đề nghị theo tên: chính người cao tuổi, người thân đang có quan hệ và nhân viên đang làm việc (demo
 // 2026-11-25); ghi kèm vai trò để phân biệt người trùng tên. Không tải được nhóm nào thì bỏ nhóm đó, vẫn gõ tự do được.
+// Ngày hết hạn của hợp đồng Hiệu lực (api-004 GET /contracts); null khi chưa có hoặc hợp đồng không có ngày hết hạn
+function useContractEnd(residentId) {
+  const [found, setFound] = useState({ id: null, end: null })
+  useEffect(() => {
+    if (!residentId) return
+    let cancelled = false
+    getContracts({ query: { residentId: Number(residentId) } })
+      .then(({ data }) => {
+        const active = (data ?? []).filter((c) => c.status === 'ACTIVE')
+        active.sort((a, b) => (a.startDate < b.startDate ? 1 : -1))
+        if (!cancelled) setFound({ id: residentId, end: active[0]?.currentEndDate ?? null })
+      })
+      .catch(() => !cancelled && setFound({ id: residentId, end: null }))
+    return () => {
+      cancelled = true
+    }
+  }, [residentId])
+  return found.id === residentId ? found.end : null
+}
+
 function useRequesterOptions(residentId) {
   const [staff, setStaff] = useState([])
   const [resident, setResident] = useState({ id: null, names: [] })
@@ -520,15 +541,16 @@ export function CreateEndingSheet({ role, request = null, onClose, onDone }) {
   // Demo 2026-11-26 (E): Bác sĩ lập xuất viện, chuyển cơ sở (kèm lý do y tế, nơi chuyển đến); vai trò khác (Hành chính) chỉ
   // lập hết hạn, chấm dứt hợp đồng, không có hai ô đó
   const clinical = role === 'DOCTOR'
-  const cases = END_CASES.filter(([c]) =>
-    clinical
-      ? ['DISCHARGE', 'TRANSFER_TO_ANOTHER_FACILITY'].includes(c)
-      : ['CONTRACT_EXPIRED', 'CONTRACT_TERMINATION'].includes(c),
-  )
+  const cases = END_CASES.filter(([c]) => ['DISCHARGE', 'TRANSFER_TO_ANOTHER_FACILITY'].includes(c))
+  // Demo BF-10 (2026-11-27): Hành chính không chọn hết hạn hay chấm dứt; theo ngày so với ngày hết hạn hợp đồng Hiệu
+  // lực (backend xét lại khi lưu)
+  const contractEnd = useContractEnd(clinical ? '' : residentId)
+  const contractCase = !date ? '' : contractEnd && date >= contractEnd ? 'CONTRACT_EXPIRED' : 'CONTRACT_TERMINATION'
+  const chosenCase = clinical ? endCase : contractCase
 
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
-    endCase: !endCase && 'Chọn trường hợp kết thúc',
+    endCase: clinical && !endCase && 'Chọn trường hợp kết thúc',
     date: !date && 'Nhập ngày kết thúc dự kiến',
     destination: endCase === 'TRANSFER_TO_ANOTHER_FACILITY' && !destination.trim() && 'Nhập nơi chuyển đến',
     requestedBy: !requestedBy.trim() && 'Nhập người đề nghị',
@@ -546,7 +568,7 @@ export function CreateEndingSheet({ role, request = null, onClose, onDone }) {
         headers: newKey(),
         body: {
           residentId: Number(residentId),
-          endCase,
+          endCase: chosenCase,
           medicalReason: medical,
           expectedEndDate: date,
           ...(destination.trim() && { destination: destination.trim() }),
@@ -579,13 +601,15 @@ export function CreateEndingSheet({ role, request = null, onClose, onDone }) {
             error={shown('resident')}
             onFailure={(e) => setFailure(problemOf(e))}
           />
-          <Choices
-            label="Trường hợp kết thúc"
-            options={cases}
-            value={endCase}
-            onChange={setEndCase}
-            error={shown('endCase')}
-          />
+          {clinical && (
+            <Choices
+              label="Trường hợp kết thúc"
+              options={cases}
+              value={endCase}
+              onChange={setEndCase}
+              error={shown('endCase')}
+            />
+          )}
           {clinical && (
             <Field>
               <label className="flex items-center gap-2 type-body-sm">
@@ -604,6 +628,14 @@ export function CreateEndingSheet({ role, request = null, onClose, onDone }) {
               onChange={(e) => setDate(e.target.value)}
             />
             {shown('date') && <FieldError>{shown('date')}</FieldError>}
+            {!clinical && residentId && (
+              <p className="type-caption text-muted-foreground">
+                {contractEnd ? `Hợp đồng hết hạn ngày ${formatDate(contractEnd)}. ` : 'Hợp đồng không có ngày hết hạn. '}
+                {contractCase === 'CONTRACT_EXPIRED' && 'Kết thúc khi hết hạn hợp đồng: tháng cuối tính theo số ngày ở.'}
+                {contractCase === 'CONTRACT_TERMINATION' &&
+                  'Chấm dứt trước hạn hợp đồng: nội trú dài hạn trả đủ tháng cuối; phí chấm dứt sớm (nếu hợp đồng có) nhập tay.'}
+              </p>
+            )}
           </Field>
           {clinical && (
             <Field data-invalid={!!shown('destination') || undefined}>
