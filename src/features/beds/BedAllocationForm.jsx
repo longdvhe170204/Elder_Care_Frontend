@@ -41,20 +41,22 @@ function readiness(bed) {
   return null
 }
 
-// Giữ thứ tự backend (khu, tầng, phòng): [{ key, title, rooms: [{ id, name, beds }] }]
+// Giữ thứ tự backend (khu, tầng, phòng): [{ key, title, rooms: [{ key, id, name, beds }] }]. Location của api-003 không bắt
+// buộc roomId: giường thiếu roomId đứng một dòng riêng theo bedId, không gộp nhầm với phòng khác
 function groupBeds(beds) {
   const groups = []
   for (const bed of beds) {
-    const { area, floor, room, roomId } = bed.location
+    const { area, floor, room, roomId, bedId } = bed.location
     const key = `${area}|${floor}`
     let group = groups.at(-1)
     if (group?.key !== key) {
       group = { key, title: [area, floor].filter(Boolean).join(' – '), rooms: [] }
       groups.push(group)
     }
+    const roomKey = roomId != null ? `room-${roomId}` : `bed-${bedId}`
     let entry = group.rooms.at(-1)
-    if (entry?.id !== roomId) {
-      entry = { id: roomId, name: room ?? bed.location.label, beds: [] }
+    if (entry?.key !== roomKey) {
+      entry = { key: roomKey, id: roomId, name: room ?? bed.location.label, beds: [] }
       group.rooms.push(entry)
     }
     entry.beds.push(bed)
@@ -306,7 +308,7 @@ export function BedAllocationForm({ resident, defaultDate, onSaved, formId, onSt
             <ul className="flex flex-col">
               {group.rooms.map((room) => (
                 <li
-                  key={room.id}
+                  key={room.key}
                   className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 border-b py-3 last:border-0"
                 >
                   <span className="flex min-w-0 flex-col">
@@ -321,9 +323,10 @@ export function BedAllocationForm({ resident, defaultDate, onSaved, formId, onSt
                     {room.beds.map((bed) => {
                       const id = String(bed.location.bedId)
                       const when = readiness(bed)
+                      const short = bed.location.bed ?? bed.location.label
                       return chip(
                         id,
-                        when ? `${bed.location.bed} · ${when}` : bed.location.bed,
+                        when ? `${short} · ${when}` : short,
                         bedId === id,
                         () => setBedId(id),
                         when ? `${bed.location.label}, ${when}` : bed.location.label,

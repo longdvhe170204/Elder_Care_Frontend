@@ -163,11 +163,15 @@ export function OpinionSheet({ applicationId, residentId, residentName, current 
                       <option value="">
                         {!contacts ? 'Đang tải…' : contacts.length ? 'Chọn người thân' : 'Chưa có người thân'}
                       </option>
-                      {(contacts ?? []).map((c) => (
-                        <option key={c.familyMemberId} value={c.familyMemberId}>
-                          {`${c.fullName} (${(RELATIONSHIP_LABELS[c.relationship] ?? c.relationship).toLowerCase()})`}
-                        </option>
-                      ))}
+                      {(contacts ?? []).map((c) => {
+                        // thiếu quan hệ thì chỉ ghi họ tên
+                        const relation = RELATIONSHIP_LABELS[c.relationship] ?? c.relationship
+                        return (
+                          <option key={c.familyMemberId} value={c.familyMemberId}>
+                            {relation ? `${c.fullName} (${relation.toLowerCase()})` : c.fullName}
+                          </option>
+                        )
+                      })}
                     </select>
                     {shown('familyMemberId') && <FieldError>{shown('familyMemberId')}</FieldError>}
                   </Field>

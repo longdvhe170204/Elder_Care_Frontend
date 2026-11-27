@@ -206,6 +206,24 @@ it('ngayGioVao_guiStartAtGioViet_ngaySaiBaoTaiO', async () => {
   await fillStart()
 })
 
+// Location của api-003 không bắt buộc roomId, bed: giường thiếu thì vẫn hiện, mỗi giường một dòng, chip ghi nhãn đầy đủ
+it('giuongThieuRoomIdVaTenGiuong_vanHienMoiGiuongMotDong', async () => {
+  api.on(
+    'GET',
+    '/bed-allocations/suitable-beds',
+    json(200, [
+      { location: { bedId: 6, label: 'Khu A – P201 – G2' }, state: 'EMPTY' },
+      { location: { bedId: 7, label: 'Khu A – P202 – G1' }, state: 'EMPTY' },
+    ]),
+  )
+  open()
+
+  expect(await screen.findByRole('radio', { name: 'Khu A – P201 – G2' })).toBeInTheDocument()
+  expect(screen.getByRole('radio', { name: 'Khu A – P202 – G1' })).toBeInTheDocument()
+  expect(screen.getAllByRole('listitem')).toHaveLength(2)
+  expect(screen.queryByText(/undefined/)).toBeNull()
+})
+
 it('ngayVaoTuHopDong_dienSanONgay', async () => {
   render(
     <BedAllocationForm

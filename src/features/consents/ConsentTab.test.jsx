@@ -204,6 +204,21 @@ describe('ConsentTab', () => {
     expect(api.calls('POST', '/files')).toHaveLength(0)
   })
 
+  // relationship không bắt buộc trong api-012: thiếu thì ô người ký chỉ ghi họ tên, form không lỗi
+  it('người thân thiếu quan hệ: ô người ký chỉ ghi họ tên', async () => {
+    api.on('GET', '/residents/5/consents', json(200, []))
+    api.on(
+      'GET',
+      '/residents/5/relationships',
+      json(200, [{ id: 3, status: 'ACTIVE', familyMember: { id: 51, fullName: 'Phan Văn Tư' } }]),
+    )
+    open({ allowedCommands: ['RECORD_CONSENT'] })
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận bản đồng ý' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Người đại diện theo pháp luật' }))
+    expect(await screen.findByRole('option', { name: 'Phan Văn Tư' })).toBeInTheDocument()
+  })
+
   it('người đại diện theo pháp luật: bắt buộc chọn người ký và đủ quyết định của Tòa án, gửi kèm tệp quyết định', async () => {
     routes({ consents: [] })
     api.on('POST', '/files', () => json(201, { fileId: 100 + api.calls('POST', '/files').length }))

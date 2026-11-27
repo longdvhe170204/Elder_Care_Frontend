@@ -289,11 +289,17 @@ export function ConsentRecordSheet({ residentId, residentName, onClose, onDone }
                         aria-invalid={!!errors.signerId || undefined}
                       >
                         <option value="">{members?.length ? 'Chọn người thân' : 'Chưa có người thân'}</option>
-                        {(members ?? []).map((r) => (
-                          <option key={r.familyMember.id} value={String(r.familyMember.id)}>
-                            {`${r.familyMember.fullName} (${(RELATIONSHIP_LABELS[r.relationship] ?? r.relationship).toLowerCase()})`}
-                          </option>
-                        ))}
+                        {(members ?? []).map((r) => {
+                          // thiếu quan hệ thì chỉ ghi họ tên
+                          const relation = RELATIONSHIP_LABELS[r.relationship] ?? r.relationship
+                          return (
+                            <option key={r.familyMember.id} value={String(r.familyMember.id)}>
+                              {relation
+                                ? `${r.familyMember.fullName} (${relation.toLowerCase()})`
+                                : r.familyMember.fullName}
+                            </option>
+                          )
+                        })}
                       </select>
                       {errors.signerId && <FieldError>{errors.signerId}</FieldError>}
                     </Field>
