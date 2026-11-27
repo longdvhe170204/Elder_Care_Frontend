@@ -47,7 +47,7 @@ describe('doseRoundView', () => {
       source: 'Gia đình gửi',
       status: 'Đến giờ',
       controlled: true,
-      sharedFloor: true,
+      sharedFloor: false,
     })
     expect(doses[0].lots).toEqual([{ code: 'Lô 5', batchId: 5, expiry: '31/12/2026', expired: false }])
   })

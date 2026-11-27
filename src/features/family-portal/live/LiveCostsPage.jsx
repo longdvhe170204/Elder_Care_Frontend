@@ -24,7 +24,7 @@ import { LivePurchaseConsent } from './LivePurchaseConsent'
 const MONEY = new Intl.NumberFormat('vi-VN')
 const money = (n) => `${MONEY.format(n ?? 0)} đồng`
 
-// Q-451: khoản nộp, khoản hoàn (cổng chỉ trả giao dịch Đã xác nhận) có biên nhận
+// Q-460: khoản nộp, khoản hoàn (cổng chỉ trả giao dịch Đã xác nhận) có biên nhận
 const PAYMENT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
 const REFUND_TYPES = ['REFUND', 'DEPOSIT_REFUND']
 const hasReceipt = (t) =>

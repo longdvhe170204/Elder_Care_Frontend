@@ -15,6 +15,7 @@ import { todayVN } from './doseRound'
 import {
   CHECKS,
   DISPOSE_KIND,
+  EXTRA_CHECKS,
   STATUS,
   confirmUse,
   disposeBatch,
@@ -33,6 +34,11 @@ import { ResidentPicker } from './ResidentPicker'
 // chứng kiến. Hệ thống không theo dõi số lượng còn (Q-393): Điều dưỡng tự báo gia đình sắp hết.
 
 const select = 'h-11 rounded-md border bg-background px-3 text-sm'
+
+const CONCENTRATION_PRESETS = ['5 mg', '10 mg', '20 mg', '40 mg', '100 mg', '250 mg', '500 mg', '1000 mg']
+const UNIT_PRESETS = ['viên', 'gói', 'ống', 'lọ', 'chai', 'tuýp', 'ml', 'giọt']
+const PACKAGING_PRESETS = ['Nguyên vẹn, rõ nhãn mác', 'Nguyên vẹn', 'Bao bì có vết rách nhẹ', 'Mất nhãn']
+const RELATIONSHIP_PRESETS = ['Con', 'Cháu', 'Vợ/Chồng', 'Anh/Chị/Em', 'Người giám hộ', 'Người quen']
 
 const ACTIONS = {
   PENDING_RECONCILIATION: ['USE', 'HOLD', 'RETURN', 'DISPOSE'],
@@ -67,6 +73,10 @@ function ReceiveForm({ residentId, resident, onDone, onClose }) {
     expiryOk: true,
     packagingOk: true,
     nameOk: true,
+    ingredientOk: true,
+    concentrationOk: true,
+    dosageFormOk: true,
+    storageOk: true,
   })
   const [submitted, setSubmitted] = useState(false)
   const [problem, setProblem] = useState(null)
@@ -95,7 +105,12 @@ function ReceiveForm({ residentId, resident, onDone, onClose }) {
           hasPrescription: form.hasPrescription,
           deliverer: { type: 'FAMILY_MEMBER', fullName: form.deliverer.trim(), ...(form.relationship.trim() && { relationship: form.relationship.trim() }) },
           receivedAt: new Date().toISOString(),
-          intakeChecks: { labelOk: form.labelOk, expiryOk: form.expiryOk, packagingOk: form.packagingOk, nameOk: form.nameOk },
+          intakeChecks: {
+            labelOk: form.labelOk,
+            expiryOk: form.expiryOk,
+            packagingOk: form.packagingOk && form.ingredientOk && form.concentrationOk && form.dosageFormOk && form.storageOk,
+            nameOk: form.nameOk,
+          },
         },
         key.current,
       )
@@ -121,17 +136,37 @@ function ReceiveForm({ residentId, resident, onDone, onClose }) {
       </SheetHeader>
       <div className="flex flex-col gap-3 overflow-y-auto px-4">
         <ProblemAlert problem={problem} />
+        <datalist id="fm-conc-list">
+          {CONCENTRATION_PRESETS.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+        <datalist id="fm-unit-list">
+          {UNIT_PRESETS.map((u) => (
+            <option key={u} value={u} />
+          ))}
+        </datalist>
+        <datalist id="fm-pack-list">
+          {PACKAGING_PRESETS.map((p) => (
+            <option key={p} value={p} />
+          ))}
+        </datalist>
+        <datalist id="fm-rel-list">
+          {RELATIONSHIP_PRESETS.map((r) => (
+            <option key={r} value={r} />
+          ))}
+        </datalist>
         {text('fm-name', 'Tên thuốc', 'customName')}
         <div className="grid grid-cols-2 gap-3">
-          {text('fm-conc', 'Hàm lượng', 'concentration', { placeholder: '500 mg' })}
-          {text('fm-unit', 'Đơn vị', 'unit')}
+          {text('fm-conc', 'Hàm lượng', 'concentration', { placeholder: '500 mg', list: 'fm-conc-list' })}
+          {text('fm-unit', 'Đơn vị', 'unit', { placeholder: 'viên', list: 'fm-unit-list' })}
           {text('fm-qty', 'Số lượng lúc nhận', 'quantity', { inputMode: 'decimal' })}
           {text('fm-exp', 'Hạn dùng', 'expiryDate', { type: 'date' })}
         </div>
-        {text('fm-pack', 'Tình trạng bao bì', 'packagingCondition')}
+        {text('fm-pack', 'Tình trạng bao bì', 'packagingCondition', { placeholder: 'Nguyên vẹn...', list: 'fm-pack-list' })}
         <div className="grid grid-cols-2 gap-3">
           {text('fm-deliverer', 'Người giao', 'deliverer')}
-          {text('fm-rel', 'Quan hệ', 'relationship')}
+          {text('fm-rel', 'Quan hệ', 'relationship', { placeholder: 'Con...', list: 'fm-rel-list' })}
         </div>
         <label className="flex cursor-pointer items-center gap-2 type-body-sm">
           <input type="checkbox" checked={form.hasPrescription} onChange={(e) => set({ hasPrescription: e.target.checked })} />
@@ -139,13 +174,13 @@ function ReceiveForm({ residentId, resident, onDone, onClose }) {
         </label>
         <fieldset className="flex flex-col gap-1.5 rounded-lg border p-3">
           <legend className="px-1 type-label">Kiểm tra khi tiếp nhận (Đạt = chọn)</legend>
-          {CHECKS.map(([field, label]) => (
+          {[...CHECKS, ...EXTRA_CHECKS].map(([field, label]) => (
             <label key={field} className="flex cursor-pointer items-center gap-2 type-body-sm">
               <input type="checkbox" checked={form[field]} onChange={(e) => set({ [field]: e.target.checked })} />
               {label} đạt
             </label>
           ))}
-          <FieldDescription>Có mục Không đạt thì lô chỉ được giữ hộ, hoàn trả hoặc hủy, không dùng được.</FieldDescription>
+          <FieldDescription>Có mục Không đạt hoặc khác hàm lượng thì lô chỉ được giữ hộ, hoàn trả hoặc hủy, không dùng được.</FieldDescription>
         </fieldset>
         {submitted && missing && <FieldError>Nhập đủ tên thuốc, hàm lượng, số lượng, hạn dùng, bao bì, người giao</FieldError>}
       </div>
@@ -309,10 +344,10 @@ function ActionForm({ action, batch, prescriptions, onDone, onClose }) {
       </div>
       <SheetFooter>
         <Button type="button" variant="outline" onClick={onClose}>
-          Hủy
+          Đóng
         </Button>
         <Button type="submit" className="h-11" disabled={saving}>
-          {LABEL[action]}
+          {action === 'DISPOSE' ? 'Xác nhận hủy' : LABEL[action]}
         </Button>
       </SheetFooter>
     </form>
@@ -466,10 +501,10 @@ export function FamilyMedicationPanel({ canRecord, onSaved }) {
                       b.status === 'IN_USE'
                         ? 'bg-emerald-50 text-emerald-800 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                         : b.status === 'PENDING_RECONCILIATION'
-                        ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
-                        : b.status === 'HOLD_ONLY'
-                        ? 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800'
-                        : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                          ? 'bg-amber-50 text-amber-800 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                          : b.status === 'HOLD_ONLY'
+                            ? 'bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-950/40 dark:text-sky-300 dark:border-sky-800'
+                            : 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
                     )}
                   >
                     {STATUS[b.status]}
@@ -534,13 +569,13 @@ export function FamilyMedicationPanel({ canRecord, onSaved }) {
                             className={cn(
                               'h-8.5 rounded-xl px-3 text-xs font-bold shadow-xs transition-all',
                               isUse &&
-                                'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs',
+                              'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs',
                               isHold &&
-                                'border-sky-300 text-sky-900 bg-sky-50/50 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-200 dark:bg-sky-950/30',
+                              'border-sky-300 text-sky-900 bg-sky-50/50 hover:bg-sky-100 dark:border-sky-800 dark:text-sky-200 dark:bg-sky-950/30',
                               isDestructive &&
-                                'border-red-200 text-red-700 bg-red-50/50 hover:bg-red-100 dark:border-red-900 dark:text-red-300 dark:bg-red-950/30',
+                              'border-red-200 text-red-700 bg-red-50/50 hover:bg-red-100 dark:border-red-900 dark:text-red-300 dark:bg-red-950/30',
                               !isUse && !isHold && !isDestructive &&
-                                'border-slate-200 text-slate-700 bg-white hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:bg-slate-800'
+                              'border-slate-200 text-slate-700 bg-white hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:bg-slate-800'
                             )}
                           >
                             {LABEL[a]}

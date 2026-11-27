@@ -88,7 +88,7 @@ describe('AppShell', () => {
       within(primary)
         .getAllByRole('button')
         .map((b) => b.textContent),
-    ).toEqual(['Checklist ca', 'Phát thuốc', 'Cảnh báo', 'Kế hoạch chăm sóc', 'Bàn giao ca'])
+    ).toEqual(['Checklist ca', 'Phát thuốc', 'Cảnh báo', 'Bàn giao ca'])
     expect(within(primary).getByRole('button', { name: 'Phát thuốc' })).toHaveAttribute('aria-current', 'page')
     expect(within(sidebar).queryByRole('button', { name: 'Việc chính' })).toBeNull()
   })

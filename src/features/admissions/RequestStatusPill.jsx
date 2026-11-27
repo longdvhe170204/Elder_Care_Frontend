@@ -56,4 +56,3 @@ export function StatusPill({ request, text, onDark = false, withDot = false }) {
     </span>
   )
 }
-

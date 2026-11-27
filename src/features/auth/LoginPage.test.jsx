@@ -98,6 +98,17 @@ describe('LoginPage', () => {
     expect(screen.getByText(/20\/10\/2026 10:15/)).toBeInTheDocument()
   })
 
+  it('nutHienMatKhau_doiKieuO', () => {
+    render(<LoginPage onNavigate={vi.fn()} />)
+    const field = screen.getByLabelText('Mật khẩu')
+    expect(field).toHaveAttribute('type', 'password')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Hiện mật khẩu' }))
+    expect(field).toHaveAttribute('type', 'text')
+    fireEvent.click(screen.getByRole('button', { name: 'Ẩn mật khẩu' }))
+    expect(field).toHaveAttribute('type', 'password')
+  })
+
   it('thieuO_baoTaiO_khongGui', async () => {
     render(<LoginPage onNavigate={vi.fn()} />)
 

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { PermissionsProvider } from '@/common/permissions/permissions'
 import { DetailHost } from '@/test/DetailHost'
 import { NotificationInbox } from './NotificationInbox'
 
@@ -227,6 +228,32 @@ describe('NotificationInbox', () => {
     const dialog = await screen.findByRole('dialog')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Lập công việc cho người này' }))
     expect(navigate).toHaveBeenCalledWith('care-task-planning', { residentId: 9001, at: '2026-11-23T03:00:00Z' })
+  })
+
+  it('FR_006_thongBaoKeHoachHieuLuc_moDungNguoiTrenManLapCongViec', async () => {
+    const effective = notification({
+      id: 15,
+      level: 'LOW',
+      eventType: 'CarePlanChanged',
+      title: 'Kế hoạch chăm sóc đã có hiệu lực',
+      sourceRecord: { type: 'M04.CARE_PLAN', id: '42', canOpen: false },
+    })
+    api.on('GET', '/me/permissions', json(200, [{ function: 'SHIFT_TASK_PLANNING', operation: 'CREATE' }]))
+    api.on('GET', '/me/notifications', json(200, { ...PAGE, items: [effective] }))
+    api.on('GET', '/me/notifications/15', json(200, { ...effective, status: 'VIEWED', viewedAt: effective.sentAt }))
+    api.on('GET', '/care-plans/42', json(200, { residentId: 9001 }))
+    const navigate = vi.fn()
+    render(
+      <PermissionsProvider>
+        <DetailHost>{(host) => <NotificationInbox {...host} onNavigate={navigate} />}</DetailHost>
+      </PermissionsProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: effective.title }))
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Xem việc cần lập' }))
+    await vi.waitFor(() =>
+      expect(navigate).toHaveBeenCalledWith('care-task-planning', { residentId: 9001, at: effective.sentAt }),
+    )
   })
 
   it('FR_020_thongBaoKhac_khongCoNutLapCongViec', async () => {

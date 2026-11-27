@@ -55,7 +55,7 @@ export function ResidentBalance({ residentId, fullName }) {
   const [notice, setNotice] = useState('')
   const [receiptFailure, setReceiptFailure] = useState(null)
 
-  // Q-451: biên nhận nộp tiền dựng ở backend, số theo mã giao dịch
+  // Q-460: biên nhận nộp tiền dựng ở backend, số theo mã giao dịch
   async function downloadReceipt(t) {
     setReceiptFailure(null)
     try {
@@ -66,7 +66,7 @@ export function ResidentBalance({ residentId, fullName }) {
     }
   }
 
-  // Bảng kê các khoản đã tick (Q-451): một bản PDF chia nhóm nộp, hoàn, trừ chi phí
+  // Bảng kê các khoản đã tick (Q-460): một bản PDF chia nhóm nộp, hoàn, trừ chi phí
   const [picked, setPicked] = useState([])
   const toggle = (id) => setPicked((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]))
 

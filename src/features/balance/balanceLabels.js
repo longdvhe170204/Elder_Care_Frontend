@@ -43,7 +43,7 @@ export function formatMoney(value) {
   return value === undefined || value === null ? '—' : `${Number(value).toLocaleString('vi-VN')} đ`
 }
 
-// Q-451: khoản nộp, khoản hoàn đã xác nhận có biên nhận (backend kiểm lại)
+// Q-460: khoản nộp, khoản hoàn đã xác nhận có biên nhận (backend kiểm lại)
 const PAYMENT_TYPES = ['CASH_PAYMENT', 'BANK_TRANSFER_PAYMENT', 'DEPOSIT_RECEIPT']
 const REFUND_TYPES = ['REFUND', 'DEPOSIT_REFUND']
 export const hasReceipt = (t) =>

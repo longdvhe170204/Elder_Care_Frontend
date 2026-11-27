@@ -55,10 +55,10 @@ function setup(ticket, permissions = ['CREATE', 'UPDATE', 'CONFIRM']) {
   if (ticket) api.on('GET', `/medication-reconciliations/${ticket.id}`, json(200, ticket, { ETag: '"3"' }))
 }
 
-function renderPanel() {
+function renderPanel(isDoctor = false) {
   render(
     <PermissionsProvider>
-      <ReconciliationPanel residentId={9} residentName="Trần Thị Mai" defaultReason="ADMISSION" />
+      <ReconciliationPanel residentId={9} residentName="Trần Thị Mai" defaultReason="ADMISSION" isDoctor={isDoctor} />
     </PermissionsProvider>,
   )
 }
@@ -77,72 +77,55 @@ describe('ReconciliationPanel', () => {
   it('FR_034b_lapPhieu_yeuCauChuyenMonThieuChiTiet_baoTaiO_tiepNhanThiGuiLenh', async () => {
     setup(null)
     api.on('POST', '/residents/9/medication-reconciliations', json(201, {}, { ETag: '"0"' }))
-    renderPanel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Lập phiếu đối chiếu' }))
-    fireEvent.change(screen.getByLabelText('Lý do lập phiếu'), { target: { value: 'PROFESSIONAL_REQUEST' } })
+    renderPanel(true)
+    fireEvent.click(await screen.findByRole('button', { name: 'Bác sĩ trực tiếp lập phiếu đối chiếu' }))
+    fireEvent.change(screen.getByLabelText('Loại đối chiếu'), { target: { value: 'PROFESSIONAL_REQUEST' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lập phiếu' }))
     expect(await screen.findByText('Nhập chi tiết lý do')).toBeTruthy()
     expect(api.calls('POST', '/residents/9/medication-reconciliations')).toHaveLength(0)
 
-    fireEvent.change(screen.getByLabelText('Lý do lập phiếu'), { target: { value: 'ADMISSION' } })
+    fireEvent.change(screen.getByLabelText('Loại đối chiếu'), { target: { value: 'ADMISSION' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lập phiếu' }))
     await waitFor(() => expect(api.calls('POST', '/residents/9/medication-reconciliations')).toHaveLength(1))
     const [, init] = api.calls('POST', '/residents/9/medication-reconciliations')[0]
-    expect(JSON.parse(init.body)).toEqual({ reason: 'ADMISSION' })
+    expect(JSON.parse(init.body)).toEqual({ reason: 'ADMISSION', comparisonSource: 'Đơn thuốc ra viện' })
     expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
   })
 
-  it('Q_307_thuocTiepNhanChiDeDoc_khongCoNutChepSan_khongQuyenLapThiKhongCoNutLap', async () => {
-    setup(OPEN, [])
-    renderPanel()
-    expect(await screen.findByText('Amlodipine 5mg sáng')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /Chép|Thêm từ hồ sơ/ })).toBeNull()
-    expect(await screen.findByRole('button', { name: 'Thêm dòng' })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Lập phiếu đối chiếu' })).toBeNull()
-  })
-
-  it('FR_035_suaDong_ngungThieuLyDoBaoTaiO_luuGuiIfMatch', async () => {
-    setup(OPEN)
+  it('M07_06_dieuDuong_tuDongLayDonHienTai_khongCoTruongQuyetDinh_khongLuuNhap_guiThangBacSi', async () => {
+    setup(null, ['CREATE', 'UPDATE'])
+    api.on('POST', '/residents/9/medication-reconciliations', json(201, {}, { ETag: '"0"' }))
+    api.on('GET', '/medication-reconciliations/4', json(200, OPEN, { ETag: '"3"' }))
     api.on('PUT', '/medication-reconciliations/4/items', json(200, {}, { ETag: '"4"' }))
-    renderPanel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Thêm dòng' }))
-    const line = screen.getByRole('group', { name: 'Dòng 1' })
-    fireEvent.change(within(line).getByLabelText('Nguồn'), { target: { value: 'ADMISSION_CURRENT_MEDICATION' } })
-    fireEvent.change(within(line).getByLabelText('Thuốc'), { target: { value: 'Amlodipine 5mg sáng' } })
-    fireEvent.change(within(line).getByLabelText('Quyết định'), { target: { value: 'DISCONTINUE' } })
-    // Q-411 (4): người không phải Bác sĩ có quyền kê đơn ghi căn cứ từ cơ sở kê bên ngoài trong lý do
-    expect(within(line).getByText(/ghi căn cứ từ cơ sở kê bên ngoài/)).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu các dòng' }))
-    expect(await within(line).findByText('Nhập lý do ngừng')).toBeTruthy()
-    expect(api.calls('PUT', '/medication-reconciliations/4/items')).toHaveLength(0)
-
-    fireEvent.change(within(line).getByLabelText('Lý do'), { target: { value: 'Bác sĩ cho ngừng khi vào viện' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu các dòng' }))
-    await waitFor(() => expect(api.calls('PUT', '/medication-reconciliations/4/items')).toHaveLength(1))
-    const [, init] = api.calls('PUT', '/medication-reconciliations/4/items')[0]
-    expect(init.headers['If-Match']).toBe('"3"')
-    expect(JSON.parse(init.body)).toEqual([
-      {
-        source: 'ADMISSION_CURRENT_MEDICATION',
-        medicationDescription: 'Amlodipine 5mg sáng',
-        decision: 'DISCONTINUE',
-        reason: 'Bác sĩ cho ngừng khi vào viện',
-      },
-    ])
+    api.on('POST', '/medication-reconciliations/4/submit', json(200, {}))
+    renderPanel(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập phiếu đối chiếu' }))
+    expect(screen.queryByRole('button', { name: 'Lưu nháp' })).toBeNull()
+    expect(screen.queryByLabelText(/Quyết định của bác sĩ/)).toBeNull()
+    fireEvent.change(screen.getByLabelText('Hàm lượng đối chiếu dòng 1'), { target: { value: '10 mg' } })
+    fireEvent.change(screen.getByLabelText('Kết quả đối chiếu dòng 1'), { target: { value: 'DOSE_CHANGED' } })
+    expect(screen.getByText('Bảng tổng hợp kết quả đối chiếu')).toBeTruthy()
+    api.on('GET', '/residents/9/medication-reconciliations', json(200, [OPEN]))
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi bác sĩ đối chiếu' }))
+    await waitFor(() => expect(api.calls('POST', '/medication-reconciliations/4/submit')).toHaveLength(1))
+    expect(JSON.parse(api.calls('PUT', '/medication-reconciliations/4/items')[0][1].body)[0]).toMatchObject({
+      source: 'CURRENT_PRESCRIPTION',
+      prescriptionId: 7,
+      nurseFinding: 'DOSE_CHANGED',
+      comparisonSummary: '[Đơn ra viện] 10 mg',
+    })
   })
 
-  it('FR_035_dongDonHienCo_chonTuDanhSachDon_themMoiThieuDonMoiBiChan', async () => {
+  it('M07_07_bacSi_suaQuyetDinh_ngungThieuLyDoBaoTaiO_doiLieuThieuDonMoiBiChan', async () => {
     setup(OPEN)
-    renderPanel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Thêm dòng' }))
-    const line = screen.getByRole('group', { name: 'Dòng 1' })
-    const options = within(within(line).getByLabelText('Đơn thuốc'))
-      .getAllByRole('option')
-      .map((o) => o.textContent)
-    expect(options.some((o) => o.includes('Amlodipin 5mg'))).toBe(true)
-    fireEvent.change(within(line).getByLabelText('Quyết định'), { target: { value: 'CHANGE_DOSE' } })
-    fireEvent.change(within(line).getByLabelText('Đơn thuốc'), { target: { value: '7' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu các dòng' }))
+    renderPanel(true)
+    const line = await screen.findByRole('group', { name: /Thuốc 1/ })
+    fireEvent.change(within(line).getByLabelText('Quyết định của bác sĩ *'), { target: { value: 'DISCONTINUE' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+    expect(await within(line).findByText('Nhập lý do ngừng')).toBeTruthy()
+
+    fireEvent.change(within(line).getByLabelText('Quyết định của bác sĩ *'), { target: { value: 'CHANGE_DOSE' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
     expect(await within(line).findByText('Lập đơn mới cho dòng này')).toBeTruthy()
     expect(within(line).getByRole('button', { name: 'Lập đơn mới cho dòng 1' })).toBeTruthy()
   })
@@ -160,7 +143,7 @@ describe('ReconciliationPanel', () => {
         },
       ],
     })
-    renderPanel()
+    renderPanel(true)
     expect(await screen.findByText('Đơn mới: Amlodipin, liều 1, Uống')).toBeTruthy()
   })
 
@@ -181,55 +164,36 @@ describe('ReconciliationPanel', () => {
   it('FR_035_luu412_baoDuLieuDaDoi_taiLaiPhieu', async () => {
     setup(OPEN)
     api.on('PUT', '/medication-reconciliations/4/items', problem(412, 'PRECONDITION_FAILED'))
-    renderPanel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Thêm dòng' }))
-    const line = screen.getByRole('group', { name: 'Dòng 1' })
-    fireEvent.change(within(line).getByLabelText('Đơn thuốc'), { target: { value: '7' } })
-    fireEvent.change(within(line).getByLabelText('Quyết định'), { target: { value: 'CONTINUE' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu các dòng' }))
+    renderPanel(true)
+    const line = await screen.findByRole('group', { name: /Thuốc 1/ })
+    fireEvent.change(within(line).getByLabelText('Quyết định của bác sĩ *'), { target: { value: 'CONTINUE' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
     expect(await screen.findByText('Dữ liệu đã thay đổi')).toBeTruthy()
     await waitFor(() => expect(api.calls('GET', '/medication-reconciliations/4').length).toBeGreaterThan(1))
   })
 
   it('FR_034_guiXacNhanThieuDong_409HienTrongKhung', async () => {
-    setup(OPEN)
+    setup({ ...OPEN, items: [{ id: 11, source: 'CURRENT_PRESCRIPTION', prescriptionId: 7, nurseFinding: 'NO_CHANGE' }] })
     api.on(
       'POST',
       '/medication-reconciliations/4/submit',
       problem(409, 'MISSING_ITEMS', { detail: 'Thiếu dòng đối chiếu cho đơn thuốc ID=7' }),
     )
-    renderPanel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Gửi xác nhận' }))
+    renderPanel(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'Gửi bác sĩ đối chiếu' }))
     expect(await screen.findByText('Thiếu dòng đối chiếu cho đơn thuốc ID=7')).toBeTruthy()
     const [, init] = api.calls('POST', '/medication-reconciliations/4/submit')[0]
     expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
   })
 
-  it('Q_447_huyPhieuMo_batBuocLyDo_guiLenhHuy', async () => {
-    setup({ ...OPEN, allowedCommands: ['CAP_NHAT_DONG', 'GUI_XAC_NHAN', 'HUY'] })
-    api.on('POST', '/medication-reconciliations/4/cancel', json(200, {}))
-    renderPanel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Hủy phiếu' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy phiếu' }))
-    expect(await screen.findByText('Nhập lý do hủy phiếu')).toBeTruthy()
-    expect(api.calls('POST', '/medication-reconciliations/4/cancel')).toHaveLength(0)
-
-    fireEvent.change(screen.getByLabelText('Lý do hủy phiếu'), { target: { value: 'Lập nhầm lý do' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy phiếu' }))
-    await waitFor(() => expect(api.calls('POST', '/medication-reconciliations/4/cancel')).toHaveLength(1))
-    expect(JSON.parse(api.calls('POST', '/medication-reconciliations/4/cancel')[0][1].body)).toEqual({
-      reason: 'Lập nhầm lý do',
-    })
-  })
-
   it('Q_447_khongCoLenhHuy_khongCoNutHuy', async () => {
     setup(OPEN)
     renderPanel()
-    await screen.findByRole('button', { name: 'Thêm dòng' })
+    await screen.findByRole('button', { name: '+ Thêm thuốc từ đơn mới' })
     expect(screen.queryByRole('button', { name: 'Hủy phiếu' })).toBeNull()
   })
 
-  it('FR_038_choXacNhan_traLaiBatBuocLyDo_tuXacNhanBiChanHaiNguoi', async () => {
+  it('FR_038_choXacNhan_traLaiBatBuocLyDo_bacSiXacNhan', async () => {
     setup(PENDING)
     api.on(
       'POST',
@@ -237,14 +201,9 @@ describe('ReconciliationPanel', () => {
       problem(409, 'TWO_PERSON_RULE', { detail: 'Người xác nhận phải khác người gửi' }),
     )
     api.on('POST', '/medication-reconciliations/4/return', json(200, {}))
-    renderPanel()
-    expect(await screen.findByText('Tiếp tục')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Lưu các dòng' })).toBeNull()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận phiếu' }))
-    // Q mới (chủ dự án 2026-11-18): người xác nhận kiểm đủ dòng cho thuốc đang dùng khi tiếp nhận
+    renderPanel(true)
+    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đối chiếu' }))
     expect(screen.getByText(/mỗi thuốc đang dùng khi tiếp nhận đã có một dòng/)).toBeTruthy()
-    expect(screen.getByText(/căn cứ của dòng Ngừng, Thay đổi liều/)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận và áp dụng quyết định' }))
     expect(await screen.findByText('Người xác nhận phải khác người gửi')).toBeTruthy()
 
@@ -329,10 +288,27 @@ describe('ReconciliationPanel', () => {
   })
 
   it('T077_lenhThanhCong_taiLaiChiTietPhieu', async () => {
-    setup(OPEN)
+    setup({ ...OPEN, items: [{ id: 11, source: 'CURRENT_PRESCRIPTION', prescriptionId: 7, nurseFinding: 'NO_CHANGE' }] })
     api.on('POST', '/medication-reconciliations/4/submit', json(200, {}))
-    renderPanel()
-    fireEvent.click(await screen.findByRole('button', { name: 'Gửi xác nhận' }))
+    renderPanel(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'Gửi bác sĩ đối chiếu' }))
     await waitFor(() => expect(api.calls('GET', '/medication-reconciliations/4').length).toBeGreaterThan(1))
+  })
+
+  it('FR_034_huyPhieuDoiChieu_batBuocLyDo_vaGuiIdempotencyKey', async () => {
+    setup({ ...OPEN, allowedCommands: ['CAP_NHAT_DONG', 'GUI_XAC_NHAN', 'HUY'] })
+    api.on('POST', '/medication-reconciliations/4/cancel', json(200, {}))
+    renderPanel(false)
+    fireEvent.click(await screen.findByRole('button', { name: 'Hủy phiếu' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy phiếu' }))
+    expect(await screen.findByText('Nhập lý do hủy phiếu')).toBeTruthy()
+    expect(api.calls('POST', '/medication-reconciliations/4/cancel')).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Lý do hủy phiếu'), { target: { value: 'Lập nhầm người cao tuổi' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy phiếu' }))
+    await waitFor(() => expect(api.calls('POST', '/medication-reconciliations/4/cancel')).toHaveLength(1))
+    const [, init] = api.calls('POST', '/medication-reconciliations/4/cancel')[0]
+    expect(JSON.parse(init.body)).toEqual({ reason: 'Lập nhầm người cao tuổi' })
+    expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
   })
 })

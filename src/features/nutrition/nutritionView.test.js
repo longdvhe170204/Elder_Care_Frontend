@@ -1,24 +1,29 @@
 import { expect, it } from 'vitest'
 import {
   assignmentState,
+  cellDishes,
   dishCommands,
   familyFoodCommands,
+  menuCommands,
   mondayOf,
-  portionsByDiet,
   slipCommands,
+  slipGroupName,
   weekDays,
   weekdayLabel,
 } from './nutritionView'
 
-it('lệnh món theo trạng thái và vai trò (FR-004a)', () => {
-  expect(dishCommands({ status: 'DRAFT' }, { kitchen: true })).toEqual(['submit', 'cancel'])
-  expect(dishCommands({ status: 'PENDING_CONFIRMATION' }, { doctor: true })).toEqual(['confirm', 'return'])
-  expect(dishCommands({ status: 'ACTIVE', pendingRevision: {} }, { doctor: true })).toEqual([
-    'confirm-revision',
-    'return-revision',
-    'deactivate',
-  ])
-  expect(dishCommands({ status: 'CANCELLED' }, { kitchen: true, doctor: true })).toEqual([])
+it('lệnh món theo trạng thái, chỉ của bếp (FR-004a, Q-445)', () => {
+  expect(dishCommands({ status: 'DRAFT' }, { kitchen: true })).toEqual(['activate', 'cancel'])
+  expect(dishCommands({ status: 'ACTIVE' }, { kitchen: true })).toEqual(['deactivate'])
+  expect(dishCommands({ status: 'DRAFT' }, { kitchen: false })).toEqual([])
+  expect(dishCommands({ status: 'CANCELLED' }, { kitchen: true })).toEqual([])
+})
+
+it('lệnh thực đơn: bếp gửi duyệt, Quản lý viện công bố hoặc trả lại (FR-029, Q-445)', () => {
+  expect(menuCommands({ status: 'DRAFT' }, { kitchen: true })).toEqual(['submit', 'cancel'])
+  expect(menuCommands({ status: 'PENDING_PUBLICATION' }, { kitchen: true })).toEqual(['withdraw'])
+  expect(menuCommands({ status: 'PENDING_PUBLICATION' }, { manager: true })).toEqual(['publish', 'return'])
+  expect(menuCommands({ status: 'PUBLISHED' }, { kitchen: true, manager: true })).toEqual([])
 })
 
 it('lệnh phiếu tách phía bếp và phía tầng (FR-047, FR-048)', () => {
@@ -39,15 +44,17 @@ it('tuần bắt đầu thứ Hai, mã ngày ISO', () => {
   expect(weekdayLabel('2026-11-08')).toBe('Chủ nhật, 08/11')
 })
 
-it('tổng suất theo chế độ ăn và bản gán hiện hành', () => {
-  expect(
-    portionsByDiet({
-      portionsByFloorArea: [
-        { floorAreaId: 1, dietId: 5, portionCount: 3 },
-        { floorAreaId: 2, dietId: 5, portionCount: 2 },
-      ],
-    }),
-  ).toEqual([{ dietId: 5, portionCount: 5 }])
+it('món của ô thực đơn chung, tên phiếu nhân viên, bản gán hiện hành', () => {
+  const content = {
+    dishes: [
+      { date: '2026-11-02', mealId: 1, dishId: 7 },
+      { date: '2026-11-02', mealId: 2, dishId: 8 },
+      { date: '2026-11-02', mealId: 1, dishId: 9 },
+    ],
+  }
+  expect(cellDishes(content, '2026-11-02', 1).map((r) => r.dishId)).toEqual([7, 9])
+  expect(slipGroupName({ group: 'STAFF' }, [])).toBe('Phiếu nhân viên')
+  expect(slipGroupName({ group: 'FLOOR', floorArea: 'Tầng 2' }, [])).toBe('Tầng 2')
   const s = assignmentState([
     { id: 1, status: 'DISCONTINUED' },
     { id: 2, status: 'ACTIVE' },

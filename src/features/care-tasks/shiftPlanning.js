@@ -74,6 +74,7 @@ export function shiftTimeOptions(shift) {
 }
 
 export const pad = (n) => String(n).padStart(2, '0')
+export const newPlanningRow = () => ({ key: crypto.randomUUID(), content: '', mode: 'adHoc' })
 
 // Giờ (HH:MM) có nằm trong ca không, tính cả ca qua đêm
 export function inShift(shift, time) {
@@ -81,40 +82,40 @@ export function inShift(shift, time) {
   return at >= new Date(shift.startsAt).getTime() && at < new Date(shift.endsAt).getTime()
 }
 
-// Mục không có giờ cố định dùng đầu ca làm mốc dự kiến, còn khung thực hiện là toàn ca.
-export const wholeShiftItem = (item) =>
+// Mục kế hoạch "một lần mỗi ca" hoặc không có giờ nào thì làm lúc nào trong ca cũng khớp (như CareTaskValidator)
+export const anyTimeItem = (item) =>
   item.frequencyType === 'ONCE_PER_SHIFT' || (!item.times?.length && !item.startsAt)
 
 // Giờ trong ngày (HH:MM) của mục kế hoạch: danh sách giờ, hoặc từ giờ bắt đầu lặp mỗi N giờ
-function itemTimes(item) {
-  if (item.frequencyType !== 'EVERY_N_HOURS' && item.times?.length) return item.times.map((t) => t.slice(0, 5))
+export function itemTimes(item) {
+  if (item.times?.length) return item.times.map((t) => t.slice(0, 5))
   if (!item.startsAt) return []
   const [hour, minute] = item.startsAt.split(':').map(Number)
-  if (item.frequencyType !== 'EVERY_N_HOURS') return [`${pad(hour)}:${pad(minute)}`]
-  if (!(item.intervalHours > 0)) return []
+  if (!(item.intervalHours > 0)) return [`${pad(hour)}:${pad(minute)}`]
   const times = []
   for (let k = 0; k * item.intervalHours < 24; k++) times.push(`${pad((hour + k * item.intervalHours) % 24)}:${pad(minute)}`)
   return times
 }
 
-function appliesOn(item, date) {
-  if (item.frequencyType !== 'DAYS_OF_WEEK') return true
-  const day = new Date(`${date}T00:00:00Z`).getUTCDay()
-  return item.weekdays?.includes(day || 7)
-}
-
-// Đối chiếu mốc dự kiến theo CarePlanItemSequence, kể cả ngày sau nửa đêm.
+// Mục kế hoạch của người cao tuổi (bỏ trùng khi ca qua đêm lấy kế hoạch của hai ngày) kèm giờ rơi vào ca; null là
+// làm lúc nào trong ca cũng được
 function planItemsInShift(resident, shift) {
+  if (resident?.planOccurrences) {
+    const timesByItem = new Map()
+    for (const { itemId, plannedAt } of resident.planOccurrences) {
+      const times = timesByItem.get(itemId) ?? []
+      times.push(plannedAt)
+      timesByItem.set(itemId, times)
+    }
+    return (resident.planItems ?? []).map((item) => {
+      const occurrences = timesByItem.get(item.id) ?? []
+      return { item, times: occurrences.map(timeOf), occurrences }
+    })
+  }
   const seen = new Set()
   return (resident?.planItems ?? [])
     .filter((item) => !seen.has(item.id) && seen.add(item.id))
-    .map((item) => {
-      const times = wholeShiftItem(item) ? [timeOf(shift.startsAt)] : itemTimes(item)
-      return {
-        item,
-        times: times.filter((time) => inShift(shift, time) && appliesOn(item, dateOf(plannedAtOf(shift, time)))),
-      }
-    })
+    .map((item) => ({ item, times: anyTimeItem(item) ? null : itemTimes(item).filter((t) => inShift(shift, t)) }))
 }
 
 // Chỉ liệt kê nguồn thuộc người đã chọn. Backend xác nhận lại hiệu lực tại giờ dự kiến.
@@ -123,8 +124,14 @@ export function matchingSources(resident, shift, taskTypeId, time) {
   const at = Date.parse(plannedAtOf(shift, time))
   return [
     ...planItemsInShift(resident, shift)
-      .filter(({ item, times }) => String(item.taskTypeId) === String(taskTypeId) && times.includes(time))
-      .map(({ item }) => ({ type: 'CARE_PLAN_ITEM', id: item.id, description: item.content, item })),
+      .filter(({ item, times }) => String(item.taskTypeId) === String(taskTypeId) && (times === null || times.includes(time)))
+      .map(({ item, occurrences }) => ({
+        type: 'CARE_PLAN_ITEM',
+        id: item.id,
+        description: item.content,
+        item,
+        plannedAt: occurrences?.find((occurrence) => timeOf(occurrence) === time),
+      })),
     ...(resident.otherSources ?? []).filter((source) => {
       const startsAt = Date.parse(source.at)
       // Nguồn theo dõi có thể bắt đầu trước ca. Backend kiểm mốc kết thúc khi lưu.
@@ -139,21 +146,22 @@ export function matchingSources(resident, shift, taskTypeId, time) {
 const sameBasis = (task, basis, time) =>
   task.basis && `${task.basis.type}:${task.basis.id}` === basis && (time === null || timeOf(task.plannedAt) === time)
 
-// Việc cần lập của một người cao tuổi trong ca (hiển thị để đối chiếu, không tự lập, Q-307): mỗi giờ của mục kế hoạch
+// Việc cần lập của một người cao tuổi trong ca: mỗi giờ của mục kế hoạch
 // rơi vào ca và mỗi nguồn khác trong ca là một việc; Đã lập khi ca đã có công việc chưa hủy cùng căn cứ, giờ; Đang
 // nhập khi một dòng của lô đang nhập đã khớp.
 export function needsOf(resident, shift, tasks, drafts) {
   const id = resident.residentId
   const own = tasks.filter((t) => t.residentId === id && t.status !== 'CANCELLED')
   const entries = [
-    ...planItemsInShift(resident, shift).flatMap(({ item, times }) =>
-      times.map((time) => ({
+    ...planItemsInShift(resident, shift).flatMap(({ item, times, occurrences }) =>
+      (times ?? [null]).map((time, index) => ({
         basis: `CARE_PLAN_ITEM:${item.id}`,
         kind: BASIS.CARE_PLAN_ITEM,
+        planItemId: item.id,
         text: item.content,
         taskTypeId: item.taskTypeId,
         time,
-        wholeShift: wholeShiftItem(item),
+        plannedAt: occurrences?.[index],
         importance: item.importance,
         role: item.performerRole,
       })),

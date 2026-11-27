@@ -50,7 +50,7 @@ describe('balanceLabels (017)', () => {
   })
 })
 
-// Q-451: khoản nộp và khoản hoàn đã xác nhận có biên nhận, số BN- hoặc HT-
+// Q-460: khoản nộp và khoản hoàn đã xác nhận có biên nhận, số BN- hoặc HT-
 describe('biên nhận', () => {
   it('khoanNopVaKhoanHoan', () => {
     const paid = { id: 7, type: 'CASH_PAYMENT', status: 'CONFIRMED', amount: 100 }
