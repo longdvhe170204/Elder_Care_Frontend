@@ -15,7 +15,8 @@ function renderForm(props = {}) {
   )
 }
 
-// 001 T022: tạo hồ sơ người cao tuổi (US1 #1, #2, #4; FR-001 → FR-005; hợp đồng POST /residents).
+// 001 T022: tạo hồ sơ người cao tuổi (US1 #1, #2, #4; FR-001 → FR-005; hợp đồng POST /residents). Chủ dự án chốt khi test
+// BF-01 2026-11-26: CCCD 12 chữ số bắt buộc, nhập và tra trước; các nhóm sau khóa tới khi tra xong mà không có hồ sơ mở.
 
 let api
 
@@ -40,17 +41,24 @@ function created(overrides = {}) {
   }
 }
 
-function fill({ name = 'Nguyễn Văn An', dob = '1948-03-14', gender = 'MALE', document = 'NONE' } = {}) {
-  if (document) fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: document } })
-  fireEvent.change(screen.getByLabelText('Họ tên'), { target: { value: name } })
-  fireEvent.change(screen.getByLabelText('Ngày sinh'), { target: { value: dob } })
-  fireEvent.change(screen.getByLabelText('Giới tính'), { target: { value: gender } })
+const field = (label) => screen.getByLabelText(new RegExp(`^${label}`))
+
+function fill({ name = 'Nguyễn Văn An', dob = '14/03/1948', gender = 'MALE' } = {}) {
+  fireEvent.change(field('Họ và tên'), { target: { value: name } })
+  fireEvent.change(field('Ngày sinh'), { target: { value: dob } })
+  fireEvent.change(field('Giới tính'), { target: { value: gender } })
 }
 
-async function checkCitizenId(number) {
-  fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'CITIZEN_ID' } })
-  fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: number } })
+function checkCitizenId(number) {
+  fireEvent.change(field('Số căn cước'), { target: { value: number } })
   fireEvent.click(screen.getByRole('button', { name: 'Tra hồ sơ' }))
+}
+
+// Tra CCCD chưa có hồ sơ nào: mở khóa các nhóm sau
+async function lookedUpNew(number = '012345678901') {
+  api.on('GET', '/residents', json(200, { items: [], nextCursor: null }))
+  checkCitizenId(number)
+  await screen.findByText('Chưa tìm thấy hồ sơ')
 }
 
 function profile(id, status, info = {}) {
@@ -71,51 +79,60 @@ function profile(id, status, info = {}) {
   }
 }
 
-describe('CreateResident: nhập giấy tờ trước, tra hồ sơ cũ theo CCCD (test BF-01 2026-11-26)', () => {
-  it('thông tin cá nhân khóa tới khi xong bước giấy tờ', () => {
+describe('CreateResident: nhập CCCD trước, tra hồ sơ cũ theo CCCD (test BF-01 2026-11-26)', () => {
+  it('thông tin cá nhân khóa tới khi tra xong số căn cước', async () => {
     renderForm()
-    expect(screen.getByLabelText('Họ tên').matches(':disabled')).toBe(true)
+    expect(field('Họ và tên').matches(':disabled')).toBe(true)
 
-    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'CITIZEN_ID' } })
-    expect(screen.getByLabelText('Họ tên').matches(':disabled')).toBe(true)
+    fireEvent.change(field('Số căn cước'), { target: { value: '012345678901' } })
+    expect(field('Họ và tên').matches(':disabled')).toBe(true)
 
-    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'NONE' } })
-    expect(screen.getByLabelText('Họ tên').matches(':disabled')).toBe(false)
+    await lookedUpNew()
+    expect(field('Họ và tên').matches(':disabled')).toBe(false)
   })
 
-  it('CCCD không đủ 12 chữ số thì báo, không tra', () => {
+  it('CCCD bắt buộc, không đủ 12 chữ số thì báo, không tra', () => {
     renderForm()
-    fireEvent.change(screen.getByLabelText('Loại giấy tờ'), { target: { value: 'CITIZEN_ID' } })
-    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: '01234567890' } })
     fireEvent.click(screen.getByRole('button', { name: 'Tra hồ sơ' }))
+    expect(screen.getByText('Nhập số căn cước')).toBeInTheDocument()
 
-    expect(screen.getByText('Số CCCD gồm đúng 12 chữ số')).toBeTruthy()
+    checkCitizenId('01234567890')
+    expect(screen.getByText('Số căn cước gồm đúng 12 chữ số')).toBeInTheDocument()
     expect(api.fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('ô số căn cước chỉ giữ chữ số, tối đa 12 số', () => {
+    renderForm()
+    fireEvent.change(field('Số căn cước'), { target: { value: '012 345 678 901 23' } })
+    expect(field('Số căn cước')).toHaveValue('012345678901')
   })
 
   it('FR-004: có hồ sơ cũ Kết thúc lưu trú thì báo sẽ liên kết và điền được thông tin từ hồ sơ cũ', async () => {
     api.on('GET', '/residents', json(200, { items: [profile(5, 'RESIDENCY_ENDED')], nextCursor: null }))
     renderForm()
-    await checkCitizenId('012345678901')
+    checkCitizenId('012345678901')
 
-    await screen.findByText('Người này đã có hồ sơ cũ. Hồ sơ mới sẽ được liên kết với hồ sơ này:')
-    expect(screen.getByText('NCT-2025-000005 · Nguyễn Văn An · Kết thúc lưu trú')).toBeTruthy()
+    await screen.findByText('Đã tìm thấy hồ sơ cũ')
+    expect(
+      screen.getByText(/Nguyễn Văn An, mã NCT-2025-000005, Kết thúc lưu trú\. Hồ sơ mới sẽ được liên kết/),
+    ).toBeInTheDocument()
     expect(new URL(api.fetchMock.mock.calls[0][0], 'http://x').searchParams.get('q')).toBe('012345678901')
-    fireEvent.click(screen.getByRole('button', { name: 'Điền thông tin từ hồ sơ cũ' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Điền từ hồ sơ cũ' }))
 
-    expect(screen.getByLabelText('Họ tên').value).toBe('Nguyễn Văn An')
-    expect(screen.getByLabelText('Ngày sinh').value).toBe('1948-03-14')
-    expect(screen.getByLabelText('Số điện thoại').value).toBe('0912000111')
+    expect(field('Họ và tên')).toHaveValue('Nguyễn Văn An')
+    expect(field('Ngày sinh')).toHaveValue('14/03/1948')
+    expect(field('Số điện thoại')).toHaveValue('0912000111')
   })
 
   it('DBR-01: CCCD đang dùng ở hồ sơ chưa kết thúc thì chặn tạo', async () => {
     api.on('GET', '/residents', json(200, { items: [profile(6, 'IN_RESIDENCE')], nextCursor: null }))
     renderForm()
-    await checkCitizenId('012345678901')
+    checkCitizenId('012345678901')
 
-    await screen.findByText('CCCD này đang dùng ở hồ sơ chưa kết thúc, không tạo được hồ sơ mới:')
-    expect(screen.getByLabelText('Họ tên').matches(':disabled')).toBe(true)
-    expect(screen.getByRole('button', { name: 'Tạo hồ sơ' }).disabled).toBe(true)
+    await screen.findByText('Đã có hồ sơ đang mở')
+    expect(screen.getByText(/Không tạo thêm hồ sơ cho số căn cước này/)).toBeInTheDocument()
+    expect(field('Họ và tên').matches(':disabled')).toBe(true)
+    expect(screen.getByRole('button', { name: 'Tạo hồ sơ' })).toBeDisabled()
   })
 
   it('hồ sơ gần nhất Qua đời thì cảnh báo, không liên kết', async () => {
@@ -125,85 +142,94 @@ describe('CreateResident: nhập giấy tờ trước, tra hồ sơ cũ theo CCC
       json(200, { items: [profile(8, 'DECEASED'), profile(4, 'RESIDENCY_ENDED')], nextCursor: null }),
     )
     renderForm()
-    await checkCitizenId('012345678901')
+    checkCitizenId('012345678901')
 
-    await screen.findByText(/CCCD trùng hồ sơ đã qua đời, cần kiểm tra lại giấy tờ/)
-    expect(screen.queryByRole('button', { name: 'Điền thông tin từ hồ sơ cũ' })).toBeNull()
+    await screen.findByText('Số căn cước trùng hồ sơ đã qua đời')
+    expect(screen.getByText(/hồ sơ mới không liên kết với hồ sơ này/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Điền từ hồ sơ cũ' })).toBeNull()
   })
 
   it('đổi số CCCD sau khi tra thì phải tra lại', async () => {
-    api.on('GET', '/residents', json(200, { items: [], nextCursor: null }))
     renderForm()
-    await checkCitizenId('012345678901')
-    await screen.findByText(/Chưa có hồ sơ nào mang CCCD này/)
+    await lookedUpNew()
 
-    fireEvent.change(screen.getByLabelText('Số giấy tờ'), { target: { value: '012345678902' } })
+    fireEvent.change(field('Số căn cước'), { target: { value: '012345678902' } })
 
-    expect(screen.getByLabelText('Họ tên').matches(':disabled')).toBe(true)
+    expect(field('Họ và tên').matches(':disabled')).toBe(true)
+  })
+
+  it('chưa tra mà bấm Tạo hồ sơ thì báo tại ô căn cước', () => {
+    renderForm()
+    fireEvent.change(field('Số căn cước'), { target: { value: '012345678901' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
+
+    expect(screen.getByText('Bấm "Tra hồ sơ" để kiểm tra số căn cước trước')).toBeInTheDocument()
+    expect(api.fetchMock).not.toHaveBeenCalled()
   })
 })
 
 describe('CreateResident: kiểm tra định dạng', () => {
-  it('họ tên có chữ số, số điện thoại, thư điện tử sai định dạng thì báo tại ô, không gọi backend', () => {
+  it('họ tên có chữ số, số điện thoại sai định dạng thì báo tại ô, không gọi backend', async () => {
     renderForm()
+    await lookedUpNew()
     fill({ name: 'Nguyễn Văn 4n' })
-    fireEvent.change(screen.getByLabelText('Số điện thoại'), { target: { value: '09a12' } })
-    fireEvent.change(screen.getByLabelText('Thư điện tử'), { target: { value: 'an@vidu' } })
+    fireEvent.change(field('Số điện thoại'), { target: { value: '09a12' } })
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
 
-    expect(screen.getByText('Họ tên chỉ gồm chữ cái và khoảng trắng')).toBeTruthy()
-    expect(screen.getByText('Số điện thoại gồm 8 đến 15 chữ số')).toBeTruthy()
-    expect(screen.getByText('Thư điện tử không đúng định dạng, ví dụ ten@vidu.vn')).toBeTruthy()
-    expect(api.fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByText('Họ và tên chỉ gồm chữ cái và khoảng trắng')).toBeInTheDocument()
+    expect(
+      screen.getByText('Số điện thoại Việt Nam: di động 10 số (03, 05, 07, 08, 09…), cố định 11 số (02…)'),
+    ).toBeInTheDocument()
+    expect(api.calls('POST', '/residents')).toHaveLength(0)
   })
 
-  it('ngày sinh trước năm 1900 bị chặn', () => {
+  it('ngày sinh trước năm 1900 bị chặn', async () => {
     renderForm()
-    fill({ dob: '1899-12-31' })
+    await lookedUpNew()
+    fill({ dob: '31/12/1899' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
 
-    expect(screen.getByText('Ngày sinh không trước năm 1900')).toBeTruthy()
-    expect(api.fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByText('Ngày sinh không trước năm 1900')).toBeInTheDocument()
+    expect(api.calls('POST', '/residents')).toHaveLength(0)
   })
 })
 
 describe('CreateResident', () => {
-  it('BUG-07: họ tên quá 200 ký tự báo tại ô bằng tiếng Việt, không gọi backend', () => {
+  it('BUG-07: họ tên quá 200 ký tự báo tại ô bằng tiếng Việt, không gọi backend', async () => {
     renderForm()
+    await lookedUpNew()
     fill({ name: 'A'.repeat(201) })
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
 
-    expect(screen.getByText('Họ tên tối đa 200 ký tự')).toBeTruthy()
-    expect(api.fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByText('Họ và tên tối đa 200 ký tự')).toBeInTheDocument()
+    expect(api.calls('POST', '/residents')).toHaveLength(0)
   })
 
-  it('chặn gửi khi thiếu họ tên, ngày sinh, giới tính', () => {
+  it('chặn gửi khi thiếu họ tên, ngày sinh, giới tính', async () => {
     renderForm()
+    await lookedUpNew()
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
 
-    expect(screen.getByText('Chọn loại giấy tờ, hoặc "Không có giấy tờ"')).toBeTruthy()
-    expect(screen.getByText('Nhập họ tên')).toBeTruthy()
-    expect(screen.getByText('Chọn ngày sinh')).toBeTruthy()
-    expect(screen.getByText('Chọn giới tính')).toBeTruthy()
-    expect(api.fetchMock).not.toHaveBeenCalled()
+    expect(screen.getByText('Nhập họ và tên')).toBeInTheDocument()
+    expect(screen.getByText('Nhập ngày sinh')).toBeInTheDocument()
+    expect(screen.getByText('Chọn giới tính')).toBeInTheDocument()
+    expect(api.calls('POST', '/residents')).toHaveLength(0)
   })
 
   it('gửi thông tin kèm Idempotency-Key và hiện mã hồ sơ đã cấp', async () => {
     api.on('POST', '/residents', json(201, created()))
-    api.on('GET', '/residents', json(200, { items: [], nextCursor: null }))
     const onCreated = vi.fn()
     renderForm({ onCreated })
-    await checkCitizenId('012345678901')
-    await screen.findByText('Chưa có hồ sơ nào mang CCCD này. Nhập thông tin để tạo hồ sơ mới.')
-    fill({ document: null })
+    await lookedUpNew()
+    fill()
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
 
-    await waitFor(() => expect(screen.getByText('NCT-2026-000007')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('NCT-2026-000007')).toBeInTheDocument())
     const [, init] = api.calls('POST', '/residents')[0]
     expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
     expect(JSON.parse(init.body)).toMatchObject({
@@ -216,17 +242,15 @@ describe('CreateResident', () => {
     expect(onCreated).toHaveBeenCalled()
   })
 
-  it('CCCD đang dùng: báo ngay ở ô số giấy tờ kèm mã hồ sơ đang mang CCCD', async () => {
+  it('CCCD đang dùng: báo ngay ở ô số căn cước kèm mã hồ sơ đang mang CCCD', async () => {
     api.on('POST', '/residents', problem(409, 'CITIZEN_ID_IN_USE', { profileCode: 'NCT-2026-000001' }))
-    api.on('GET', '/residents', json(200, { items: [], nextCursor: null }))
     renderForm()
-    await checkCitizenId('012345678901')
-    await screen.findByText(/Chưa có hồ sơ nào mang CCCD này/)
-    fill({ document: null })
+    await lookedUpNew()
+    fill()
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
 
-    await waitFor(() => expect(screen.getByText('CCCD đang dùng ở hồ sơ NCT-2026-000001')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText('Số căn cước đang dùng ở hồ sơ NCT-2026-000001')).toBeInTheDocument())
   })
 
   it('cảnh báo CCCD trùng hồ sơ đã qua đời hiện sau khi tạo', async () => {
@@ -246,10 +270,11 @@ describe('CreateResident', () => {
       ),
     )
     renderForm()
+    await lookedUpNew()
     fill()
 
     fireEvent.click(screen.getByRole('button', { name: 'Tạo hồ sơ' }))
 
-    await waitFor(() => expect(screen.getByText(/đã qua đời, cần kiểm tra lại giấy tờ/)).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(/đã qua đời, cần kiểm tra lại giấy tờ/)).toBeInTheDocument())
   })
 })

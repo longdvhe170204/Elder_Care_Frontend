@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { typeChoice } from '@/test/choiceTray'
 import { EndOfLifeWish } from './EndOfLifeWish'
 
 // 001 T070 (US7; FR-023a → FR-023i): khối Nguyện vọng cuối đời. Thẻ phiếu hiện hành kèm nhận định chỉ bên trong phiếu,
@@ -81,9 +82,9 @@ function routes({ current = CURRENT, history = [CURRENT, OLD], forbidden = false
   )
 }
 
-// Chọn người thân theo mã khi danh sách đã tải (ô chọn theo tên)
+/// Chọn người thân theo mã khi danh sách đã tải (ô chọn theo tên)
 async function pickMember(label, id) {
-  const select = screen.getByLabelText(label)
+  const select = field(label)
   await waitFor(() =>
     expect(
       within(select)
@@ -100,27 +101,44 @@ function open(props = {}) {
 
 const pdf = (name = 'ban-ky.pdf') => new File(['%PDF-1.4'], name, { type: 'application/pdf' })
 
+// Nhãn ô bắt buộc có dấu * ở cuối (khung ghi phiếu riêng, rà soát 2026-11-26)
+const field = (label) => screen.getByLabelText(new RegExp(`^${label}`))
+
 function choose(label, file) {
-  fireEvent.change(screen.getByLabelText(label), { target: { files: [file] } })
+  fireEvent.change(field(label), { target: { files: [file] } })
+}
+
+// Bác sĩ nhận định chọn theo tên (ô tìm, giá trị là mã tài khoản)
+async function pickDoctor() {
+  const box = screen.getByRole('combobox', { name: /^Bác sĩ nhận định/ })
+  // danh sách Bác sĩ tải xong thì ô đổi chữ gợi ý
+  await waitFor(() => expect(box).toHaveAttribute('placeholder', 'Gõ tên Bác sĩ'))
+  // gõ không tự mở danh sách trong jsdom: bấm nút mở rồi gõ để lọc
+  fireEvent.click(within(box.parentElement).getByRole('button', { name: 'Mở danh sách' }))
+  fireEvent.change(box, { target: { value: 'Phạm' } })
+  fireEvent.click(await screen.findByRole('option', { name: 'Phạm Văn Bác' }))
+}
+
+async function openForm() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+  return screen.findByRole('dialog', { name: 'Ghi phiếu nguyện vọng cuối đời' })
 }
 
 async function fillCommon({ self = true } = {}) {
   fireEvent.click(screen.getByRole('radio', { name: 'Đưa về nhà' }))
-  fireEvent.change(screen.getByLabelText('Người cần liên hệ trước khi thực hiện'), {
-    target: { value: 'Con gái 0912' },
-  })
-  await screen.findByRole('option', { name: 'Phạm Văn Bác (Bác sĩ)' })
-  fireEvent.change(screen.getByLabelText('Bác sĩ nhận định'), { target: { value: '8' } })
+  fireEvent.change(field('Người cần liên hệ trước khi thực hiện'), { target: { value: 'Con gái 0912' } })
+  fireEvent.click(screen.getByRole('radio', { name: 'Khi tiếp nhận' }))
+  await pickDoctor()
+  // Giúp hiểu trước, nhận định sau (Q-348): ô chọn nhanh có "Khác"
+  typeChoice('Đã giúp người cao tuổi hiểu lựa chọn bằng cách nào', 'Giải thích bằng lời')
   fireEvent.click(
     within(screen.getByRole('radiogroup', { name: /tự quyết được/ })).getByRole('radio', {
       name: self ? 'Có' : 'Không',
     }),
   )
-  fireEvent.change(screen.getByLabelText('Cách đã hỗ trợ người cao tuổi hiểu thông tin'), {
-    target: { value: 'Giải thích bằng lời' },
-  })
-  fireEvent.change(screen.getByLabelText('Ngày xem lại nhận định'), { target: { value: '2099-01-01' } })
+  fireEvent.change(field('Ngày xem lại nhận định'), { target: { value: '01/01/2099' } })
   choose('Bản ký đã scan', pdf())
+  fireEvent.change(field('Ngày ký'), { target: { value: '10/10/2026' } })
 }
 
 describe('EndOfLifeWish', () => {
@@ -136,7 +154,8 @@ describe('EndOfLifeWish', () => {
     expect(within(assessment).getByText('Dùng tranh minh họa, hỏi lại từng ý')).toBeInTheDocument()
     expect(within(assessment).getByText('20/11/2026')).toBeInTheDocument()
     const opinions = within(now).getByRole('list', { name: 'Ý kiến khác' })
-    expect(within(opinions).getByText(/Người thân \(mã 31\)/)).toBeInTheDocument()
+    // Rà soát 2026-11-26: ý kiến khác ghi tên người thân thay cho mã
+    expect(await within(opinions).findByText(/Người thân \(Trần Văn Minh\)/)).toBeInTheDocument()
     expect(within(opinions).getByText('Muốn chuyển bệnh viện')).toBeInTheDocument()
 
     const history = screen.getByRole('list', { name: 'Lịch sử phiếu nguyện vọng cuối đời' })
@@ -176,12 +195,14 @@ describe('EndOfLifeWish', () => {
     expect(screen.queryByRole('button', { name: /Ghi phiếu/ })).not.toBeInTheDocument()
   })
 
-  it('chưa có phiếu: cảnh báo và mời ghi phiếu', async () => {
+  // Rà soát 2026-11-26: chưa có phiếu Hiệu lực chỉ ghi một dòng; ẩn lịch sử khi trống
+  it('chưa có phiếu: một dòng và mời ghi phiếu', async () => {
     routes({ current: null, history: [] })
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
-    expect(await screen.findByText('Chưa có phiếu nguyện vọng cuối đời Hiệu lực')).toBeInTheDocument()
+    expect(await screen.findByText('Chưa có phiếu')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ghi phiếu nguyện vọng' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Lịch sử phiếu nguyện vọng cuối đời' })).not.toBeInTheDocument()
   })
 
   it('Hành chính, Kế toán không xem được nội dung: chỉ thấy đã có hay chưa có phiếu', async () => {
@@ -203,7 +224,7 @@ describe('EndOfLifeWish', () => {
     const onChanged = vi.fn()
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'], onChanged })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     await fillCommon()
     expect(screen.getByText(/Người quyết định:/)).toHaveTextContent('Người cao tuổi')
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
@@ -221,6 +242,7 @@ describe('EndOfLifeWish', () => {
         reviewDate: '2099-01-01',
       },
       signerType: 'RESIDENT',
+      signedAt: '2026-10-09T17:00:00.000Z',
       signedCopyFileId: 90,
       source: 'ADMISSION',
     })
@@ -234,14 +256,18 @@ describe('EndOfLifeWish', () => {
     routes({ current: null, history: [] })
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
     expect(await screen.findByText('Chọn một lựa chọn')).toBeInTheDocument()
+    expect(screen.getByText('Nhập người cần liên hệ trước khi thực hiện')).toBeInTheDocument()
+    expect(screen.getByText('Chọn nguồn phiếu')).toBeInTheDocument()
+    expect(screen.getByText('Chọn Bác sĩ nhận định')).toBeInTheDocument()
     expect(screen.getByText('Chọn nhận định của Bác sĩ')).toBeInTheDocument()
     expect(screen.getByText('Nhập cách đã hỗ trợ người cao tuổi hiểu thông tin')).toBeInTheDocument()
-    expect(screen.getByText('Chọn ngày xem lại nhận định')).toBeInTheDocument()
+    expect(screen.getByText('Nhập ngày xem lại dạng DD/MM/YYYY')).toBeInTheDocument()
     expect(screen.getByText('Chọn tệp bản ký đã scan')).toBeInTheDocument()
+    expect(screen.getByText('Nhập ngày ký dạng DD/MM/YYYY')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/end-of-life-wishes')).toHaveLength(0)
     expect(api.calls('POST', '/files')).toHaveLength(0)
   })
@@ -252,7 +278,7 @@ describe('EndOfLifeWish', () => {
     api.on('POST', '/residents/5/end-of-life-wishes', json(201, OLD))
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     await fillCommon({ self: false })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     expect(await screen.findByText('Chọn người ký thay')).toBeInTheDocument()
@@ -262,14 +288,14 @@ describe('EndOfLifeWish', () => {
 
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện theo pháp luật' }))
     await pickMember('Người thân là người ký', 41)
-    fireEvent.change(screen.getByLabelText('Quan hệ với người cao tuổi'), { target: { value: 'Con gái' } })
+    fireEvent.change(field('Quan hệ với người cao tuổi'), { target: { value: 'Con gái' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     expect(await screen.findByText('Nhập số quyết định')).toBeInTheDocument()
     expect(screen.getByText('Chọn tệp quyết định của Tòa án')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Số quyết định'), { target: { value: '15/2026/QĐ-TA' } })
-    fireEvent.change(screen.getByLabelText('Ngày quyết định'), { target: { value: '2026-03-02' } })
-    fireEvent.change(screen.getByLabelText('Tòa án'), { target: { value: 'TAND quận 1' } })
+    fireEvent.change(field('Số quyết định'), { target: { value: '15/2026/QĐ-TA' } })
+    fireEvent.change(field('Ngày quyết định'), { target: { value: '02/03/2026' } })
+    fireEvent.change(field('Tòa án'), { target: { value: 'TAND quận 1' } })
     choose('Bản scan quyết định của Tòa án', pdf('qd.pdf'))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
@@ -294,11 +320,11 @@ describe('EndOfLifeWish', () => {
     api.on('POST', '/residents/5/end-of-life-wishes', json(201, OLD))
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     await fillCommon({ self: false })
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện của người bệnh' }))
     await pickMember('Người thân là người ký', 41)
-    fireEvent.change(screen.getByLabelText('Quan hệ với người cao tuổi'), { target: { value: 'Con gái' } })
+    fireEvent.change(field('Quan hệ với người cao tuổi'), { target: { value: 'Con gái' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     expect(await screen.findByText('Chọn cách người đại diện được chọn')).toBeInTheDocument()
 
@@ -317,9 +343,14 @@ describe('EndOfLifeWish', () => {
     api.on('POST', '/residents/5/end-of-life-wishes', json(201, CURRENT))
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     await fillCommon()
+    // Ý kiến khác gập lại; không chọn sẵn nguồn ý kiến (Q-307)
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến khác' }))
     fireEvent.change(screen.getByLabelText('Nội dung ý kiến'), { target: { value: 'Muốn chuyển bệnh viện' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến' }))
+    expect(await screen.findByText('Chọn nguồn ý kiến')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('radio', { name: 'Người thân' }))
     fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến' }))
     expect(await screen.findByText('Chọn người thân nêu ý kiến')).toBeInTheDocument()
 
@@ -345,11 +376,11 @@ describe('EndOfLifeWish', () => {
     api.on('POST', '/residents/5/end-of-life-wishes', problem(409, 'INVALID_SIGNER'))
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     await fillCommon({ self: false })
     fireEvent.click(screen.getByRole('radio', { name: 'Người đại diện của người bệnh' }))
     await pickMember('Người thân là người ký', 99)
-    fireEvent.change(screen.getByLabelText('Quan hệ với người cao tuổi'), { target: { value: 'Bạn' } })
+    fireEvent.change(field('Quan hệ với người cao tuổi'), { target: { value: 'Bạn' } })
     fireEvent.click(screen.getByRole('radio', { name: 'Do người cao tuổi chọn' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
@@ -361,7 +392,7 @@ describe('EndOfLifeWish', () => {
     api.on('POST', '/files', problem(422, 'FILE_TOO_LARGE'))
     open({ allowedCommands: ['RECORD_END_OF_LIFE_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     await fillCommon()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
