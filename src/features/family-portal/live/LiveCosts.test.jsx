@@ -48,6 +48,8 @@ describe('LiveCostsPage', () => {
     expect(screen.getByRole('img', { name: /Mã QR chuyển khoản/ })).toBeInTheDocument()
     expect(screen.getByText('Thanh toán bảng chi phí')).toBeInTheDocument()
     expect(screen.getByText('-9.300.000 đồng')).toBeInTheDocument()
+    // Q-460: chỉ khoản nộp có biên nhận
+    expect(screen.getAllByRole('button', { name: 'Tải biên nhận' })).toHaveLength(1)
   })
 
   it('FR_003_chuaCoTaiKhoanThu_khongCoMucNopTien', async () => {

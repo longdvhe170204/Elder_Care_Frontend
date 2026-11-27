@@ -174,6 +174,24 @@ export const postDayCareClosureDays = (params) => request('POST', '/day-care-clo
 /** Hủy khai báo ngày nghỉ (FR-060a) */
 export const postDayCareClosureDaysByIdCancel = (params) => request('POST', '/day-care-closure-days/{id}/cancel', params)
 
+/** Yêu cầu kết thúc lưu trú của một người cao tuổi (cổng người thân, chỉ người đại diện) (FR-062) */
+export const getFamilyPortalResidentsByResidentIdResidencyEndingRequests = (params) => request('GET', '/family-portal/residents/{residentId}/residency-ending-requests', params)
+
+/** Người đại diện gửi yêu cầu kết thúc lưu trú (FR-062) */
+export const postFamilyPortalResidentsByResidentIdResidencyEndingRequests = (params) => request('POST', '/family-portal/residents/{residentId}/residency-ending-requests', params)
+
+/** Người đại diện hủy yêu cầu kết thúc lưu trú còn Chờ xử lý (FR-062) */
+export const postFamilyPortalResidencyEndingRequestsByIdCancel = (params) => request('POST', '/family-portal/residency-ending-requests/{id}/cancel', params)
+
+/** Yêu cầu kết thúc lưu trú người thân gửi (Hành chính) (FR-062) */
+export const getResidencyEndingRequests = (params) => request('GET', '/residency-ending-requests', params)
+
+/** Xem một yêu cầu kết thúc lưu trú (Hành chính, để lập hồ sơ điền sẵn) (FR-062) */
+export const getResidencyEndingRequestsById = (params) => request('GET', '/residency-ending-requests/{id}', params)
+
+/** Hành chính từ chối yêu cầu kết thúc lưu trú, kèm lý do (FR-062) */
+export const postResidencyEndingRequestsByIdReject = (params) => request('POST', '/residency-ending-requests/{id}/reject', params)
+
 /** Danh sách hồ sơ kết thúc lưu trú (FR-062, FR-067) */
 export const getResidencyEndings = (params) => request('GET', '/residency-endings', params)
 

@@ -269,18 +269,16 @@ describe('NotificationInbox', () => {
     expect(within(dialog).queryByRole('button', { name: 'Lập công việc cho người này' })).not.toBeInTheDocument()
   })
 
-  it('FR_036_anSauKhiXem_boKhoiDanhSach_coIdempotencyKey', async () => {
+  // Góp ý demo BF-10 (2026-11-27): bỏ ẩn thông báo, chỉ còn Chưa xem → Đã xem
+  it('thongBaoDaXem_khongCoNutAn', async () => {
     api.on('GET', '/me/notifications', json(200, PAGE))
     api.on('GET', '/me/notifications/13', json(200, VIEWED))
-    api.on('POST', '/me/notifications/13/hide', json(200, {}))
     render(<DetailHost>{(host) => <NotificationInbox {...host} />}</DetailHost>)
     fireEvent.click(await screen.findByRole('button', { name: 'Yêu cầu phê duyệt mới' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Ẩn khỏi danh sách' }))
+    const dialog = await screen.findByRole('dialog')
 
-    await screen.findByText('Đã ẩn thông báo khỏi danh sách')
-    const [, init] = api.calls('POST', '/me/notifications/13/hide')[0]
-    expect(init.headers['Idempotency-Key']).toMatch(/^[0-9a-f-]{36}$/)
-    expect(within(screen.getByRole('list', { name: 'Thông báo' })).queryByText('Yêu cầu phê duyệt mới')).toBeNull()
+    await within(dialog).findByText('Nội dung hiện theo quyền hiện hành của bạn.')
+    expect(screen.queryByRole('button', { name: 'Ẩn khỏi danh sách' })).not.toBeInTheDocument()
   })
 
   it('loiTai_hienThuLai', async () => {

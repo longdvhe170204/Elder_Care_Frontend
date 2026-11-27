@@ -19,6 +19,18 @@ const ENDING = {
   status: 'PREPARING',
 }
 
+const REQUEST = {
+  id: 7,
+  residentId: 5,
+  residentName: 'Nguyễn Thị Lan',
+  familyMemberId: 41,
+  familyMemberName: 'Trần Văn Minh',
+  endCase: 'CONTRACT_EXPIRED',
+  expectedEndDate: '2026-11-30',
+  reason: 'Gia đình đón về',
+  status: 'PENDING',
+}
+
 const CONDITIONS = {
   conditions: [
     { code: 'END_A_COSTS', name: 'Chi phí kỳ cuối đã chốt', status: 'NOT_MET', basis: 'FR-063' },
@@ -67,6 +79,7 @@ beforeEach(() => {
     ),
   )
   api.on('GET', '/residency-endings', json(200, [ENDING, { ...ENDING, id: 15, status: 'CANCELLED' }]))
+  api.on('GET', '/residency-ending-requests', json(200, []))
   api.on('GET', '/residency-endings/14', json(200, ENDING))
   api.on('GET', '/residency-endings/14/conditions', json(200, CONDITIONS))
   api.on('GET', '/residents/5', json(200, { id: 5, personalInfo: { fullName: 'Nguyễn Thị Lan' } }))
@@ -95,6 +108,72 @@ describe('EndingsPage', () => {
     )
     expect(await screen.findByRole('heading', { name: 'Nguyễn Thị Lan' })).toBeInTheDocument()
     expect(await screen.findByText('Chi phí kỳ cuối đã chốt')).toBeInTheDocument()
+  })
+
+  // Góp ý demo BF-10 (B14): backend chạy đồng hồ giả lập thì giờ bàn giao điền sẵn theo giờ backend, không theo máy
+  it('gioBanGiaoDienSan_theoDongHoGiaLap', async () => {
+    api.on('GET', '/residency-endings/14/conditions', json(200, READY))
+    api.on('GET', '/testing/clock', json(200, { now: '2026-11-26T02:05:00Z', simulated: true }))
+    renderPage()
+    await openEnding()
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận kết thúc' }))
+
+    await waitFor(() => expect(screen.getByLabelText('Thời điểm bàn giao, kết thúc')).toHaveValue('2026-11-26T09:05'))
+  })
+
+  // Demo 2026-11-26: yêu cầu người đại diện gửi trên app; lập hồ sơ điền sẵn
+  it('yeuCauNguoiThan_lapHoSoDienSan_guiMaYeuCau', async () => {
+    api.on('GET', '/residency-ending-requests', json(200, [REQUEST]))
+    api.on('POST', '/residency-endings', json(201, ENDING))
+    render(
+      <PermissionsProvider>
+        <EndingsPage role="OFFICE_STAFF" onNavigate={vi.fn()} requestId={7} />
+      </PermissionsProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Lập hồ sơ từ yêu cầu' }))
+    const sheet = await screen.findByRole('dialog')
+    expect(within(sheet).getByLabelText('Ngày kết thúc dự kiến')).toHaveValue('2026-11-30')
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Lập hồ sơ' }))
+
+    await waitFor(() => expect(api.calls('POST', '/residency-endings')).toHaveLength(1))
+    expect(JSON.parse(api.calls('POST', '/residency-endings')[0][1].body)).toMatchObject({
+      residentId: 5,
+      endCase: 'CONTRACT_EXPIRED',
+      expectedEndDate: '2026-11-30',
+      requestedBy: 'Trần Văn Minh (người thân)',
+      reason: 'Gia đình đón về',
+      endingRequestId: 7,
+    })
+  })
+
+  it('yeuCauNguoiThan_tuChoiBatBuocLyDo', async () => {
+    api.on('GET', '/residency-ending-requests', json(200, [REQUEST]))
+    api.on('POST', '/residency-ending-requests/7/reject', json(200, { ...REQUEST, status: 'REJECTED' }))
+    renderPage()
+    fireEvent.click(await screen.findByRole('button', { name: 'Từ chối' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận từ chối' }))
+    expect(screen.getByText('Nhập lý do')).toBeInTheDocument()
+    expect(api.calls('POST', '/residency-ending-requests/7/reject')).toHaveLength(0)
+
+    fireEvent.change(screen.getByLabelText('Lý do từ chối yêu cầu của Nguyễn Thị Lan'), {
+      target: { value: 'Cần trao đổi thêm' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Xác nhận từ chối' }))
+
+    expect(await screen.findByText('Đã từ chối yêu cầu kết thúc lưu trú')).toBeInTheDocument()
+    expect(JSON.parse(api.calls('POST', '/residency-ending-requests/7/reject')[0][1].body)).toEqual({
+      reason: 'Cần trao đổi thêm',
+    })
+  })
+
+  it('yeuCauMoTuThongBaoDaHuy_baoTrangThai', async () => {
+    api.on('GET', '/residency-ending-requests/7', json(200, { ...REQUEST, status: 'CANCELLED' }))
+    render(
+      <PermissionsProvider>
+        <EndingsPage role="OFFICE_STAFF" onNavigate={vi.fn()} requestId={7} />
+      </PermissionsProvider>,
+    )
+    expect(await screen.findByText('Yêu cầu của Nguyễn Thị Lan đã được người thân hủy.')).toBeInTheDocument()
   })
 
   it('FR_063_moTheoMa_hienDieuKien_vaHaiYCuaMucH', async () => {

@@ -53,12 +53,6 @@ export function LiveNotificationsPage({ viewer }) {
     setState((s) => ({ ...s, items: s.items.map((n) => (n.id === data.id ? data : n)) }))
   }, [])
 
-  const hide = useCallback((id) => {
-    setState((s) => ({ ...s, items: s.items.filter((n) => n.id !== id) }))
-    setOpened(null)
-    setAnnouncement('Đã ẩn thông báo khỏi danh sách')
-  }, [])
-
   const sourceAction = (n) =>
     confirmationIdOf(n) !== null && (
       <Button
@@ -135,7 +129,6 @@ export function LiveNotificationsPage({ viewer }) {
                 key={`n-${opened.id}`}
                 id={opened.id}
                 onOpened={replace}
-                onHidden={hide}
                 sourceAction={sourceAction}
                 {...titles}
               />

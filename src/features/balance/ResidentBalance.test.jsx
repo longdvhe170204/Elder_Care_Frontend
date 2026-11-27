@@ -86,6 +86,47 @@ describe('ResidentBalance (017)', () => {
     vi.unstubAllGlobals()
   })
 
+  // Q-460: biên nhận chỉ có ở khoản nộp đã xác nhận, người xem đủ sổ
+  it('Q_460_taiBienNhan_chiKhoanNopDaXacNhan', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    const api = setup()
+    api.on('GET', '/balance-transactions/1/receipt', json(200, {}))
+    const buttons = await screen.findAllByRole('button', { name: 'Tải biên nhận' })
+    expect(buttons).toHaveLength(1)
+
+    fireEvent.click(buttons[0])
+
+    await waitFor(() => expect(api.calls('GET', '/balance-transactions/1/receipt')).toHaveLength(1))
+    await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled())
+  })
+
+  // Q-460 mở rộng: khoản hoàn đã xác nhận có biên nhận; tick nhiều khoản đã xác nhận để in một bảng kê
+  it('Q_460_chonKhoan_inBangKe', async () => {
+    URL.createObjectURL = vi.fn(() => 'blob:x')
+    URL.revokeObjectURL = vi.fn()
+    const api = setup()
+    api.on('GET', '/residents/7/balance-transactions/summary', json(200, {}))
+    const print = await screen.findByRole('button', { name: 'In bảng kê (0)' })
+    expect(print).toBeDisabled()
+    const boxes = screen.getAllByRole('checkbox', { name: /Chọn giao dịch/ })
+    // khoản hoàn còn Chờ duyệt không chọn được
+    expect(boxes).toHaveLength(2)
+
+    fireEvent.click(boxes[0])
+    fireEvent.click(boxes[1])
+    fireEvent.click(screen.getByRole('button', { name: 'In bảng kê (2)' }))
+
+    await waitFor(() => expect(api.calls('GET', '/residents/7/balance-transactions/summary')).toHaveLength(1))
+    expect(String(api.calls('GET', '/residents/7/balance-transactions/summary')[0][0])).toContain('id=1&id=2')
+  })
+
+  it('Q_460_hanhChinh_khongCoNutBienNhan', async () => {
+    setup({ balance: { ...BALANCE, hiddenFields: ['paymentCode'] } })
+    await screen.findAllByText('Nộp tiền mặt')
+    expect(screen.queryByRole('button', { name: 'Tải biên nhận' })).not.toBeInTheDocument()
+  })
+
   it('FR_002_hienSoDuCocNoMaNopTienVaTinhTrang', async () => {
     setup()
     expect(await screen.findByText('NCT7K2M9X4A')).toBeInTheDocument()

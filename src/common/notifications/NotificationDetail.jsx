@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { LockIcon } from 'lucide-react'
-import { getMeNotificationsById, postMeNotificationsByIdHide } from '@/api'
+import { getMeNotificationsById } from '@/api'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ProblemAlert } from '@/common/ProblemAlert'
@@ -23,7 +23,6 @@ const PART_ORDER = ['GENERAL', 'HEALTH', 'COSTS', 'VISITS', 'CONTRACT']
 export function NotificationDetail({
   id,
   onOpened,
-  onHidden,
   sourceAction,
   onNavigate,
   Title = 'h2',
@@ -31,8 +30,6 @@ export function NotificationDetail({
 }) {
   const [state, setState] = useState({ status: 'loading' })
   const [failure, setFailure] = useState(null)
-  const [busy, setBusy] = useState(false)
-  const hideKey = useRef(crypto.randomUUID())
 
   const load = useCallback(async () => {
     try {
@@ -71,19 +68,6 @@ export function NotificationDetail({
   const parts = PART_ORDER.filter(
     (type) => n.content.some((p) => p.informationType === type) || n.hiddenParts.includes(type),
   )
-
-  async function hide() {
-    setFailure(null)
-    setBusy(true)
-    try {
-      await postMeNotificationsByIdHide({ path: { id }, headers: { 'Idempotency-Key': hideKey.current } })
-      onHidden(id)
-    } catch (error) {
-      setFailure(problemOf(error))
-    } finally {
-      setBusy(false)
-    }
-  }
 
   return (
     <div className="flex flex-col gap-5 type-body-sm">
@@ -153,7 +137,6 @@ export function NotificationDetail({
         <Button
           variant="outline"
           className="self-start"
-          disabled={busy}
           onClick={() =>
             SOURCE_TARGETS[n.sourceRecord.type].resolve(n.sourceRecord.id).then(
               ([page, params]) => onNavigate(page, params),
@@ -165,11 +148,6 @@ export function NotificationDetail({
         </Button>
       )}
       <ProblemAlert problem={failure} />
-      {n.viewedAt && (
-        <Button variant="outline" className="self-start" disabled={busy} onClick={hide}>
-          Ẩn khỏi danh sách
-        </Button>
-      )}
     </div>
   )
 }

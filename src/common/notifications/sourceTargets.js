@@ -17,6 +17,7 @@ export const SOURCE_PAGES = {
   'M11.BALANCE': ['balance', 'residentId', 'Mở số dư của người cao tuổi', { focus: 'resident' }],
   'M11.COST_STATEMENT': ['charges', 'statementId', 'Mở bảng chi phí'],
   'M02.RESIDENCY_ENDING': ['residency-endings', 'endingId', 'Mở hồ sơ kết thúc lưu trú'],
+  'M02.ENDING_REQUEST': ['residency-endings', 'requestId', 'Xử lý yêu cầu kết thúc lưu trú'],
 }
 
 // [màn, tham số] để mở bản ghi nguồn của thông báo; null khi nguồn chưa mở thẳng được
