@@ -33,10 +33,11 @@ const STREAM_URL = '/api/v1/notifications/stream?backgroundRefresh=true'
 const POLL_MS = 60_000
 const SELECT_CLASS = 'h-10 w-full rounded-md border border-input bg-transparent px-3'
 
-function toQuery({ level, unread, eventType, residentId }, cursor) {
+function toQuery({ level, unread, open, eventType, residentId }, cursor) {
   return {
     level: level || undefined,
     unread: unread || undefined,
+    open: open || undefined,
     eventType: eventType || undefined,
     residentId: residentId || undefined,
     cursor,
@@ -68,7 +69,7 @@ function CarePlanWorkButton({ notification, onNavigate }) {
 }
 
 export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
-  const [filter, setFilter] = useState({ level: '', unread: false, eventType: '', residentId: '' })
+  const [filter, setFilter] = useState({ level: '', unread: false, open: false, eventType: '', residentId: '' })
   const [state, setState] = useState({ status: 'loading', items: [], nextCursor: null })
   // Loại sự kiện đã gặp, ghi bằng tiêu đề thông báo thay cho mã (DESIGN.md mục 8, D9)
   const [eventTypes, setEventTypes] = useState({})
@@ -286,11 +287,18 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
           </ToggleGroup>
           <ToggleGroup
             variant="outline"
-            value={filter.unread ? ['unread'] : []}
-            onValueChange={(next) => setFilter((f) => ({ ...f, unread: next.includes('unread') }))}
+            multiple
+            value={[...(filter.unread ? ['unread'] : []), ...(filter.open ? ['open'] : [])]}
+            onValueChange={(next) =>
+              setFilter((f) => ({ ...f, unread: next.includes('unread'), open: next.includes('open') }))
+            }
           >
             <ToggleGroupItem value="unread" className="h-10 px-4">
               Chưa xem
+            </ToggleGroupItem>
+            {/* Q-462: việc nguồn đã báo xử lý xong thì không còn ở lọc này */}
+            <ToggleGroupItem value="open" className="h-10 px-4">
+              Cần xử lý
             </ToggleGroupItem>
           </ToggleGroup>
           <Field className="w-60">
@@ -404,7 +412,7 @@ export function NotificationInbox({ openedKey, onOpen, onClose, onNavigate }) {
                     notification={n}
                     selected={isOpen(n.id)}
                     onOpen={() => open(n.id)}
-                    status={n.viewedAt ? 'Đã xem' : 'Chưa xem'}
+                    status={n.handledAt ? 'Đã xử lý' : n.viewedAt ? 'Đã xem' : 'Chưa xem'}
                   />
                 </li>
               ))}

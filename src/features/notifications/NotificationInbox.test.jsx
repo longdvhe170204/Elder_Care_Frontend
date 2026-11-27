@@ -156,6 +156,19 @@ describe('NotificationInbox', () => {
     expect(inboxCalls().at(-1).searchParams.get('unread')).toBe('true')
   })
 
+  // Góp ý demo BF-10 (2026-11-27, Q-462): việc đã xử lý mang nhãn Đã xử lý; lọc Cần xử lý gửi open=true
+  it('Q_462_daXuLy_nhan_vaLocCanXuLy', async () => {
+    const handled = notification({ id: 14, title: 'Yêu cầu kết thúc lưu trú', handledAt: '2026-12-02T02:19:00Z' })
+    api.on('GET', '/me/notifications', json(200, { ...PAGE, items: [handled] }))
+    render(<DetailHost>{(host) => <NotificationInbox {...host} />}</DetailHost>)
+    const list = await screen.findByRole('list', { name: 'Thông báo' })
+    expect(within(list).getByText('Đã xử lý')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cần xử lý' }))
+    await screen.findByRole('list', { name: 'Thông báo' })
+    expect(inboxCalls().at(-1).searchParams.get('open')).toBe('true')
+  })
+
   it('FR_033_locTheoNguoiCaoTuoi_guiResidentId', async () => {
     api.on('GET', '/me/notifications', json(200, PAGE))
     api.on(
