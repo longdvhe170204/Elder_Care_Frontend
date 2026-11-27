@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
+import { typeChoice } from '@/test/choiceTray'
 import { EndOfLifeWish } from './EndOfLifeWish'
 import { TreatmentWish } from './TreatmentWish'
 
@@ -87,6 +88,8 @@ describe('Nháp phiếu nguyện vọng cuối đời', () => {
     expect(screen.getByRole('button', { name: 'Sửa bản Nháp' })).toBeInTheDocument()
   })
 
+  // Rà soát 2026-11-26 (chủ dự án duyệt): kiểm chứng ngay trong thẻ Nháp; nội dung gia đình khai chỉ đọc, dưới là phần cần
+  // ghi khi kiểm chứng; "Không duyệt" là Hủy nháp kèm lý do
   it('Bác sĩ thấy Nháp chờ kiểm chứng: không có nút ghi phiếu mới; Kiểm chứng gửi đủ nội dung, không có nguồn', async () => {
     api.on(
       'GET',
@@ -101,34 +104,42 @@ describe('Nháp phiếu nguyện vọng cuối đời', () => {
       <EndOfLifeWish residentId={5} status="ADMISSION_IN_PROGRESS" allowedCommands={['RECORD_END_OF_LIFE_WISH']} />,
     )
 
-    const card = await screen.findByRole('region', { name: 'Bản Nháp tự khai chờ kiểm chứng' })
-    expect(within(card).getByText('Tự khai, chưa được Bác sĩ kiểm chứng')).toBeInTheDocument()
+    const card = await screen.findByRole('region', { name: 'Bản Nháp tự khai · chờ kiểm chứng' })
+    expect(within(card).getByText('Hành chính Hoa lập')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ghi phiếu nguyện vọng' })).toBeNull()
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Kiểm chứng' }))
-    const form = screen.getByRole('form', { name: 'Kiểm chứng phiếu nguyện vọng cuối đời' })
-    expect(within(form).getByLabelText('Người cần liên hệ trước khi thực hiện')).toHaveValue('Con trai 0901')
-    await within(form).findByRole('option', { name: 'Phạm Văn Bác (Bác sĩ)' })
-    fireEvent.change(within(form).getByLabelText('Bác sĩ nhận định'), { target: { value: '8' } })
+    const form = within(card).getByRole('form', { name: 'Kiểm chứng phiếu nguyện vọng cuối đời' })
+    // Nội dung gia đình khai chỉ đọc
+    expect(within(form).getByText('Con trai 0901')).toBeInTheDocument()
+    expect(within(form).queryByRole('textbox', { name: /Người cần liên hệ/ })).toBeNull()
+    const doctor = within(form).getByRole('combobox', { name: /^Bác sĩ nhận định/ })
+    await waitFor(() => expect(doctor).toHaveAttribute('placeholder', 'Gõ tên Bác sĩ'))
+    fireEvent.click(within(doctor.parentElement).getByRole('button', { name: 'Mở danh sách' }))
+    fireEvent.click(await screen.findByRole('option', { name: 'Phạm Văn Bác' }))
+    typeChoice('Đã giúp người cao tuổi hiểu lựa chọn bằng cách nào', 'Giải thích bằng lời', form)
     fireEvent.click(
       within(within(form).getByRole('radiogroup', { name: /tự quyết được/ })).getByRole('radio', { name: 'Có' }),
     )
-    fireEvent.change(within(form).getByLabelText('Cách đã hỗ trợ người cao tuổi hiểu thông tin'), {
-      target: { value: 'Giải thích bằng lời' },
-    })
-    fireEvent.change(within(form).getByLabelText('Ngày xem lại nhận định'), { target: { value: '2099-01-01' } })
-    fireEvent.change(within(form).getByLabelText('Bản ký đã scan'), {
+    fireEvent.change(within(form).getByLabelText(/^Ngày xem lại nhận định/), { target: { value: '01/01/2099' } })
+    fireEvent.change(within(form).getByLabelText(/^Bản ký đã scan/), {
       target: { files: [new File(['%PDF-1.4'], 'ky.pdf', { type: 'application/pdf' })] },
     })
-    fireEvent.click(within(form).getByRole('button', { name: 'Kiểm chứng và lưu' }))
+    fireEvent.change(within(form).getByLabelText(/^Ngày ký/), { target: { value: '10/11/2026' } })
+    fireEvent.click(within(card).getByRole('button', { name: 'Xác nhận kiểm chứng' }))
 
     await waitFor(() => expect(api.calls('POST', '/residents/5/end-of-life-wish-draft/verify')).toHaveLength(1))
     const body = JSON.parse(api.calls('POST', '/residents/5/end-of-life-wish-draft/verify')[0][1].body)
-    expect(body).toMatchObject({ choice: 'STAY_PALLIATIVE', assessingDoctorId: 8, signedCopyFileId: 77 })
+    expect(body).toMatchObject({
+      choice: 'STAY_PALLIATIVE',
+      firstContact: 'Con trai 0901',
+      assessingDoctorId: 8,
+      signedCopyFileId: 77,
+      selfDeterminationAssessment: { canSelfDetermine: true, supportMethod: 'Giải thích bằng lời' },
+    })
     expect(body.source).toBeUndefined()
   })
 
-  it('Hủy nháp bắt buộc lý do rồi gửi lý do', async () => {
+  it('Không duyệt: Hủy nháp bắt buộc lý do rồi gửi lý do', async () => {
     api.on(
       'GET',
       '/residents/5/end-of-life-wishes',
@@ -140,7 +151,7 @@ describe('Nháp phiếu nguyện vọng cuối đời', () => {
       <EndOfLifeWish residentId={5} status="ADMISSION_IN_PROGRESS" allowedCommands={['RECORD_END_OF_LIFE_WISH']} />,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Hủy nháp' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Không duyệt' }))
     fireEvent.click(screen.getByRole('button', { name: 'Xác nhận hủy nháp' }))
     expect(await screen.findByText('Nhập lý do hủy nháp')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/end-of-life-wish-draft/discard')).toHaveLength(0)
@@ -150,6 +161,7 @@ describe('Nháp phiếu nguyện vọng cuối đời', () => {
     expect(JSON.parse(api.calls('POST', '/residents/5/end-of-life-wish-draft/discard')[0][1].body)).toEqual({
       reason: 'Gia đình khai nhầm',
     })
+    expect(await screen.findByText('Đã hủy bản Nháp tự khai.')).toBeInTheDocument()
   })
 })
 
@@ -171,6 +183,15 @@ describe('Nháp phiếu nguyện vọng khi điều trị', () => {
     const form = screen.getByRole('form', { name: 'Bản Nháp phiếu nguyện vọng khi điều trị' })
     fireEvent.change(within(form).getByLabelText('Tên bệnh viện 1'), { target: { value: 'Bệnh viện X' } })
     fireEvent.change(within(form).getByLabelText('Địa chỉ bệnh viện 1'), { target: { value: '12 Lê Lợi' } })
+    // Người trả lời không chọn sẵn (Q-307; rà soát 2026-11-26)
+    fireEvent.click(within(form).getByRole('button', { name: 'Lưu bản Nháp' }))
+    expect(await within(form).findByText('Chọn người trả lời')).toBeInTheDocument()
+    expect(api.calls('PUT', '/residents/5/treatment-wish-draft')).toHaveLength(0)
+    fireEvent.click(
+      within(within(form).getByRole('radiogroup', { name: /^Người trả lời/ })).getByRole('radio', {
+        name: 'Người cao tuổi',
+      }),
+    )
     fireEvent.click(within(form).getByRole('button', { name: 'Lưu bản Nháp' }))
 
     await waitFor(() => expect(api.calls('PUT', '/residents/5/treatment-wish-draft')).toHaveLength(1))
@@ -193,13 +214,14 @@ describe('Nháp phiếu nguyện vọng khi điều trị', () => {
     )
     render(<TreatmentWish residentId={5} status="IN_RESIDENCE" allowedCommands={['RECORD_TREATMENT_WISH']} />)
 
-    const card = await screen.findByRole('region', { name: 'Bản Nháp tự khai chờ kiểm chứng' })
+    // Kiểm chứng ngay trong thẻ Nháp: nội dung chỉ đọc, chỉ ghi ô bắt buộc Nháp còn thiếu (ở đây là người đi kèm)
+    const card = await screen.findByRole('region', { name: 'Bản Nháp tự khai · chờ kiểm chứng' })
     expect(screen.queryByRole('button', { name: 'Ghi phiếu nguyện vọng' })).toBeNull()
-    fireEvent.click(within(card).getByRole('button', { name: 'Kiểm chứng' }))
-    const form = screen.getByRole('form', { name: 'Kiểm chứng phiếu nguyện vọng khi điều trị' })
-    expect(within(form).getByLabelText('Tên bệnh viện 1')).toHaveValue('Bệnh viện X')
+    const form = within(card).getByRole('form', { name: 'Kiểm chứng phiếu nguyện vọng khi điều trị' })
+    expect(within(form).getByText('Bệnh viện X · 12 Lê Lợi')).toBeInTheDocument()
+    expect(within(form).queryByLabelText(/^Tên bệnh viện 1/)).toBeNull()
     fireEvent.click(within(form).getByRole('radio', { name: 'Gia đình' }))
-    fireEvent.click(within(form).getByRole('button', { name: 'Kiểm chứng và lưu' }))
+    fireEvent.click(within(card).getByRole('button', { name: 'Xác nhận kiểm chứng' }))
 
     await waitFor(() => expect(api.calls('POST', '/residents/5/treatment-wish-draft/verify')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/residents/5/treatment-wish-draft/verify')[0][1].body)).toMatchObject({

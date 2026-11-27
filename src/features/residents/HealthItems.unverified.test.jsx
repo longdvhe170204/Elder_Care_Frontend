@@ -96,6 +96,7 @@ describe('HealthItems, mục tự khai chưa kiểm chứng', () => {
 
     render(<HealthItems residentId={7} allowedCommands={['RECORD_HEALTH_ITEM']} />)
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận mục' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Bệnh nền' }))
 
     const source = await screen.findByLabelText('Nguồn thông tin')
     expect(source.value).toBe('5')

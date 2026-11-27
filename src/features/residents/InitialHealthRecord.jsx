@@ -7,7 +7,15 @@ import {
   putResidentsByIdInitialHealthRecord,
 } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Empty, EmptyHeader, EmptyTitle } from '@/components/ui/empty'
 import { Field, FieldGroup, FieldLabel } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,10 +26,13 @@ import { problemOf } from '@/common/problem'
 import { CorrectionBadge } from '@/common/correction/CorrectionBadge'
 import { CorrectionHistorySheet } from '@/common/correction/CorrectionHistorySheet'
 import { HEALTH_RECORD_FIELDS, HEALTH_RECORD_TYPE } from './healthLabels'
+import { InitialHealthSheet } from './InitialHealthSheet'
 
 // Hồ sơ sức khỏe ban đầu (001 T033; US2; FR-017; hợp đồng GET, PUT /residents/{id}/initial-health-record, POST …/confirm).
 // Sửa được khi còn Bản nháp (If-Match lấy từ ETag lần đọc gần nhất); chỉ Bác sĩ xác nhận; sau đó chỉ đính chính qua
 // khung dùng chung của 000. Nút hiện theo allowedCommands của hồ sơ; quyền thật do backend kiểm.
+// Rà soát cho Bác sĩ 2026-11-26: "Sửa bản nháp" mở khung Sức khỏe ban đầu (InitialHealthSheet, như Hành chính) khi có
+// residentName; "Xác nhận hồ sơ" hỏi lại vì sau đó chỉ đính chính; ô trống không hiện.
 
 function blank(value) {
   const text = value.trim()
@@ -32,7 +43,7 @@ function formOf(record) {
   return Object.fromEntries(HEALTH_RECORD_FIELDS.map((f) => [f.name, record?.[f.name] ?? '']))
 }
 
-export function InitialHealthRecord({ residentId, allowedCommands }) {
+export function InitialHealthRecord({ residentId, residentName, allowedCommands }) {
   const [state, setState] = useState('loading')
   const [record, setRecord] = useState(null)
   const [etag, setEtag] = useState(null)
@@ -42,6 +53,8 @@ export function InitialHealthRecord({ residentId, allowedCommands }) {
   const [busy, setBusy] = useState(false)
   const [correcting, setCorrecting] = useState(false)
   const [voided, setVoided] = useState(false)
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const canWrite = allowedCommands.includes('WRITE_INITIAL_HEALTH_RECORD')
   const canConfirm = allowedCommands.includes('CONFIRM_INITIAL_HEALTH_RECORD')
@@ -89,6 +102,7 @@ export function InitialHealthRecord({ residentId, allowedCommands }) {
   }, [record])
 
   function startEditing() {
+    if (residentName) return setSheetOpen(true)
     setForm(formOf(record))
     setFailure(null)
     setEditing(true)
@@ -120,8 +134,10 @@ export function InitialHealthRecord({ residentId, allowedCommands }) {
     setBusy(true)
     try {
       await postResidentsByIdInitialHealthRecordConfirm({ path: { id: residentId }, headers: { 'If-Match': etag } })
+      setConfirmOpen(false)
       await load()
     } catch (error) {
+      setConfirmOpen(false)
       setFailure(problemOf(error))
     } finally {
       setBusy(false)
@@ -172,10 +188,6 @@ export function InitialHealthRecord({ residentId, allowedCommands }) {
         <Empty>
           <EmptyHeader>
             <EmptyTitle>Chưa lập hồ sơ sức khỏe ban đầu</EmptyTitle>
-            <EmptyDescription>
-              Hồ sơ lập được khi người cao tuổi đang tiếp nhận hoặc đã vào ở; chưa lập cũng không chặn hoàn tất tiếp
-              nhận.
-            </EmptyDescription>
           </EmptyHeader>
           {canWrite && (
             <Button type="button" className="h-11" onClick={startEditing}>
@@ -228,10 +240,10 @@ export function InitialHealthRecord({ residentId, allowedCommands }) {
       {record && !editing && (
         <>
           <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
-            {HEALTH_RECORD_FIELDS.map((f) => (
+            {HEALTH_RECORD_FIELDS.filter((f) => record[f.name]).map((f) => (
               <div key={f.name} className="flex flex-col">
                 <dt className="type-caption text-muted-foreground">{f.label}</dt>
-                <dd className="type-body-sm whitespace-pre-wrap font-medium">{record[f.name] || 'Chưa ghi nhận'}</dd>
+                <dd className="type-body-sm whitespace-pre-wrap font-medium">{record[f.name]}</dd>
               </div>
             ))}
           </dl>
@@ -246,7 +258,7 @@ export function InitialHealthRecord({ residentId, allowedCommands }) {
               </Button>
             )}
             {!record.confirmed && canConfirm && (
-              <Button type="button" className="h-11" disabled={busy} onClick={confirm}>
+              <Button type="button" className="h-11" disabled={busy} onClick={() => setConfirmOpen(true)}>
                 Xác nhận hồ sơ
               </Button>
             )}
@@ -269,6 +281,35 @@ export function InitialHealthRecord({ residentId, allowedCommands }) {
             />
           )}
         </>
+      )}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Xác nhận hồ sơ sức khỏe ban đầu</DialogTitle>
+            <DialogDescription>Sau khi xác nhận không sửa được nữa, chỉ đính chính.</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="h-11" onClick={() => setConfirmOpen(false)}>
+              Quay lại
+            </Button>
+            <Button type="button" className="h-11" disabled={busy} onClick={confirm}>
+              Xác nhận
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {sheetOpen && (
+        <InitialHealthSheet
+          residentId={residentId}
+          residentName={residentName}
+          allowedCommands={allowedCommands}
+          onClose={() => setSheetOpen(false)}
+          onDone={() => {
+            setSheetOpen(false)
+            load()
+          }}
+        />
       )}
     </section>
   )

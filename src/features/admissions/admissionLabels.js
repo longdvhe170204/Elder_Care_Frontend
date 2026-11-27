@@ -55,7 +55,7 @@ export const CONDITION_STATUS = {
 export const OPINIONS = [
   ['AGREE', 'Đồng ý'],
   ['DISAGREE', 'Không đồng ý'],
-  ['UNABLE_TO_EXPRESS', 'Không thể bày tỏ'],
+  ['UNABLE_TO_EXPRESS', 'Không bày tỏ được'],
 ]
 
 export const OPINION_SOURCES = [

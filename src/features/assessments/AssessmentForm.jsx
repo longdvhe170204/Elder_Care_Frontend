@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import {
+  getCatalogsByType,
   getAssessmentsById,
   postAssessmentsByIdConfirm,
   postAssessmentsByIdDiscardDraft,
   putAssessmentsById,
 } from '@/api'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   Dialog,
   DialogContent,
@@ -15,32 +17,76 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Textarea } from '@/components/ui/textarea'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ChoiceTray } from '@/common/ChoiceTray'
+import { DiscardChangesDialog } from '@/common/DiscardChangesDialog'
 import { formatDateTime } from '@/common/dateTime'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { ASSESSMENT_BASIS, ASSESSMENT_DISCARD_REASONS, CARE_NOTES } from '@/common/quickChoices'
+import {
+  ASSESSMENT_BASIS,
+  ASSESSMENT_COMMENT_CHOICES,
+  ASSESSMENT_DISCARD_REASONS,
+  CARE_NOTES,
+} from '@/common/quickChoices'
 import { StatusBadge } from '@/common/StatusBadge'
+import { memberNameOf, useFamilyMembers } from '@/common/useFamilyMembers'
 import { problemOf } from '@/common/problem'
+import { cn } from '@/lib/utils'
 import { HEALTH_RECORD_FIELDS, HEALTH_TYPE_LABELS, HEALTH_TYPE_ORDER } from '../residents/healthLabels'
+import { residentLine } from '../residents/residentLabels'
 import {
   ASSESSMENT_STATUS_LABELS,
   ASSESSMENT_TYPE_LABELS,
   CARE_LEVEL_LABELS,
   CARE_LEVEL_ORDER,
+  CARE_LEVEL_SHORT_LABELS,
   RESIDENCE_TYPE_LABELS,
 } from './assessmentLabels'
-import { FamilyDeclaredList } from './FamilyDeclared'
 
-// Phiếu đánh giá đang soạn (001 T042; US3; FR-024 → FR-029, FR-031; hợp đồng GET, PUT /assessments/{id},
-// POST …/confirm, …/discard-draft). Bên trái phiếu, bên phải thông tin tham khảo (FR-024). Không có ô điểm và không có
-// mức đề xuất: Bác sĩ tự chọn mức. Sửa nháp dùng If-Match lấy từ ETag lần đọc gần nhất; chỉ Bác sĩ xác nhận; quyền thật
-// do backend kiểm, nút hiện theo allowedCommands của hồ sơ.
+// Phiếu đánh giá đang soạn mở trong khung riêng (001 T042; US3; FR-024 → FR-029, FR-031; hợp đồng GET, PUT
+// /assessments/{id}, POST …/confirm, …/discard-draft; chủ dự án duyệt hướng 1 ngày 2026-11-26): khung rộng, đầu, chân cố
+// định; trái là phiếu, phải là thông tin tham khảo (sức khỏe ban đầu trước, rồi mục Hiệu lực, chỉ số đo, Gia đình khai).
+// Không có ô điểm, không mức đề xuất, không chọn sẵn (Q-307): Bác sĩ tự chọn mức. Căn cứ, loại hình đề xuất không bắt buộc
+// nên gập lại. Sửa nháp dùng If-Match lấy từ ETag lần đọc gần nhất; chỉ Bác sĩ xác nhận; quyền thật do backend kiểm.
+// Rà soát 2026-11-26 (chủ dự án duyệt A, B): nhận xét viết theo năm chủ đề của FR-025, dưới mỗi ô là tham khảo đúng chủ đề
+// (sức khỏe ban đầu, Gia đình khai); cột phải chỉ còn phần không thuộc năm chủ đề. API giữ một trường comment: lưu thì ghép
+// "Chủ đề: nội dung" từng dòng, mở lại thì tách theo tiêu đề dòng; nội dung không có tiêu đề vào ô Tình trạng chung.
 
-const NOTE_MAX = 1000
+const FORM_ID = 'assessment-draft-form'
+
+// [mã chủ đề Gia đình khai, nhãn, trường sức khỏe ban đầu cùng chủ đề]; danh sách chọn nhanh ở ASSESSMENT_COMMENT_CHOICES
+const COMMENT_TOPICS = [
+  ['GENERAL_CONDITION', 'Tình trạng chung', null],
+  ['MOBILITY', 'Vận động', 'mobility'],
+  ['SELF_CARE', 'Tự chăm sóc', 'selfCareAbility'],
+  ['COGNITION', 'Nhận thức', 'cognition'],
+  ['KNOWN_RISKS', 'Nguy cơ cần lưu ý', null],
+]
+const TOPIC_FIELDS = COMMENT_TOPICS.map((t) => t[2]).filter(Boolean)
+
+function splitComment(text) {
+  const topics = Object.fromEntries(COMMENT_TOPICS.map(([key]) => [key, []]))
+  let current = 'GENERAL_CONDITION'
+  for (const line of (text ?? '').split(/\r?\n/)) {
+    const topic = COMMENT_TOPICS.find(([, label]) => line.startsWith(`${label}:`))
+    if (topic) {
+      current = topic[0]
+      topics[current].push(line.slice(topic[1].length + 1).trimStart())
+    } else {
+      topics[current].push(line)
+    }
+  }
+  return Object.fromEntries(Object.entries(topics).map(([key, lines]) => [key, lines.join('\n').trim()]))
+}
+
+function composeComment(topics) {
+  return COMMENT_TOPICS.filter(([key]) => topics[key]?.trim())
+    .map(([key, label]) => `${label}: ${topics[key].trim()}`)
+    .join('\n')
+}
 
 function blank(value) {
   const text = value.trim()
@@ -50,10 +96,10 @@ function blank(value) {
 function formOf(a) {
   return {
     basis: a.basis ?? '',
-    comment: a.comment ?? '',
+    topics: splitComment(a.comment),
     careNote: a.careNote ?? '',
     careLevel: a.careLevel ?? '',
-    careNeedIds: new Set((a.careNeeds ?? []).map((n) => n.id)),
+    careNeedIds: (a.careNeeds ?? []).map((n) => String(n.id)),
     proposedResidenceType: a.proposedResidenceType ?? '',
   }
 }
@@ -61,13 +107,17 @@ function formOf(a) {
 function bodyOf(form) {
   return {
     basis: blank(form.basis),
-    comment: blank(form.comment),
+    comment: blank(composeComment(form.topics)),
     careNote: blank(form.careNote),
     careLevel: form.careLevel || undefined,
-    careNeedIds: [...form.careNeedIds],
+    careNeedIds: form.careNeedIds.map(Number),
     proposedResidenceType: form.proposedResidenceType || undefined,
   }
 }
+
+const sameForm = (a, b) =>
+  JSON.stringify({ ...a, careNeedIds: [...a.careNeedIds].sort() }) ===
+  JSON.stringify({ ...b, careNeedIds: [...b.careNeedIds].sort() })
 
 // Tác động của lệnh Xác nhận, nêu trước khi bấm (research H-10; FR-033, FR-035, FR-036).
 function effectOf({ type, residentStatus, currentLevel, level }) {
@@ -81,26 +131,35 @@ function effectOf({ type, residentStatus, currentLevel, level }) {
   return 'Mức chăm sóc không đổi. Yêu cầu đổi mức chưa kết thúc của người này (nếu có) chuyển sang Được thay thế.'
 }
 
+function RefSection({ id, title, children }) {
+  return (
+    <section aria-labelledby={id} className="flex flex-col gap-2">
+      <h4 id={id} className="type-label">
+        {title}
+      </h4>
+      {children}
+    </section>
+  )
+}
+
 function Reference({ reference }) {
   const initial = reference?.initialHealthRecord
   const items = reference?.activeHealthItems ?? []
   const vitals = reference?.latestVitalSigns ?? []
   return (
-    <aside aria-label="Thông tin tham khảo" className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4">
-      <p className="type-caption text-muted-foreground">
-        Thông tin tham khảo khi đánh giá. Hệ thống không tính điểm và không đề xuất mức chăm sóc.
-      </p>
-
-      <section aria-labelledby="ref-initial" className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <h4 id="ref-initial" className="type-label">
-            Hồ sơ sức khỏe ban đầu
-          </h4>
-          {initial && <StatusBadge status={initial.confirmed ? 'Đã xác nhận' : 'Bản nháp'} />}
-        </div>
+    <aside aria-label="Thông tin tham khảo" className="flex flex-col gap-5 rounded-lg bg-muted/40 p-4">
+      <RefSection
+        id="ref-initial"
+        title={
+          <span className="flex flex-wrap items-center gap-2">
+            Sức khỏe ban đầu
+            {initial && <StatusBadge status={initial.confirmed ? 'Đã xác nhận' : 'Bản nháp'} />}
+          </span>
+        }
+      >
         {initial ? (
           <dl className="flex flex-col gap-2">
-            {HEALTH_RECORD_FIELDS.filter((f) => initial[f.name]).map((f) => (
+            {HEALTH_RECORD_FIELDS.filter((f) => initial[f.name] && !TOPIC_FIELDS.includes(f.name)).map((f) => (
               <div key={f.name} className="flex flex-col">
                 <dt className="type-caption text-muted-foreground">{f.label}</dt>
                 <dd className="type-body-sm whitespace-pre-wrap">{initial[f.name]}</dd>
@@ -108,16 +167,13 @@ function Reference({ reference }) {
             ))}
           </dl>
         ) : (
-          <p className="type-body-sm text-muted-foreground">Chưa lập hồ sơ sức khỏe ban đầu.</p>
+          <p className="type-body-sm text-muted-foreground">Chưa lập</p>
         )}
-      </section>
+      </RefSection>
 
-      <section aria-labelledby="ref-items" className="flex flex-col gap-2">
-        <h4 id="ref-items" className="type-label">
-          Dị ứng, bệnh nền, tiền sử đang hiệu lực
-        </h4>
+      <RefSection id="ref-items" title="Dị ứng, bệnh nền, tiền sử">
         {items.length === 0 ? (
-          <p className="type-body-sm text-muted-foreground">Không có mục nào đang hiệu lực.</p>
+          <p className="type-body-sm text-muted-foreground">Không có mục đang hiệu lực</p>
         ) : (
           HEALTH_TYPE_ORDER.filter((t) => items.some((i) => i.type === t)).map((t) => (
             <div key={t} className="flex flex-col">
@@ -135,15 +191,10 @@ function Reference({ reference }) {
             </div>
           ))
         )}
-      </section>
+      </RefSection>
 
-      <section aria-labelledby="ref-vitals" className="flex flex-col gap-2">
-        <h4 id="ref-vitals" className="type-label">
-          Chỉ số đo gần nhất
-        </h4>
-        {vitals.length === 0 ? (
-          <p className="type-body-sm text-muted-foreground">Chưa có lần đo chỉ số nào.</p>
-        ) : (
+      {vitals.length > 0 && (
+        <RefSection id="ref-vitals" title="Chỉ số đo gần nhất">
           <ul className="type-body-sm">
             {vitals.map((v) => (
               <li key={v.indicatorId}>
@@ -151,21 +202,82 @@ function Reference({ reference }) {
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </RefSection>
+      )}
     </aside>
   )
 }
 
-export function AssessmentForm({
+function DiscardDialog({ open, busy, onCancel, onDiscard }) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState('')
+  return (
+    <Dialog open={open} onOpenChange={(next) => !next && onCancel()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Hủy bản nháp</DialogTitle>
+          <DialogDescription>Bản đã hủy vẫn lưu trong lịch sử và không sửa được.</DialogDescription>
+        </DialogHeader>
+        <Field data-invalid={!!error || undefined}>
+          <ChoiceTray
+            id="assessment-discard-reason"
+            label="Lý do hủy"
+            options={ASSESSMENT_DISCARD_REASONS}
+            value={reason}
+            onChange={(value) => {
+              setReason(value)
+              setError('')
+            }}
+            invalid={!!error}
+          />
+          {error && <FieldError>{error}</FieldError>}
+        </Field>
+        <DialogFooter>
+          <Button type="button" variant="outline" className="h-11" onClick={onCancel}>
+            Quay lại
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="h-11"
+            disabled={busy}
+            onClick={() => (reason.trim() ? onDiscard(reason.trim()) : setError('Chọn hoặc ghi lý do hủy'))}
+          >
+            Hủy bản nháp
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function AssessmentSheet({
   assessmentId,
+  residentId,
+  residentName,
+  resident,
   residentStatus,
   currentLevel,
-  careNeedOptions,
+  careNeedOptions: givenNeeds,
   canConfirm,
+  onClose,
   onChanged,
   onConfirmed,
 }) {
+  const members = useFamilyMembers(residentId)
+  // Mở thẳng từ danh sách (Chờ đánh giá đầu vào) thì tự nạp danh mục nhu cầu chăm sóc
+  const [loadedNeeds, setLoadedNeeds] = useState([])
+  useEffect(() => {
+    if (givenNeeds) return undefined
+    let live = true
+    getCatalogsByType({ path: { type: 'care-needs' } })
+      .then(({ data }) => live && setLoadedNeeds(data.filter((n) => n.status !== 'INACTIVE')))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [givenNeeds])
+  const careNeedOptions = givenNeeds ?? loadedNeeds
   const [state, setState] = useState('loading')
   const [detail, setDetail] = useState(null)
   const [etag, setEtag] = useState(null)
@@ -174,10 +286,10 @@ export function AssessmentForm({
   const [fieldErrors, setFieldErrors] = useState({})
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
-  const [discarding, setDiscarding] = useState(false)
-  const [discardReason, setDiscardReason] = useState('')
-  const [discardError, setDiscardError] = useState('')
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [confirmClose, setConfirmClose] = useState(false)
 
   const load = useCallback(async () => {
     try {
@@ -185,6 +297,7 @@ export function AssessmentForm({
       setDetail(data)
       setEtag(tag)
       setForm(formOf(data))
+      setMoreOpen(data.type === 'INITIAL' ? !!data.proposedResidenceType : !!data.basis)
       setFailure(null)
       setState('ready')
     } catch (error) {
@@ -194,26 +307,38 @@ export function AssessmentForm({
   }, [assessmentId])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- nạp phiếu khi mở tab
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- nạp phiếu khi mở khung
     load()
   }, [load])
 
-  const set = (name) => (event) => {
+  const dirty = !!form && !!detail && !sameForm(form, formOf(detail))
+  const requestClose = () => (dirty ? setConfirmClose(true) : onClose())
+
+  const set = (name) => (value) => {
     setSaved(false)
-    setForm((current) => ({ ...current, [name]: event.target.value }))
+    setFieldErrors((current) => ({ ...current, [name]: undefined }))
+    setForm((current) => ({ ...current, [name]: value }))
+  }
+  const setTopic = (key) => (value) => {
+    setSaved(false)
+    setFieldErrors((current) => ({ ...current, comment: undefined }))
+    setForm((current) => ({ ...current, topics: { ...current.topics, [key]: value } }))
   }
 
-  function toggleNeed(id, checked) {
-    setSaved(false)
-    setForm((current) => {
-      const ids = new Set(current.careNeedIds)
-      if (checked) ids.add(id)
-      else ids.delete(id)
-      return { ...current, careNeedIds: ids }
-    })
+  // Tham khảo theo chủ đề: sức khỏe ban đầu cùng chủ đề, các mục Gia đình khai (ghi tên người thân)
+  function refsOf(key, field) {
+    const initial = detail?.reference?.initialHealthRecord
+    const lines = []
+    if (field && initial?.[field]) lines.push(`Sức khỏe ban đầu: ${initial[field]}`)
+    for (const e of detail?.familyDeclared ?? []) {
+      if (e.topic !== key) continue
+      const who = e.source?.type === 'FAMILY_MEMBER' ? memberNameOf(members, e.source.familyMemberId) : 'người cao tuổi'
+      lines.push(`Gia đình khai (${who}): ${e.content}`)
+    }
+    return lines
   }
 
-  // Lưu nháp; trả ETag mới (hoặc null khi lỗi) để lệnh Xác nhận dùng ngay.
+  // Lưu nháp; trả ETag mới để lệnh Xác nhận dùng ngay.
   async function persist() {
     const { data, etag: tag } = await putAssessmentsById({
       path: { id: assessmentId },
@@ -222,6 +347,7 @@ export function AssessmentForm({
     })
     setDetail(data)
     setEtag(tag)
+    setForm(formOf(data))
     return tag
   }
 
@@ -271,229 +397,253 @@ export function AssessmentForm({
     }
   }
 
-  async function discard(event) {
-    event.preventDefault()
-    if (!discardReason.trim()) {
-      setDiscardError('Nhập lý do hủy nháp')
-      return
-    }
-    setDiscardError('')
+  async function discard(reason) {
+    setFailure(null)
     setBusy(true)
     try {
-      await postAssessmentsByIdDiscardDraft({ path: { id: assessmentId }, body: { reason: discardReason.trim() } })
+      await postAssessmentsByIdDiscardDraft({ path: { id: assessmentId }, body: { reason } })
+      setDiscardOpen(false)
       onChanged?.()
+      onClose()
     } catch (error) {
+      setDiscardOpen(false)
       setFailure(problemOf(error))
     } finally {
       setBusy(false)
     }
   }
 
-  if (state === 'loading') {
-    return (
-      <div aria-busy="true" className="flex flex-col gap-2">
-        <span className="sr-only">Đang tải phiếu đánh giá</span>
-        <Skeleton className="h-10" />
-        <Skeleton className="h-32" />
-      </div>
-    )
-  }
-  if (state === 'error') return <ProblemAlert problem={failure} />
-
-  const problem = (
-    <ProblemAlert problem={failure}>
-      {failure?.status === 412 && (
-        <Button type="button" variant="outline" className="h-11 self-start" onClick={load}>
-          Xem giá trị mới
-        </Button>
-      )}
-    </ProblemAlert>
-  )
-  const isInitial = detail.type === 'INITIAL'
+  const isInitial = detail?.type === 'INITIAL'
+  const title = `${ASSESSMENT_TYPE_LABELS[detail?.type] ?? 'Đánh giá'}: ${residentName ?? ''}`.trim()
 
   return (
-    <section aria-labelledby="assessment-draft-title" className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 id="assessment-draft-title" className="type-card-title">
-          {ASSESSMENT_TYPE_LABELS[detail.type]} đang soạn
-        </h3>
-        <StatusBadge status={ASSESSMENT_STATUS_LABELS[detail.status]} />
-        <span className="type-caption text-muted-foreground">Người lập: {detail.createdBy}</span>
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <form onSubmit={save} noValidate className="flex flex-col gap-4">
-          <FieldGroup>
-            <ChoiceTray
-              id="assessment-basis"
-              label="Căn cứ, lý do"
-              options={ASSESSMENT_BASIS}
-              value={form.basis}
-              onChange={(value) => set('basis')({ target: { value } })}
-            />
-
-            <Field data-invalid={!!fieldErrors.comment || undefined}>
-              <FieldLabel htmlFor="assessment-comment">Nhận xét đánh giá (bắt buộc khi xác nhận)</FieldLabel>
-              <Textarea
-                id="assessment-comment"
-                rows={6}
-                value={form.comment}
-                onChange={set('comment')}
-                aria-invalid={!!fieldErrors.comment || undefined}
-              />
-              <FieldDescription>
-                Tình trạng chung, vận động, tự chăm sóc, nhận thức và các nguy cơ cần lưu ý.
-              </FieldDescription>
-              {fieldErrors.comment && <FieldError>{fieldErrors.comment}</FieldError>}
-            </Field>
-
-            <Field>
-              <ChoiceTray
-                id="assessment-care-note"
-                label="Lưu ý chăm sóc (hiện trên thẻ người cao tuổi)"
-                options={CARE_NOTES}
-                multiple
-                value={form.careNote}
-                onChange={(value) => set('careNote')({ target: { value } })}
-              />
-              <FieldDescription className="tabular-nums">
-                {form.careNote.length}/{NOTE_MAX} ký tự
-              </FieldDescription>
-            </Field>
-
-            <Field data-invalid={!!fieldErrors.careLevel || undefined}>
-              <FieldLabel id="assessment-level-label">Mức chăm sóc trong phiếu (bắt buộc khi xác nhận)</FieldLabel>
-              <ToggleGroup
-                variant="outline"
-                aria-labelledby="assessment-level-label"
-                value={form.careLevel ? [form.careLevel] : []}
-                onValueChange={(next) => {
-                  setSaved(false)
-                  setForm((current) => ({ ...current, careLevel: next[0] ?? '' }))
-                }}
-                className="grid w-full grid-cols-1 sm:grid-cols-3"
-              >
-                {CARE_LEVEL_ORDER.map((code) => (
-                  <ToggleGroupItem key={code} value={code} className="h-11">
-                    {CARE_LEVEL_LABELS[code]}
-                  </ToggleGroupItem>
-                ))}
-              </ToggleGroup>
-              <FieldDescription>
-                Mức này chưa áp dụng cho tới khi Bác sĩ xác nhận.
-                {!isInitial && residentStatus !== 'ADMISSION_IN_PROGRESS'
-                  ? ' Người cao tuổi đã lưu trú: mức hiện hành chỉ đổi theo yêu cầu điều chỉnh hợp đồng.'
-                  : ''}
-              </FieldDescription>
-              {fieldErrors.careLevel && <FieldError>{fieldErrors.careLevel}</FieldError>}
-            </Field>
-
-            <Field>
-              <FieldLabel id="assessment-needs-label">Nhu cầu chăm sóc</FieldLabel>
-              {careNeedOptions.length === 0 ? (
-                <p className="type-body-sm text-muted-foreground">Danh mục nhu cầu chăm sóc đang trống.</p>
-              ) : (
-                <ul aria-labelledby="assessment-needs-label" className="flex flex-wrap gap-2">
-                  {careNeedOptions.map((n) => (
-                    <li key={n.id}>
-                      <label className="flex min-h-10 cursor-pointer items-center gap-2 rounded-lg border px-3">
-                        <Checkbox
-                          checked={form.careNeedIds.has(n.id)}
-                          onCheckedChange={(checked) => toggleNeed(n.id, checked)}
-                        />
-                        <span className="type-body-sm">{n.name}</span>
-                      </label>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Field>
-
-            {isInitial && (
-              <Field>
-                <FieldLabel id="assessment-residence-label">Loại hình lưu trú đề xuất (không bắt buộc)</FieldLabel>
-                <ToggleGroup
-                  variant="outline"
-                  aria-labelledby="assessment-residence-label"
-                  value={form.proposedResidenceType ? [form.proposedResidenceType] : []}
-                  onValueChange={(next) => {
-                    setSaved(false)
-                    setForm((current) => ({ ...current, proposedResidenceType: next[0] ?? '' }))
-                  }}
-                  className="grid w-full grid-cols-1 sm:grid-cols-3"
-                >
-                  {Object.entries(RESIDENCE_TYPE_LABELS).map(([code, label]) => (
-                    <ToggleGroupItem key={code} value={code} className="h-11">
-                      {label}
-                    </ToggleGroupItem>
-                  ))}
-                </ToggleGroup>
-                <FieldDescription>Chỉ để tham khảo; loại hình chính thức do hợp đồng quyết định.</FieldDescription>
-              </Field>
-            )}
-          </FieldGroup>
-
-          {problem}
-          <p role="status" aria-live="polite" className="type-caption text-muted-foreground">
-            {saved ? 'Đã lưu bản nháp.' : ''}
-          </p>
-
-          <div className="flex flex-wrap gap-3">
-            <Button type="submit" variant="outline" className="h-11" disabled={busy}>
-              Lưu nháp
-            </Button>
-            {canConfirm && (
-              <Button type="button" className="h-11" disabled={busy} onClick={() => setConfirmOpen(true)}>
-                Xác nhận đánh giá
-              </Button>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11"
-              disabled={busy}
-              onClick={() => setDiscarding((open) => !open)}
-            >
-              Hủy nháp…
-            </Button>
+    <Sheet open onOpenChange={(next) => !next && requestClose()}>
+      <SheetContent side="center" className="gap-0 p-0 sm:max-w-5xl">
+        <div className="flex h-full min-h-0 flex-col">
+          <div className="flex shrink-0 flex-col gap-1 border-b px-6 pt-6 pb-4 pr-12">
+            <div className="flex flex-wrap items-center gap-3">
+              <SheetTitle className="type-title">{title}</SheetTitle>
+              {detail && <StatusBadge status={ASSESSMENT_STATUS_LABELS[detail.status]} />}
+            </div>
+            <SheetDescription>
+              {detail
+                ? [residentLine(resident), `Người lập: ${detail.createdBy}`].filter(Boolean).join(' · ')
+                : 'Đang tải phiếu'}
+            </SheetDescription>
           </div>
 
-          {discarding && (
-            <div className="flex flex-col gap-2 rounded-lg border p-3">
-              <Field data-invalid={!!discardError || undefined}>
-                <ChoiceTray
-                  id="assessment-discard-reason"
-                  label="Lý do hủy nháp"
-                  options={ASSESSMENT_DISCARD_REASONS}
-                  value={discardReason}
-                  onChange={setDiscardReason}
-                  invalid={!!discardError}
-                />
-                {discardError && <FieldError>{discardError}</FieldError>}
-              </Field>
-              <Button type="button" variant="outline" className="h-11 self-start" disabled={busy} onClick={discard}>
-                Hủy bản nháp này
-              </Button>
-              <p className="type-caption text-muted-foreground">
-                Bản đã hủy vẫn được lưu trong lịch sử và không sửa được.
-              </p>
-            </div>
-          )}
-        </form>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">
+            {state === 'loading' && (
+              <div aria-busy="true" className="flex flex-col gap-2">
+                <span className="sr-only">Đang tải phiếu đánh giá</span>
+                <Skeleton className="h-10" />
+                <Skeleton className="h-32" />
+              </div>
+            )}
+            {state === 'error' && <ProblemAlert problem={failure} />}
+            {state === 'ready' && (
+              <div className="grid gap-6 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+                <form
+                  id={FORM_ID}
+                  onSubmit={save}
+                  noValidate
+                  aria-busy={busy || undefined}
+                  className="flex flex-col gap-5"
+                >
+                  <fieldset className="flex flex-col gap-4" data-invalid={!!fieldErrors.comment || undefined}>
+                    <legend className="type-label mb-3">
+                      Nhận xét đánh giá
+                      <span aria-hidden="true" className="text-destructive">
+                        {' '}
+                        *
+                      </span>
+                    </legend>
+                    {COMMENT_TOPICS.map(([key, label, field]) => {
+                      const refs = refsOf(key, field)
+                      return (
+                        <Field key={key}>
+                          {/* Khay chọn nhanh, chọn nhiều, kèm Khác (chủ dự án yêu cầu 2026-11-26) */}
+                          <ChoiceTray
+                            id={`assessment-comment-${key}`}
+                            label={label}
+                            options={ASSESSMENT_COMMENT_CHOICES[key]}
+                            multiple
+                            value={form.topics[key]}
+                            onChange={setTopic(key)}
+                            invalid={!!fieldErrors.comment}
+                            placeholder="Bấm để chọn hoặc gõ"
+                          />
+                          {refs.length > 0 && (
+                            <ul className="flex flex-col type-caption text-muted-foreground">
+                              {refs.map((line) => (
+                                <li key={line}>{line}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </Field>
+                      )
+                    })}
+                    {fieldErrors.comment && <FieldError>{fieldErrors.comment}</FieldError>}
+                  </fieldset>
 
-        <div className="flex flex-col gap-4">
-          <FamilyDeclaredList entries={detail.familyDeclared} />
-          <Reference reference={detail.reference} />
+                  <ChoiceTray
+                    id="assessment-care-note"
+                    label="Lưu ý chăm sóc hiện trên thẻ"
+                    options={CARE_NOTES}
+                    multiple
+                    value={form.careNote}
+                    onChange={set('careNote')}
+                    placeholder="Bấm để chọn hoặc gõ"
+                  />
+
+                  <Field data-invalid={!!fieldErrors.careLevel || undefined}>
+                    <FieldLabel id="assessment-level-label">
+                      Mức chăm sóc
+                      <span aria-hidden="true" className="text-destructive">
+                        *
+                      </span>
+                    </FieldLabel>
+                    <ToggleGroup
+                      variant="outline"
+                      spacing={2}
+                      aria-labelledby="assessment-level-label"
+                      value={form.careLevel ? [form.careLevel] : []}
+                      onValueChange={(next) => set('careLevel')(next[0] ?? '')}
+                      className="grid w-full grid-cols-3"
+                    >
+                      {CARE_LEVEL_ORDER.map((code) => (
+                        <ToggleGroupItem
+                          key={code}
+                          value={code}
+                          aria-label={CARE_LEVEL_LABELS[code]}
+                          aria-invalid={!!fieldErrors.careLevel || undefined}
+                          className="h-11"
+                        >
+                          {CARE_LEVEL_SHORT_LABELS[code]}
+                        </ToggleGroupItem>
+                      ))}
+                    </ToggleGroup>
+                    {fieldErrors.careLevel && <FieldError>{fieldErrors.careLevel}</FieldError>}
+                  </Field>
+
+                  <Field>
+                    <FieldLabel id="assessment-needs-label">Nhu cầu chăm sóc</FieldLabel>
+                    {careNeedOptions.length === 0 ? (
+                      <p className="type-body-sm text-muted-foreground">Danh mục nhu cầu chăm sóc đang trống</p>
+                    ) : (
+                      <ToggleGroup
+                        multiple
+                        variant="outline"
+                        spacing={2}
+                        aria-labelledby="assessment-needs-label"
+                        value={form.careNeedIds}
+                        onValueChange={set('careNeedIds')}
+                        className="flex-wrap"
+                      >
+                        {careNeedOptions.map((n) => (
+                          <ToggleGroupItem key={n.id} value={String(n.id)} className="h-11 px-4">
+                            {n.name}
+                          </ToggleGroupItem>
+                        ))}
+                      </ToggleGroup>
+                    )}
+                  </Field>
+
+                  <Collapsible open={moreOpen} onOpenChange={setMoreOpen} className="flex flex-col gap-5">
+                    <CollapsibleTrigger className="flex items-center gap-1.5 self-start type-body-sm font-medium text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+                      {isInitial ? 'Thêm loại hình đề xuất' : 'Thêm căn cứ'}
+                      <ChevronDown
+                        aria-hidden
+                        className={cn('size-4 transition-transform', moreOpen && 'rotate-180')}
+                      />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="flex flex-col gap-5">
+                      {/* Đánh giá đầu vào: căn cứ đã rõ theo loại phiếu nên không có ô căn cứ */}
+                      {!isInitial && (
+                        <ChoiceTray
+                          id="assessment-basis"
+                          label="Căn cứ, lý do"
+                          options={ASSESSMENT_BASIS}
+                          value={form.basis}
+                          onChange={set('basis')}
+                          placeholder="Bấm để chọn hoặc gõ"
+                        />
+                      )}
+                      {isInitial && (
+                        <Field>
+                          <FieldLabel id="assessment-residence-label">Loại hình lưu trú đề xuất</FieldLabel>
+                          <ToggleGroup
+                            variant="outline"
+                            spacing={2}
+                            aria-labelledby="assessment-residence-label"
+                            value={form.proposedResidenceType ? [form.proposedResidenceType] : []}
+                            onValueChange={(next) => set('proposedResidenceType')(next[0] ?? '')}
+                            className="flex-wrap"
+                          >
+                            {Object.entries(RESIDENCE_TYPE_LABELS).map(([code, label]) => (
+                              <ToggleGroupItem key={code} value={code} className="h-11 px-4">
+                                {label}
+                              </ToggleGroupItem>
+                            ))}
+                          </ToggleGroup>
+                        </Field>
+                      )}
+                    </CollapsibleContent>
+                  </Collapsible>
+
+                  <ProblemAlert problem={failure}>
+                    {failure?.status === 412 && (
+                      <Button type="button" variant="outline" className="h-11 self-start" onClick={load}>
+                        Xem giá trị mới
+                      </Button>
+                    )}
+                  </ProblemAlert>
+                </form>
+
+                <Reference reference={detail.reference} />
+              </div>
+            )}
+          </div>
+
+          <div className="flex shrink-0 flex-wrap items-center gap-3 border-t px-6 py-4">
+            {state === 'ready' && (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11"
+                disabled={busy}
+                onClick={() => setDiscardOpen(true)}
+              >
+                Hủy nháp
+              </Button>
+            )}
+            <p role="status" aria-live="polite" className="type-caption text-muted-foreground">
+              {saved && !dirty ? 'Đã lưu bản nháp' : ''}
+            </p>
+            <span className="flex-1" />
+            {state === 'ready' && (
+              <>
+                <Button type="submit" form={FORM_ID} variant="outline" className="h-11" disabled={busy}>
+                  {busy ? 'Đang lưu…' : 'Lưu nháp'}
+                </Button>
+                {canConfirm && (
+                  <Button type="button" className="h-11" disabled={busy} onClick={() => setConfirmOpen(true)}>
+                    Xác nhận đánh giá
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
         </div>
-      </div>
+      </SheetContent>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Xác nhận đánh giá</DialogTitle>
             <DialogDescription>
-              {effectOf({ type: detail.type, residentStatus, currentLevel, level: form.careLevel })} Sau khi xác nhận
-              không sửa được nữa, chỉ đính chính.
+              {detail && effectOf({ type: detail.type, residentStatus, currentLevel, level: form?.careLevel })} Sau khi
+              xác nhận không sửa được nữa, chỉ đính chính.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -506,6 +656,17 @@ export function AssessmentForm({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </section>
+
+      {discardOpen && <DiscardDialog open busy={busy} onCancel={() => setDiscardOpen(false)} onDiscard={discard} />}
+
+      <DiscardChangesDialog
+        open={confirmClose}
+        onKeep={() => setConfirmClose(false)}
+        onDiscard={() => {
+          setConfirmClose(false)
+          onClose()
+        }}
+      />
+    </Sheet>
   )
 }

@@ -80,7 +80,7 @@ function routes({ active = ACTIVE, history = [ACTIVE, OLD], forbidden = false } 
 
 // Chọn người thân theo mã khi danh sách đã tải (ô chọn theo tên)
 async function pickMember(label, id) {
-  const select = screen.getByLabelText(label)
+  const select = field(label)
   await waitFor(() =>
     expect(
       within(select)
@@ -95,10 +95,28 @@ function open(props = {}) {
   return render(<TreatmentWish residentId={5} status="IN_RESIDENCE" allowedCommands={[]} {...props} />)
 }
 
+// Nhãn ô bắt buộc có dấu * ở cuối (khung ghi phiếu riêng, rà soát 2026-11-26)
+const field = (label) => screen.getByLabelText(new RegExp(`^${label}`))
+
+async function openForm() {
+  fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+  return screen.findByRole('dialog', { name: 'Ghi phiếu nguyện vọng khi điều trị' })
+}
+
+// Người trả lời không chọn sẵn (Q-307; rà soát 2026-11-26)
 function fillMinimum() {
-  fireEvent.change(screen.getByLabelText('Tên bệnh viện 1'), { target: { value: 'Bệnh viện X' } })
-  fireEvent.change(screen.getByLabelText('Địa chỉ bệnh viện 1'), { target: { value: '12 Lê Lợi' } })
+  fireEvent.change(field('Tên bệnh viện 1'), { target: { value: 'Bệnh viện X' } })
+  fireEvent.change(field('Địa chỉ bệnh viện 1'), { target: { value: '12 Lê Lợi' } })
   fireEvent.click(screen.getByRole('radio', { name: 'Gia đình' }))
+  fireEvent.click(
+    within(screen.getByRole('radiogroup', { name: /^Người trả lời/ })).getByRole('radio', { name: 'Người cao tuổi' }),
+  )
+}
+
+// Ý kiến khác gập lại, không chọn sẵn nguồn ý kiến
+function openOpinions(source) {
+  fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến khác' }))
+  fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Nguồn ý kiến' })).getByRole('radio', { name: source }))
 }
 
 describe('TreatmentWish', () => {
@@ -138,13 +156,14 @@ describe('TreatmentWish', () => {
     expect(screen.queryByRole('button', { name: /Ghi phiếu/ })).not.toBeInTheDocument()
   })
 
-  it('chưa có phiếu: báo không chặn việc nào và mời ghi phiếu', async () => {
+  // Rà soát 2026-11-26: chưa có phiếu Hiệu lực chỉ ghi một dòng; ẩn lịch sử khi trống
+  it('chưa có phiếu: một dòng và mời ghi phiếu', async () => {
     routes({ active: null, history: [] })
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'] })
 
-    expect(await screen.findByText('Chưa có phiếu nguyện vọng khi điều trị Hiệu lực')).toBeInTheDocument()
-    expect(screen.getByText(/không chặn việc nào/)).toBeInTheDocument()
+    expect(await screen.findByText('Chưa có phiếu')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Ghi phiếu nguyện vọng' })).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Lịch sử phiếu nguyện vọng khi điều trị' })).not.toBeInTheDocument()
   })
 
   it('Hành chính thấy "Đã có phiếu" không thấy nội dung; Kế toán không thấy khối này', async () => {
@@ -166,7 +185,7 @@ describe('TreatmentWish', () => {
     const onChanged = vi.fn()
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'], onChanged })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fillMinimum()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
@@ -187,15 +206,16 @@ describe('TreatmentWish', () => {
     expect(await screen.findByText('Đã ghi phiếu nguyện vọng khi điều trị.')).toBeInTheDocument()
   })
 
-  it('thiếu bệnh viện hoặc người đi kèm thì báo tại ô và không gọi backend', async () => {
+  it('thiếu bệnh viện, người đi kèm hoặc người trả lời thì báo tại ô và không gọi backend', async () => {
     routes({ active: null, history: [] })
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
 
     expect(await screen.findByText('Nhập tên và địa chỉ bệnh viện ưu tiên')).toBeInTheDocument()
     expect(screen.getByText('Chọn người đi kèm')).toBeInTheDocument()
+    expect(screen.getByText('Chọn người trả lời')).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/treatment-wishes')).toHaveLength(0)
   })
 
@@ -204,16 +224,16 @@ describe('TreatmentWish', () => {
     api.on('POST', '/residents/5/treatment-wishes', json(201, { wish: ACTIVE, warnings: [] }))
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fillMinimum()
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm bệnh viện thứ hai' }))
-    expect(screen.queryByRole('button', { name: 'Thêm bệnh viện thứ hai' })).not.toBeInTheDocument()
-    fireEvent.change(screen.getByLabelText('Tên bệnh viện 2'), { target: { value: 'Bệnh viện Y' } })
+    fireEvent.click(screen.getByRole('button', { name: /Thêm bệnh viện thứ hai/ }))
+    expect(screen.queryByRole('button', { name: /Thêm bệnh viện thứ hai/ })).not.toBeInTheDocument()
+    fireEvent.change(field('Tên bệnh viện 2'), { target: { value: 'Bệnh viện Y' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     expect(await screen.findByText(/Nhập đủ tên và địa chỉ bệnh viện thứ hai/)).toBeInTheDocument()
     expect(api.calls('POST', '/residents/5/treatment-wishes')).toHaveLength(0)
 
-    fireEvent.change(screen.getByLabelText('Địa chỉ bệnh viện 2'), { target: { value: '5 Hai Bà Trưng' } })
+    fireEvent.change(field('Địa chỉ bệnh viện 2'), { target: { value: '5 Hai Bà Trưng' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
     await waitFor(() => expect(api.calls('POST', '/residents/5/treatment-wishes')).toHaveLength(1))
     const body = JSON.parse(api.calls('POST', '/residents/5/treatment-wishes')[0][1].body)
@@ -225,13 +245,16 @@ describe('TreatmentWish', () => {
     api.on('POST', '/residents/5/treatment-wishes', json(201, { wish: ACTIVE, warnings: [] }))
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fillMinimum()
-    fireEvent.change(screen.getByLabelText('Số thẻ'), { target: { value: 'GD4797912345678' } })
-    fireEvent.change(screen.getByLabelText('Hạn thẻ'), { target: { value: '2027-06-30' } })
+    // Bảo hiểm y tế gập lại (không bắt buộc)
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm bảo hiểm y tế' }))
+    fireEvent.change(field('Số thẻ'), { target: { value: 'GD4797912345678' } })
+    fireEvent.change(field('Hạn thẻ'), { target: { value: '30/06/2027' } })
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hỏi gia đình trước khi chuyển viện không khẩn cấp' }))
     expect(screen.queryByLabelText('Mã người thân cần báo')).not.toBeInTheDocument()
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Báo Trần Văn Minh' }))
+    openOpinions('Người thân')
     await pickMember('Người thân nêu ý kiến', 32)
     fireEvent.change(screen.getByLabelText('Nội dung ý kiến'), { target: { value: 'Muốn bệnh viện Z' } })
     fireEvent.click(screen.getByRole('button', { name: 'Thêm ý kiến' }))
@@ -256,7 +279,7 @@ describe('TreatmentWish', () => {
     )
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fillMinimum()
     fireEvent.click(screen.getByRole('checkbox', { name: 'Hỏi gia đình trước khi chuyển viện không khẩn cấp' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
@@ -270,7 +293,7 @@ describe('TreatmentWish', () => {
     api.on('POST', '/residents/5/treatment-wishes', problem(409, 'INVALID_FAMILY_MEMBER'))
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fillMinimum()
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Báo Ngô Văn Khác' }))
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))
@@ -284,9 +307,9 @@ describe('TreatmentWish', () => {
     api.on('POST', '/residents/5/treatment-wishes', json(201, { wish: ACTIVE, warnings: [] }))
     open({ allowedCommands: ['RECORD_TREATMENT_WISH'] })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi phiếu nguyện vọng' }))
+    await openForm()
     fillMinimum()
-    fireEvent.change(screen.getByLabelText('Bản ký đã scan (không bắt buộc)'), {
+    fireEvent.change(field('Bản ký đã scan'), {
       target: { files: [new File(['%PDF-1.4'], 'phieu.pdf', { type: 'application/pdf' })] },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu phiếu' }))

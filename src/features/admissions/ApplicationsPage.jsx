@@ -101,6 +101,7 @@ export function ApplicationsPage({ role, onNavigate = () => {} } = {}) {
           canCreateProfile={PROFILE_CREATORS.includes(role)}
           onClose={() => setSheet(null)}
           onDone={opened}
+          onOpenProfile={(id) => onNavigate('residents', { residentId: id })}
         />
       )}
       <ToggleGroup

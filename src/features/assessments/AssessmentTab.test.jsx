@@ -144,21 +144,35 @@ describe('AssessmentTab', () => {
     expect(await screen.findByText('Không có quyền xem đánh giá')).toBeInTheDocument()
   })
 
-  it('phiếu nháp có hai khối: phiếu và thông tin tham khảo; không có ô điểm hay mức đề xuất', async () => {
+  // Phiếu đang soạn mở khung riêng bằng "Mở phiếu" (chủ dự án duyệt 2026-11-26)
+  async function openDraft() {
+    fireEvent.click(await screen.findByRole('button', { name: 'Mở phiếu' }))
+    const dialog = await screen.findByRole('dialog')
+    await within(dialog).findByRole('button', { name: 'Lưu nháp' })
+    return dialog
+  }
+
+  it('phiếu nháp: trái là phiếu năm chủ đề, phải là thông tin tham khảo; không có ô điểm hay mức đề xuất', async () => {
     const draft = detail()
     routes({ list: [assessment()], draft })
     open()
 
     expect(await screen.findByRole('heading', { name: /Đánh giá đầu vào đang soạn/ })).toBeInTheDocument()
-    const reference = screen.getByRole('complementary', { name: 'Thông tin tham khảo' })
-    expect(within(reference).getByText('Đi lại cần gậy')).toBeInTheDocument()
+    const dialog = await openDraft()
+    const reference = within(dialog).getByRole('complementary', { name: 'Thông tin tham khảo' })
+    expect(within(reference).getByText('O+')).toBeInTheDocument()
     expect(within(reference).getByText(/Penicillin, mức Nặng/)).toBeInTheDocument()
-    // 007 đã nối (LatestVitalSignSource); chưa đo lần nào thì nói đúng như vậy
-    expect(within(reference).getByText('Chưa có lần đo chỉ số nào.')).toBeInTheDocument()
-    expect(screen.queryByLabelText(/điểm/i)).not.toBeInTheDocument()
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument()
-    expect(screen.queryByText(/mức đề xuất|gợi ý mức/i)).not.toBeInTheDocument()
-    expect(screen.getByText(/chưa áp dụng cho tới khi Bác sĩ xác nhận/)).toBeInTheDocument()
+    // Trường sức khỏe ban đầu cùng chủ đề hiện dưới ô chủ đề đó, không lặp ở cột phải
+    expect(within(reference).queryByText('Đi lại cần gậy')).not.toBeInTheDocument()
+    expect(within(dialog).getByText('Sức khỏe ban đầu: Đi lại cần gậy')).toBeInTheDocument()
+    for (const topic of ['Tình trạng chung', 'Vận động', 'Tự chăm sóc', 'Nhận thức', 'Nguy cơ cần lưu ý'])
+      expect(within(dialog).getByRole('button', { name: topic })).toBeInTheDocument()
+    // Chưa đo lần nào thì không có phần chỉ số đo
+    expect(within(reference).queryByText('Chỉ số đo gần nhất')).not.toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/điểm/i)).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('spinbutton')).not.toBeInTheDocument()
+    expect(within(dialog).queryByText(/mức đề xuất|gợi ý mức/i)).not.toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Chăm sóc cơ bản' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('BF_01_buoc4_chiSoDoGanNhat_hienTenGiaTriDonViVaLucDo', async () => {
@@ -176,31 +190,37 @@ describe('AssessmentTab', () => {
     routes({ list: [assessment()], draft })
     open()
 
-    const reference = await screen.findByRole('complementary', { name: 'Thông tin tham khảo' })
+    const dialog = await openDraft()
+    const reference = within(dialog).getByRole('complementary', { name: 'Thông tin tham khảo' })
     expect(within(reference).getByText('Huyết áp: 130/85 mmHg, đo 26/11/2026 09:00')).toBeInTheDocument()
   })
 
   it('Điều dưỡng không có nút Xác nhận; Lưu nháp gửi If-Match và các trường đã nhập', async () => {
     const draft = detail()
     routes({ list: [assessment()], draft })
-    api.on('PUT', '/assessments/7', json(200, detail({ comment: 'Tỉnh táo', careLevel: 'REGULAR' }), { ETag: '"3"' }))
+    api.on(
+      'PUT',
+      '/assessments/7',
+      json(200, detail({ comment: 'Tình trạng chung: Tỉnh táo', careLevel: 'REGULAR' }), { ETag: '"3"' }),
+    )
     open({ allowedCommands: NURSE })
 
-    fireEvent.change(await screen.findByLabelText(/Nhận xét đánh giá/), { target: { value: 'Tỉnh táo' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Chăm sóc thường xuyên' }))
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Hỗ trợ vận động' }))
-    expect(screen.queryByRole('button', { name: 'Xác nhận đánh giá' })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu nháp' }))
+    const dialog = await openDraft()
+    typeChoice('Tình trạng chung', 'Tỉnh táo', dialog)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Chăm sóc thường xuyên' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hỗ trợ vận động' }))
+    expect(within(dialog).queryByRole('button', { name: 'Xác nhận đánh giá' })).not.toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu nháp' }))
 
     await waitFor(() => expect(api.calls('PUT', '/assessments/7')).toHaveLength(1))
     const [, init] = api.calls('PUT', '/assessments/7')[0]
     expect(new Headers(init.headers).get('If-Match')).toBe('"2"')
     expect(JSON.parse(init.body)).toMatchObject({
-      comment: 'Tỉnh táo',
+      comment: 'Tình trạng chung: Tỉnh táo',
       careLevel: 'REGULAR',
       careNeedIds: [11],
     })
-    expect(await screen.findByText('Đã lưu bản nháp.')).toBeInTheDocument()
+    expect(await within(dialog).findByText('Đã lưu bản nháp')).toBeInTheDocument()
   })
 
   it('Bác sĩ xác nhận thiếu nhận xét và mức: báo tại từng ô, không phải lỗi chung', async () => {
@@ -219,14 +239,15 @@ describe('AssessmentTab', () => {
     )
     open()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đánh giá' }))
-    const dialog = await screen.findByRole('dialog')
+    const sheet = await openDraft()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Xác nhận đánh giá' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Xác nhận đánh giá' })
     expect(within(dialog).getByText(/trở thành mức chăm sóc hiện hành ngay/)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Xác nhận' }))
 
-    expect(await screen.findByText('Nhập nhận xét đánh giá trước khi xác nhận')).toBeInTheDocument()
-    expect(screen.getByText('Chọn một mức chăm sóc trước khi xác nhận')).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(await within(sheet).findByText('Nhập nhận xét đánh giá trước khi xác nhận')).toBeInTheDocument()
+    expect(within(sheet).getByText('Chọn một mức chăm sóc trước khi xác nhận')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Xác nhận đánh giá' })).not.toBeInTheDocument()
   })
 
   it('Bác sĩ xác nhận hợp lệ: lưu nháp rồi xác nhận với ETag mới, hiện tác động', async () => {
@@ -248,8 +269,13 @@ describe('AssessmentTab', () => {
     )
     open()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đánh giá' }))
-    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Xác nhận' }))
+    const sheet = await openDraft()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Xác nhận đánh giá' }))
+    fireEvent.click(
+      within(await screen.findByRole('dialog', { name: 'Xác nhận đánh giá' })).getByRole('button', {
+        name: 'Xác nhận',
+      }),
+    )
 
     expect(await screen.findByText(/Mức chăm sóc hiện hành đã được cập nhật/)).toBeInTheDocument()
     const [, init] = api.calls('POST', '/assessments/7/confirm')[0]
@@ -265,8 +291,9 @@ describe('AssessmentTab', () => {
     })
     open({ residentStatus: 'IN_RESIDENCE' })
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận đánh giá' }))
-    const dialog = await screen.findByRole('dialog')
+    const sheet = await openDraft()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Xác nhận đánh giá' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Xác nhận đánh giá' })
     expect(within(dialog).getByText(/Mức hiện hành \(Chăm sóc cơ bản\) giữ nguyên/)).toBeInTheDocument()
     expect(within(dialog).getByText(/Hành chính được báo/)).toBeInTheDocument()
   })
@@ -276,13 +303,15 @@ describe('AssessmentTab', () => {
     api.on('POST', '/assessments/7/discard-draft', json(200, assessment({ status: 'DISCARDED' })))
     open()
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Hủy nháp…' }))
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy bản nháp này' }))
-    expect(await screen.findByText('Nhập lý do hủy nháp')).toBeInTheDocument()
+    const sheet = await openDraft()
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Hủy nháp' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Hủy bản nháp' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy bản nháp' }))
+    expect(await within(dialog).findByText('Chọn hoặc ghi lý do hủy')).toBeInTheDocument()
     expect(api.calls('POST', '/assessments/7/discard-draft')).toHaveLength(0)
 
-    typeChoice('Lý do hủy nháp', 'Nhập nhầm')
-    fireEvent.click(screen.getByRole('button', { name: 'Hủy bản nháp này' }))
+    typeChoice('Lý do hủy', 'Nhập nhầm', dialog)
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Hủy bản nháp' }))
     await waitFor(() => expect(api.calls('POST', '/assessments/7/discard-draft')).toHaveLength(1))
     expect(JSON.parse(api.calls('POST', '/assessments/7/discard-draft')[0][1].body)).toEqual({ reason: 'Nhập nhầm' })
   })

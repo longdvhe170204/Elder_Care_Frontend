@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   getResidents,
+  getResidentsById,
   getResidentsByResidentIdRelationships,
   getResidentsByResidentIdVisitPickupWishes,
   getRightChangeRequests,
@@ -155,7 +156,10 @@ function RelationshipTable({ relationships, selectedId, onSelect }) {
   )
 }
 
-export function FamilyMembersPage() {
+// residentId: mở từ bước "Ghi người thân" của Hồ sơ tiếp nhận, chọn sẵn người cao tuổi đó (chủ dự án yêu cầu 2026-11-26);
+// họ tên, mã hồ sơ tải theo mã, không đưa lên địa chỉ trang. openAdd: mở luôn khung Thêm người thân sau khi tải xong quan
+// hệ (để biết đã có liên hệ chính, người đại diện chưa)
+export function FamilyMembersPage({ residentId = null, openAdd = false } = {}) {
   const { can } = usePermissions()
   const [resident, setResident] = useState(null)
   const [relationships, setRelationships] = useState(null)
@@ -189,6 +193,17 @@ export function FamilyMembersPage() {
       setFailure(problemOf(error))
     }
   }, [])
+
+  useEffect(() => {
+    if (residentId == null) return
+    getResidentsById({ path: { id: residentId } })
+      .then(({ data }) => {
+        setResident({ id: data.id, name: data.personalInfo?.fullName ?? `Mã ${data.id}`, code: data.profileCode })
+        return load(data.id)
+      })
+      .then(() => openAdd && setSheet('add'))
+      .catch((error) => setFailure(problemOf(error)))
+  }, [residentId, openAdd, load])
 
   function pick(next) {
     setResident(next)
@@ -280,9 +295,12 @@ export function FamilyMembersPage() {
                 Ghi phiếu đăng ký
               </Button>
             )}
-            <Button variant="ghost" className="h-11" onClick={() => setResident(null)}>
-              Chọn người cao tuổi khác
-            </Button>
+            {/* Mở từ Hồ sơ tiếp nhận (đã chọn sẵn) thì không đổi người cao tuổi; quay lại bằng nút Quay lại của khung */}
+            {residentId == null && (
+              <Button variant="ghost" className="h-11" onClick={() => setResident(null)}>
+                Chọn người cao tuổi khác
+              </Button>
+            )}
           </div>
           <ProblemAlert problem={failure} />
           {relationships === null ? (
@@ -353,6 +371,7 @@ export function FamilyMembersPage() {
               residentName={resident.name}
               hasPrimaryContact={hasPrimaryContact}
               hasRepresentative={hasRepresentative}
+              existingMemberIds={active.map((r) => r.familyMember.id)}
               onClose={() => setSheet(null)}
               onDone={changed}
             />

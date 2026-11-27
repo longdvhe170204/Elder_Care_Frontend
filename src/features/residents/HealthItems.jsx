@@ -195,7 +195,8 @@ function bodyOf(kind, form) {
 
 function RecordItemForm({ residentId, selfReport, onRecorded, onCancel }) {
   const [catalogs, setCatalogs] = useState(null)
-  const [kind, setKind] = useState('ALLERGY_CATALOG')
+  // Không chọn sẵn loại mục (Q-307; rà soát cho Bác sĩ 2026-11-26)
+  const [kind, setKind] = useState('')
   const [form, setForm] = useState({ allergenId: '', freeText: '', severityId: '', sourceId: '' })
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
@@ -230,6 +231,7 @@ function RecordItemForm({ residentId, selfReport, onRecorded, onCancel }) {
 
   function validate() {
     const next = {}
+    if (!kind) return { kind: 'Chọn loại mục' }
     if (kind === 'ALLERGY_CATALOG' && !form.allergenId) next.allergenId = 'Chọn dị nguyên'
     if (kind !== 'ALLERGY_CATALOG' && !form.freeText.trim()) next.freeText = 'Nhập nội dung'
     if (kind.startsWith('ALLERGY') && !form.severityId) next.severityId = 'Chọn mức độ'
@@ -279,7 +281,7 @@ function RecordItemForm({ residentId, selfReport, onRecorded, onCancel }) {
       noValidate
       className="flex flex-col gap-4 rounded-lg border p-3"
     >
-      <Field>
+      <Field data-invalid={!!errors.kind || undefined}>
         <FieldLabel>Loại mục</FieldLabel>
         <ToggleGroup
           variant="outline"
@@ -299,50 +301,53 @@ function RecordItemForm({ residentId, selfReport, onRecorded, onCancel }) {
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
+        {errors.kind && <FieldError>{errors.kind}</FieldError>}
       </Field>
-      <FieldGroup>
-        {kind === 'ALLERGY_CATALOG' ? (
-          <SelectField
-            id="health-allergen"
-            label="Dị nguyên"
-            value={form.allergenId}
-            onChange={set('allergenId')}
-            options={catalogs.allergens}
-            error={errors.allergenId}
-          />
-        ) : (
-          <Field data-invalid={!!errors.freeText || undefined}>
-            <FieldLabel htmlFor="health-free-text">Nội dung</FieldLabel>
-            <Textarea
-              id="health-free-text"
-              rows={2}
-              maxLength={1000}
-              value={form.freeText}
-              onChange={set('freeText')}
-              aria-invalid={!!errors.freeText || undefined}
+      {kind && (
+        <FieldGroup>
+          {kind === 'ALLERGY_CATALOG' ? (
+            <SelectField
+              id="health-allergen"
+              label="Dị nguyên"
+              value={form.allergenId}
+              onChange={set('allergenId')}
+              options={catalogs.allergens}
+              error={errors.allergenId}
             />
-            {errors.freeText && <FieldError>{errors.freeText}</FieldError>}
-          </Field>
-        )}
-        {kind.startsWith('ALLERGY') && (
+          ) : (
+            <Field data-invalid={!!errors.freeText || undefined}>
+              <FieldLabel htmlFor="health-free-text">Nội dung</FieldLabel>
+              <Textarea
+                id="health-free-text"
+                rows={2}
+                maxLength={1000}
+                value={form.freeText}
+                onChange={set('freeText')}
+                aria-invalid={!!errors.freeText || undefined}
+              />
+              {errors.freeText && <FieldError>{errors.freeText}</FieldError>}
+            </Field>
+          )}
+          {kind.startsWith('ALLERGY') && (
+            <SelectField
+              id="health-severity"
+              label="Mức độ"
+              value={form.severityId}
+              onChange={set('severityId')}
+              options={catalogs.severities}
+              error={errors.severityId}
+            />
+          )}
           <SelectField
-            id="health-severity"
-            label="Mức độ"
-            value={form.severityId}
-            onChange={set('severityId')}
-            options={catalogs.severities}
-            error={errors.severityId}
+            id="health-source"
+            label="Nguồn thông tin"
+            value={form.sourceId}
+            onChange={set('sourceId')}
+            options={catalogs.sources}
+            error={errors.sourceId}
           />
-        )}
-        <SelectField
-          id="health-source"
-          label="Nguồn thông tin"
-          value={form.sourceId}
-          onChange={set('sourceId')}
-          options={catalogs.sources}
-          error={errors.sourceId}
-        />
-      </FieldGroup>
+        </FieldGroup>
+      )}
       {selfReport && (
         <Alert variant="attention">
           <AlertTitle>Thông tin tự khai của gia đình, chưa được Bác sĩ kiểm chứng</AlertTitle>
@@ -490,9 +495,7 @@ export function HealthItems({ residentId, allowedCommands }) {
         <Empty>
           <EmptyHeader>
             <EmptyTitle>Chưa ghi nhận dị ứng, bệnh nền hay tiền sử bệnh</EmptyTitle>
-            <EmptyDescription>
-              {filter === 'EXCLUDED' ? 'Chưa có mục nào bị loại trừ.' : 'Mục ghi nhận xong sẽ hiện ở đây.'}
-            </EmptyDescription>
+            {filter === 'EXCLUDED' && <EmptyDescription>Chưa có mục nào bị loại trừ.</EmptyDescription>}
           </EmptyHeader>
         </Empty>
       )}

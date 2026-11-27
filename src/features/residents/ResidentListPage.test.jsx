@@ -84,14 +84,18 @@ describe('ResidentListPage', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Tạo hồ sơ' }))
     const dialog = await screen.findByRole('dialog')
-    fireEvent.change(within(dialog).getByLabelText('Họ tên'), { target: { value: 'Đỗ Thị Hoa' } })
-    fireEvent.change(within(dialog).getByLabelText('Ngày sinh'), { target: { value: '1944-03-02' } })
-    fireEvent.change(within(dialog).getByLabelText('Giới tính'), { target: { value: 'FEMALE' } })
+    // CCCD bắt buộc, tra trước (BF-01 2026-11-26)
+    fireEvent.change(within(dialog).getByLabelText(/^Số căn cước/), { target: { value: '001044009876' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Tra hồ sơ' }))
+    expect(await within(dialog).findByText('Chưa tìm thấy hồ sơ')).toBeInTheDocument()
+    fireEvent.change(within(dialog).getByLabelText(/^Họ và tên/), { target: { value: 'Đỗ Thị Hoa' } })
+    fireEvent.change(within(dialog).getByLabelText(/^Ngày sinh/), { target: { value: '02/03/1944' } })
+    fireEvent.change(within(dialog).getByLabelText(/^Giới tính/), { target: { value: 'FEMALE' } })
     fireEvent.click(within(dialog).getByRole('button', { name: 'Tạo hồ sơ' }))
 
     const form = await screen.findByRole('dialog')
     expect(await within(form).findByText('Lập đăng ký tiếp nhận')).toBeInTheDocument()
-    fireEvent.change(within(form).getByLabelText('Ngày đăng ký'), { target: { value: '2026-11-18' } })
+    fireEvent.change(within(form).getByLabelText(/^Ngày đăng ký/), { target: { value: '18/11/2026' } })
     fireEvent.click(within(form).getByRole('button', { name: 'Bán trú' }))
     fireEvent.click(within(form).getByRole('button', { name: 'Cơ bản' }))
     fireEvent.click(within(form).getByRole('button', { name: 'Lưu đăng ký' }))
@@ -115,9 +119,9 @@ describe('ResidentListPage', () => {
     fireEvent.submit(screen.getByRole('searchbox', { name: 'Tìm hồ sơ' }))
 
     await waitFor(() =>
-      expect(api.calls('GET', '/residents').some(([url]) => new URL(url, 'http://x').searchParams.get('q') === 'Chi')).toBe(
-        true,
-      ),
+      expect(
+        api.calls('GET', '/residents').some(([url]) => new URL(url, 'http://x').searchParams.get('q') === 'Chi'),
+      ).toBe(true),
     )
   })
 
@@ -184,30 +188,23 @@ describe('ResidentListPage', () => {
     expect(within(await rowOf('Bà An')).getByText(/tính từ lúc Ghi nhận trở về/)).toBeTruthy()
   })
 
-  it('bộ lọc Cần đánh giá lại n: bảng chỉ còn những người đó, quá hạn trước', async () => {
+  // Chủ dự án bỏ mục lọc "Cần đánh giá lại" (2026-11-26): cột Đánh giá lại chỉ hiện khi có người cần
+  it('coNguoiCanDanhGiaLai_chiCoCotDanhGiaLai_khongCoMucLoc', async () => {
     setup({ due: [OVERDUE, DUE] })
     render(<ResidentListPage role="NURSING_STAFF" />)
-    const filter = await screen.findByRole('button', { name: 'Cần đánh giá lại 2' })
-    expect(filter.getAttribute('aria-pressed')).toBe('false')
 
-    fireEvent.click(filter)
-
-    await waitFor(() => expect(screen.queryByText('Bà An')).toBeNull())
-    const names = screen.getAllByRole('button', { name: /^(Bà|Ông) / }).map((b) => b.getAttribute('aria-label'))
-    expect(names).toEqual(['Bà Chi, NCT-2026-000003', 'Ông Bình, NCT-2026-000002'])
-    expect(screen.getByRole('button', { name: 'Cần đánh giá lại 2' }).getAttribute('aria-pressed')).toBe('true')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Tất cả' }))
-    expect(await screen.findByText('Bà An')).toBeTruthy()
+    expect(await screen.findByRole('columnheader', { name: 'Đánh giá lại' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /^Cần đánh giá lại/ })).toBeNull()
+    expect(screen.getByText('Bà An')).toBeTruthy()
   })
 
-  it('không ai cần đánh giá lại: bộ lọc ghi 0 và hiện trạng thái trống', async () => {
+  it('không ai cần đánh giá lại: không có cột Đánh giá lại', async () => {
     setup({ due: [] })
     render(<ResidentListPage role="NURSING_STAFF" />)
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Cần đánh giá lại 0' }))
-
-    expect(await screen.findByText('Chưa có ai cần đánh giá lại')).toBeTruthy()
+    await rowOf('Bà An')
+    await waitFor(() => expect(api.calls('GET', '/reassessments/due')).toHaveLength(1))
+    expect(screen.queryByRole('columnheader', { name: 'Đánh giá lại' })).toBeNull()
   })
 
   it('không có quyền xem đánh giá (403): bảng hồ sơ vẫn hiện, không có bộ lọc và cột Đánh giá lại', async () => {

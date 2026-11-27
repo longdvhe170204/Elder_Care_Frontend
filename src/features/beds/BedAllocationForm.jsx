@@ -3,55 +3,83 @@ import { getBedAllocationsSuitableBeds, getContracts, getRoomTypes, getRooms, po
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ChoiceTray } from '@/common/ChoiceTray'
+import { DateField } from '@/common/DateField'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { BED_ALLOCATION_REASONS } from '@/common/quickChoices'
 import { problemOf } from '@/common/problem'
 import { formatDateTime } from '@/common/dateTime'
-import { CARE_LEVEL_LABELS } from '@/features/assessments/assessmentLabels'
-import { GENDER_LABELS } from '@/features/residents/residentLabels'
+import { displayDate, isoDate } from '@/common/dateText'
 
-// T028: người dùng tự chọn giường; đổi thời điểm hoặc tải lại luôn bỏ lựa chọn cũ. Nhóm A BF-01 (chủ dự án chọn
-// 2026-11-21): bảng một lựa chọn kèm loại phòng, người cùng phòng (họ tên, giới tính, mức; 003 FR-022) và lúc sẵn sàng,
-// không xếp hạng, không chọn sẵn (Q-307); ngày, giờ hai ô dd/mm/yyyy và 24 giờ ở mọi trình duyệt. defaultDate (yyyy-MM-dd):
-// ngày vào của hợp đồng vừa lập, điền sẵn ô ngày (chủ dự án xác nhận không vi phạm Q-307), người dùng vẫn sửa được.
+// T028: người dùng tự chọn giường; đổi thời điểm hoặc tải lại luôn bỏ lựa chọn cũ. Audit BF-01 2026-11-26 (chủ dự án duyệt
+// bản phác): giường gom theo khu – tầng, mỗi phòng một dòng (tên, loại phòng), giường chọn được là chip tách rời; không xếp
+// hạng, không chọn sẵn (Q-307). Không hiện người cùng phòng (chủ dự án chọn 2026-11-26; backend chưa điền `roommates`).
+// Người Đang tiếp nhận bắt buộc ghi ngày, giờ vào (chủ dự án chọn 2026-11-26, FR-023 đặt trước giường cho ngày vào).
+// defaultDate (yyyy-MM-dd): ngày vào của hợp đồng vừa lập, điền sẵn ô ngày (chủ dự án xác nhận không vi phạm Q-307).
+// formId: form nằm trong khung riêng (BedAllocationSheet), nút gửi ở chân khung; onStateChange({ dirty, busy }) cho khung.
 
-const DATE_PATTERN = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
 const TIME_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)$/
 
-function isoDate(text) {
-  const match = DATE_PATTERN.exec(text.trim())
-  if (!match) return null
-  const [, d, m, y] = match.map(Number)
-  const date = new Date(Date.UTC(y, m - 1, d))
-  if (date.getUTCFullYear() !== y || date.getUTCMonth() !== m - 1 || date.getUTCDate() !== d) return null
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-}
+const CHIP =
+  'inline-flex h-9 cursor-pointer items-center rounded-lg border border-input bg-background px-3 type-body-sm ' +
+  'has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground ' +
+  'has-focus-visible:ring-3 has-focus-visible:ring-ring/50 has-disabled:cursor-default has-disabled:opacity-60'
 
-const displayDate = (iso) => (iso ? iso.split('-').reverse().join('/') : '')
+const SMALL_CHIP = CHIP.replace('h-9', 'h-8').replace('px-3', 'px-2.5')
 
-function roommatesText(roommates) {
-  if (!roommates?.length) return 'Chưa có ai'
-  return roommates
-    .map((r) =>
-      [r.fullName, GENDER_LABELS[r.gender]?.toLowerCase(), CARE_LEVEL_LABELS[r.careLevel]?.toLowerCase()]
-        .filter(Boolean)
-        .join(', '),
-    )
-    .join('; ')
+// Phòng nam, phòng nữ (003 FR-018 (c)): danh sách chỉ gồm phòng hợp giới tính, ghi chính sách để người dùng thấy
+const GENDER_POLICY = { MALE: 'Phòng nam', FEMALE: 'Phòng nữ', UNRESTRICTED: 'Không giới hạn giới tính' }
+
+// Chip lọc gọn: bỏ chữ "Phòng" đầu tên loại phòng (Phòng đôi → Đôi)
+const shortType = (name) => {
+  const short = (name ?? 'Chưa rõ').replace(/^phòng\s+/i, '')
+  return short.charAt(0).toUpperCase() + short.slice(1)
 }
 
 function readiness(bed) {
-  if (bed.earliestStartAt) return `Từ ${formatDateTime(bed.earliestStartAt)}`
-  if (bed.futureAllocationFrom) return `Trống tới ${formatDateTime(bed.futureAllocationFrom)}`
-  return 'Ngay'
+  if (bed.earliestStartAt) return `từ ${formatDateTime(bed.earliestStartAt)}`
+  if (bed.futureAllocationFrom) return `trống tới ${formatDateTime(bed.futureAllocationFrom)}`
+  return null
 }
 
-export function BedAllocationForm({ resident, defaultDate, onSaved }) {
+// Giữ thứ tự backend (khu, tầng, phòng): [{ key, title, rooms: [{ key, id, name, beds }] }]. Location của api-003 không bắt
+// buộc roomId: giường thiếu roomId đứng một dòng riêng theo bedId, không gộp nhầm với phòng khác
+function groupBeds(beds) {
+  const groups = []
+  for (const bed of beds) {
+    const { area, floor, room, roomId, bedId } = bed.location
+    const key = `${area}|${floor}`
+    let group = groups.at(-1)
+    if (group?.key !== key) {
+      group = { key, title: [area, floor].filter(Boolean).join(' – '), rooms: [] }
+      groups.push(group)
+    }
+    const roomKey = roomId != null ? `room-${roomId}` : `bed-${bedId}`
+    let entry = group.rooms.at(-1)
+    if (entry?.key !== roomKey) {
+      entry = { key: roomKey, id: roomId, name: room ?? bed.location.label, beds: [] }
+      group.rooms.push(entry)
+    }
+    entry.beds.push(bed)
+  }
+  return groups
+}
+
+function Required() {
+  return (
+    <span className="ml-0.5 text-destructive" aria-hidden="true">
+      *
+    </span>
+  )
+}
+
+export function BedAllocationForm({ resident, defaultDate, onSaved, formId, onStateChange, onOpenWaitingList }) {
+  const inSheet = !!formId
+  const admitting = resident.status === 'ADMISSION_IN_PROGRESS'
   const [bedId, setBedId] = useState('')
   const [reason, setReason] = useState('')
   const [dateText, setDateText] = useState(displayDate(defaultDate))
   const [timeText, setTimeText] = useState('')
-  const [revision, setRevision] = useState(0)
+  const [attempted, setAttempted] = useState(false)
   const [options, setOptions] = useState({ loading: true, beds: [] })
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(false)
@@ -59,9 +87,15 @@ export function BedAllocationForm({ resident, defaultDate, onSaved }) {
   const command = useRef(null)
   const date = isoDate(dateText)
   const time = TIME_PATTERN.exec(timeText.trim())
-  const dateError = dateText.trim() && !date ? 'Nhập ngày có thật, dạng dd/mm/yyyy' : null
-  const timeError = timeText.trim() && !time ? 'Nhập giờ dạng 24 giờ, ví dụ 08:00' : null
+  const dateError = dateText.trim()
+    ? !date && 'Nhập ngày có thật, dạng DD/MM/YYYY'
+    : admitting && attempted && 'Nhập ngày vào'
+  const timeError = timeText.trim() ? !time && 'Nhập giờ dạng 24 giờ, HH:MM' : admitting && attempted && 'Nhập giờ vào'
   const startAt = date && time ? `${date}T${time[1].padStart(2, '0')}:${time[2]}:00+07:00` : undefined
+  const dirty = !!bedId || !!reason.trim() || dateText !== displayDate(defaultDate) || !!timeText.trim()
+  useEffect(() => {
+    onStateChange?.({ dirty, busy })
+  }, [dirty, busy, onStateChange])
   useEffect(() => {
     let current = true
     getBedAllocationsSuitableBeds({ query: { residentId: resident.id, startAt } })
@@ -75,21 +109,31 @@ export function BedAllocationForm({ resident, defaultDate, onSaved }) {
     return () => {
       current = false
     }
-  }, [resident.id, startAt, revision])
-  // 4b (chủ dự án chọn 2026-11-21): loại phòng của hợp đồng (Hiệu lực, Chờ ký, rồi Nháp) và loại phòng của từng phòng
-  // (GET /rooms) để mặc định chỉ hiện giường đúng loại phòng; không đọc được thì không lọc. Backend không chặn theo loại
-  // phòng (003 FR-018), nên người dùng bỏ chọn được để xem mọi giường phù hợp. Tên loại phòng của từng giường cũng lấy ở đây.
+  }, [resident.id, startAt])
+  // 4b (chủ dự án chọn 2026-11-21): loại phòng của hợp đồng (Hiệu lực, Chờ ký, rồi Nháp) được bật sẵn ở chip lọc; đây chỉ là
+  // bộ lọc, không chọn sẵn giường. Backend không chặn theo loại phòng (003 FR-018), nên người dùng chọn "Tất cả" được.
   const [roomTypeOf, setRoomTypeOf] = useState({})
-  const [roomType, setRoomType] = useState(null)
-  const [onlyContractType, setOnlyContractType] = useState(true)
+  const [contractType, setContractType] = useState(null)
+  const [pickedType, setPickedType] = useState(null)
+  const typeFilter = pickedType ?? contractType ?? 'all'
   useEffect(() => {
     let current = true
     Promise.all([getRooms({ query: {} }), getRoomTypes({ query: {} })])
       .then(([rooms, types]) => {
         if (!current) return
-        const names = Object.fromEntries(types.data.map((t) => [t.id, t.name]))
+        const typeById = Object.fromEntries(types.data.map((t) => [t.id, t]))
         setRoomTypeOf(
-          Object.fromEntries(rooms.data.map((r) => [r.id, { id: r.roomTypeId, name: names[r.roomTypeId] }])),
+          Object.fromEntries(
+            rooms.data.map((r) => [
+              r.id,
+              {
+                id: r.roomTypeId,
+                name: typeById[r.roomTypeId]?.name,
+                beds: typeById[r.roomTypeId]?.standardBeds,
+                gender: r.genderPolicy,
+              },
+            ]),
+          ),
         )
         return getContracts({
           query: { residentId: resident.id, status: ['ACTIVE', 'PENDING_SIGNATURE', 'DRAFT'] },
@@ -98,12 +142,7 @@ export function BedAllocationForm({ resident, defaultDate, onSaved }) {
           const contract = contracts.data
             .filter((c) => order.includes(c.status) && c.roomTypeId)
             .sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status))[0]
-          if (!current || !contract) return
-          setRoomType({
-            id: contract.roomTypeId,
-            name: names[contract.roomTypeId] ?? 'của hợp đồng',
-            rooms: new Set(rooms.data.filter((r) => r.roomTypeId === contract.roomTypeId).map((r) => r.id)),
-          })
+          if (current && contract) setContractType(String(contract.roomTypeId))
         })
       })
       .catch(() => {})
@@ -111,24 +150,34 @@ export function BedAllocationForm({ resident, defaultDate, onSaved }) {
       current = false
     }
   }, [resident.id])
+  const typeOf = (bed) => roomTypeOf[bed.location.roomId]
+  const types = [
+    ...new Map(
+      options.beds
+        .map(typeOf)
+        .filter((t) => t?.id != null)
+        .map((t) => [String(t.id), t]),
+    ),
+  ]
+    .sort(([, a], [, b]) => (a.beds ?? 99) - (b.beds ?? 99) || (a.name ?? '').localeCompare(b.name ?? '', 'vi'))
+    .map(([id, t]) => [id, shortType(t.name), t.name])
   const beds =
-    roomType && onlyContractType ? options.beds.filter((bed) => roomType.rooms.has(bed.location.roomId)) : options.beds
-  function reload() {
-    setBedId('')
-    setError(null)
-    setOptions({ loading: true, beds: [] })
-    setRevision((value) => value + 1)
-  }
+    typeFilter === 'all' ? options.beds : options.beds.filter((bed) => String(typeOf(bed)?.id) === typeFilter)
+  const groups = groupBeds(beds)
   function changeWhen(setter) {
-    return (event) => {
-      setter(event.target.value)
+    return (value) => {
+      setter(value)
       setBedId('')
       setError(null)
     }
   }
   async function submit(event) {
     event.preventDefault()
+    setAttempted(true)
     if (pending.current || options.loading || !bedId || !reason.trim()) return
+    if (dateText.trim() || timeText.trim() || admitting) {
+      if (!startAt) return
+    }
     const body = { residentId: resident.id, bedId: Number(bedId), reason: reason.trim(), ...(startAt && { startAt }) }
     const signature = JSON.stringify(body)
     if (command.current?.signature !== signature) command.current = { signature, key: crypto.randomUUID() }
@@ -146,134 +195,170 @@ export function BedAllocationForm({ resident, defaultDate, onSaved }) {
       setBusy(false)
     }
   }
+  const chip = (value, label, checked, onChange, ariaLabel, className = CHIP) => (
+    <label key={value} className={className}>
+      <input
+        type="radio"
+        className="sr-only"
+        checked={checked}
+        disabled={busy}
+        aria-label={ariaLabel}
+        onChange={onChange}
+      />
+      {label}
+    </label>
+  )
   return (
     <form
+      id={formId}
       onSubmit={submit}
-      className="flex flex-col gap-4 rounded-xl border bg-card p-4"
+      noValidate
+      aria-busy={busy || undefined}
       aria-label="Chọn giường phân bổ"
+      className={inSheet ? 'flex flex-col gap-6' : 'flex flex-col gap-5 rounded-xl border bg-card p-4'}
     >
-      <h2 className="type-title-sm">
-        Phân bổ cho {resident.fullName} {resident.profileCode && `(${resident.profileCode})`}
-      </h2>
-      {resident.status === 'ADMISSION_IN_PROGRESS' && (
-        <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-3">
-          <label className="flex flex-col gap-2">
-            Ngày bắt đầu dự kiến
-            <Input
-              inputMode="numeric"
-              placeholder="dd/mm/yyyy"
-              value={dateText}
-              disabled={busy}
-              aria-invalid={!!dateError || undefined}
-              onChange={changeWhen(setDateText)}
-            />
+      {!inSheet && (
+        <h2 className="type-title-sm">
+          Phân bổ cho {resident.fullName} {resident.profileCode && `(${resident.profileCode})`}
+        </h2>
+      )}
+      {admitting && (
+        <div className="grid grid-cols-[minmax(0,1fr)_8rem] gap-x-3 gap-y-2">
+          <label htmlFor="bed-allocation-date" className="type-label">
+            Ngày vào dự kiến
+            <Required />
           </label>
-          <label className="flex flex-col gap-2">
+          <label htmlFor="bed-allocation-time" className="type-label">
             Giờ
-            <Input
-              inputMode="numeric"
-              placeholder="08:00"
-              value={timeText}
-              disabled={busy}
-              aria-invalid={!!timeError || undefined}
-              onChange={changeWhen(setTimeText)}
-            />
+            <Required />
           </label>
-          {(dateError || timeError) && (
-            <p className="type-body-sm col-span-2 text-destructive">{dateError ?? timeError}</p>
-          )}
-          {date && !timeText.trim() && (
-            <p className="type-caption col-span-2 text-muted-foreground">Nhập giờ để kiểm giường theo thời điểm vào.</p>
-          )}
-        </div>
-      )}
-      {roomType && (
-        <label className="flex items-center gap-2">
-          <input
-            type="checkbox"
-            className="size-4"
-            checked={onlyContractType}
+          <DateField
+            id="bed-allocation-date"
+            value={dateText}
             disabled={busy}
-            onChange={(event) => {
-              setOnlyContractType(event.target.checked)
-              setBedId('')
-            }}
+            invalid={!!dateError}
+            aria-required="true"
+            onChange={changeWhen(setDateText)}
           />
-          Chỉ giường loại {roomType.name} của hợp đồng
-        </label>
-      )}
-      {options.loading && <p aria-busy="true">Đang tải giường phù hợp…</p>}
-      {!options.loading && !error && !beds.length && <p>Chưa có giường phù hợp tại thời điểm này.</p>}
-      {beds.length > 0 && (
-        <div className="overflow-x-auto rounded-xl border">
-          <table aria-label="Giường phù hợp" className="type-body-sm w-full min-w-[34rem]">
-            <thead>
-              <tr className="border-b text-left">
-                <th className="w-10 px-3 py-2">
-                  <span className="sr-only">Chọn</span>
-                </th>
-                <th className="type-caption px-3 py-2 text-muted-foreground">Giường</th>
-                <th className="type-caption px-3 py-2 text-muted-foreground">Loại phòng</th>
-                <th className="type-caption px-3 py-2 text-muted-foreground">Người cùng phòng</th>
-                <th className="type-caption px-3 py-2 text-muted-foreground">Sẵn sàng</th>
-              </tr>
-            </thead>
-            <tbody>
-              {beds.map((bed) => {
-                const id = String(bed.location.bedId)
-                return (
-                  <tr
-                    key={id}
-                    className="cursor-pointer border-b last:border-0 has-checked:bg-muted"
-                    onClick={() => !busy && setBedId(id)}
-                  >
-                    <td className="px-3 py-2">
-                      <input
-                        type="radio"
-                        name="bed"
-                        className="size-4"
-                        aria-label={bed.location.label}
-                        checked={bedId === id}
-                        disabled={busy}
-                        onChange={() => setBedId(id)}
-                      />
-                    </td>
-                    <td className="px-3 py-2">
-                      {bed.location.room && bed.location.bed ? (
-                        <span className="flex flex-col">
-                          <span>{`${bed.location.room}, ${bed.location.bed}`}</span>
-                          <span className="type-caption text-muted-foreground">{bed.location.label}</span>
-                        </span>
-                      ) : (
-                        bed.location.label
-                      )}
-                    </td>
-                    <td className="px-3 py-2">{roomTypeOf[bed.location.roomId]?.name ?? 'Chưa rõ'}</td>
-                    <td className="px-3 py-2">{roommatesText(bed.roommates)}</td>
-                    <td className="px-3 py-2 tabular-nums">{readiness(bed)}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+          <Input
+            id="bed-allocation-time"
+            inputMode="numeric"
+            placeholder="HH:MM"
+            maxLength={5}
+            autoComplete="off"
+            className="h-11 tabular-nums"
+            value={timeText}
+            disabled={busy}
+            aria-required="true"
+            aria-invalid={!!timeError || undefined}
+            onChange={(event) => changeWhen(setTimeText)(event.target.value)}
+          />
+          {(dateError || timeError) && (
+            <p className="type-body-sm col-span-2 text-destructive" role="alert">
+              {dateError || timeError}
+            </p>
+          )}
         </div>
       )}
+      {types.length > 1 && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span id="bed-allocation-type" className="type-label">
+            Loại phòng
+          </span>
+          <div role="radiogroup" aria-labelledby="bed-allocation-type" className="flex flex-wrap gap-1.5">
+            {[['all', 'Tất cả', 'Tất cả loại phòng'], ...types].map(([value, label, fullName]) =>
+              chip(
+                value,
+                label,
+                typeFilter === value,
+                () => {
+                  setPickedType(value)
+                  setBedId('')
+                },
+                fullName,
+                SMALL_CHIP,
+              ),
+            )}
+          </div>
+        </div>
+      )}
+      <fieldset className="flex flex-col">
+        <legend className="type-label mb-2">
+          Giường
+          <Required />
+        </legend>
+        {options.loading && (
+          <p className="type-body-sm text-muted-foreground" aria-busy="true">
+            Đang tải giường phù hợp…
+          </p>
+        )}
+        {!options.loading && !error && !beds.length && (
+          <div className="flex flex-col items-start gap-1 type-body-sm">
+            <p>Chưa có giường phù hợp tại thời điểm này.</p>
+            {onOpenWaitingList && (
+              <Button type="button" variant="link" className="h-auto p-0" onClick={onOpenWaitingList}>
+                Mở Danh sách chờ
+              </Button>
+            )}
+          </div>
+        )}
+        {groups.map((group) => (
+          <div key={group.key} className="flex flex-col border-t pt-4 first-of-type:border-0 first-of-type:pt-0">
+            <p className="type-label text-muted-foreground">{group.title}</p>
+            <ul className="flex flex-col">
+              {group.rooms.map((room) => (
+                <li
+                  key={room.key}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-2 border-b py-3 last:border-0"
+                >
+                  <span className="flex min-w-0 flex-col">
+                    <span className="type-body font-medium">{room.name}</span>
+                    <span className="type-caption text-muted-foreground">
+                      {[roomTypeOf[room.id]?.name ?? 'Chưa rõ loại phòng', GENDER_POLICY[roomTypeOf[room.id]?.gender]]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </span>
+                  </span>
+                  <span className="flex flex-wrap justify-end gap-2">
+                    {room.beds.map((bed) => {
+                      const id = String(bed.location.bedId)
+                      const when = readiness(bed)
+                      const short = bed.location.bed ?? bed.location.label
+                      return chip(
+                        id,
+                        when ? `${short} · ${when}` : short,
+                        bedId === id,
+                        () => setBedId(id),
+                        when ? `${bed.location.label}, ${when}` : bed.location.label,
+                      )
+                    })}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+        {attempted && !options.loading && beds.length > 0 && !bedId && (
+          <p className="type-body-sm mt-2 text-destructive" role="alert">
+            Chọn một giường
+          </p>
+        )}
+      </fieldset>
       <ChoiceTray
         id="bed-allocation-reason"
         label="Lý do phân bổ"
+        required
+        invalid={attempted && !reason.trim()}
         options={BED_ALLOCATION_REASONS}
         value={reason}
         onChange={setReason}
       />
       {error && <ProblemAlert problem={error} />}
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={busy || options.loading || !bedId || !reason.trim()}>
-          Xác nhận phân bổ
+      {!inSheet && (
+        <Button type="submit" className="h-11 self-start" disabled={busy || options.loading}>
+          {busy ? 'Đang lưu…' : 'Xác nhận phân bổ'}
         </Button>
-        <Button type="button" variant="outline" disabled={busy} onClick={reload}>
-          Tải lại giường
-        </Button>
-      </div>
+      )}
     </form>
   )
 }

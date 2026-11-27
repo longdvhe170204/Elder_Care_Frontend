@@ -38,6 +38,19 @@ export const ASSESSMENT_BASIS = ['Đánh giá đầu vào khi tiếp nhận']
 
 export const ASSESSMENT_DISCARD_REASONS = ['Lập nhầm người', 'Thông tin chưa đủ, lập lại']
 
+// Cách đã giúp người cao tuổi hiểu lựa chọn trước khi Bác sĩ nhận định tự quyết (Q-348, BR-M01-15; chủ dự án yêu cầu
+// 2026-11-26 cho dễ hiểu): danh sách gợi ý, kèm "Khác", không chọn sẵn
+export const SUPPORT_METHOD_CHOICES = [
+  'Giải thích bằng lời, chậm, từng ý',
+  'Có người thân cùng nghe',
+  'Dùng tranh hoặc giấy viết',
+  'Đeo máy trợ thính, kính',
+  'Nói vào lúc tỉnh táo',
+  'Hỏi lại sau một ngày',
+  'Người cao tuổi nhắc lại được ý chính',
+  'Đã giải thích nhưng không nhắc lại được',
+]
+
 export const CARE_NOTES = [
   'Nguy cơ ngã',
   'Ăn mềm, dễ nuốt',
@@ -55,3 +68,73 @@ export const FAMILY_DECLARED_CHOICES = {
   COGNITION: ['Tỉnh táo', 'Hay quên', 'Lú lẫn về đêm', 'Đi lang thang'],
   KNOWN_RISKS: ['Nguy cơ ngã', 'Nghẹn, sặc khi ăn', 'Loét tì đè', 'Hay đi ra ngoài một mình'],
 }
+
+// Nhận xét đánh giá của Bác sĩ theo năm chủ đề FR-025 (chủ dự án yêu cầu 2026-11-26): khay chọn nhanh, chọn nhiều, kèm
+// Khác; dựa trên danh sách Gia đình khai, thêm lựa chọn chuyên môn
+export const ASSESSMENT_COMMENT_CHOICES = {
+  GENERAL_CONDITION: [
+    'Tỉnh táo, tiếp xúc tốt',
+    'Mệt mỏi',
+    'Ăn uống được',
+    'Ăn uống kém',
+    'Ngủ được',
+    'Ngủ kém',
+    'Sụt cân gần đây',
+    'Huyết áp ổn định',
+  ],
+  MOBILITY: [
+    'Đi lại tự lập',
+    'Đi chậm, cần người đi kèm',
+    'Đi cần gậy hoặc khung',
+    'Dùng xe lăn',
+    'Nằm tại giường',
+    'Từng ngã',
+  ],
+  SELF_CARE: [
+    'Tự làm được hết',
+    'Tự ăn được',
+    'Cần hỗ trợ tắm rửa',
+    'Cần hỗ trợ vệ sinh',
+    'Cần hỗ trợ mặc quần áo',
+    'Phụ thuộc hoàn toàn',
+  ],
+  COGNITION: ['Tỉnh táo, định hướng tốt', 'Hay quên', 'Lú lẫn về đêm', 'Đi lang thang', 'Khó giao tiếp', 'Nghe kém'],
+  KNOWN_RISKS: [
+    'Nguy cơ ngã',
+    'Nghẹn, sặc khi ăn',
+    'Loét tì đè',
+    'Hay đi ra ngoài một mình',
+    'Quên uống thuốc',
+    'Chưa thấy nguy cơ đáng kể',
+  ],
+}
+
+// Hồ sơ sức khỏe ban đầu (chủ dự án duyệt 2026-11-26): mỗi ô có khay chọn nhanh, chọn nhiều, kèm Khác. Ba ô khả năng dùng
+// lại danh sách Gia đình khai; ghi chú nhu cầu dùng lại CARE_NOTES; các ô khác là bản nháp.
+export const HEALTH_RECORD_CHOICES = {
+  mobility: FAMILY_DECLARED_CHOICES.MOBILITY,
+  selfCareAbility: FAMILY_DECLARED_CHOICES.SELF_CARE,
+  cognition: FAMILY_DECLARED_CHOICES.COGNITION,
+  initialNeedsNote: CARE_NOTES,
+  nutritionNeeds: ['Ăn mềm, dễ nuốt', 'Ăn ít muối', 'Ăn ít đường', 'Ăn chay', 'Cần hỗ trợ khi ăn', 'Ăn qua ống thông'],
+  currentMedications: [
+    'Không dùng thuốc thường xuyên',
+    'Thuốc huyết áp',
+    'Thuốc tiểu đường',
+    'Thuốc tim mạch',
+    'Thuốc giảm đau khi cần',
+  ],
+  rehabilitationNeeds: ['Không cần', 'Tập đi lại', 'Phục hồi sau tai biến', 'Tập vận động tay', 'Tập nuốt'],
+}
+
+// Gợi ý nội dung mục bệnh nền, tiền sử bệnh (chọn một, hoặc Khác để gõ)
+export const CHRONIC_CONDITION_CHOICES = [
+  'Tăng huyết áp',
+  'Đái tháo đường',
+  'Bệnh tim',
+  'Bệnh phổi tắc nghẽn mạn tính',
+  'Thoái hóa khớp',
+  'Sa sút trí tuệ',
+]
+
+export const MEDICAL_HISTORY_CHOICES = ['Tai biến mạch máu não', 'Nhồi máu cơ tim', 'Gãy xương', 'Phẫu thuật']

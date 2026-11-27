@@ -17,7 +17,7 @@ import { problemOf } from '@/common/problem'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { CorrectionBadge } from '@/common/correction/CorrectionBadge'
 import { CorrectionHistorySheet } from '@/common/correction/CorrectionHistorySheet'
-import { AssessmentForm } from './AssessmentForm'
+import { AssessmentSheet } from './AssessmentForm'
 import { FamilyDeclaredEditor } from './FamilyDeclared'
 import { ReassessmentNotice } from './ReassessmentNotice'
 import {
@@ -32,7 +32,7 @@ import {
 } from './assessmentLabels'
 
 // Tab "Đánh giá" trong khung chi tiết hồ sơ (001 T042; US3; FR-024 → FR-038; bố cục duyệt 2026-10-23): mức chăm sóc hiện
-// hành, phiếu đang soạn (hai cột: phiếu và thông tin tham khảo), lịch sử đánh giá. Nút theo allowedCommands của hồ sơ:
+// hành, dòng phiếu đang soạn (mở khung riêng AssessmentSheet, chủ dự án duyệt 2026-11-26; lập xong mở luôn), lịch sử. Nút theo allowedCommands của hồ sơ:
 // CREATE_ASSESSMENT (Bác sĩ, Điều dưỡng), CONFIRM_ASSESSMENT (chỉ Bác sĩ, cũng là người đính chính).
 
 // Loại đánh giá lập được theo trạng thái người cao tuổi (FR-034, FR-035); backend kiểm lại và trả 409 khi sai.
@@ -158,7 +158,14 @@ export function AssessmentTab(props) {
   return <AssessmentTabContent {...props} />
 }
 
-function AssessmentTabContent({ residentId, residentStatus, allowedCommands = [], onChanged }) {
+function AssessmentTabContent({
+  residentId,
+  residentName,
+  residentProfile,
+  residentStatus,
+  allowedCommands = [],
+  onChanged,
+}) {
   const [state, setState] = useState('loading')
   const [level, setLevel] = useState(null)
   const [reassessment, setReassessment] = useState(null)
@@ -168,6 +175,7 @@ function AssessmentTabContent({ residentId, residentStatus, allowedCommands = []
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState(null)
   const [correctingId, setCorrectingId] = useState(null)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const canCreate = allowedCommands.includes('CREATE_ASSESSMENT')
   const canConfirm = allowedCommands.includes('CONFIRM_ASSESSMENT')
@@ -225,6 +233,7 @@ function AssessmentTabContent({ residentId, residentStatus, allowedCommands = []
         body: { type: createType },
       })
       await load()
+      setSheetOpen(true)
     } catch (error) {
       setFailure(problemOf(error))
     } finally {
@@ -233,6 +242,7 @@ function AssessmentTabContent({ residentId, residentStatus, allowedCommands = []
   }
 
   async function confirmed(data) {
+    setSheetOpen(false)
     setResult(data.effects)
     await load()
     onChanged?.()
@@ -285,16 +295,39 @@ function AssessmentTabContent({ residentId, residentStatus, allowedCommands = []
       )}
 
       {draft ? (
-        <AssessmentForm
-          key={draft.id}
-          assessmentId={draft.id}
-          residentStatus={residentStatus}
-          currentLevel={level?.careLevel ?? null}
-          careNeedOptions={careNeeds}
-          canConfirm={canConfirm}
-          onChanged={load}
-          onConfirmed={confirmed}
-        />
+        <section
+          aria-labelledby="assessment-draft-title"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border p-4"
+        >
+          <div className="flex min-w-0 flex-1 flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 id="assessment-draft-title" className="type-card-title">
+                {ASSESSMENT_TYPE_LABELS[draft.type]} đang soạn
+              </h3>
+              <StatusBadge status={ASSESSMENT_STATUS_LABELS[draft.status]} />
+            </div>
+            <span className="type-caption text-muted-foreground">Người lập: {draft.createdBy}</span>
+          </div>
+          <Button type="button" className="h-11" onClick={() => setSheetOpen(true)}>
+            Mở phiếu
+          </Button>
+          {sheetOpen && (
+            <AssessmentSheet
+              key={draft.id}
+              assessmentId={draft.id}
+              residentId={residentId}
+              residentName={residentName}
+              resident={residentProfile}
+              residentStatus={residentStatus}
+              currentLevel={level?.careLevel ?? null}
+              careNeedOptions={careNeeds}
+              canConfirm={canConfirm}
+              onClose={() => setSheetOpen(false)}
+              onChanged={load}
+              onConfirmed={confirmed}
+            />
+          )}
+        </section>
       ) : (
         <section aria-labelledby="assessment-new-title" className="flex flex-col gap-2">
           <h3 id="assessment-new-title" className="type-card-title">

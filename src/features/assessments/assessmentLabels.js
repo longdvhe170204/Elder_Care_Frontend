@@ -9,6 +9,13 @@ export const CARE_LEVEL_LABELS = {
 
 export const CARE_LEVEL_ORDER = ['BASIC', 'REGULAR', 'SPECIAL']
 
+// Nhãn ngắn trên ba nút chọn mức của phiếu (nhãn nút đọc màn hình vẫn là nhãn đầy đủ)
+export const CARE_LEVEL_SHORT_LABELS = {
+  BASIC: 'Cơ bản',
+  REGULAR: 'Thường xuyên',
+  SPECIAL: 'Đặc biệt',
+}
+
 // Chủ đề của mục "Gia đình khai" (Q-412, FR-025a; hợp đồng api-001, schema FamilyDeclaredTopic)
 export const FAMILY_DECLARED_TOPIC_LABELS = {
   GENERAL_CONDITION: 'Tình trạng chung',

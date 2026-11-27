@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import {
   ApiError,
   getResidentsByIdEndOfLifeWishDraft,
@@ -8,25 +9,31 @@ import {
   postResidentsByIdEndOfLifeWishes,
   putResidentsByIdEndOfLifeWishDraft,
 } from '@/api'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Field, FieldDescription, FieldError, FieldLabel, FieldLegend, FieldSet } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
+import { ChoiceTray } from '@/common/ChoiceTray'
+import { SUPPORT_METHOD_CHOICES } from '@/common/quickChoices'
+import { DateField } from '@/common/DateField'
+import { isoDate } from '@/common/dateText'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate, formatDateTime } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
+import { cn } from '@/lib/utils'
+import { FilePick } from '../consents/ConsentRecordSheet'
 import { FileField, Row } from '../consents/ConsentTab'
 import { POSITIVE_INTEGER, today, uploadProblem, toRequestOpinion } from './wishUtils'
 import { FamilyMemberSelect } from '@/common/FamilyMemberSelect'
-import { StaffSelectField } from '@/common/StaffSelectField'
 import { useFamilyMembers } from '@/common/useFamilyMembers'
 import { OpinionEditor, OpinionList } from './Opinions'
 import { DiscardDraftForm, DraftCard } from './WishDraft'
 import { useWishDraft } from './useWishDraft'
+import { DoctorSelect, WishSheet } from './WishSheet'
 import {
   CHOICE_LABELS,
   END_OF_LIFE_STATUS_LABELS,
@@ -42,12 +49,22 @@ import {
 // quyết được" chỉ hiện bên trong chính phiếu (FR-023h), kèm dòng "Người quyết định". Hành chính, Kế toán không xem được
 // nội dung: chỉ thấy "Đã có phiếu" hoặc "Chưa có phiếu" (FR-023e). Tạm thời: mã Bác sĩ nhận định và mã người thân nhập
 // tay vì chưa có danh sách (feature 008, 012); backend kiểm vai trò Bác sĩ và quan hệ Hiệu lực.
+// Rà soát cho Bác sĩ 2026-11-26 (chủ dự án duyệt): ghi, kiểm chứng phiếu mở khung riêng (WishSheet); chưa có phiếu Hiệu
+// lực chỉ ghi một dòng; ẩn lịch sử khi trống; ý kiến khác ghi tên người thân.
 
 function yesNo(value) {
   return value ? 'Có' : 'Không'
 }
 
-function WishDetails({ wish }) {
+function Required() {
+  return (
+    <span aria-hidden="true" className="text-destructive">
+      *
+    </span>
+  )
+}
+
+function WishDetails({ wish, residentId }) {
   const assessment = wish.selfDeterminationAssessment
   return (
     <>
@@ -82,16 +99,16 @@ function WishDetails({ wish }) {
           <Row label="Ngày xem lại nhận định">{formatDate(assessment.reviewDate)}</Row>
         </dl>
       </section>
-      <OpinionList opinions={wish.otherOpinions} />
+      <OpinionList opinions={wish.otherOpinions} residentId={residentId} />
     </>
   )
 }
 
-function RadioRow({ label, labelId, options, value, onChange, error }) {
+function RadioRow({ label, labelId, options, value, onChange, error, required = false }) {
   return (
     <Field data-invalid={!!error || undefined}>
       <span className="type-label" id={labelId}>
-        {label}
+        {label} {required && <Required />}
       </span>
       <div role="radiogroup" aria-labelledby={labelId} className="flex flex-wrap gap-2">
         {options.map(([optionValue, optionLabel]) => (
@@ -113,10 +130,12 @@ function RadioRow({ label, labelId, options, value, onChange, error }) {
   )
 }
 
-function TextField({ id, label, value, onChange, error, hint, inputMode, type }) {
+function TextField({ id, label, value, onChange, error, hint, inputMode, type, required = false }) {
   return (
     <Field data-invalid={!!error || undefined}>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id}>
+        {label} {required && <Required />}
+      </FieldLabel>
       <Input
         id={id}
         type={type}
@@ -130,7 +149,9 @@ function TextField({ id, label, value, onChange, error, hint, inputMode, type })
   )
 }
 
-function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = null }) {
+// Ghi phiếu mới trong khung riêng, kiểm chứng ngay trong thẻ Nháp (chủ dự án duyệt 2026-11-26): 01 Lựa chọn và người liên
+// hệ, 02 Nhận định của Bác sĩ, 03 Người quyết định và bản ký; ý kiến khác gập lại. Ngày gõ DD/MM/YYYY, không điền sẵn (Q-307).
+function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = null, onDiscardDraft }) {
   const verify = mode === 'verify'
   // Demo 2026-11-25: người ký, Bác sĩ nhận định chọn theo tên thay cho ô nhập mã
   const members = useFamilyMembers(residentId)
@@ -149,19 +170,30 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
     courtNumber: '',
     courtDate: '',
     courtName: '',
-    signedAt: today(),
-    source: 'ADMISSION',
+    signedAt: '',
+    source: null,
   })
-  const [opinions, setOpinions] = useState([])
-  const [signedCopy, setSignedCopy] = useState(null)
-  const [courtFile, setCourtFile] = useState(null)
+  const [opinions, setOpinionsState] = useState([])
+  const [opinionsOpen, setOpinionsOpen] = useState(false)
+  const [signedCopy, setSignedCopyState] = useState(null)
+  const [courtFile, setCourtFileState] = useState(null)
+  const [dirty, setDirty] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
   const [errors, setErrors] = useState({})
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const [key] = useState(() => crypto.randomUUID())
   // tệp đã tải lên theo đối tượng File, để gửi lại sau lỗi không tải lên lần nữa
   const uploaded = useRef(new Map())
-  const set = (name) => (value) => setV((current) => ({ ...current, [name]: value }))
+  const touched = (fn) => (value) => {
+    setDirty(true)
+    fn(value)
+  }
+  const set = (name) => touched((value) => setV((current) => ({ ...current, [name]: value })))
+  const setOpinions = touched(setOpinionsState)
+  const setSignedCopy = touched(setSignedCopyState)
+  const setCourtFile = touched(setCourtFileState)
 
   async function upload(file) {
     if (!uploaded.current.has(file)) uploaded.current.set(file, await uploadFile(file))
@@ -171,6 +203,9 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
   const canSelf = v.canSelf === true
   const legal = v.signerType === 'LEGAL_REPRESENTATIVE'
   const patientRep = v.signerType === 'PATIENT_REPRESENTATIVE'
+  const reviewIso = isoDate(v.reviewDate)
+  const signedIso = isoDate(v.signedAt)
+  const courtIso = isoDate(v.courtDate)
 
   function validate() {
     const next = {}
@@ -179,8 +214,8 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
     if (!POSITIVE_INTEGER.test(v.doctorId.trim())) next.doctorId = 'Chọn Bác sĩ nhận định'
     if (v.canSelf === null) next.canSelf = 'Chọn nhận định của Bác sĩ'
     if (!v.supportMethod.trim()) next.supportMethod = 'Nhập cách đã hỗ trợ người cao tuổi hiểu thông tin'
-    if (!v.reviewDate) next.reviewDate = 'Chọn ngày xem lại nhận định'
-    else if (v.reviewDate < today()) next.reviewDate = WISH_ERRORS.INVALID_REVIEW_DATE[1]
+    if (!reviewIso) next.reviewDate = 'Nhập ngày xem lại dạng DD/MM/YYYY'
+    else if (reviewIso < today()) next.reviewDate = WISH_ERRORS.INVALID_REVIEW_DATE[1]
     if (v.canSelf === false) {
       if (!v.signerType) next.signerType = 'Chọn người ký thay'
       if (!POSITIVE_INTEGER.test(v.signerId.trim())) next.signerId = 'Chọn người thân là người ký'
@@ -188,13 +223,14 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
       if (patientRep && !v.selection) next.selection = WISH_ERRORS.REPRESENTATIVE_SELECTION_REQUIRED[1]
       if (legal) {
         if (!v.courtNumber.trim()) next.courtNumber = 'Nhập số quyết định'
-        if (!v.courtDate) next.courtDate = 'Chọn ngày quyết định'
+        if (!courtIso) next.courtDate = 'Nhập ngày quyết định dạng DD/MM/YYYY'
         if (!v.courtName.trim()) next.courtName = 'Nhập tên Tòa án'
         if (!courtFile) next.courtFile = 'Chọn tệp quyết định của Tòa án'
       }
     }
     if (!signedCopy) next.signedCopy = WISH_ERRORS.EVIDENCE_REQUIRED[1]
-    if (!v.signedAt) next.signedAt = 'Chọn ngày ký'
+    if (!signedIso) next.signedAt = 'Nhập ngày ký dạng DD/MM/YYYY'
+    if (!verify && !v.source) next.source = 'Chọn nguồn phiếu'
     return next
   }
 
@@ -213,7 +249,7 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
         step = 'courtFile'
         courtDecision = {
           number: v.courtNumber.trim(),
-          date: v.courtDate,
+          date: courtIso,
           court: v.courtName.trim(),
           fileId: await upload(courtFile),
         }
@@ -235,14 +271,14 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
           selfDeterminationAssessment: {
             canSelfDetermine: canSelf,
             supportMethod: v.supportMethod.trim(),
-            reviewDate: v.reviewDate,
+            reviewDate: reviewIso,
           },
           signerType: signer,
           signerFamilyMemberId: canSelf ? undefined : Number(v.signerId.trim()),
           representativeSelection: patientRep && !canSelf ? v.selection : undefined,
           courtDecision,
           otherOpinions: opinions.map(toRequestOpinion),
-          signedAt: new Date(`${v.signedAt}T00:00:00+07:00`).toISOString(),
+          signedAt: new Date(`${signedIso}T00:00:00+07:00`).toISOString(),
           signedCopyFileId,
           source: verify ? undefined : v.source,
         },
@@ -260,25 +296,22 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
     }
   }
 
-  return (
-    <form
-      onSubmit={submit}
-      noValidate
-      aria-label={verify ? 'Kiểm chứng phiếu nguyện vọng cuối đời' : 'Ghi phiếu nguyện vọng cuối đời'}
-      className="flex flex-col gap-4 rounded-lg border bg-muted/30 p-4"
-    >
-      <h3 className="type-card-title">
-        {verify ? 'Kiểm chứng phiếu nguyện vọng cuối đời' : 'Ghi phiếu nguyện vọng cuối đời'}
-      </h3>
-      <p className="type-body-sm text-muted-foreground">
-        {verify
-          ? 'Phiếu điền sẵn từ bản Nháp gia đình khai; sửa nếu cần, ghi nhận định của Bác sĩ và bản ký. Lưu xong phiếu có hiệu lực, thay phiếu Hiệu lực hiện hành nếu có.'
-          : 'Phiếu mới thay phiếu Hiệu lực hiện hành; phiếu cũ vẫn xem được ở lịch sử. Phiếu mang nhận định của Bác sĩ chỉ cho quyết định này, không phải dấu của người cao tuổi.'}
-      </p>
+  const dateField = (id, label, name, required = true) => (
+    <Field data-invalid={!!errors[name] || undefined}>
+      <FieldLabel htmlFor={id}>
+        {label} {required && <Required />}
+      </FieldLabel>
+      <DateField id={id} value={v[name]} onChange={set(name)} invalid={!!errors[name]} />
+      {errors[name] && <FieldError>{errors[name]}</FieldError>}
+    </Field>
+  )
 
+  const group01 = (
+    <div className="flex flex-col gap-5">
       <RadioRow
         label="Lựa chọn khi nguy kịch"
         labelId="eol-choice"
+        required
         options={Object.entries(CHOICE_LABELS)}
         value={v.choice}
         onChange={set('choice')}
@@ -286,6 +319,7 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
       />
       <TextField
         id="eol-first-contact"
+        required
         label="Người cần liên hệ trước khi thực hiện"
         value={v.firstContact}
         onChange={set('firstContact')}
@@ -295,63 +329,66 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
         <FieldLabel htmlFor="eol-note">Ghi chú</FieldLabel>
         <Textarea id="eol-note" rows={2} value={v.note} onChange={(e) => set('note')(e.target.value)} />
       </Field>
-
-      <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
-        <legend className="type-label px-1">Nhận định của Bác sĩ cho phiếu này</legend>
-        <StaffSelectField
-          id="eol-doctor"
-          label="Bác sĩ nhận định"
-          valueKey="accountId"
-          positions={['Bác sĩ']}
-          value={v.doctorId}
-          onChange={set('doctorId')}
-          invalid={!!errors.doctorId}
-          errorText={errors.doctorId}
-        />
+      {!verify && (
         <RadioRow
-          label="Người cao tuổi tự quyết được việc chọn này"
-          labelId="eol-can-self"
+          label="Nguồn phiếu"
+          labelId="eol-source"
+          required
           options={[
-            [true, 'Có'],
-            [false, 'Không'],
+            ['ADMISSION', SOURCE_LABELS.ADMISSION],
+            ['FAMILY_REQUEST', SOURCE_LABELS.FAMILY_REQUEST],
           ]}
-          value={v.canSelf}
-          onChange={set('canSelf')}
-          error={errors.canSelf}
+          value={v.source}
+          onChange={set('source')}
+          error={errors.source}
         />
-        <Field data-invalid={!!errors.supportMethod || undefined}>
-          <FieldLabel htmlFor="eol-support">Cách đã hỗ trợ người cao tuổi hiểu thông tin</FieldLabel>
-          <Textarea
-            id="eol-support"
-            rows={2}
-            value={v.supportMethod}
-            onChange={(e) => set('supportMethod')(e.target.value)}
-            aria-invalid={!!errors.supportMethod || undefined}
-          />
-          {errors.supportMethod && <FieldError>{errors.supportMethod}</FieldError>}
-        </Field>
-        <TextField
-          id="eol-review-date"
-          type="date"
-          label="Ngày xem lại nhận định"
-          value={v.reviewDate}
-          onChange={set('reviewDate')}
-          error={errors.reviewDate}
-          hint="Tới ngày này hệ thống nhắc Bác sĩ và Điều dưỡng phụ trách một lần."
-        />
-      </fieldset>
-
-      {v.canSelf === true && (
-        <p className="type-body-sm rounded-lg border p-3">
-          Người quyết định: <strong>Người cao tuổi</strong> (chính người cao tuổi trả lời và ký).
-        </p>
       )}
+    </div>
+  )
+
+  const group02 = (
+    <div className="flex flex-col gap-5">
+      <DoctorSelect id="eol-doctor" value={v.doctorId} onChange={set('doctorId')} error={errors.doctorId} />
+      {/* Giúp hiểu trước, nhận định sau (Q-348; chủ dự án yêu cầu 2026-11-26 cho dễ hiểu): ô chọn nhanh có "Khác" */}
+      <Field data-invalid={!!errors.supportMethod || undefined}>
+        <ChoiceTray
+          id="eol-support"
+          label="Đã giúp người cao tuổi hiểu lựa chọn bằng cách nào"
+          required
+          options={SUPPORT_METHOD_CHOICES}
+          multiple
+          value={v.supportMethod}
+          onChange={set('supportMethod')}
+          invalid={!!errors.supportMethod}
+          placeholder="Bấm để chọn hoặc gõ"
+        />
+        {errors.supportMethod && <FieldError>{errors.supportMethod}</FieldError>}
+      </Field>
+      <RadioRow
+        label="Sau khi được giải thích, người cao tuổi có tự quyết được lựa chọn này không"
+        labelId="eol-can-self"
+        required
+        options={[
+          [true, 'Có'],
+          [false, 'Không'],
+        ]}
+        value={v.canSelf}
+        onChange={set('canSelf')}
+        error={errors.canSelf}
+      />
+      {dateField('eol-review-date', 'Ngày xem lại nhận định', 'reviewDate')}
+    </div>
+  )
+
+  const group03 = (
+    <div className="flex flex-col gap-5">
+      {v.canSelf === true && <p className="type-body-sm">Người quyết định: Người cao tuổi</p>}
       {v.canSelf === false && (
-        <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
-          <legend className="type-label px-1">Người quyết định thay</legend>
+        <>
           <RadioRow
             label="Người ký thay"
             labelId="eol-signer-type"
+            required
             options={[
               ['PATIENT_REPRESENTATIVE', SIGNER_LABELS.PATIENT_REPRESENTATIVE],
               ['LEGAL_REPRESENTATIVE', SIGNER_LABELS.LEGAL_REPRESENTATIVE],
@@ -360,22 +397,23 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
             onChange={set('signerType')}
             error={errors.signerType}
           />
-          <FamilyMemberSelect
-            id="eol-signer-id"
-            label="Người thân là người ký"
-            members={members}
-            value={v.signerId}
-            onChange={set('signerId')}
-            error={errors.signerId}
-            hint="Người này cũng là người trả lời phiếu."
-          />
-          <TextField
-            id="eol-relationship"
-            label="Quan hệ với người cao tuổi"
-            value={v.relationship}
-            onChange={set('relationship')}
-            error={errors.relationship}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FamilyMemberSelect
+              id="eol-signer-id"
+              label="Người thân là người ký"
+              members={members}
+              value={v.signerId}
+              onChange={set('signerId')}
+              error={errors.signerId}
+            />
+            <TextField
+              id="eol-relationship"
+              label="Quan hệ với người cao tuổi"
+              value={v.relationship}
+              onChange={set('relationship')}
+              error={errors.relationship}
+            />
+          </div>
           {patientRep && (
             <RadioRow
               label="Người đại diện được chọn theo cách nào"
@@ -388,21 +426,13 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
           )}
           {legal && (
             <>
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <TextField
                   id="eol-court-number"
                   label="Số quyết định"
                   value={v.courtNumber}
                   onChange={set('courtNumber')}
                   error={errors.courtNumber}
-                />
-                <TextField
-                  id="eol-court-date"
-                  type="date"
-                  label="Ngày quyết định"
-                  value={v.courtDate}
-                  onChange={set('courtDate')}
-                  error={errors.courtDate}
                 />
                 <TextField
                   id="eol-court-name"
@@ -412,63 +442,149 @@ function WishForm({ residentId, onCancel, onDone, mode = 'record', initial = nul
                   error={errors.courtName}
                 />
               </div>
-              <FileField
+              {dateField('eol-court-date', 'Ngày quyết định', 'courtDate')}
+              <FilePick
                 id="eol-court-file"
                 label="Bản scan quyết định của Tòa án"
-                error={errors.courtFile}
+                file={courtFile}
                 onPick={setCourtFile}
+                error={errors.courtFile}
               />
             </>
           )}
-        </fieldset>
+        </>
       )}
-
-      <FileField id="eol-signed-copy" label="Bản ký đã scan" error={errors.signedCopy} onPick={setSignedCopy} />
-      <TextField
-        id="eol-signed-at"
-        type="date"
-        label="Ngày ký"
-        value={v.signedAt}
-        onChange={set('signedAt')}
-        error={errors.signedAt}
+      <FilePick
+        id="eol-signed-copy"
+        label="Bản ký đã scan"
+        file={signedCopy}
+        onPick={setSignedCopy}
+        error={errors.signedCopy}
       />
-      {!verify && (
-        <RadioRow
-          label="Nguồn phiếu"
-          labelId="eol-source"
-          options={[
-            ['ADMISSION', SOURCE_LABELS.ADMISSION],
-            ['FAMILY_REQUEST', SOURCE_LABELS.FAMILY_REQUEST],
-          ]}
-          value={v.source}
-          onChange={set('source')}
-        />
-      )}
+      {dateField('eol-signed-at', 'Ngày ký', 'signedAt')}
+      <Collapsible
+        open={opinionsOpen || opinions.length > 0}
+        onOpenChange={setOpinionsOpen}
+        className="flex flex-col gap-4"
+      >
+        <CollapsibleTrigger className="flex items-center gap-1.5 self-start type-body-sm font-medium text-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
+          Thêm ý kiến khác
+          <ChevronDown
+            aria-hidden
+            className={cn('size-4 transition-transform', (opinionsOpen || opinions.length > 0) && 'rotate-180')}
+          />
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <OpinionEditor
+            idPrefix="eol"
+            residentId={residentId}
+            items={opinions}
+            onChange={setOpinions}
+            error={errors.opinions}
+          />
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  )
 
-      <OpinionEditor
-        idPrefix="eol"
-        residentId={residentId}
-        items={opinions}
-        onChange={setOpinions}
-        error={errors.opinions}
-      />
+  // Kiểm chứng ngay trong thẻ Nháp (chủ dự án duyệt 2026-11-26): nội dung gia đình khai chỉ đọc (bấm "Sửa nội dung" thì
+  // sửa tại chỗ), dưới là phần cần ghi khi kiểm chứng; "Không duyệt" là Hủy nháp kèm lý do, không mở màn khác.
+  if (verify) {
+    return (
+      <section aria-labelledby="eol-verify-title" className="flex flex-col gap-4 rounded-lg border p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h4 id="eol-verify-title" className="type-label">
+            Bản Nháp tự khai <span className="type-caption text-warning-foreground">· chờ kiểm chứng</span>
+          </h4>
+          {!editing && (
+            <Button type="button" variant="link" className="h-auto p-0" onClick={() => setEditing(true)}>
+              Sửa nội dung
+            </Button>
+          )}
+        </div>
+        {initial?.recordedBy && (
+          <p className="type-caption text-muted-foreground">
+            {initial.recordedBy} lập{initial.at && ` ${formatDateTime(initial.at)}`}
+          </p>
+        )}
+        <form
+          id="eol-verify-form"
+          onSubmit={submit}
+          noValidate
+          aria-label="Kiểm chứng phiếu nguyện vọng cuối đời"
+          aria-busy={busy || undefined}
+          className="flex flex-col gap-5"
+        >
+          {editing ? group01 : <DraftDetails draft={initial} residentId={residentId} />}
+          <div className="flex flex-col gap-5 border-t pt-4">
+            <h5 className="type-label">Phần cần ghi khi kiểm chứng</h5>
+            {group02}
+            {group03}
+          </div>
+          <ProblemAlert problem={failure} />
+        </form>
+        {discarding ? (
+          <DiscardDraftForm idPrefix="eol" onDiscard={onDiscardDraft} onCancel={() => setDiscarding(false)} />
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            <Button type="submit" form="eol-verify-form" className="h-11" disabled={busy}>
+              {busy ? 'Đang lưu…' : 'Xác nhận kiểm chứng'}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-11"
+              disabled={busy}
+              onClick={() => setDiscarding(true)}
+            >
+              Không duyệt
+            </Button>
+          </div>
+        )}
+      </section>
+    )
+  }
 
-      <ProblemAlert problem={failure} />
-
-      <div className="flex flex-wrap gap-3">
-        <Button type="submit" className="h-11" disabled={busy}>
-          {verify ? 'Kiểm chứng và lưu' : 'Lưu phiếu'}
-        </Button>
-        <Button type="button" variant="outline" className="h-11" onClick={onCancel}>
-          Thôi
-        </Button>
-      </div>
-    </form>
+  return (
+    <WishSheet
+      title="Ghi phiếu nguyện vọng cuối đời"
+      formId="eol-wish-form"
+      dirty={dirty}
+      busy={busy}
+      submitLabel="Lưu phiếu"
+      onClose={onCancel}
+    >
+      <form
+        id="eol-wish-form"
+        onSubmit={submit}
+        noValidate
+        aria-label="Ghi phiếu nguyện vọng cuối đời"
+        className="flex flex-col divide-y"
+      >
+        <FieldSet className="py-6">
+          <FieldLegend className="type-label mb-4">01 · Lựa chọn và người liên hệ</FieldLegend>
+          {group01}
+        </FieldSet>
+        <FieldSet className="py-6">
+          <FieldLegend className="type-label mb-4">02 · Nhận định của Bác sĩ</FieldLegend>
+          {group02}
+        </FieldSet>
+        <FieldSet className="py-6">
+          <FieldLegend className="type-label mb-4">03 · Người quyết định và bản ký</FieldLegend>
+          {group03}
+        </FieldSet>
+        {failure && (
+          <div className="py-6">
+            <ProblemAlert problem={failure} />
+          </div>
+        )}
+      </form>
+    </WishSheet>
   )
 }
 
 // Nội dung bản Nháp tự khai: chưa có nhận định của Bác sĩ (FR-023n)
-function DraftDetails({ draft }) {
+function DraftDetails({ draft, residentId }) {
   return (
     <>
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -488,7 +604,7 @@ function DraftDetails({ draft }) {
           </div>
         )}
       </dl>
-      <OpinionList opinions={draft.otherOpinions ?? []} />
+      <OpinionList opinions={draft.otherOpinions ?? []} residentId={residentId} />
     </>
   )
 }
@@ -639,7 +755,7 @@ function EndOfLifeDraftForm({ residentId, initial, onCancel, onDone }) {
   )
 }
 
-export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWish, onChanged }) {
+export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWish, onChanged, onStatus }) {
   const [state, setState] = useState('loading')
   const [summary, setSummary] = useState(null)
   const [failure, setFailure] = useState(null)
@@ -708,7 +824,7 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
     <div className="flex flex-col gap-3">
       {draft && draftMode !== 'edit' && (
         <DraftCard id="eol-draft-title" title="Bản Nháp tự khai" draft={draft}>
-          <DraftDetails draft={draft} />
+          <DraftDetails draft={draft} residentId={residentId} />
         </DraftCard>
       )}
       {draftMode === 'edit' ? (
@@ -739,11 +855,24 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
     </div>
   )
 
-  const heading = (
-    <h3 id="eol-title" className="type-card-title">
-      Nguyện vọng cuối đời
-    </h3>
-  )
+  // Tình trạng phiếu cho chip của tab Nguyện vọng: chờ kiểm chứng, Hiệu lực, chưa có (chủ dự án duyệt 2026-11-26)
+  const wishStatus =
+    state === 'ready'
+      ? draft && canRecord
+        ? 'draft'
+        : summary?.current
+          ? 'active'
+          : 'none'
+      : state === 'forbidden'
+        ? draft
+          ? 'draft'
+          : hasWish
+            ? 'active'
+            : 'none'
+        : null
+  useEffect(() => {
+    if (wishStatus) onStatus?.(wishStatus)
+  }, [wishStatus, onStatus])
 
   if (state === 'loading') {
     return (
@@ -756,13 +885,9 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
   }
   if (state === 'forbidden') {
     return (
-      <section aria-labelledby="eol-title" className="flex flex-col gap-2 rounded-lg border p-4">
-        {heading}
+      <section aria-label="Nguyện vọng cuối đời" className="flex flex-col gap-3">
         <p className="type-body-sm">
           {hasWish ? 'Đã có phiếu nguyện vọng cuối đời.' : 'Chưa có phiếu nguyện vọng cuối đời.'}
-        </p>
-        <p className="type-body-sm text-muted-foreground">
-          Vai trò của bạn chỉ thấy phiếu đã có hay chưa, không xem được nội dung.
         </p>
         {officeDraft}
       </section>
@@ -786,37 +911,39 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
 
   return (
     <div className="flex flex-col gap-4">
-      <section aria-labelledby="eol-title" className="flex flex-col gap-3 rounded-lg border p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          {heading}
-          {current && <StatusBadge status={END_OF_LIFE_STATUS_LABELS.ACTIVE} />}
-        </div>
-        {current ? (
-          <WishDetails wish={current} />
-        ) : (
-          <Alert variant="attention">
-            <AlertTitle>Chưa có phiếu nguyện vọng cuối đời Hiệu lực</AlertTitle>
-            <AlertDescription>
-              Bác sĩ và Điều dưỡng phụ trách được nhắc ghi phiếu tới khi có.
-              {FINAL_STATUSES.includes(status) && ' Hồ sơ ở trạng thái cuối nên không ghi phiếu mới được.'}
-            </AlertDescription>
-          </Alert>
-        )}
-        {canRecordNew && (
-          <Button
-            type="button"
-            variant={current ? 'outline' : 'default'}
-            className="h-11 self-start"
-            aria-pressed={formOpen}
-            onClick={() => {
-              setDone(null)
-              setFormOpen(true)
-            }}
-          >
-            {current ? 'Ghi phiếu mới' : 'Ghi phiếu nguyện vọng'}
-          </Button>
-        )}
-      </section>
+      {/* Một thẻ mỗi chip: phiếu Hiệu lực, hoặc thẻ kiểm chứng Nháp, hoặc một dòng "Chưa có phiếu" (2026-11-26) */}
+      {(current || !draft) && (
+        <section
+          aria-label="Nguyện vọng cuối đời"
+          className={current ? 'flex flex-col gap-3 rounded-lg border p-4' : 'flex flex-col gap-3'}
+        >
+          {current ? (
+            <>
+              <StatusBadge status={END_OF_LIFE_STATUS_LABELS.ACTIVE} />
+              <WishDetails wish={current} residentId={residentId} />
+            </>
+          ) : (
+            <p className="type-body-sm text-muted-foreground">
+              Chưa có phiếu
+              {FINAL_STATUSES.includes(status) && '; hồ sơ ở trạng thái cuối nên không ghi phiếu mới được'}
+            </p>
+          )}
+          {canRecordNew && (
+            <Button
+              type="button"
+              variant={current ? 'outline' : 'default'}
+              className="h-11 self-start"
+              aria-pressed={formOpen}
+              onClick={() => {
+                setDone(null)
+                setFormOpen(true)
+              }}
+            >
+              {current ? 'Ghi phiếu mới' : 'Ghi phiếu nguyện vọng'}
+            </Button>
+          )}
+        </section>
+      )}
 
       {done && (
         <p role="status" className="type-body-sm rounded-lg border bg-muted/30 p-3">
@@ -827,68 +954,34 @@ export function EndOfLifeWish({ residentId, status, allowedCommands = [], hasWis
         <WishForm residentId={residentId} onCancel={() => setFormOpen(false)} onDone={finished} />
       )}
       {canRecord && draft && (
-        <DraftCard
-          id="eol-draft-title"
-          title="Bản Nháp tự khai chờ kiểm chứng"
-          draft={draft}
-          actions={
-            draftMode === null && (
-              <>
-                <Button
-                  type="button"
-                  className="h-11"
-                  onClick={() => {
-                    setDone(null)
-                    setDraftMode('verify')
-                  }}
-                >
-                  Kiểm chứng
-                </Button>
-                <Button type="button" variant="outline" className="h-11" onClick={() => setDraftMode('discard')}>
-                  Hủy nháp
-                </Button>
-              </>
-            )
-          }
-        >
-          <DraftDetails draft={draft} />
-          {draftMode === 'discard' && (
-            <DiscardDraftForm idPrefix="eol" onDiscard={discard} onCancel={() => setDraftMode(null)} />
-          )}
-        </DraftCard>
-      )}
-      {canRecord && draft && draftMode === 'verify' && (
         <WishForm
+          key={draft.id ?? 'draft'}
           residentId={residentId}
           mode="verify"
           initial={draft}
-          onCancel={() => setDraftMode(null)}
           onDone={finished}
+          onDiscardDraft={discard}
         />
       )}
 
-      <section aria-labelledby="eol-history-title" className="flex flex-col gap-2">
-        <h4 id="eol-history-title" className="type-label">
-          Lịch sử phiếu nguyện vọng cuối đời
-        </h4>
-        {past.length === 0 ? (
-          <p className="type-body-sm text-muted-foreground">Chưa có phiếu nào được thay thế.</p>
-        ) : (
+      {past.length > 0 && (
+        <section aria-labelledby="eol-history-title" className="flex flex-col gap-2">
+          <h4 id="eol-history-title" className="type-label">
+            Lịch sử phiếu nguyện vọng cuối đời
+          </h4>
           <ul aria-label="Lịch sử phiếu nguyện vọng cuối đời" className="flex flex-col gap-2">
             {past.map((wish) => (
               <li key={wish.id} className="flex flex-col gap-3 rounded-lg border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge status={END_OF_LIFE_STATUS_LABELS[wish.status]} />
-                  <span className="type-caption text-muted-foreground tabular-nums">
-                    {formatDate(wish.signedAt)}
-                  </span>
+                  <span className="type-caption text-muted-foreground tabular-nums">{formatDate(wish.signedAt)}</span>
                 </div>
-                <WishDetails wish={wish} />
+                <WishDetails wish={wish} residentId={residentId} />
               </li>
             ))}
           </ul>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   )
 }

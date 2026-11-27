@@ -11,7 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { ChoiceTray } from '@/common/ChoiceTray'
 import { FamilyMemberField } from '@/common/FamilyMemberField'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { useFamilyMembers } from '@/common/useFamilyMembers'
+import { memberNameOf, useFamilyMembers } from '@/common/useFamilyMembers'
 import { FAMILY_DECLARED_CHOICES } from '@/common/quickChoices'
 import { problemOf } from '@/common/problem'
 import { FAMILY_DECLARED_TOPIC_LABELS } from './assessmentLabels'
@@ -23,13 +23,15 @@ import { FAMILY_DECLARED_TOPIC_LABELS } from './assessmentLabels'
 const SELF_REPORT_LABEL = 'Tự khai, chưa được Bác sĩ kiểm chứng'
 const POSITIVE_INTEGER = /^[1-9]\d{0,17}$/
 
-function sourceText(source) {
-  return source.type === 'FAMILY_MEMBER' ? `Người thân (mã ${source.familyMemberId})` : 'Người cao tuổi'
+// Nguồn người thân ghi theo tên khi có danh sách người thân (Bác sĩ xem trong phiếu đánh giá); không có thì theo mã
+function sourceText(source, members) {
+  if (source.type !== 'FAMILY_MEMBER') return 'Người cao tuổi'
+  return members ? memberNameOf(members, source.familyMemberId) : `Người thân (mã ${source.familyMemberId})`
 }
 
 const entryKey = (e) => [e.topic, e.content, e.source.type, e.source.familyMemberId ?? null]
 
-function EntryItems({ entries, onRemove }) {
+function EntryItems({ entries, members, onRemove }) {
   return (
     <ul aria-label="Các mục gia đình khai" className="flex flex-col gap-2">
       {entries.map((entry, index) => (
@@ -37,7 +39,7 @@ function EntryItems({ entries, onRemove }) {
           <span className="type-label">{FAMILY_DECLARED_TOPIC_LABELS[entry.topic]}</span>
           <span className="type-body-sm">{entry.content}</span>
           <span className="type-caption text-muted-foreground">
-            Nguồn: {sourceText(entry.source)}
+            Nguồn: {sourceText(entry.source, members)}
             {entry.recordedBy && ` · ghi bởi ${entry.recordedBy}`}
           </span>
           {onRemove && (
@@ -51,21 +53,18 @@ function EntryItems({ entries, onRemove }) {
   )
 }
 
-// Chỉ đọc, cho Bác sĩ, Điều dưỡng trong màn đánh giá
-export function FamilyDeclaredList({ entries }) {
+// Chỉ đọc, cho Bác sĩ, Điều dưỡng trong cột tham khảo của phiếu đánh giá; nhãn tự khai là chữ hổ phách, không nhãn bo
+export function FamilyDeclaredList({ entries, members }) {
   if (!entries?.length) return null
   return (
-    <section
-      aria-labelledby="family-declared-title"
-      className="flex flex-col gap-2 rounded-lg border border-dashed p-3"
-    >
-      <div className="flex flex-wrap items-center gap-2">
+    <section aria-labelledby="family-declared-title" className="flex flex-col gap-2">
+      <div className="flex flex-col">
         <h4 id="family-declared-title" className="type-label">
           Gia đình khai
         </h4>
-        <Badge variant="attention">{SELF_REPORT_LABEL}</Badge>
+        <span className="type-caption text-warning-foreground">{SELF_REPORT_LABEL}</span>
       </div>
-      <EntryItems entries={entries} />
+      <EntryItems entries={entries} members={members} />
     </section>
   )
 }

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes, problem } from '@/test/fetchRoutes'
 import { PermissionsProvider } from '@/common/permissions/permissions'
@@ -89,6 +89,8 @@ beforeEach(() => {
   for (const id of [31, 32, 33]) api.on('GET', `/contracts/${id}/addenda`, json(200, []))
   api.on('GET', '/contracts/31/non-standard-terms', json(200, []))
   api.on('GET', '/services', json(200, []))
+  // jsdom không có scrollIntoView (form hợp đồng cuộn tới ô lỗi đầu tiên)
+  Element.prototype.scrollIntoView = vi.fn()
 })
 
 describe('ContractsPage', () => {
@@ -118,11 +120,16 @@ describe('ContractsPage', () => {
     expect(screen.queryByRole('button', { name: /Thu cọc|Xác nhận đặt cọc/ })).not.toBeInTheDocument()
   })
 
-  it('FR_028_truongTaiChinhBiAn_hienGhiChuTheoQuyen', async () => {
+  // Audit BF-01 2026-11-27: trường tài chính backend ẩn (hiddenFields) thì không hiện, bỏ dòng ghi chú "Trường tài chính
+  // được ẩn…"
+  it('FR_028_truongTaiChinhBiAn_khongHien_khongCoDongGhiChu', async () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Hiệu lực 1' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Phạm Thị Mai' }))
-    expect(await screen.findByText(/Trường tài chính được ẩn theo quyền/)).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Hợp đồng HD-033/ })).toBeInTheDocument()
+    expect(await screen.findByText('Đã đặt cọc')).toBeInTheDocument()
+    expect(screen.queryByText(/Trường tài chính được ẩn/)).toBeNull()
+    expect(screen.queryByText(/Cần [0-9]/)).toBeNull()
   })
 
   it('BR_M02_09_hopDongHieuLuc_hienNoiDungHienHanhTheoPhuLuc_vaTomTatPhuLuc', async () => {
@@ -199,6 +206,10 @@ describe('ContractsPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Nguyễn Thị Lan' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Gửi ký' }))
+    // Gửi ký hỏi lại rồi mới gửi
+    expect(screen.getByText('Gửi ký hợp đồng này?')).toBeInTheDocument()
+    expect(api.calls('POST', '/contracts/31/send-for-signature')).toHaveLength(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Gửi ký' }))
     expect(await screen.findByText('Cần đúng một dịch vụ chăm sóc theo mức của hợp đồng')).toBeInTheDocument()
   })
 
@@ -209,19 +220,35 @@ describe('ContractsPage', () => {
       '/contracts/32/record-signed',
       json(200, { contract: { ...PENDING, status: 'ACTIVE' }, warnings: [] }),
     )
+    // Hợp đồng nội trú: giường đã phân bổ bắt đầu không sau ngày bắt đầu hợp đồng (FR-021)
+    api.on(
+      'GET',
+      '/bed-allocations',
+      json(200, [
+        {
+          id: 4,
+          status: 'FUTURE',
+          plannedStartAt: '2026-11-10T01:00:00Z',
+          location: { roomId: 1, room: 'Phòng 201', bed: 'G2', label: 'P201 – G2' },
+        },
+      ]),
+    )
+    api.on('GET', '/rooms', json(200, [{ id: 1, roomTypeId: 1 }]))
+    api.on('GET', '/room-types', json(200, [{ id: 1, name: 'Phòng đôi' }]))
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Chờ ký 1' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Lê Văn Hải' }))
-    fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận đã ký…' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận đã ký' }))
 
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Lưu đã ký' })).toBeEnabled())
     fireEvent.click(screen.getByRole('button', { name: 'Lưu đã ký' }))
     expect(await screen.findByText('Nhập ngày ký')).toBeInTheDocument()
     expect(screen.getByText('Chọn người đại diện ký')).toBeInTheDocument()
-    expect(screen.getByText('Chọn bản scan hợp đồng')).toBeInTheDocument()
+    expect(screen.getByText('Chọn bản scan hợp đồng đã ký')).toBeInTheDocument()
 
-    fireEvent.change(screen.getByLabelText('Ngày ký'), { target: { value: '2026-11-09' } })
-    fireEvent.change(await screen.findByLabelText('Người đại diện ký'), { target: { value: '41' } })
-    fireEvent.change(screen.getByLabelText('Bản scan hợp đồng'), {
+    fireEvent.change(screen.getByLabelText(/^Ngày ký/), { target: { value: '09/11/2026' } })
+    fireEvent.click(await screen.findByRole('radio', { name: 'Trần Văn Minh' }))
+    fireEvent.change(screen.getByLabelText(/^Bản scan hợp đồng đã ký/), {
       target: { files: [new File(['x'], 'hd.pdf', { type: 'application/pdf' })] },
     })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu đã ký' }))
@@ -238,7 +265,7 @@ describe('ContractsPage', () => {
     renderPage()
     fireEvent.click(await screen.findByRole('button', { name: 'Lập hợp đồng' }))
     const dialog = screen.getByRole('dialog')
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Tiếp' }))
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Lưu hợp đồng nháp' }))
     expect(await within(dialog).findByText('Chọn người cao tuổi')).toBeInTheDocument()
     expect(within(dialog).getByText('Chọn loại lưu trú')).toBeInTheDocument()
     expect(api.calls('POST', '/contracts')).toHaveLength(0)
@@ -259,8 +286,9 @@ describe('ContractsPage mở theo contractId', () => {
         <ContractsPage contractId={33} />
       </PermissionsProvider>,
     )
-    expect(await screen.findByRole('heading', { name: 'Phạm Thị Mai' })).toBeInTheDocument()
-    expect(screen.getByText('Hợp đồng HD-033')).toBeInTheDocument()
+    const title = await screen.findByRole('heading', { name: /Hợp đồng HD-033/ })
+    expect(within(title).getByText('Hiệu lực')).toBeInTheDocument()
+    expect(await screen.findByText('Phạm Thị Mai', { selector: 'p' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Hiệu lực/, hidden: true })).toHaveAttribute('aria-pressed', 'true')
   })
 })

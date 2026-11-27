@@ -13,6 +13,24 @@ export const STATUS_LABELS = {
 
 export const GENDER_LABELS = { MALE: 'Nam', FEMALE: 'Nữ' }
 
+// Tuổi tròn theo ngày sinh yyyy-mm-dd (đầu khung Việc tiếp nhận, phiếu đánh giá)
+export function ageOf(dateOfBirth) {
+  if (!dateOfBirth) return null
+  const [y, m, d] = dateOfBirth.split('-').map(Number)
+  const now = new Date()
+  const before = now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)
+  return now.getFullYear() - y - (before ? 1 : 0)
+}
+
+// Dòng phụ của người cao tuổi: "Nam, 81 tuổi · Đang tiếp nhận"
+export function residentLine(profile) {
+  if (!profile) return ''
+  const info = profile.personalInfo ?? {}
+  const age = ageOf(info.dateOfBirth)
+  const who = [GENDER_LABELS[info.gender], age !== null && `${age} tuổi`].filter(Boolean).join(', ')
+  return [who, STATUS_LABELS[profile.status]].filter(Boolean).join(' · ')
+}
+
 export const ID_DOCUMENT_LABELS = { CITIZEN_ID: 'CCCD', OTHER: 'Giấy tờ khác' }
 
 // Vai trò được tạo hồ sơ (Phụ lục 27, dòng "Hồ sơ người cao tuổi": Hành chính; Quản lý viện thay khi cần)

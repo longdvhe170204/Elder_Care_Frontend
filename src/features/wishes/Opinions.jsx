@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field'
+import { Field, FieldError, FieldLabel } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
 import { FamilyMemberSelect } from '@/common/FamilyMemberSelect'
 import { formatDateTime } from '@/common/dateTime'
@@ -12,14 +12,16 @@ import { OPINION_SOURCE_LABELS } from './wishLabels'
 // xóa sau khi lưu. Người cao tuổi và người thân nói khác nhau thì hai dòng riêng, không gộp, không chọn hộ.
 
 // residentId: để chọn người thân nêu ý kiến theo tên thay cho ô nhập mã (demo 2026-11-25)
-export function OpinionEditor({ idPrefix, residentId, items, onChange, error }) {
+export function OpinionEditor({ idPrefix, residentId, items, onChange, error, compact = false }) {
   const members = useFamilyMembers(residentId)
-  const [type, setType] = useState('FAMILY_MEMBER')
+  // Không chọn sẵn nguồn (Q-307; rà soát 2026-11-26)
+  const [type, setType] = useState('')
   const [familyMemberId, setFamilyMemberId] = useState('')
   const [content, setContent] = useState('')
   const [problem, setProblem] = useState(null)
 
   function add() {
+    if (!type) return setProblem('Chọn nguồn ý kiến')
     if (!content.trim()) return setProblem('Nhập nội dung ý kiến')
     if (type === 'FAMILY_MEMBER' && !POSITIVE_INTEGER.test(familyMemberId.trim())) {
       return setProblem('Chọn người thân nêu ý kiến')
@@ -32,11 +34,9 @@ export function OpinionEditor({ idPrefix, residentId, items, onChange, error }) 
 
   return (
     <fieldset className="flex flex-col gap-3 rounded-lg border p-3">
-      <legend className="type-label px-1">Ý kiến khác với lựa chọn (không bắt buộc)</legend>
-      <FieldDescription>
-        Mỗi ý kiến một mục có nguồn. Lựa chọn trên phiếu ghi theo người quyết định; ý kiến khác không đổi lựa chọn và
-        không sửa được sau khi lưu.
-      </FieldDescription>
+      <legend className="type-label px-1">
+        {compact ? 'Ý kiến khác' : 'Ý kiến khác với lựa chọn (không bắt buộc)'}
+      </legend>
       {items.length > 0 && (
         <ul aria-label="Ý kiến khác đã thêm" className="flex flex-col gap-2">
           {items.map((item, index) => (
@@ -101,7 +101,9 @@ export function OpinionEditor({ idPrefix, residentId, items, onChange, error }) 
   )
 }
 
-export function OpinionList({ opinions }) {
+// residentId: ghi tên người thân nêu ý kiến thay cho mã (rà soát 2026-11-26)
+export function OpinionList({ opinions, residentId }) {
+  const members = useFamilyMembers(opinions?.length ? residentId : null)
   if (!opinions?.length) return null
   return (
     <div className="flex flex-col gap-2">
@@ -111,8 +113,9 @@ export function OpinionList({ opinions }) {
           <li key={index} className="rounded-lg border p-2">
             <p className="type-caption text-muted-foreground">
               {OPINION_SOURCE_LABELS[opinion.source.type]}
-              {opinion.source.familyMemberId != null && ` (mã ${opinion.source.familyMemberId})`} · {opinion.recordedBy}{' '}
-              · {formatDateTime(opinion.at)}
+              {opinion.source.familyMemberId != null &&
+                ` (${memberNameOf(members, opinion.source.familyMemberId)})`} · {opinion.recordedBy} ·{' '}
+              {formatDateTime(opinion.at)}
             </p>
             <p className="type-body-sm whitespace-pre-wrap">{opinion.content}</p>
           </li>

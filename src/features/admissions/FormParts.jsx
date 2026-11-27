@@ -9,10 +9,18 @@ import { ResidentCombobox } from '@/common/ResidentCombobox'
 // Thành phần form dùng chung trong features/admissions (004): chọn một trong vài giá trị, dòng thông tin, ô lý do,
 // chọn người cao tuổi. Không dùng chung với feature khác (frontend/README mục 4 điều 1).
 
-export function Choices({ label, options, value, onChange, error }) {
+// required: thêm dấu * sau nhãn (form Lập đăng ký, 2026-11-26); aria-label của nhóm vẫn là nhãn chữ
+export function Choices({ label, options, value, onChange, error, required = false }) {
   return (
     <Field data-invalid={!!error || undefined}>
-      <FieldLabel>{label}</FieldLabel>
+      <FieldLabel>
+        {label}
+        {required && (
+          <span aria-hidden="true" className="text-destructive">
+            *
+          </span>
+        )}
+      </FieldLabel>
       <ToggleGroup
         variant="outline"
         value={value ? [value] : []}
@@ -60,7 +68,9 @@ export function ReasonField({ id, value, onChange, error, label = 'Lý do', show
         onChange={(e) => onChange(e.target.value)}
         aria-invalid={!!error || undefined}
       />
-      {showCount && <span className="self-end type-caption tabular-nums text-muted-foreground">{`${value.length} / 2000`}</span>}
+      {showCount && (
+        <span className="self-end type-caption tabular-nums text-muted-foreground">{`${value.length} / 2000`}</span>
+      )}
       {error && <FieldError>{error}</FieldError>}
     </Field>
   )

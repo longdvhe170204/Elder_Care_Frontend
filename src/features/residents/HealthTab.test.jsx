@@ -181,6 +181,10 @@ describe('HealthTab, hồ sơ sức khỏe ban đầu', () => {
 
     open()
     fireEvent.click(await screen.findByRole('button', { name: 'Xác nhận hồ sơ' }))
+    // Xác nhận hỏi lại vì sau đó chỉ đính chính
+    const ask = await screen.findByRole('dialog', { name: 'Xác nhận hồ sơ sức khỏe ban đầu' })
+    expect(api.calls('POST', '/residents/7/initial-health-record/confirm')).toHaveLength(0)
+    fireEvent.click(within(ask).getByRole('button', { name: 'Xác nhận' }))
 
     await waitFor(() => expect(api.calls('POST', '/residents/7/initial-health-record/confirm')).toHaveLength(1))
     expect(api.calls('POST', '/residents/7/initial-health-record/confirm')[0][1].headers['If-Match']).toBe('"1"')
@@ -234,7 +238,9 @@ describe('HealthTab, hồ sơ sức khỏe ban đầu', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Đính chính' }))
     const blood = await screen.findByRole('textbox', { name: 'Nhóm máu' })
     expect(blood.value).toBe('O+')
-    fireEvent.change(screen.getByRole('textbox', { name: 'Thuốc đang sử dụng khi tiếp nhận' }), { target: { value: 'Amlodipine 20mg' } })
+    fireEvent.change(screen.getByRole('textbox', { name: 'Thuốc đang sử dụng khi tiếp nhận' }), {
+      target: { value: 'Amlodipine 20mg' },
+    })
     fireEvent.change(screen.getByRole('textbox', { name: 'Lý do' }), { target: { value: 'Sai liều' } })
     fireEvent.click(screen.getByRole('button', { name: 'Lưu đính chính' }))
 
@@ -351,6 +357,7 @@ describe('HealthTab, mục sức khỏe', () => {
 
     open()
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận mục' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Dị ứng (danh mục)' }))
     fireEvent.click(await screen.findByRole('button', { name: 'Ghi nhận' }))
 
     expect(screen.getByText('Chọn dị nguyên')).toBeTruthy()

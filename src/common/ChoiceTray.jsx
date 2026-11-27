@@ -18,7 +18,18 @@ const split = (value) =>
     .map((v) => v.trim())
     .filter(Boolean)
 
-export function ChoiceTray({ id, label, options, multiple = false, value, onChange, invalid = false, placeholder }) {
+// required: dấu * đỏ sau nhãn cho ô bắt buộc
+export function ChoiceTray({
+  id,
+  label,
+  options,
+  multiple = false,
+  value,
+  onChange,
+  invalid = false,
+  placeholder,
+  required = false,
+}) {
   const [open, setOpen] = useState(false)
   const [otherOpen, setOtherOpen] = useState(false)
   const [otherText, setOtherText] = useState('')
@@ -78,6 +89,12 @@ export function ChoiceTray({ id, label, options, multiple = false, value, onChan
     >
       <span id={labelId} className="type-label">
         {label}
+        {required && (
+          <span aria-hidden="true" className="text-destructive">
+            {' '}
+            *
+          </span>
+        )}
       </span>
       <div
         className="flex min-h-11 flex-wrap items-center gap-1.5 rounded-[10px] border border-input bg-popover px-2 py-1.5 aria-invalid:border-destructive"
@@ -113,11 +130,8 @@ export function ChoiceTray({ id, label, options, multiple = false, value, onChan
           onClick={() => (open ? close() : setOpen(true))}
         >
           <span>
-            {items.length === 0
-              ? (placeholder ?? (multiple ? 'Chọn một hoặc nhiều mục' : 'Chọn'))
-              : multiple
-                ? 'Chọn thêm'
-                : 'Đổi'}
+            {/* Đã chọn mục thì không ghi "Chọn thêm", "Đổi" (chủ dự án bỏ 2026-11-26), chỉ còn mũi tên mở khay */}
+            {items.length === 0 ? (placeholder ?? (multiple ? 'Chọn một hoặc nhiều mục' : 'Chọn')) : ''}
           </span>
           <ChevronDown className="size-4" aria-hidden="true" />
         </button>

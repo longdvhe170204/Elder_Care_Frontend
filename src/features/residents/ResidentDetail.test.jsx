@@ -82,7 +82,8 @@ describe('ResidentDetail', () => {
       </PermissionsProvider>,
     )
     const flag = await screen.findByRole('button', { name: 'Ghi dấu nguy kịch' })
-    const parts = screen.getByRole('heading', { name: 'Các phần của hồ sơ' })
+    // Nút các phần của hồ sơ nằm ngay dưới khối An toàn (rà soát 2026-11-26, bỏ tiêu đề "Các phần của hồ sơ")
+    const parts = screen.getByRole('button', { name: 'Trạng thái' })
     expect(parts.compareDocumentPosition(flag) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(flag.className).toMatch(/text-destructive/)
   })
