@@ -21,7 +21,6 @@ import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field
 import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet'
 import { ProblemAlert } from '@/common/ProblemAlert'
-import { StatusBadge } from '@/common/StatusBadge'
 import { formatDate } from '@/common/dateTime'
 import { uploadFile } from '@/common/files'
 import { problemOf } from '@/common/problem'
@@ -52,6 +51,7 @@ import { ChevronDown } from 'lucide-react'
 import { cn } from 'cn'
 import { useBedChangeNames } from './useBedChangeNames'
 import { bedText, roomTypeMismatch, useAllocatedBed } from './useAllocatedBed'
+import { useDepositCollected } from './useDepositCollected'
 
 // Hôm nay ở Việt Nam, dạng yyyy-MM-dd (en-CA định dạng đúng kiểu này)
 const vietnamToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' }).format(new Date())
@@ -67,41 +67,51 @@ const REASON_COMMANDS = {
     postContractsByIdSubmitTermsForApproval,
     'Đã gửi duyệt điều khoản',
   ],
-  'return-to-draft': [
-    'Trả về nháp…',
-    'Trả hợp đồng về nháp',
-    postContractsByIdReturnToDraft,
-    'Đã trả hợp đồng về nháp',
-  ],
-  cancel: ['Hủy hợp đồng…', 'Hủy hợp đồng', postContractsByIdCancel, 'Đã hủy hợp đồng'],
+  'return-to-draft': ['Trả về nháp', 'Trả hợp đồng về nháp', postContractsByIdReturnToDraft, 'Đã trả hợp đồng về nháp'],
+  cancel: ['Hủy hợp đồng', 'Hủy hợp đồng', postContractsByIdCancel, 'Đã hủy hợp đồng'],
 }
 
-function RecordSignedForm({ contract, onDone, onCancel }) {
-  const [signedDate, setSignedDate] = useState('')
-  const [representatives, setRepresentatives] = useState([])
+// Ghi nhận đã ký (FR-021): ngày ký (không sau hôm nay; backend kiểm thêm không trước ngày lập, SIGNED_DATE_INVALID), người
+// đại diện đã ký (chip, không chọn sẵn), bản scan. Nội trú phải có giường đã phân bổ: kiểm trước, thiếu thì khóa nút.
+const SIGN_FORM_ID = 'record-signed-form'
+
+// onReturnToDraft: có khi giường bắt đầu sau ngày bắt đầu hợp đồng và hợp đồng trả về nháp được (sửa ngày bắt đầu)
+function RecordSignedPanel({ contract, bedLine, bedMissing, onReturnToDraft, onBusy, onDone }) {
+  const [dateText, setDateText] = useState('')
+  const [representatives, setRepresentatives] = useState(null)
   const [representativeId, setRepresentativeId] = useState('')
   const [file, setFile] = useState(null)
   const [submitted, setSubmitted] = useState(false)
-  const [busy, setBusy] = useState(false)
   const [failure, setFailure] = useState(null)
+  const today = vietnamToday()
 
   useEffect(() => {
     getResidentsByResidentIdRelationships({ path: { residentId: contract.residentId } })
       // chỉ người đại diện có quan hệ Hiệu lực mới ký được (backend REPRESENTATIVE_REQUIRED)
       .then(({ data }) => setRepresentatives(data.filter((r) => r.status === 'ACTIVE' && r.representative)))
-      .catch((e) => setFailure(problemOf(e)))
+      .catch((e) => {
+        setRepresentatives([])
+        setFailure(problemOf(e))
+      })
   }, [contract.residentId])
 
+  const signedDate = isoDate(dateText)
   const errors = {
-    date: !signedDate && 'Nhập ngày ký',
+    date: !dateText.trim()
+      ? 'Nhập ngày ký'
+      : !signedDate
+        ? 'Nhập ngày có thật, dạng DD/MM/YYYY'
+        : signedDate > today && 'Ngày ký không sau hôm nay',
     representative: !representativeId && 'Chọn người đại diện ký',
-    file: !file && 'Chọn bản scan hợp đồng',
+    file: !file && 'Chọn bản scan hợp đồng đã ký',
   }
+  const shown = (key) => (submitted ? errors[key] || null : null)
 
-  async function save() {
+  async function save(event) {
+    event.preventDefault()
     setSubmitted(true)
-    if (Object.values(errors).some(Boolean)) return
-    setBusy(true)
+    if (bedMissing || Object.values(errors).some(Boolean)) return
+    onBusy(true)
     setFailure(null)
     try {
       const scanFileId = await uploadFile(file)
@@ -114,66 +124,123 @@ function RecordSignedForm({ contract, onDone, onCancel }) {
     } catch (e) {
       setFailure(problemOf(e))
     } finally {
-      setBusy(false)
+      onBusy(false)
     }
   }
 
   return (
-    <div className="flex flex-col gap-3 border-t pt-4">
-      <h3 className="type-card-title">Ghi nhận hợp đồng đã ký</h3>
-      <FieldGroup>
-        <Field data-invalid={(submitted && !!errors.date) || undefined}>
-          <FieldLabel htmlFor="signed-date">Ngày ký</FieldLabel>
-          <Input
+    <form
+      id={SIGN_FORM_ID}
+      onSubmit={save}
+      noValidate
+      aria-label="Ghi nhận đã ký"
+      className="flex flex-col gap-4 rounded-xl bg-muted/50 p-4"
+    >
+      <h3 className="type-label">Ghi nhận đã ký</h3>
+      {bedLine && (
+        <p className={cn('type-body-sm', bedMissing ? 'text-destructive' : 'text-success-foreground')}>{bedLine}</p>
+      )}
+      {onReturnToDraft && (
+        <Button type="button" variant="outline" className="h-10 self-start" onClick={onReturnToDraft}>
+          Trả về nháp để sửa ngày
+        </Button>
+      )}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field data-invalid={!!shown('date') || undefined}>
+          <FieldLabel htmlFor="signed-date">
+            Ngày ký
+            <span aria-hidden="true" className="text-destructive">
+              *
+            </span>
+          </FieldLabel>
+          <DateField
             id="signed-date"
-            type="date"
-            className="h-11"
-            value={signedDate}
-            onChange={(e) => setSignedDate(e.target.value)}
+            value={dateText}
+            onChange={setDateText}
+            max={today}
+            invalid={!!shown('date')}
+            aria-required="true"
           />
-          {submitted && errors.date && <FieldError>{errors.date}</FieldError>}
+          {shown('date') && <FieldError>{shown('date')}</FieldError>}
         </Field>
-        <Field data-invalid={(submitted && !!errors.representative) || undefined}>
-          <FieldLabel htmlFor="signed-representative">Người đại diện ký</FieldLabel>
-          <select
-            id="signed-representative"
-            className={SELECT}
-            value={representativeId}
-            onChange={(e) => setRepresentativeId(e.target.value)}
-          >
-            <option value="">Chọn người đại diện</option>
-            {representatives.map((r) => (
-              <option key={r.id} value={r.familyMember.id}>
-                {r.familyMember.fullName}
-              </option>
-            ))}
-          </select>
-          {submitted && errors.representative && <FieldError>{errors.representative}</FieldError>}
+        <Field data-invalid={!!shown('representative') || undefined}>
+          <span id="signed-representative-label" className="type-label">
+            Người đại diện ký
+            <span aria-hidden="true" className="ml-1 text-destructive">
+              *
+            </span>
+          </span>
+          {representatives === null ? (
+            <span className="type-body-sm text-muted-foreground">Đang tải…</span>
+          ) : representatives.length === 0 ? (
+            <span className="type-body-sm text-destructive">Chưa có người đại diện Hiệu lực</span>
+          ) : (
+            <div role="radiogroup" aria-labelledby="signed-representative-label" className="flex flex-wrap gap-2">
+              {representatives.map((r) => {
+                const id = String(r.familyMember.id)
+                return (
+                  <label
+                    key={r.id}
+                    className="inline-flex h-11 cursor-pointer items-center rounded-lg border border-input bg-background px-3 type-body-sm has-checked:border-primary has-checked:bg-primary has-checked:text-primary-foreground has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
+                  >
+                    <input
+                      type="radio"
+                      name="signed-representative"
+                      className="sr-only"
+                      checked={representativeId === id}
+                      onChange={() => setRepresentativeId(id)}
+                    />
+                    {r.familyMember.fullName}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          {shown('representative') && <FieldError>{shown('representative')}</FieldError>}
         </Field>
-        <Field data-invalid={(submitted && !!errors.file) || undefined}>
-          <FieldLabel htmlFor="signed-scan">Bản scan hợp đồng</FieldLabel>
-          <FileInput
-            id="signed-scan"
-            accept="application/pdf,image/*"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-          />
-          {submitted && errors.file && <FieldError>{errors.file}</FieldError>}
-        </Field>
-      </FieldGroup>
-      <ProblemAlert problem={failure} />
-      <div className="flex justify-end gap-2">
-        <Button variant="ghost" className="h-11" onClick={onCancel}>
-          Đóng
-        </Button>
-        <Button className="h-11" disabled={busy} onClick={save}>
-          Lưu đã ký
-        </Button>
       </div>
-    </div>
+      <Field data-invalid={!!shown('file') || undefined}>
+        <FieldLabel htmlFor="signed-scan">
+          Bản scan hợp đồng đã ký
+          <span aria-hidden="true" className="text-destructive">
+            *
+          </span>
+        </FieldLabel>
+        <FileInput
+          id="signed-scan"
+          accept="application/pdf,image/*"
+          aria-invalid={!!shown('file') || undefined}
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        {shown('file') && <FieldError>{shown('file')}</FieldError>}
+      </Field>
+      {failure && <ProblemAlert problem={failure} />}
+    </form>
   )
 }
 
-export function ContractDetail({ contract, residentName, canUpdate, onChanged, onEdit, Title, Description }) {
+const STATUS_DOT = {
+  DRAFT: 'bg-muted-foreground',
+  PENDING_SIGNATURE: 'bg-warning-foreground',
+  ACTIVE: 'bg-success-foreground',
+}
+
+// Chi tiết hợp đồng (audit BF-01 2026-11-27, chủ dự án duyệt bản phác): đầu khung số hợp đồng và chấm trạng thái; phần lệnh
+// (Ghi nhận đã ký, Gửi ký, lý do của Trả về nháp, Hủy, Gửi duyệt điều khoản) mở ngay dưới đầu khung; thông tin hai cột;
+// Chi phí có đơn giá và "Mỗi tháng"; Đặt cọc "Cần … · đã thu …"; chân khung: "Hủy hợp đồng…" chữ đỏ bên trái, lệnh khác bên
+// phải, nút chính Ghi nhận đã ký hoặc Gửi ký. Gửi ký hỏi lại và hiện cảnh báo backend trả (FR-025). framed: trong popup thì
+// đầu, chân cố định, giữa cuộn; ở màn Hợp đồng (khung chi tiết) thì xếp liền.
+export function ContractDetail({
+  contract,
+  residentName,
+  residentCode,
+  canUpdate,
+  onChanged,
+  onEdit,
+  Title,
+  Description,
+  framed = false,
+}) {
   const [deposit, setDeposit] = useState(null)
   const [addenda, setAddenda] = useState([])
   const [current, setCurrent] = useState(null)
@@ -184,18 +251,26 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
   const [failure, setFailure] = useState(null)
   const [busy, setBusy] = useState(false)
   const [roomTypeName, setRoomTypeName] = useState(null)
-  const [serviceNames, setServiceNames] = useState({})
+  const [catalog, setCatalog] = useState({})
   const bedNames = useBedChangeNames(
     addenda.filter((a) => a.changeTypes?.includes('BED')).flatMap((a) => [a.contentBefore, a.contentAfter]),
   )
   const allocated = useAllocatedBed(contract.residentId, contract.id)
+  const collected = useDepositCollected(contract.residentId, contract.id)
   const mismatch = roomTypeMismatch(allocated, contract.roomTypeId)
-  const allowed = contract.allowedCommands ?? []
-  const hidden = contract.hiddenFields ?? []
+  const allowed = canUpdate ? (contract.allowedCommands ?? []) : []
   const draft = contract.status === 'DRAFT'
   const active = contract.status === 'ACTIVE'
+  const residential = ['LONG_TERM_RESIDENTIAL', 'SHORT_TERM_RESIDENTIAL'].includes(contract.residenceType)
   // BR-M02-09: hợp đồng hiệu lực tại một ngày = bản gốc + phụ lục đã áp dụng tới ngày đó
   const shown = { ...contract, ...(current?.content ?? {}) }
+  const services = shown.services ?? []
+  const prices = usePriceVersions(services.map((s) => s.serviceId))
+  const priceOf = (id) => (prices[id] ? priceOn(prices[id], shown.startDate ?? vietnamToday()) : undefined)
+  const monthly = services.filter((s) => catalog[s.serviceId]?.billingPeriod === 'MONTH')
+  const monthlyTotal = monthly.every((s) => priceOf(s.serviceId) !== undefined)
+    ? monthly.reduce((sum, s) => sum + priceOf(s.serviceId), 0)
+    : null
 
   // Loại phòng, dịch vụ đăng ký ghi bằng tên (4b, chủ dự án duyệt 2026-11-21); không đọc được danh mục thì ghi "mã …"
   useEffect(() => {
@@ -206,7 +281,7 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
         .catch(() => {})
     if (contract.services?.length)
       getServices({ query: {} })
-        .then(({ data }) => !cancelled && setServiceNames(Object.fromEntries(data.map((s) => [s.id, s.name]))))
+        .then(({ data }) => !cancelled && setCatalog(Object.fromEntries(data.map((s) => [s.id, s]))))
         .catch(() => {})
     return () => {
       cancelled = true
@@ -245,9 +320,10 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
     setBusy(true)
     setFailure(null)
     try {
-      await call({ path: { id: contract.id }, headers: newKey(), ...(body && { body }) })
+      const { data } = await call({ path: { id: contract.id }, headers: newKey(), ...(body && { body }) })
+      const warnings = (data?.warnings ?? []).map((w) => w.description).filter(Boolean)
       open(null)
-      onChanged(message)
+      onChanged(warnings.length ? `${message}. Lưu ý: ${warnings.join('; ')}` : message)
     } catch (e) {
       setFailure(problemOf(e))
     } finally {
@@ -262,80 +338,136 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
     run(call, { reason: reason.trim() }, message)
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <StatusBadge status={CONTRACT_STATUS[contract.status] ?? contract.status} />
-        <Title className="type-title">{residentName}</Title>
-        <Description className="type-body-sm text-muted-foreground">{`Hợp đồng ${contract.contractNumber ?? 'chưa có số'}`}</Description>
+  const bed = allocated.bed
+  // FR-021: giường phải bắt đầu trong hoặc trước ngày bắt đầu hợp đồng (chủ dự án yêu cầu kiểm trước 2026-11-27)
+  const bedLate = !!(bed?.startDate && contract.startDate && bed.startDate > contract.startDate)
+  const bedBlocked = residential && (!bed || bedLate)
+  const bedLine = residential
+    ? !bed
+      ? 'Chưa có giường phân bổ: chọn giường trước khi ghi nhận đã ký'
+      : bedLate
+        ? `Giường ${bedText(bed.location)} bắt đầu ${formatDate(bed.startDate)}, sau ngày bắt đầu hợp đồng ${formatDate(contract.startDate)}: trả về nháp để sửa ngày bắt đầu, hoặc chọn lại giường`
+        : `Giường: ${bedText(bed.location)}${bed.startDate ? `, bắt đầu ${formatDate(bed.startDate)}` : ''}`
+    : null
+
+  const header = (
+    <div className={cn('flex flex-col gap-1', framed && 'shrink-0 border-b px-6 pt-6 pb-4 pr-12')}>
+      <Title className="type-title flex flex-wrap items-center gap-x-3">
+        {`Hợp đồng ${contract.contractNumber ?? 'chưa có số'}`}
+        <span className="type-body-sm inline-flex items-center gap-1.5 font-normal">
+          <span aria-hidden="true" className={cn('size-2 rounded-full', STATUS_DOT[contract.status] ?? 'bg-border')} />
+          {CONTRACT_STATUS[contract.status] ?? contract.status}
+        </span>
+      </Title>
+      <Description className="type-body-sm text-muted-foreground">
+        {[residentName, residentCode].filter(Boolean).join(' · ')}
+      </Description>
+    </div>
+  )
+
+  const panel =
+    mode === 'record-signed' ? (
+      <RecordSignedPanel
+        contract={contract}
+        bedLine={bedLine}
+        bedMissing={bedBlocked}
+        onReturnToDraft={bedLate && allowed.includes('return-to-draft') ? () => open('return-to-draft') : null}
+        onBusy={setBusy}
+        onDone={(m) => {
+          open(null)
+          onChanged(m)
+        }}
+      />
+    ) : mode === 'send' ? (
+      <div className="rounded-xl bg-muted/50 p-4">
+        <h3 className="type-label">Gửi ký hợp đồng này?</h3>
       </div>
+    ) : mode ? (
+      <div className="flex flex-col gap-3 rounded-xl bg-muted/50 p-4">
+        <h3 className="type-label">{REASON_COMMANDS[mode][1]}</h3>
+        <ReasonField
+          id="contract-reason"
+          options={CONTRACT_REASONS[mode]}
+          value={reason}
+          onChange={setReason}
+          error={submitted && !reason.trim() ? 'Nhập lý do' : null}
+        />
+      </div>
+    ) : null
+
+  const body = (
+    <div className={cn('flex flex-col gap-6', framed && 'min-h-0 flex-1 overflow-y-auto px-6 py-6')}>
+      {panel}
+      {failure && <ProblemAlert problem={failure} />}
       {contract.overdueSince && (
         <p className="type-body-sm text-destructive">{`Quá hạn từ ${formatDate(contract.overdueSince)}`}</p>
       )}
-      <div className="grid gap-3">
+      <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
         <Info label="Loại lưu trú">{labelOf(RESIDENCE_TYPES, shown.residenceType)}</Info>
         <Info label="Thời gian">
           {`Từ ${formatDate(shown.startDate)}${shown.endDate ? ` đến ${formatDate(shown.endDate)}` : ''}`}
         </Info>
+        <Info label="Mức chăm sóc">{labelOf(CARE_LEVELS, shown.careLevel)}</Info>
+        <Info label="Kỳ tính phí lưu trú">{labelOf(BILLING_PERIODS, shown.residencyFeeBillingPeriod)}</Info>
         {contract.roomTypeId && (
           <Info label="Loại phòng">{roomTypeName ?? `Loại phòng mã ${contract.roomTypeId}`}</Info>
         )}
-        {allocated.bed && (
-          <Info label="Giường đã phân bổ">
-            {bedText(allocated.bed.location) +
-              (allocated.roomTypeName(allocated.bed.roomTypeId)
-                ? ` (${allocated.roomTypeName(allocated.bed.roomTypeId)})`
-                : '')}
-          </Info>
-        )}
-        {mismatch && (
-          <p className="type-body-sm rounded-md border border-warning-foreground/40 bg-warning px-3 py-2 text-warning-foreground">
-            {mismatch}
-          </p>
-        )}
-        <Info label="Mức chăm sóc">{labelOf(CARE_LEVELS, shown.careLevel)}</Info>
-        <Info label="Kỳ tính phí lưu trú">{labelOf(BILLING_PERIODS, shown.residencyFeeBillingPeriod)}</Info>
+        {bed && <Info label="Giường đã phân bổ">{bedText(bed.location)}</Info>}
         {contract.signedDate && <Info label="Ngày ký">{formatDate(contract.signedDate)}</Info>}
         {contract.terminationReason && <Info label="Lý do chấm dứt">{contract.terminationReason}</Info>}
       </div>
+      {mismatch && (
+        <p className="type-body-sm rounded-md border border-warning-foreground/40 bg-warning px-3 py-2 text-warning-foreground">
+          {mismatch}
+        </p>
+      )}
       {current?.addendumId && (
         <p className="type-caption text-muted-foreground">
           {`Theo phụ lục hiệu lực từ ${formatDate(current.effectiveFrom)}; bản gốc giữ nguyên.`}
         </p>
       )}
-      {contract.services?.length > 0 && (
-        <section className="flex flex-col gap-1">
-          <h3 id="contract-services" className="type-card-title">
-            Dịch vụ đăng ký
+      {services.length > 0 && (
+        <section aria-labelledby="contract-services" className="flex flex-col gap-1">
+          <h3 id="contract-services" className="type-label">
+            Chi phí
           </h3>
-          <ul aria-labelledby="contract-services" className="flex flex-col gap-1">
-            {contract.services.map((s) => (
-              <li key={s.serviceId} className="type-body-sm">
-                {`${serviceNames[s.serviceId] ?? `Dịch vụ mã ${s.serviceId}`}, ${s.inPackage ? 'trong gói' : 'ngoài gói'}`}
+          <ul className="flex flex-col">
+            {services.map((s) => (
+              <li key={s.serviceId} className="type-body-sm flex flex-wrap justify-between gap-x-4 py-0.5">
+                <span>{catalog[s.serviceId]?.name ?? `Dịch vụ mã ${s.serviceId}`}</span>
+                <span className="tabular-nums text-muted-foreground">
+                  {priceText(priceOf(s.serviceId), catalog[s.serviceId]?.billingPeriod)}
+                </span>
               </li>
             ))}
           </ul>
+          {monthly.length > 0 && monthlyTotal !== null && (
+            <p className="flex justify-between gap-4 border-t pt-2 type-body-sm font-medium">
+              <span>Mỗi tháng</span>
+              <span className="tabular-nums">{money(monthlyTotal)}</span>
+            </p>
+          )}
         </section>
       )}
-      {hidden.length > 0 && (
-        <p className="type-caption text-muted-foreground">Trường tài chính được ẩn theo quyền của bạn.</p>
-      )}
-      <ProblemAlert problem={failure} />
-
       {deposit && (
         <section className="flex flex-col gap-1">
-          <h3 className="type-card-title">Đặt cọc</h3>
-          <p className="type-body-sm">{DEPOSIT_STATUS[deposit.status] ?? deposit.status}</p>
-          {deposit.requiredAmount !== undefined && deposit.requiredAmount !== null && (
-            <p className="type-body-sm tabular-nums">{`Khoản cần đặt cọc: ${money(deposit.requiredAmount)}`}</p>
-          )}
-          <p className="type-caption text-muted-foreground">Kế toán xác nhận đặt cọc ở màn Số dư, tiền cọc.</p>
+          <h3 className="type-label">Đặt cọc</h3>
+          <p className="type-body-sm tabular-nums">
+            {deposit.notRequired || deposit.status === 'NOT_REQUIRED'
+              ? 'Không yêu cầu đặt cọc'
+              : [
+                  deposit.requiredAmount != null && `Cần ${money(deposit.requiredAmount)}`,
+                  collected != null && `đã thu ${money(collected)}`,
+                  DEPOSIT_STATUS[deposit.status],
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+          </p>
         </section>
       )}
-
       {terms.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h3 className="type-card-title">Điều khoản khác chuẩn</h3>
+          <h3 className="type-label">Điều khoản khác chuẩn</h3>
           <ul className="flex flex-col gap-1">
             {terms.map((t) => (
               <li key={t.type} className="type-body-sm">
@@ -346,10 +478,9 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
           </ul>
         </section>
       )}
-
       {addenda.length > 0 && (
         <section className="flex flex-col gap-2">
-          <h3 className="type-card-title">Phụ lục</h3>
+          <h3 className="type-label">Phụ lục</h3>
           <ul className="flex flex-col gap-1">
             {addenda.map((a) => (
               <li key={a.id} className="type-body-sm">
@@ -367,69 +498,81 @@ export function ContractDetail({ contract, residentName, canUpdate, onChanged, o
           </ul>
         </section>
       )}
+    </div>
+  )
 
-      {mode === null && canUpdate && allowed.length > 0 && (
-        <div className="flex flex-wrap justify-end gap-2 border-t pt-4">
-          {allowed.includes('update') && (
-            <Button variant="outline" className="h-11" onClick={() => onEdit(contract)}>
-              Sửa nội dung
-            </Button>
-          )}
-          {['submit-terms-for-approval', 'return-to-draft', 'cancel'].map(
-            (command) =>
-              allowed.includes(command) && (
-                <Button key={command} variant="outline" className="h-11" onClick={() => open(command)}>
-                  {REASON_COMMANDS[command][0]}
-                </Button>
-              ),
-          )}
-          {allowed.includes('record-signed') && (
-            <Button className="h-11" onClick={() => open('record-signed')}>
-              Ghi nhận đã ký…
-            </Button>
-          )}
-          {allowed.includes('send-for-signature') && (
-            <Button
-              className="h-11"
-              disabled={busy}
-              onClick={() => run(postContractsByIdSendForSignature, null, 'Đã gửi ký')}
-            >
-              Gửi ký
-            </Button>
-          )}
-        </div>
+  const footerClass = cn('flex flex-wrap items-center gap-3', framed ? 'shrink-0 border-t px-6 py-4' : 'border-t pt-4')
+  const footer = mode ? (
+    <div className={cn(footerClass, 'justify-end')}>
+      <Button type="button" variant="outline" className="h-11" disabled={busy} onClick={() => open(null)}>
+        Thôi
+      </Button>
+      {mode === 'record-signed' ? (
+        <Button type="submit" form={SIGN_FORM_ID} className="h-11" disabled={busy || bedBlocked}>
+          {busy ? 'Đang lưu…' : 'Lưu đã ký'}
+        </Button>
+      ) : mode === 'send' ? (
+        <Button
+          className="h-11"
+          disabled={busy}
+          onClick={() => run(postContractsByIdSendForSignature, null, 'Đã gửi ký')}
+        >
+          {busy ? 'Đang gửi…' : 'Gửi ký'}
+        </Button>
+      ) : (
+        <Button
+          className="h-11"
+          variant={mode === 'cancel' ? 'destructive' : 'default'}
+          disabled={busy}
+          onClick={submitReason}
+        >
+          {REASON_COMMANDS[mode][1]}
+        </Button>
       )}
+    </div>
+  ) : allowed.length > 0 ? (
+    <div className={footerClass}>
+      {allowed.includes('cancel') && (
+        <Button
+          variant="ghost"
+          className="h-11 px-2 text-destructive hover:text-destructive"
+          onClick={() => open('cancel')}
+        >
+          {REASON_COMMANDS.cancel[0]}
+        </Button>
+      )}
+      <span className="flex-1" />
+      {allowed.includes('update') && (
+        <Button variant="outline" className="h-11" onClick={() => onEdit(contract)}>
+          Sửa nội dung
+        </Button>
+      )}
+      {['submit-terms-for-approval', 'return-to-draft'].map(
+        (command) =>
+          allowed.includes(command) && (
+            <Button key={command} variant="outline" className="h-11" onClick={() => open(command)}>
+              {REASON_COMMANDS[command][0]}
+            </Button>
+          ),
+      )}
+      {allowed.includes('record-signed') && (
+        <Button className="h-11" onClick={() => open('record-signed')}>
+          Ghi nhận đã ký
+        </Button>
+      )}
+      {allowed.includes('send-for-signature') && (
+        <Button className="h-11" onClick={() => open('send')}>
+          Gửi ký
+        </Button>
+      )}
+    </div>
+  ) : null
 
-      {mode === 'record-signed' && (
-        <RecordSignedForm
-          contract={contract}
-          onCancel={() => open(null)}
-          onDone={(m) => {
-            open(null)
-            onChanged(m)
-          }}
-        />
-      )}
-      {mode && mode !== 'record-signed' && (
-        <div className="flex flex-col gap-3 border-t pt-4">
-          <h3 className="type-card-title">{REASON_COMMANDS[mode][1]}</h3>
-          <ReasonField
-            id="contract-reason"
-            options={CONTRACT_REASONS[mode]}
-            value={reason}
-            onChange={setReason}
-            error={submitted && !reason.trim() ? 'Nhập lý do' : null}
-          />
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" className="h-11" onClick={() => open(null)}>
-              Đóng
-            </Button>
-            <Button className="h-11" disabled={busy} onClick={submitReason}>
-              {REASON_COMMANDS[mode][1]}
-            </Button>
-          </div>
-        </div>
-      )}
+  return (
+    <div className={cn('flex flex-col', framed ? 'h-full min-h-0' : 'gap-6')}>
+      {header}
+      {body}
+      {footer}
     </div>
   )
 }
@@ -627,8 +770,16 @@ export function ContractSheet({
 
   const startDate = isoDate(startText)
   const endDate = isoDate(endText)
+  // Ngày bắt đầu của giường đã phân bổ: hợp đồng nội trú không được bắt đầu sớm hơn (004 FR-021)
+  const bedStart = allocated.bed?.startDate ?? null
   // 004 FR-019: hợp đồng nội trú ghi loại phòng (giường do phân bổ của 003); chỉ loại phòng phục vụ loại lưu trú đã chọn
   const residential = type === 'LONG_TERM_RESIDENTIAL' || type === 'SHORT_TERM_RESIDENTIAL'
+  const bedError =
+    residential &&
+    bedStart &&
+    startDate &&
+    startDate < bedStart &&
+    `Giường bắt đầu ${displayDate(bedStart)}; ngày bắt đầu hợp đồng không được sớm hơn (FR-021)`
   const roomTypeOptions = (roomTypes ?? [])
     .filter((t) => (type === 'SHORT_TERM_RESIDENTIAL' ? t.servesShortTerm : t.servesLongTerm))
     .sort((a, b) => (a.standardBeds ?? 99) - (b.standardBeds ?? 99))
@@ -637,7 +788,7 @@ export function ContractSheet({
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
     type: !type && 'Chọn loại lưu trú',
-    start: startText.trim() ? !startDate && 'Nhập ngày có thật, dạng DD/MM/YYYY' : 'Nhập ngày bắt đầu',
+    start: !startText.trim() ? 'Nhập ngày bắt đầu' : !startDate ? 'Nhập ngày có thật, dạng DD/MM/YYYY' : bedError,
     end: endText.trim()
       ? !endDate
         ? 'Nhập ngày có thật, dạng DD/MM/YYYY'
@@ -822,7 +973,7 @@ export function ContractSheet({
                         required
                         value={startText}
                         onChange={setStartText}
-                        error={shown('start')}
+                        error={shown('start') || bedError || null}
                       />
                       <DateInput
                         id="contract-end"
@@ -909,12 +1060,7 @@ export function ContractSheet({
                       error={shown('level')}
                     />
                     {residential && allocated.bed && (
-                      <Info label="Giường đã phân bổ">
-                        {bedText(allocated.bed.location) +
-                          (allocated.roomTypeName(allocated.bed.roomTypeId)
-                            ? ` (${allocated.roomTypeName(allocated.bed.roomTypeId)})`
-                            : '')}
-                      </Info>
+                      <Info label="Giường đã phân bổ">{bedText(allocated.bed.location)}</Info>
                     )}
                     {residential && (
                       <Choices

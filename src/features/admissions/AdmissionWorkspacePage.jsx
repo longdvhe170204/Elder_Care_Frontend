@@ -14,23 +14,12 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { PermissionDeniedState } from '@/common/PageState'
 import { ProblemAlert } from '@/common/ProblemAlert'
 import { ResidentAvatar } from '@/common/ResidentAvatar'
-import { formatDate } from '@/common/dateTime'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import { cn } from '@/lib/utils'
 import { BedAllocationSheet } from '../beds/BedAllocationSheet'
 import { ResidentDetail, ResidentPartSheet } from '../residents/ResidentDetail'
-import { GENDER_LABELS } from '../residents/residentLabels'
-import {
-  APPLICATION_STATUS,
-  CARE_LEVELS,
-  OPEN_STATUSES,
-  OPINIONS,
-  OPINION_SOURCES,
-  RESIDENCE_TYPES,
-  labelOf,
-  money,
-} from './admissionLabels'
+import { APPLICATION_STATUS, CARE_LEVELS, OPEN_STATUSES, RESIDENCE_TYPES, labelOf, money } from './admissionLabels'
 import { ApplicationSheet, OpinionSheet } from './ApplicationParts'
 import { ContractDetail, ContractSheet } from './ContractParts'
 import { ConsentRecordSheet } from '../consents/ConsentRecordSheet'
@@ -40,6 +29,7 @@ import { admissionProgress } from './admissionProgress'
 import { bedText, roomTypeMismatch, useAllocatedBed } from './useAllocatedBed'
 import { useContractDepositStatus, useDepositCollected } from './useDepositCollected'
 import { DepositReceiptSheet } from '../balance/DepositReceiptSheet'
+import { CompleteAdmissionPopup } from './CompleteAdmissionPopup'
 
 // Hồ sơ tiếp nhận (chủ dự án duyệt 2026-11-17, đề xuất A; DESIGN.md 5.3): một màn cho một lượt tiếp nhận, đi theo các
 // bước BF-01. Trạng thái từng bước lấy từ điều kiện tiếp nhận của 004 (FR-004; mã ADM_A → ADM_F);
@@ -67,14 +57,6 @@ const keepStep = {
   required: (s) => s.required && s.state === 'todo',
   wait: (s) => s.view === 'wait',
   all: () => true,
-}
-
-function ageOf(dateOfBirth) {
-  if (!dateOfBirth) return null
-  const [y, m, d] = dateOfBirth.split('-').map(Number)
-  const now = new Date()
-  const before = now.getMonth() + 1 < m || (now.getMonth() + 1 === m && now.getDate() < d)
-  return now.getFullYear() - y - (before ? 1 : 0)
 }
 
 function useWorkspace(id) {
@@ -162,6 +144,18 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
 
   const { application, conditions, resident, contract, contractsFailed } = state
   const mismatch = roomTypeMismatch(allocated, contract?.roomTypeId)
+  // Mức của hợp đồng khác mức hiện hành (đánh giá đầu vào đã xác nhận): ghi rõ ở bước Hợp đồng và việc cần làm theo trạng
+  // thái hợp đồng (BR-M02-22, FR-023; chủ dự án yêu cầu 2026-11-27)
+  const levelMismatch =
+    contract?.careLevel && resident.currentCareLevel && contract.careLevel !== resident.currentCareLevel
+      ? `Hợp đồng ghi ${labelOf(CARE_LEVELS, contract.careLevel).toLowerCase()}, đánh giá đầu vào là ${labelOf(CARE_LEVELS, resident.currentCareLevel).toLowerCase()}: ${
+          contract.status === 'ACTIVE'
+            ? 'lập yêu cầu thay đổi lưu trú đổi mức chăm sóc'
+            : contract.status === 'PENDING_SIGNATURE'
+              ? 'trả về nháp rồi sửa mức chăm sóc'
+              : 'sửa mức chăm sóc của hợp đồng'
+        }`
+      : null
   const allocatedType = allocated.bed && allocated.roomTypeName(allocated.bed.roomTypeId)
   // Dòng phụ bước Đặt cọc theo hợp đồng và sổ cọc (audit 2026-11-27)
   const depositNote = !contract
@@ -193,8 +187,6 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
   const { conditionOf, counts } = progress
   // Mặc định "Việc của bạn"; lượt đã đóng hoặc không có việc của bạn thì xem tất cả
   const shown = filter ?? (closed || counts.mine === 0 ? 'all' : 'mine')
-  const age = ageOf(info.dateOfBirth)
-  const ageText = age == null ? null : `${age} tuổi`
   const waitingFor = [...new Set(progress.waiting.map((s) => s.who))]
 
   function changed(message) {
@@ -297,37 +289,13 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           />
           <div className="flex flex-col gap-1">
             <h1 className="type-page text-primary">{`Tiếp nhận ${name}`}</h1>
-            <p className="type-body-sm text-muted-foreground">
-              {[
-                GENDER_LABELS[info.gender],
-                ageText,
-                resident.profileCode,
-                labelOf(RESIDENCE_TYPES, application.desiredResidenceType),
-                closed && `lượt ${(APPLICATION_STATUS[application.status] ?? application.status).toLowerCase()}`,
-                `đăng ký ${formatDate(application.applicationDate)}`,
-                application.desiredAdmissionDate && `muốn vào ${formatDate(application.desiredAdmissionDate)}`,
-              ]
-                .filter(Boolean)
-                .join(', ')}
-            </p>
-            <p className="type-body-sm text-muted-foreground">
-              {application.expectedCareLevel && (
-                <>
-                  {'Mức dự kiến '}
-                  <span className="text-foreground">{labelOf(CARE_LEVELS, application.expectedCareLevel)}</span>
-                  {'. '}
-                </>
-              )}
-              {opinion ? (
-                <>
-                  {'Ý kiến vào ở '}
-                  <span className="text-foreground">{labelOf(OPINIONS, opinion.opinion)}</span>
-                  {`, nguồn ${labelOf(OPINION_SOURCES, opinion.source?.type).toLowerCase()}.`}
-                </>
-              ) : (
-                'Chưa ghi ý kiến vào ở.'
-              )}
-            </p>
+            {/* Bỏ hai dòng phụ (giới tính, tuổi, mã, ngày đăng ký; mức dự kiến, ý kiến) theo chủ dự án 2026-11-27; lượt đã đóng
+                vẫn ghi trạng thái lượt */}
+            {closed && (
+              <p className="type-body-sm text-muted-foreground">
+                {`Lượt ${(APPLICATION_STATUS[application.status] ?? application.status).toLowerCase()}`}
+              </p>
+            )}
           </div>
           {can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE') && !closed && (
             <div className={ACTION}>
@@ -462,6 +430,15 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
                                 {bedText(allocated.bed.location) + (allocatedType ? ` (${allocatedType})` : '')}
                               </span>
                             )}
+                            {/* Khai báo tạm trú trong 1 ngày sau Hoàn tất tiếp nhận (CFG-M02-12, BF-01 bước 15a) */}
+                            {step.key === 'registration' && application.status === 'ADMITTED' && (
+                              <span className="type-caption text-muted-foreground">
+                                Hạn: trong 1 ngày sau tiếp nhận
+                              </span>
+                            )}
+                            {step.key === 'contract' && levelMismatch && (
+                              <span className="type-caption text-warning-foreground">{levelMismatch}</span>
+                            )}
                             {step.key === 'deposit' && depositNote && (
                               <span className="type-caption text-muted-foreground">{depositNote}</span>
                             )}
@@ -488,7 +465,7 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
             className={cn(GRID, 'sticky bottom-0 items-center rounded-b-xl border-t bg-card py-4')}
           >
             <span className={ACTION}>
-              <Button className="h-10 w-full max-sm:w-auto" onClick={() => setSheet({ kind: 'part', part: 'status' })}>
+              <Button className="h-10 w-full max-sm:w-auto" onClick={() => setSheet({ kind: 'complete' })}>
                 Hoàn tất tiếp nhận
               </Button>
             </span>
@@ -523,11 +500,16 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
             'consent',
             'health',
             'wishes',
+            'complete',
           ].includes(sheet.kind)
         }
         onOpenChange={(open) => !open && changed()}
       >
-        <SheetContent className="overflow-y-auto p-6 sm:max-w-3xl">
+        {/* Chi tiết hợp đồng mở bằng popup giữa màn như các bước khác (chủ dự án yêu cầu 2026-11-27); hồ sơ vẫn là khung phải */}
+        <SheetContent
+          side={sheet?.kind === 'contract' ? 'center' : 'right'}
+          className={sheet?.kind === 'contract' ? 'gap-0 p-0 sm:max-w-3xl' : 'overflow-y-auto p-6 sm:max-w-3xl'}
+        >
           {sheet?.kind === 'resident' && (
             <ResidentDetail
               residentId={resident.id}
@@ -541,8 +523,10 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           )}
           {sheet?.kind === 'contract' && contract && (
             <ContractDetail
+              framed
               contract={contract}
               residentName={name}
+              residentCode={resident.profileCode}
               canUpdate={can('ADMISSION_CONTRACT_DEPOSIT', 'UPDATE')}
               onChanged={(message) => {
                 if (message) setAnnouncement(message)
@@ -563,7 +547,8 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           residentCode={resident.profileCode}
           defaults={{
             residenceType: application.desiredResidenceType,
-            startDate: application.desiredAdmissionDate,
+            // Đã có giường thì ngày bắt đầu theo ngày vào của giường (FR-021), chưa có thì ngày muốn vào của lượt đăng ký
+            startDate: allocated.bed?.startDate ?? application.desiredAdmissionDate,
             careLevel: resident.currentCareLevel ?? application.expectedCareLevel,
             roomTypeId: allocated.bed?.roomTypeId,
           }}
@@ -591,6 +576,30 @@ export function AdmissionWorkspacePage({ id, onNavigate = () => {} }) {
           onClose={() => changed()}
           onSaved={() => changed('Đã phân bổ giường')}
           onOpenWaitingList={() => onNavigate('waiting-list')}
+        />
+      )}
+      {/* Hoàn tất tiếp nhận: popup tại chỗ (audit 2026-11-27), không qua khung Trạng thái */}
+      {sheet?.kind === 'complete' && (
+        <CompleteAdmissionPopup
+          resident={{
+            id: resident.id,
+            name,
+            code: resident.profileCode,
+            residence: labelOf(RESIDENCE_TYPES, contract?.residenceType ?? application.desiredResidenceType),
+          }}
+          roomTypeId={contract?.roomTypeId}
+          opinion={opinion}
+          checks={progress.requiredSteps.map((s) => ({ key: s.key, label: s.label }))}
+          warnings={[
+            progress.steps.consent?.state !== 'done' && 'Chưa có bản đồng ý chia sẻ dữ liệu',
+            progress.steps.wishes?.state !== 'done' && 'Chưa đủ phiếu nguyện vọng cuối đời, khi điều trị',
+          ].filter(Boolean)}
+          onClose={() => setSheet(null)}
+          onDone={(data) =>
+            changed(
+              ['Đã hoàn tất tiếp nhận', ...(data?.warnings ?? []).map((w) => w.description)].filter(Boolean).join('. '),
+            )
+          }
         />
       )}
       {sheet?.kind === 'deposit' && (

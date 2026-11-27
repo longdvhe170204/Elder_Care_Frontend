@@ -37,8 +37,10 @@ export function DateField({ id, value, onChange, min, max, invalid = false, ...i
         type="button"
         variant="ghost"
         size="icon"
-        className="absolute top-1/2 right-1 size-9 -translate-y-1/2 text-muted-foreground"
+        className="absolute top-1 right-1 size-9 text-muted-foreground"
         aria-label="Chọn ngày trên lịch"
+        // mở bảng chọn ngày; aria-haspopup cũng tắt hiệu ứng nhún khi bấm của Button (chủ dự án yêu cầu 2026-11-27)
+        aria-haspopup="dialog"
         onClick={openPicker}
       >
         <CalendarDays aria-hidden="true" />

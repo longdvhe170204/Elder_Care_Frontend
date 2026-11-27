@@ -26,7 +26,14 @@ export function useAllocatedBed(residentId, reload) {
         const roomTypeId = allocation
           ? (rooms.data.find((r) => r.id === allocation.location.roomId)?.roomTypeId ?? null)
           : null
-        setState({ bed: allocation && { status: allocation.status, location: allocation.location, roomTypeId }, names })
+        // startDate: ngày bắt đầu của phân bổ theo giờ Việt Nam (yyyy-MM-dd), để so với ngày bắt đầu hợp đồng (004 FR-021;
+        // backend so ngày: phân bổ bắt đầu trong hoặc trước ngày bắt đầu hợp đồng)
+        const at = allocation?.startAt ?? allocation?.plannedStartAt
+        const startDate = at ? new Date(at).toLocaleDateString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' }) : null
+        setState({
+          bed: allocation && { status: allocation.status, location: allocation.location, roomTypeId, startDate },
+          names,
+        })
       })
       .catch(() => active && setState({ bed: null, names: {} }))
     return () => {
