@@ -1,9 +1,12 @@
 import { useEffect, useState } from 'react'
-import { ChevronDown, LogOut, Menu, Moon, Sun, UserRound, X } from 'lucide-react'
+import { ChevronDown, HandHelping, LogOut, Menu, Moon, Sun, UserRound, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { getMeNotifications } from '@/api'
+import { usePermissions } from '@/common/permissions/permissions'
 import { applyTheme, readTheme } from '@/common/theme'
+import { AssistDialog } from '@/features/alerts/AssistRequest'
 import { cn } from '@/lib/utils'
 import { ACCOUNT_PAGE, ROLES, groupOfPage, navForRole } from './navigation'
 import { ICONS } from './navIcons'
@@ -277,11 +280,47 @@ function NavList({ groups, page, onSelect, openGroups, onGroupOpenChange, badges
 
 const DESKTOP = '(min-width: 768px)'
 
+// Q-463 (chủ dự án duyệt 2026-11-28; DESIGN.md mục 5): nút "Cần hỗ trợ" của nhân viên ở mọi màn: máy tính dưới logo của
+// menu trái, dưới 768px trên thanh trên. Màn Cảnh báo, Sự cố đã có nút ở đầu màn (kèm nhắc yêu cầu cùng vụ) nên khung không
+// đặt thêm. Hiện theo quyền EMERGENCY_ASSIST_BUTTON:CREATE; backend vẫn kiểm khi gửi.
+const PAGES_WITH_OWN_ASSIST = ['alerts', 'incidents']
+
+function ShellAssist({ compact, onOpenAlert }) {
+  const [open, setOpen] = useState(false)
+  const toAlert = (alertId) => {
+    setOpen(false)
+    onOpenAlert(alertId)
+  }
+  return (
+    <>
+      {compact ? (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Cần hỗ trợ"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-destructive text-white hover:bg-destructive/90 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        >
+          <HandHelping className="size-5" aria-hidden="true" />
+        </button>
+      ) : (
+        <Button className="h-11 w-full bg-destructive text-white hover:bg-destructive/90" onClick={() => setOpen(true)}>
+          <HandHelping aria-hidden="true" />
+          Cần hỗ trợ
+        </Button>
+      )}
+      {open && <AssistDialog onClose={() => setOpen(false)} onOpenAlert={toAlert} onJoined={toAlert} />}
+    </>
+  )
+}
+
 export function AppShell({ role, hasFunction, built, onRoleChange, session, onLogout, page, onPageChange, children }) {
   const groups = navForRole(role, hasFunction, built)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [openGroups, setGroupOpen] = useOpenGroups(page, role)
   const badges = { notifications: useUnreadCount(!!session, page) }
+  const { can } = usePermissions()
+  const assist = !!session && can('EMERGENCY_ASSIST_BUTTON', 'CREATE') && !PAGES_WITH_OWN_ASSIST.includes(page)
+  const openAlert = (alertId) => onPageChange('alerts', { alertId })
   const pageLabel =
     page === ACCOUNT_PAGE
       ? 'Tài khoản của tôi'
@@ -333,6 +372,7 @@ export function AppShell({ role, hasFunction, built, onRoleChange, session, onLo
           <Menu className="size-5" aria-hidden="true" />
         </button>
         <span className="min-w-0 flex-1 truncate type-label text-sidebar-primary-foreground">{pageLabel}</span>
+        {assist && <ShellAssist compact onOpenAlert={openAlert} />}
         <RoleAvatar label={roleLabel} className="mr-2 size-8" />
       </header>
 
@@ -374,6 +414,11 @@ export function AppShell({ role, hasFunction, built, onRoleChange, session, onLo
           <LeafMark />
           <span className="type-title text-sidebar-primary-foreground">Elder_Care</span>
         </div>
+        {assist && (
+          <div className="px-3 pb-1">
+            <ShellAssist onOpenAlert={openAlert} />
+          </div>
+        )}
         <NavList
           groups={groups}
           page={page}

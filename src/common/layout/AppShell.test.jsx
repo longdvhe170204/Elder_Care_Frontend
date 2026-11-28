@@ -1,7 +1,58 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { json, mockRoutes } from '@/test/fetchRoutes'
+import { PermissionsProvider } from '@/common/permissions/permissions'
 import { AppShell } from './AppShell'
+
+// Q-463: nút "Cần hỗ trợ" ở mọi màn nhân viên (menu trái và thanh trên), trừ Cảnh báo, Sự cố đã có nút ở đầu màn
+describe('AppShell, nút Cần hỗ trợ', () => {
+  function withPermissions(page, permissions) {
+    const api = mockRoutes()
+    api.on('GET', '/me/permissions', json(200, permissions))
+    api.on('GET', '/me', json(200, { roles: ['AC-06'] }))
+    api.on('GET', '/me/notifications', json(200, { unreadCount: 0, unacknowledgedUrgentCount: 0, items: [] }))
+    api.on('GET', '/incident-floors', json(200, [{ id: 7, name: 'Tầng 1', current: true }]))
+    const onPageChange = vi.fn()
+    render(
+      <PermissionsProvider>
+        <AppShell
+          role="NURSING_STAFF"
+          hasFunction={() => true}
+          onRoleChange={() => {}}
+          session={{ accountId: 1, fullName: 'Lê Thu Hà' }}
+          page={page}
+          onPageChange={onPageChange}
+        >
+          <p>Nội dung</p>
+        </AppShell>
+      </PermissionsProvider>,
+    )
+    return { api, onPageChange }
+  }
+  const ASSIST = [{ function: 'EMERGENCY_ASSIST_BUTTON', operation: 'CREATE' }]
+
+  it('coQuyen_nutOMenuVaThanhTren_bamMoHopGui', async () => {
+    withPermissions('care-tasks', ASSIST)
+    const buttons = await screen.findAllByRole('button', { name: 'Cần hỗ trợ' })
+    expect(buttons).toHaveLength(2)
+    expect(within(screen.getByRole('banner')).getByRole('button', { name: 'Cần hỗ trợ' })).toBeTruthy()
+    fireEvent.click(buttons[0])
+    expect(await screen.findByRole('dialog', { name: 'Cần hỗ trợ' })).toBeTruthy()
+  })
+
+  it('khongCoQuyen_hoacManCanhBao_khongCoNut', async () => {
+    const { api } = withPermissions('care-tasks', [])
+    await waitFor(() => expect(api.calls('GET', '/me/permissions')).toHaveLength(1))
+    expect(screen.queryByRole('button', { name: 'Cần hỗ trợ' })).toBeNull()
+    cleanup()
+
+    const alerts = withPermissions('alerts', ASSIST)
+    await waitFor(() => expect(alerts.api.calls('GET', '/me/permissions')).toHaveLength(1))
+    // Quyền đã tải (mục menu theo quyền đã lọc lại) mà vẫn không có nút
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(screen.queryByRole('button', { name: 'Cần hỗ trợ' })).toBeNull()
+  })
+})
 
 // Khung chung (DESIGN.md 5, 10): dưới 768px thanh trên gọn (nút mở menu, tên màn, ảnh đại diện vai trò), menu mở
 // thành ngăn kéo; khối người dùng không cắt tên. jsdom không áp CSS nên thanh trên và menu trái cùng có trong DOM.
