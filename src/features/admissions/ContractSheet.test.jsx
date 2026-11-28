@@ -101,8 +101,8 @@ describe('ContractSheet', () => {
       json(200, [
         { id: 31, type: 'CARE', name: 'Chăm sóc cơ bản', careLevelCode: 'BASIC', status: 'ACTIVE' },
         { id: 32, type: 'CARE', name: 'Chăm sóc thường xuyên', careLevelCode: 'REGULAR', status: 'ACTIVE' },
-        { id: 41, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng đôi', roomTypeId: 1, status: 'ACTIVE' },
-        { id: 42, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng bốn giường', roomTypeId: 2, status: 'ACTIVE' },
+        { id: 41, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng đôi', roomTypeId: 1, billingPeriod: 'MONTH', status: 'ACTIVE' },
+        { id: 42, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng bốn giường', roomTypeId: 2, billingPeriod: 'MONTH', status: 'ACTIVE' },
         { id: 51, type: 'MEAL', name: 'Suất ăn', status: 'ACTIVE' },
         { id: 71, type: 'CONSUMABLE', name: 'Tã người lớn', status: 'ACTIVE' },
         { id: 81, type: 'REHABILITATION', name: 'Phục hồi chức năng', status: 'ACTIVE' },
@@ -153,8 +153,8 @@ describe('ContractSheet', () => {
       json(200, [
         { id: 31, type: 'CARE', name: 'Chăm sóc cơ bản', careLevelCode: 'BASIC', status: 'ACTIVE' },
         { id: 32, type: 'CARE', name: 'Chăm sóc thường xuyên', careLevelCode: 'REGULAR', status: 'ACTIVE' },
-        { id: 41, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng đôi', roomTypeId: 1, status: 'ACTIVE' },
-        { id: 42, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng bốn giường', roomTypeId: 2, status: 'ACTIVE' },
+        { id: 41, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng đôi', roomTypeId: 1, billingPeriod: 'MONTH', status: 'ACTIVE' },
+        { id: 42, type: 'RESIDENCY_FEE', name: 'Phí lưu trú phòng bốn giường', roomTypeId: 2, billingPeriod: 'MONTH', status: 'ACTIVE' },
         { id: 81, type: 'REHABILITATION', name: 'Phục hồi chức năng', status: 'ACTIVE' },
       ]),
     )
@@ -205,7 +205,7 @@ describe('ContractSheet', () => {
     ])
   })
 
-  // Kỳ tính phí theo loại lưu trú (nội trú tháng, ngày; bán trú buổi; chủ dự án xác nhận); bán trú không có ô loại phòng
+  // Q-462: dài hạn chỉ tháng; ngắn ngày tháng, ngày; bán trú tháng, buổi; bán trú không có ô loại phòng
   it('kyTinhPhiTheoLoaiLuuTru_banTruKhongCoLoaiPhong', async () => {
     api.on('GET', '/room-types', json(200, ROOM_TYPES))
     const dialog = await openNew()
@@ -213,14 +213,76 @@ describe('ContractSheet', () => {
     expect(within(dialog).queryByRole('button', { name: 'Theo tháng' })).toBeNull()
     pick(dialog, 'Nội trú dài hạn')
     expect(within(dialog).getByRole('button', { name: 'Theo tháng' })).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: 'Theo ngày' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Theo ngày' })).toBeNull()
     expect(within(dialog).queryByRole('button', { name: 'Theo buổi' })).toBeNull()
     expect(roomGroup(dialog)).toBeInTheDocument()
 
+    pick(dialog, 'Nội trú ngắn ngày')
+    expect(within(dialog).getByRole('button', { name: 'Theo tháng' })).toBeInTheDocument()
+    expect(within(dialog).getByRole('button', { name: 'Theo ngày' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Theo buổi' })).toBeNull()
+
     pick(dialog, 'Bán trú')
     expect(within(dialog).getByRole('button', { name: 'Theo buổi' })).toBeInTheDocument()
-    expect(within(dialog).queryByRole('button', { name: 'Theo tháng' })).toBeNull()
+    expect(within(dialog).getByRole('button', { name: 'Theo tháng' })).toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Theo ngày' })).toBeNull()
     expect(within(dialog).queryByRole('group', { name: 'Loại phòng' })).toBeNull()
+  })
+
+  // Q-462: ngắn ngày giá ngày gắn phí lưu trú kỳ ngày của loại phòng, không gắn phí giá tháng
+  it('nganNgayGiaNgay_ganPhiLuuTruKyNgay', async () => {
+    api.on(
+      'GET',
+      '/services',
+      json(200, [
+        { id: 31, type: 'CARE', name: 'Chăm sóc cơ bản', careLevelCode: 'BASIC', status: 'ACTIVE' },
+        { id: 41, type: 'RESIDENCY_FEE', name: 'Phòng đôi theo tháng', roomTypeId: 1, billingPeriod: 'MONTH', status: 'ACTIVE' },
+        { id: 43, type: 'RESIDENCY_FEE', name: 'Phòng đôi theo ngày', roomTypeId: 1, billingPeriod: 'DAY', status: 'ACTIVE' },
+      ]),
+    )
+    api.on('GET', '/room-types', json(200, ROOM_TYPES))
+    const dialog = await openNew()
+
+    pick(dialog, 'Nội trú ngắn ngày')
+    pick(dialog, 'Cơ bản')
+    pick(dialog, 'Theo ngày')
+    await pickRoom(dialog, 'Phòng đôi')
+    const fixed = await within(dialog).findByRole('list', { name: 'Theo mức chăm sóc, loại phòng' })
+    expect(within(fixed).getByText('Phòng đôi theo ngày')).toBeInTheDocument()
+    expect(within(fixed).queryByText('Phòng đôi theo tháng')).toBeNull()
+  })
+
+  // Q-462: bán trú giá tháng gắn dòng buổi bán trú kỳ tháng, không gắn dòng giá buổi
+  it('banTruGiaThang_ganDongBuoiBanTruKyThang', async () => {
+    api.on(
+      'GET',
+      '/services',
+      json(200, [
+        { id: 31, type: 'CARE', name: 'Chăm sóc cơ bản', careLevelCode: 'BASIC', status: 'ACTIVE' },
+        { id: 61, type: 'DAY_CARE_SESSION', name: 'Bán trú theo buổi', billingPeriod: 'SESSION', status: 'ACTIVE' },
+        { id: 62, type: 'DAY_CARE_SESSION', name: 'Bán trú theo tháng', billingPeriod: 'MONTH', status: 'ACTIVE' },
+      ]),
+    )
+    api.on('GET', '/room-types', json(200, ROOM_TYPES))
+    api.on('POST', '/contracts', json(201, { id: 9 }))
+    const dialog = await openNew()
+
+    pick(dialog, 'Bán trú')
+    setStart(dialog, '20/11/2026')
+    pick(dialog, 'Cơ bản')
+    pick(dialog, 'Theo tháng')
+    pick(dialog, 'Không yêu cầu đặt cọc')
+    const fixed = await within(dialog).findByRole('list', { name: 'Theo mức chăm sóc, loại phòng' })
+    expect(within(fixed).getByText('Bán trú theo tháng')).toBeInTheDocument()
+    expect(within(fixed).queryByText('Bán trú theo buổi')).toBeNull()
+    save(dialog)
+    await vi.waitFor(() => expect(api.calls('POST', '/contracts')).toHaveLength(1))
+    const body = JSON.parse(api.calls('POST', '/contracts')[0][1].body)
+    expect(body.residencyFeeBillingPeriod).toBe('MONTH')
+    expect(body.services).toEqual([
+      { serviceId: 31, inPackage: false },
+      { serviceId: 62, inPackage: false },
+    ])
   })
 
   // Bán trú tự gắn dịch vụ buổi bán trú (Q-426), không gửi loại phòng
@@ -303,6 +365,8 @@ describe('ContractSheet', () => {
     pick(dialog, 'Nội trú dài hạn')
     setStart(dialog, '20/11/2026')
     pick(dialog, 'Thường xuyên')
+    // Q-462: phí lưu trú theo loại phòng và kỳ tính của hợp đồng
+    pick(dialog, 'Theo tháng')
     await pickRoom(dialog, 'Phòng đôi')
     fireEvent.click(within(dialog).getByRole('button', { name: 'Dịch vụ đi kèm' }))
     pick(dialog, 'Chọn Phục hồi chức năng')

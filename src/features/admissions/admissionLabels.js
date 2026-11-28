@@ -44,6 +44,13 @@ export const BILLING_PERIODS = [
   ['SESSION', 'Theo buổi'],
 ]
 
+// Q-462: kỳ tính phí lưu trú được phép theo loại lưu trú (backend chặn tổ hợp khác, 422 BILLING_PERIOD_NOT_ALLOWED)
+export const PERIODS_OF_RESIDENCE = {
+  LONG_TERM_RESIDENTIAL: ['MONTH'],
+  SHORT_TERM_RESIDENTIAL: ['MONTH', 'DAY'],
+  DAY_CARE: ['MONTH', 'SESSION'],
+}
+
 export const CONDITION_STATUS = {
   MET: 'Đạt',
   NOT_MET: 'Chưa đạt',

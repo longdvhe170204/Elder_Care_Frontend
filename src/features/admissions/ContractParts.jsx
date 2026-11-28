@@ -31,6 +31,7 @@ import {
   CHANGE_TYPES,
   changeValueText,
   CONTRACT_STATUS,
+  PERIODS_OF_RESIDENCE,
   RESIDENCE_TYPES,
   SELECT,
   labelOf,
@@ -598,13 +599,11 @@ const DAYS = [
 // đi theo luồng riêng nên không có trong form. Đặt cọc: chọn "Có đặt cọc" hoặc "Không yêu cầu đặt cọc" (spec 004 US4). Khoản
 // cọc theo chính sách của web (chủ dự án chọn 2026-11-27, không ghi vào nghiệp vụ): DEPOSIT_MONTHS tháng phí cố định (chăm sóc
 // theo mức + phí lưu trú theo loại phòng, đơn giá tại ngày bắt đầu), như thực tế các viện thu 1–2 tháng tiền phòng; tự điền và
-// tính lại khi đổi mức, loại phòng tới khi Hành chính sửa tay. Bán trú không có phí tháng nên nhập tay.
+// tính lại khi đổi mức, loại phòng tới khi Hành chính sửa tay. Bán trú giá tháng tính cả dòng buổi bán trú kỳ tháng (Q-462).
 // defaults (lập mới từ Hồ sơ tiếp nhận; chủ dự án duyệt 2026-11-27, chép lại thông tin Hành chính đã ghi, không phải gợi ý
 // Q-307): residenceType, startDate (yyyy-MM-dd) từ lượt đăng ký; careLevel là mức hiện hành, chưa có thì mức dự kiến; roomTypeId
 // của giường đã phân bổ. Sửa được trước khi lưu. Kỳ tính phí, dịch vụ đi kèm, đặt cọc không điền sẵn.
 const FORM_ID = 'contract-form'
-const PERIODS_OF = { DAY_CARE: ['SESSION'] }
-const RESIDENTIAL_PERIODS = ['MONTH', 'DAY']
 const REGISTRABLE_TYPES = ['REHABILITATION', 'ACTIVITY', 'MEDICAL_ESCORT', 'INJECTION']
 const UNIT_OF = { MONTH: 'tháng', DAY: 'ngày', SESSION: 'buổi', OCCURRENCE: 'lần', UNIT: 'đơn vị' }
 const DEPOSIT_MONTHS = 1
@@ -784,7 +783,7 @@ export function ContractSheet({
     .filter((t) => (type === 'SHORT_TERM_RESIDENTIAL' ? t.servesShortTerm : t.servesLongTerm))
     .sort((a, b) => (a.standardBeds ?? 99) - (b.standardBeds ?? 99))
     .map((t) => [String(t.id), t.name])
-  const periodOptions = BILLING_PERIODS.filter(([value]) => (PERIODS_OF[type] ?? RESIDENTIAL_PERIODS).includes(value))
+  const periodOptions = BILLING_PERIODS.filter(([value]) => (PERIODS_OF_RESIDENCE[type] ?? []).includes(value))
   const errors = {
     resident: !residentId && 'Chọn người cao tuổi',
     type: !type && 'Chọn loại lưu trú',
@@ -804,17 +803,20 @@ export function ContractSheet({
   function changeType(next) {
     setType(next)
     // Kỳ đã chọn không hợp loại lưu trú mới thì bỏ, người dùng chọn lại (không tự chọn thay)
-    if (period && !(PERIODS_OF[next] ?? RESIDENTIAL_PERIODS).includes(period)) setPeriod('')
+    if (period && !(PERIODS_OF_RESIDENCE[next] ?? []).includes(period)) setPeriod('')
     if (next === 'DAY_CARE') setRoomTypeId('')
   }
 
   // Q-300, 6.4, Q-426: dịch vụ theo lựa chọn mức, loại phòng, loại lưu trú; dòng cũ của mức, loại phòng khác bị thay khi lưu
   const services = catalog ?? []
   const careService = services.find((s) => s.type === 'CARE' && s.careLevelCode === level)
+  // Q-462: phí lưu trú, buổi bán trú lấy dòng có kỳ tính trùng kỳ của hợp đồng (giá tháng, giá ngày hoặc giá buổi)
   const feeService = residential
-    ? services.find((s) => s.type === 'RESIDENCY_FEE' && s.roomTypeId === Number(roomTypeId))
+    ? services.find(
+        (s) => s.type === 'RESIDENCY_FEE' && s.roomTypeId === Number(roomTypeId) && s.billingPeriod === period,
+      )
     : type === 'DAY_CARE'
-      ? services.find((s) => s.type === 'DAY_CARE_SESSION')
+      ? services.find((s) => s.type === 'DAY_CARE_SESSION' && s.billingPeriod === period)
       : undefined
   const fixedServices = [careService, feeService].filter(Boolean)
   const fixedTypes = ['CARE', 'RESIDENCY_FEE', 'DAY_CARE_SESSION']
