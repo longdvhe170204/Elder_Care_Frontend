@@ -21,7 +21,7 @@ export const putCarePlansByIdRiskAgreements = (params) => request('PUT', '/care-
 /** Gửi Bác sĩ duyệt (FR-003, FR-005) */
 export const postCarePlansByIdSubmit = (params) => request('POST', '/care-plans/{id}/submit', params)
 
-/** Rút lại bản Chờ duyệt về Nháp (chỉ người lập, Q-447) (FR-003) */
+/** Rút lại bản Chờ duyệt về Nháp (chỉ người lập, Q-456) (FR-003) */
 export const postCarePlansByIdRetract = (params) => request('POST', '/care-plans/{id}/retract', params)
 
 /** Duyệt (Bác sĩ; Điều dưỡng được gán quyền) (FR-003, FR-004, FR-005, BR-M04-19) */
@@ -33,19 +33,19 @@ export const postCarePlansByIdReturn = (params) => request('POST', '/care-plans/
 /** Hủy phiên bản Nháp hoặc Chờ duyệt (người lập, người có quyền duyệt) (FR-003) */
 export const postCarePlansByIdCancel = (params) => request('POST', '/care-plans/{id}/cancel', params)
 
-/** Hàng chờ cần lập hoặc sửa kế hoạch theo phạm vi xem, chờ lâu nhất trước (Q-448) (FR-009, FR-059) */
+/** Hàng chờ cần lập hoặc sửa kế hoạch theo phạm vi xem, chờ lâu nhất trước (Q-457) (FR-009, FR-059) */
 export const getCarePlanReviewsQueue = (params) => request('GET', '/care-plan-reviews/queue', params)
 
-/** Kế hoạch được duyệt trong 7 ngày qua theo phạm vi xem, mới nhất trước (Q-451) (FR-059) */
+/** Kế hoạch được duyệt trong khoảng CFG-M04-15 (mặc định 7 ngày), theo phạm vi xem, mới nhất trước (Q-451) (FR-059) */
 export const getCarePlanReviewsApproved = (params) => request('GET', '/care-plan-reviews/approved', params)
 
-/** Yêu cầu xem xét kế hoạch Đang mở của một người cao tuổi (Q-448) (FR-058, FR-059) */
+/** Yêu cầu xem xét kế hoạch Đang mở của một người cao tuổi (Q-457) (FR-058, FR-059) */
 export const getResidentsByResidentIdCarePlanReviews = (params) => request('GET', '/residents/{residentId}/care-plan-reviews', params)
 
-/** Không cần thay đổi kế hoạch, đóng mọi yêu cầu xem xét Đang mở (người có quyền Lập hoặc Duyệt; Q-448) (FR-058) */
+/** Không cần thay đổi kế hoạch, đóng mọi yêu cầu xem xét Đang mở (người có quyền Lập hoặc Duyệt; Q-457) (FR-058) */
 export const postResidentsByResidentIdCarePlanReviewsDismiss = (params) => request('POST', '/residents/{residentId}/care-plan-reviews/dismiss', params)
 
-/** Thay đổi của bản sửa so với kế hoạch Hiệu lực (mục thêm, bớt, đổi; Q-447) (FR-008) */
+/** Thay đổi của bản sửa so với kế hoạch Hiệu lực (mục thêm, bớt, đổi; Q-456) (FR-008) */
 export const getCarePlansCompare = (params) => request('GET', '/care-plans/compare', params)
 
 /** Trạng thái có mặt theo ngày của khu bán trú (FR-012, FR-013, FR-016, FR-049) */

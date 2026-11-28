@@ -105,7 +105,7 @@ export const postAdjustmentsByIdConfirm = (params) => request('POST', '/adjustme
 /** Người nhận tại tầng yêu cầu suất bổ sung sau giờ bữa, trong ngưỡng giao trễ (FR-040) */
 export const postDailyMealsByIdExtraPortions = (params) => request('POST', '/daily-meals/{id}/extra-portions', params)
 
-/** Phục vụ suất giữ cho người trở về trong ngưỡng (tạo phát sinh "+1" không cần giao); đổi đường dẫn 2026-11-24 (Q-445) (FR-040a) */
+/** Phục vụ suất giữ cho người trở về trong ngưỡng (tạo phát sinh "+1" không cần giao); đổi đường dẫn 2026-11-24 (Q-454) (FR-040a) */
 export const postHeldPortionsByIdServe = (params) => request('POST', '/held-portions/{id}/serve', params)
 
 /** Ghi hủy bỏ suất giữ khi hết ngưỡng (FR-040a) */

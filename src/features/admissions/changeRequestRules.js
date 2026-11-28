@@ -1,4 +1,5 @@
 import { formatDate } from '@/common/dateTime'
+import { PERIODS_OF_RESIDENCE } from './admissionLabels'
 
 // Kiểm tra và gợi ý cho form yêu cầu thay đổi lưu trú (004 FR-037 → FR-041) và phần Hành chính xác nhận với người đại diện
 // kèm bằng chứng trước khi gửi Quản lý viện duyệt (chủ dự án yêu cầu 2026-11-20; api-004
@@ -84,6 +85,13 @@ export function validateChange({ types, value, date, contract }) {
       const missing = requiredCompanions(contract?.residenceType, value.residenceType).filter((t) => !types.includes(t))
       if (missing.length > 0)
         errors.residenceType = `Đổi sang loại này cần chọn thêm loại thay đổi: ${missing.map((t) => COMPANION_TEXT[t]).join(', ')}`
+      // Q-462: kỳ tính phí sau thay đổi (kỳ mới nếu chọn, không thì kỳ hiện hành) phải hợp loại mới
+      const allowed = PERIODS_OF_RESIDENCE[value.residenceType] ?? []
+      const period = value.residencyFeeBillingPeriod ?? contract?.residencyFeeBillingPeriod
+      if (value.residencyFeeBillingPeriod && !allowed.includes(value.residencyFeeBillingPeriod))
+        errors.residencyFeeBillingPeriod = 'Kỳ tính phí này không dùng được cho loại lưu trú mới'
+      else if (period && !allowed.includes(period))
+        errors.residencyFeeBillingPeriod = 'Chọn kỳ tính phí mới cho loại lưu trú mới'
     }
   }
   if (types.includes('CARE_LEVEL')) {

@@ -29,8 +29,10 @@ import { openFile, uploadFile } from '@/common/files'
 import { usePermissions } from '@/common/permissions/permissions'
 import { problemOf } from '@/common/problem'
 import {
+  BILLING_PERIODS,
   CARE_LEVELS,
   CHANGE_TYPES,
+  PERIODS_OF_RESIDENCE,
   RESIDENCE_TYPES,
   SELECT,
   changeValueText,
@@ -710,7 +712,7 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
     setFailure(null)
     // Chỉ gửi phần giá trị mới của các loại đã chọn
     const keep = {
-      RESIDENCE_TYPE: ['residenceType'],
+      RESIDENCE_TYPE: ['residenceType', 'residencyFeeBillingPeriod'],
       CARE_LEVEL: ['careLevel'],
       DURATION: ['endDate'],
       BED: ['newBedId'],
@@ -955,7 +957,9 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                 onChange={(v) => {
                   // Tự chọn loại kèm bắt buộc của loại lưu trú mới, bỏ loại kèm của lựa chọn trước (FR-041)
                   setTypes((t) => withCompanions(t, contract?.residenceType, value.residenceType, v))
-                  set({ residenceType: v })
+                  // Q-462: kỳ đã chọn không hợp loại mới thì bỏ, người dùng chọn lại (không tự chọn thay)
+                  const keepPeriod = (PERIODS_OF_RESIDENCE[v] ?? []).includes(value.residencyFeeBillingPeriod)
+                  set({ residenceType: v, residencyFeeBillingPeriod: keepPeriod ? value.residencyFeeBillingPeriod : undefined })
                 }}
                 error={shown('residenceType')}
               />
@@ -965,6 +969,22 @@ export function ChangeRequestSheet({ request, etag, onClose, onDone }) {
                     .map((t) => labelOf(CHANGE_TYPES, t))
                     .join(', ')} (kiểm khi duyệt).`}
                 </FieldDescription>
+              )}
+              {value.residenceType && (
+                <>
+                  <Choices
+                    label="Kỳ tính phí lưu trú"
+                    options={BILLING_PERIODS.filter(([p]) => (PERIODS_OF_RESIDENCE[value.residenceType] ?? []).includes(p))}
+                    value={value.residencyFeeBillingPeriod ?? ''}
+                    onChange={(v) => set({ residencyFeeBillingPeriod: v })}
+                    error={shown('residencyFeeBillingPeriod')}
+                  />
+                  {contract?.residencyFeeBillingPeriod && (
+                    <FieldDescription>
+                      {`Hiện tại: ${labelOf(BILLING_PERIODS, contract.residencyFeeBillingPeriod)}. Không chọn thì giữ kỳ hiện tại nếu hợp loại mới.`}
+                    </FieldDescription>
+                  )}
+                </>
               )}
             </>
           )}
