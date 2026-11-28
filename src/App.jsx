@@ -301,7 +301,7 @@ function App() {
         session={session}
         onLogout={logout}
         page={menuPageOf(page)}
-        onPageChange={(key) => navigate(key)}
+        onPageChange={(key, nextParams) => navigate(key, nextParams)}
       >
         {trail.length > 0 && (
           <Button type="button" variant="outline" className="mb-4 h-11" onClick={goBack}>
